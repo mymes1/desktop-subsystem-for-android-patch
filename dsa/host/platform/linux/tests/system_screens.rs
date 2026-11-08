@@ -16,10 +16,14 @@
 //! (`/tmp/screens-test-<pid>`) for the job to keep.
 #![cfg(target_os = "linux")]
 
+mod boot_check;
+
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 
 use dsa_host_core::apk_info::inflate::inflate;
 use dsa_host_core::guest_log::LogFilter;
@@ -37,6 +41,17 @@ const SHORT_DP: u32 = 520;
 const WIDTH_DP: u32 = 480;
 /// The whole test, boot included, stays under twelve minutes.
 const BUDGET: Duration = Duration::from_secs(690);
+/// How long past its budget the test may run before it stops everything it started and
+/// ends: inside the job step's 14 minutes, so the step never kills it with its VM still
+/// running.
+const OVERRUN: Duration = Duration::from_secs(60);
+/// How long one adb command may take. A dump or a capture takes seconds.
+const ADB_LIMIT: Duration = Duration::from_secs(120);
+/// How long the screenrecord fallback may take: it records for 3 s.
+const SCREENRECORD_LIMIT: Duration = Duration::from_secs(30);
+/// How many frames the screenrecord fallback reads before it stops: the newest of them is
+/// kept, and raw frames are large (6 MiB at 1920x1080).
+const SCREENRECORD_FRAMES: usize = 4;
 
 fn scratch() -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
@@ -44,48 +59,6 @@ fn scratch() -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
-}
-
-/// A child process, stopped (SIGTERM, then SIGKILL) when dropped, so a failing test leaves no
-/// VM.
-struct Service {
-    child: Child,
-    log: PathBuf,
-}
-
-impl Service {
-    fn spawn(command: &mut Command, log: PathBuf) -> Service {
-        let out = std::fs::File::create(&log).unwrap();
-        let child = command
-            .stdin(Stdio::null())
-            .stdout(out.try_clone().unwrap())
-            .stderr(out)
-            .spawn()
-            .expect("starting a DSA program");
-        Service { child, log }
-    }
-
-    fn log(&self) -> String {
-        std::fs::read_to_string(&self.log).unwrap_or_default()
-    }
-}
-
-impl Drop for Service {
-    fn drop(&mut self) {
-        // SAFETY: kill with a child's own process ID and a constant signal.
-        unsafe {
-            libc::kill(self.child.id() as libc::pid_t, libc::SIGTERM);
-        }
-        let deadline = Instant::now() + Duration::from_secs(60);
-        while Instant::now() < deadline {
-            if let Ok(Some(_)) = self.child.try_wait() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
 }
 
 /// Fails the test with what the service printed and the guest log's last lines.
@@ -103,12 +76,6 @@ fn fail(why: String, service: &Service, log: &Mutex<Vec<String>>) -> ! {
         "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{tail}",
         service.log(),
     )
-}
-
-/// The guest log's lines, also after a thread panicked while it held them.
-fn lock(log: &Mutex<Vec<String>>) -> std::sync::MutexGuard<'_, Vec<String>> {
-    log.lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn client(socket: &Path, wait: Duration) -> HostApiClient {
@@ -453,23 +420,31 @@ struct Adb {
 }
 
 impl Adb {
+    /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most: a command that
+    /// hangs fails the check with what it was, instead of holding it until the job's timeout.
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
-        let out = Command::new(&self.program)
-            .arg("-s")
-            .arg(&self.serial)
-            .args(args)
-            .stdin(Stdio::null())
-            .output()
-            .map_err(|why| format!("running {}: {why}", self.program.display()))?;
-        if !out.status.success() {
-            return Err(format!(
+        let out = run_bounded(
+            Command::new(&self.program)
+                .arg("-s")
+                .arg(&self.serial)
+                .args(args),
+            ADB_LIMIT,
+            usize::MAX,
+        )?;
+        match out.status {
+            Some(status) if status.success() => Ok(out.stdout),
+            Some(_) => Err(format!(
                 "adb {} failed: {}{}",
                 args.join(" "),
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
-            ));
+            )),
+            None => Err(format!(
+                "adb {} did not finish within {} s and was stopped",
+                args.join(" "),
+                ADB_LIMIT.as_secs()
+            )),
         }
-        Ok(out.stdout)
     }
 
     fn shell(&self, command: &str) -> Result<String, String> {
@@ -480,12 +455,17 @@ impl Adb {
     /// Connects, and waits until the guest's shell answers.
     fn connect(&self, wait: Duration) -> Result<(), String> {
         let deadline = Instant::now() + wait;
-        let _ = Command::new(&self.program).arg("start-server").output();
+        let _ = run_bounded(
+            Command::new(&self.program).arg("start-server"),
+            ADB_LIMIT,
+            usize::MAX,
+        );
         loop {
-            let _ = Command::new(&self.program)
-                .arg("connect")
-                .arg(&self.serial)
-                .output();
+            let _ = run_bounded(
+                Command::new(&self.program).arg("connect").arg(&self.serial),
+                ADB_LIMIT,
+                usize::MAX,
+            );
             match self.shell("echo ready") {
                 Ok(out) if out.trim() == "ready" => return Ok(()),
                 Ok(out) if Instant::now() >= deadline => {
@@ -510,7 +490,9 @@ impl Adb {
     /// `screencap` maps SurfaceFlinger's capture for the CPU, and in the guest a buffer the
     /// GPU drew can map as nothing but zeros. Then the screen is read again from a
     /// `screenrecord` frame, which the GPU reads back itself (`glReadPixels`), and that
-    /// picture is kept as `name-record.png`.
+    /// picture is kept as `name-record.png`. screenrecord runs for [SCREENRECORD_LIMIT] at
+    /// most, and stops once it has sent [SCREENRECORD_FRAMES] frames: a screenrecord that sends
+    /// nothing held the whole check until the job's timeout.
     fn screen(&self, dir: &Path, name: &str) -> Result<(usize, Vec<u8>), String> {
         let png = self.run(&["exec-out", "screencap", "-p"])?;
         let _ = std::fs::write(dir.join(format!("{name}.png")), &png);
@@ -522,22 +504,25 @@ impl Adb {
             "screencap gave an empty picture of {name} ({width}x{height}); reading a screenrecord frame instead"
         );
         let size = format!("{width}x{height}");
-        let frames = self.run(&[
-            "exec-out",
-            "screenrecord",
-            "--output-format=raw-frames",
-            "--size",
-            size.as_str(),
-            "--time-limit",
-            "3",
-            "-",
-        ])?;
-        let pixels = newest_raw_frame(&frames, width, height).ok_or_else(|| {
-            format!(
-                "screencap gave an empty picture of {name}, and screenrecord gave {} bytes, not a whole {size} frame",
-                frames.len()
-            )
-        })?;
+        let recorded = run_bounded(
+            Command::new(&self.program)
+                .arg("-s")
+                .arg(&self.serial)
+                .args([
+                    "exec-out",
+                    "screenrecord",
+                    "--output-format=raw-frames",
+                    "--size",
+                    size.as_str(),
+                    "--time-limit",
+                    "3",
+                    "-",
+                ]),
+            SCREENRECORD_LIMIT,
+            width * height * 3 * SCREENRECORD_FRAMES,
+        )?;
+        let pixels = newest_raw_frame(&recorded.stdout, width, height)
+            .ok_or_else(|| screenrecord_failure(name, &size, &recorded))?;
         let picture = dsa_host_linux::shell::png::Rgba {
             width: width as u32,
             height: height as u32,
@@ -563,6 +548,27 @@ impl Adb {
         let _ = std::fs::write(dir.join("overlays.log"), &listed);
         listed
     }
+}
+
+/// Why the screenrecord fallback gave no picture of `name`, which is `size` large.
+fn screenrecord_failure(name: &str, size: &str, recorded: &boot_check::Bounded) -> String {
+    let how = match recorded.status {
+        _ if recorded.timed_out => format!(
+            "did not finish within {} s and was stopped",
+            SCREENRECORD_LIMIT.as_secs()
+        ),
+        Some(status) => format!("ended ({status})"),
+        None => "was stopped".to_string(),
+    };
+    format!(
+        "screencap gave an empty picture of {name}, and screenrecord {how} after sending {} bytes in {:.1} s, not one whole {size} frame{}",
+        recorded.stdout.len(),
+        recorded.took.as_secs_f64(),
+        match String::from_utf8_lossy(&recorded.stderr).trim() {
+            "" => String::new(),
+            said => format!("; it said: {said}"),
+        }
+    )
 }
 
 /// Gives Settings' task a window `height_dp` tall, then opens its home page afresh in it, so
@@ -730,6 +736,51 @@ fn fr34_an_empty_capture_is_read_again_from_the_newest_whole_screenrecord_frame(
 }
 
 #[test]
+fn fr34_a_screenrecord_that_sends_nothing_is_stopped_at_its_limit_with_a_reason() {
+    // A command that never ends and never writes stands in for a screenrecord that hangs.
+    let started = Instant::now();
+    let recorded = run_bounded(
+        Command::new("sh").args(["-c", "echo no frames >&2; exec sleep 600"]),
+        Duration::from_secs(2),
+        usize::MAX,
+    )
+    .unwrap();
+    assert!(started.elapsed() < Duration::from_secs(20));
+    assert!(recorded.timed_out);
+    assert!(recorded.status.is_none());
+    let why = screenrecord_failure("display", "1920x1080", &recorded);
+    assert!(
+        why.contains("did not finish within 30 s and was stopped"),
+        "{why}"
+    );
+    assert!(why.contains("after sending 0 bytes"), "{why}");
+    assert!(why.contains("not one whole 1920x1080 frame"), "{why}");
+    assert!(why.contains("it said: no frames"), "{why}");
+
+    // One that keeps writing is stopped once it has written enough, well before its limit.
+    let started = Instant::now();
+    let recorded = run_bounded(
+        Command::new("sh").args(["-c", "exec yes"]),
+        Duration::from_secs(60),
+        64 * 1024,
+    )
+    .unwrap();
+    assert!(started.elapsed() < Duration::from_secs(20));
+    assert!(!recorded.timed_out);
+    assert!(recorded.stdout.len() >= 64 * 1024);
+
+    // One that ends gives all it wrote.
+    let recorded = run_bounded(
+        Command::new("sh").args(["-c", "printf abc"]),
+        Duration::from_secs(20),
+        usize::MAX,
+    )
+    .unwrap();
+    assert!(recorded.status.is_some_and(|status| status.success()));
+    assert_eq!(recorded.stdout, b"abc");
+}
+
+#[test]
 fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_rounded_cards() {
     let (Some(crosvm), Some(image)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
@@ -744,6 +795,7 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
         .unwrap_or_else(|| PathBuf::from("adb"));
     let started = Instant::now();
     let deadline = started + BUDGET;
+    let _watchdog = Watchdog::start("the system screens check", BUDGET + OVERRUN);
     let dir = scratch();
     let socket = dir.join("host.sock");
     let config = dir.join("dsa-hostd.json");

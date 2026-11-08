@@ -3166,7 +3166,16 @@ FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
 # page and a task window's system menu opens. The window manager applies the override only
 # while this flag is on, and Android leaves it off unless a device turns it on, as large
 # screen devices do.
-FRAMEWORK_OVERLAY_BOOLEANS = {"config_appCompatUserAppAspectRatioSettingsIsEnabled": True}
+#
+# The window manager keeps the boot animation up until a wallpaper has drawn
+# (config_checkWallpaperAtBoot). The image has no wallpaper to draw: Android's default one is
+# SystemUI's ImageWallpaper, and SystemUI is removed, so the window manager gave up only at
+# its 30 s boot timeout ("BOOT TIMEOUT: forcing display enabled"). Every boot was 30 s
+# longer, and the user's storage was unlocked, and widgets became available, 30 s later.
+FRAMEWORK_OVERLAY_BOOLEANS = {
+    "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
+    "config_checkWallpaperAtBoot": False,
+}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'
