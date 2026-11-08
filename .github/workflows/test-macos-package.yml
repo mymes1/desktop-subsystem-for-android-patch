@@ -29,6 +29,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # File and line tables only in the debug builds of the Rust code: backtraces still name
+  # the line, and the cached target folders stay a fraction of their full size.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   package:
     name: Build and package the macOS host (macos, arm64)
@@ -39,6 +44,14 @@ jobs:
         working-directory: dsa
     steps:
       - uses: actions/checkout@v4
+
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: macos-package
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Lint the macOS host
         run: cargo clippy -p dsa-host-macos --all-targets -- -D warnings
