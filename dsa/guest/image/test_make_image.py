@@ -3031,7 +3031,9 @@ class TouchLatencyTests(unittest.TestCase):
             self.assertIn('android:targetPackage="com.android.settings"', manifest)
             self.assertIn('android:isStatic="true"', manifest)
             self.assertIn('android:hasCode="false"', manifest)
-            for folder, theme in [("drawable", "light"), ("drawable-night", "dark")]:
+            # SettingsLib's icon is in drawable-v36; an overlay's value is used only where its
+            # configuration matches at least as well as the one it replaces.
+            for folder, theme in [("drawable-v36", "light"), ("drawable-night-v36", "dark")]:
                 icon = ET.fromstring((root / "src/res" / folder / "settingslib_expressive_icon_back.xml").read_text())
                 ns = "{http://schemas.android.com/apk/res/android}"
                 circle, arrow = icon.findall("item")
@@ -3596,6 +3598,7 @@ ANDROID_VISIBILITY = 0x010100DC
 ANDROID_CLIP_TO_PADDING = 0x010100EB
 RECYCLER_VIEW = "androidx.recyclerview.widget.RecyclerView"
 TYPE_REFERENCE, TYPE_DIMENSION, TYPE_INT_DEC, TYPE_BOOLEAN = 0x01, 0x05, 0x10, 0x12
+TYPE_ATTRIBUTE = 0x02
 
 
 def compiled_layout(root):
@@ -4137,6 +4140,452 @@ class ListBottomMarginTests(unittest.TestCase):
         # words of its own, which also name the window's bottom edge.
         self.assertIn("so the last row of its list sits on the window's bottom edge", outputs[0])
         self.assertNotIn("so the last row of its list sits on the window's bottom edge", outputs[1])
+
+
+def string_pool(strings):
+    """A string pool of UTF-8 strings shorter than 128 bytes, as aapt2 writes one."""
+    data, offsets = b"", []
+    for text in strings:
+        offsets.append(len(data))
+        encoded = text.encode("utf-8")
+        data += bytes([len(text), len(encoded)]) + encoded + b"\0"
+    data += b"\0" * (-len(data) % 4)
+    start = 28 + 4 * len(strings)
+    header = struct.pack("<HHIIIIII", 0x0001, 28, start + len(data), len(strings), 0, 0x100, start, 0)
+    return header + b"".join(struct.pack("<I", offset) for offset in offsets) + data
+
+
+def resource_table(resources, layout="full"):
+    """A compiled resource table of package 0x7f with `resources` ({type: [name]}), one type
+    chunk per type in the default configuration. `layout` is how aapt2 lays the entries out:
+    "full" (32-bit offsets, with one empty entry), "compact" (16-bit offsets and compact
+    entries, with one empty entry) or "sparse" (index and offset pairs)."""
+    types = list(resources)
+    keys = [name for names in resources.values() for name in names]
+    type_pool, key_pool = string_pool(types), string_pool(keys)
+    chunks = b""
+    for type_id, type_name in enumerate(types, 1):
+        entries, offsets = b"", []
+        for name in resources[type_name]:
+            offsets.append(len(entries))
+            if layout == "full":
+                entries += struct.pack("<HHI", 8, 0, keys.index(name)) + struct.pack("<HBBI", 8, 0, 0x10, 0)
+            else:
+                entries += struct.pack("<HHI", keys.index(name), make_image.ARSC_ENTRY_COMPACT, 0)
+        if layout == "sparse":
+            flags = make_image.ARSC_TYPE_SPARSE
+            array = b"".join(struct.pack("<HH", i, offset // 4) for i, offset in enumerate(offsets))
+            count = len(offsets)
+        elif layout == "compact":
+            flags = make_image.ARSC_TYPE_OFFSET16
+            array = b"".join(struct.pack("<H", offset // 4) for offset in offsets) + struct.pack("<H", 0xFFFF)
+            count = len(offsets) + 1
+        else:
+            flags = 0
+            array = b"".join(struct.pack("<I", offset) for offset in offsets) + struct.pack("<I", 0xFFFFFFFF)
+            count = len(offsets) + 1
+        array += b"\0" * (-len(array) % 4)
+        config = struct.pack("<I", 64) + bytes(60)
+        header_size = 8 + 12 + len(config)
+        body = struct.pack("<BBHII", type_id, flags, 0, count, header_size + len(array)) + config + array + entries
+        chunks += struct.pack("<HHI", 0x0201, header_size, 8 + len(body)) + body
+    name = "com.example".encode("utf-16-le").ljust(256, b"\0")
+    package_body = (struct.pack("<I", 0x7F) + name
+                    + struct.pack("<IIIII", 288, len(types), 288 + len(type_pool), len(keys), 0)
+                    + type_pool + key_pool + chunks)
+    package = struct.pack("<HHI", 0x0200, 288, 8 + len(package_body)) + package_body
+    globals_pool = string_pool(["res/x.xml"])
+    return struct.pack("<HHII", 0x0002, 12, 12 + len(globals_pool) + len(package), 1) + globals_pool + package
+
+
+def table_of(names):
+    """A resource table that defines exactly `names` ("type/name")."""
+    resources = {}
+    for name in names:
+        kind, entry = name.split("/", 1)
+        resources.setdefault(kind, []).append(entry)
+    return resource_table(resources)
+
+
+def apk_with_table(table, files=None):
+    """An APK holding the resource table `table` and `files`."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as archive:
+        archive.writestr("resources.arsc", table)
+        for name, data in (files or {}).items():
+            archive.writestr(name, data)
+    return out.getvalue()
+
+
+APP_EXPANDED = 0x7F040249
+APP_BAR = "com.google.android.material.appbar.AppBarLayout"
+SETTINGS_TITLE_LAYOUT = "res/layout-v36/settingslib_expressive_collapsing_toolbar_content_layout.xml"
+NS = "{http://schemas.android.com/apk/res/android}"
+APP_NS = "{http://schemas.android.com/apk/res-auto}"
+
+
+class SystemScreenDesignTests(unittest.TestCase):
+    """The design of the screens Android draws itself: overlays built against each image's
+    own framework-res and app, a large title that folds, rounded cards, bold titles, a blue
+    accent in both themes, and rounded dialogs with their buttons side by side."""
+
+    @staticmethod
+    def sources(write):
+        """The files an overlay's sources writer puts in a folder, by path."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write(root)
+            return {path.relative_to(root).as_posix(): path.read_text()
+                    for path in root.rglob("*") if path.is_file()}
+
+    def every_overlay(self, home_padding=False):
+        return {
+            "DsaFrameworkOverlay.apk": self.sources(make_image.framework_overlay_sources),
+            "DsaSettingsOverlay.apk": self.sources(
+                lambda root: make_image.settings_overlay_sources(root, home_padding=home_padding)),
+            **{apk: self.sources(lambda root, apk=apk: make_image.design_overlay_sources(root, apk))
+               for apk in make_image.DESIGN_OVERLAYS},
+        }
+
+    def test_fr34_a_resource_table_is_read_in_every_entry_layout_aapt2_writes(self):
+        resources = {"dimen": ["settingslib_toolbar_layout_height", "settingslib_preference_corner_radius"],
+                     "style": ["SettingsLibCollapsingToolbarTitle.Expanded"], "id": ["app_bar"]}
+        wanted = {"dimen/settingslib_toolbar_layout_height", "dimen/settingslib_preference_corner_radius",
+                  "style/SettingsLibCollapsingToolbarTitle.Expanded", "id/app_bar"}
+        for layout in ("full", "compact", "sparse"):
+            self.assertEqual(make_image.arsc_resource_names(resource_table(resources, layout)), wanted, layout)
+        with self.assertRaises(ValueError):
+            make_image.arsc_resource_names(b"\x03\x00\x08\x00\x08\x00\x00\x00")
+
+    def test_fr34_every_target_package_has_an_overlay(self):
+        targets = {overlay["target"] for overlay in make_image.SYSTEM_OVERLAYS}
+        self.assertEqual(targets, {"android", "com.android.settings", "com.android.documentsui",
+                                   "com.android.permissioncontroller", "com.android.packageinstaller",
+                                   "com.android.intentresolver"})
+        for apk, files in self.every_overlay().items():
+            overlay = make_image.system_overlay(apk)
+            manifest = ET.fromstring(files["AndroidManifest.xml"])
+            self.assertEqual(manifest.get("package"), overlay["package"])
+            element = manifest.find("overlay")
+            self.assertEqual(element.get(NS + "targetPackage"), overlay["target"])
+            # Static: enabled at every boot, and no app or user can turn it off.
+            self.assertEqual(element.get(NS + "isStatic"), "true")
+            self.assertEqual(manifest.find("application").get(NS + "hasCode"), "false")
+            if apk != "DsaFrameworkOverlay.apk":
+                # Only a resource map makes the framework rewrite the overlay's references to
+                # the app's ids and attributes into the app's own.
+                resources_map = element.get(NS + "resourcesMap").removeprefix("@xml/")
+                mapping = ET.fromstring(files[f"res/xml/{resources_map}.xml"])
+                targets = {item.get("target") for item in mapping.findall("item")}
+                self.assertEqual(targets, set(make_image.overlaid_resources(apk)), apk)
+
+    def test_fr34_the_overlays_are_built_against_the_images_framework_res_and_each_app(self):
+        home_padding = True
+        tables = {apk: table_of(make_image.overlaid_resources(apk, home_padding))
+                  for apk in make_image.SYSTEM_OVERLAY_FILES}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run") as run:
+            root = Path(tmp)
+            framework, settings, others = make_image.build_system_overlays(
+                Path("/sdk/aapt2"), root / "framework-res.apk", root, tables, home_padding)
+            self.assertEqual(set(others), set(make_image.DESIGN_OVERLAYS))
+            links = [call.args for call in run.call_args_list if call.args[1] == "link"]
+            self.assertEqual(len(links), len(make_image.SYSTEM_OVERLAYS))
+            for link in links:
+                self.assertIn(root / "framework-res.apk", link)
+                # The record goes in as an asset.
+                self.assertIn("-A", link)
+            for apk_path in [framework, settings, *others.values()]:
+                apk = Path(apk_path).name
+                record = json.loads((Path(apk_path).parent / make_image.SYSTEM_OVERLAY_RECORD).read_text())
+                self.assertEqual(record["target"], make_image.system_overlay(apk)["target"])
+                self.assertEqual(record["framework_res"],
+                                 hashlib.sha256(tables["DsaFrameworkOverlay.apk"]).hexdigest())
+                self.assertEqual(record["target_resources"], hashlib.sha256(tables[apk]).hexdigest())
+
+    def test_fr34_an_overlay_written_for_another_build_of_its_app_stops_the_image(self):
+        tables = {apk: table_of(make_image.overlaid_resources(apk)) for apk in make_image.SYSTEM_OVERLAY_FILES}
+        tables["DsaSettingsOverlay.apk"] = table_of(
+            [name for name in make_image.overlaid_resources("DsaSettingsOverlay.apk")
+             if name != "style/SettingsLibTheme.CollapsingToolbar.Expressive"])
+        with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run"):
+            with self.assertRaisesRegex(ValueError, "SettingsLibTheme.CollapsingToolbar.Expressive"):
+                make_image.build_system_overlays(Path("/sdk/aapt2"), Path(tmp) / "framework-res.apk",
+                                                 Path(tmp), tables)
+
+    def image(self, framework_table=b"", break_settings=False, without=None):
+        """The names and files of a target_files with every overlay, built against
+        `framework_table` (the image's own when empty), its framework-res, and its apps."""
+        own = table_of(["dimen/config_dialogCornerRadius"])
+        files = {make_image.FRAMEWORK_RES: apk_with_table(own)}
+        for overlay in make_image.SYSTEM_OVERLAYS:
+            app = table_of([f"id/{overlay['apk']}"])
+            if overlay["target_apk"] and overlay["target"] != "android":
+                files["SYSTEM" + overlay["target_apk"]] = apk_with_table(app)
+            if break_settings and overlay["target"] == "com.android.settings":
+                app = table_of(["id/another_build"])
+            record = make_image.overlay_record(overlay["target"], framework_table or own,
+                                               own if overlay["target"] == "android" else app)
+            if overlay["apk"] != without:
+                files[f"VENDOR/overlay/{overlay['apk']}"] = apk_with_table(
+                    b"overlay", {make_image.SYSTEM_OVERLAY_RECORD: json.dumps(record)})
+        return list(files), files.__getitem__
+
+    def test_fr34_check_image_accepts_overlays_built_against_its_framework_res_and_apps(self):
+        self.assertEqual(make_image.system_overlay_problems(*self.image()), [])
+
+    def test_fr34_check_image_rejects_an_image_missing_an_overlay(self):
+        for apk in make_image.SYSTEM_OVERLAY_FILES:
+            problems = make_image.system_overlay_problems(*self.image(without=apk))
+            self.assertEqual(len(problems), 1, apk)
+            self.assertIn(f"VENDOR/overlay/{apk} is missing", problems[0])
+
+    def test_fr34_check_image_rejects_an_overlay_built_against_another_framework_res(self):
+        problems = make_image.system_overlay_problems(*self.image(framework_table=table_of(["id/other"])))
+        self.assertEqual(len(problems), len(make_image.SYSTEM_OVERLAYS))
+        self.assertTrue(all("built against another framework-res" in problem for problem in problems))
+
+    def test_fr34_check_image_rejects_an_overlay_built_for_another_build_of_its_app(self):
+        problems = make_image.system_overlay_problems(*self.image(break_settings=True))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("DsaSettingsOverlay.apk was built for another build of com.android.settings", problems[0])
+
+    def test_fr34_check_image_rejects_an_overlay_that_does_not_say_what_it_was_built_against(self):
+        names, read = self.image()
+        files = {name: read(name) for name in names}
+        files["VENDOR/overlay/DsaIntentResolverOverlay.apk"] = apk_with_table(b"overlay")
+        problems = make_image.system_overlay_problems(list(files), files.__getitem__)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("DsaIntentResolverOverlay.apk does not say which framework-res", problems[0])
+
+    def test_fr34_check_image_runs_the_overlay_check(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        outputs = []
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            for framework_table in (b"", table_of(["id/other"])):
+                names, read = self.image(framework_table=framework_table)
+                with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                    archive.writestr("META/apkcerts.txt", "")
+                    archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                    for name in names:
+                        archive.writestr(name, read(name))
+                outputs.append(subprocess.run([sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                                              capture_output=True, text=True).stdout)
+        self.assertNotIn("built against another framework-res", outputs[0])
+        for apk in make_image.SYSTEM_OVERLAY_FILES:
+            self.assertNotIn(f"{apk} is missing", outputs[0])
+            self.assertIn(f"VENDOR/overlay/{apk} was built against another framework-res", outputs[1])
+
+    def test_fr34_the_image_carries_every_overlay_with_the_platform_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            overlays = {}
+            for apk in make_image.DESIGN_OVERLAYS:
+                (root / apk).write_bytes(apk.encode())
+                overlays[apk] = root / apk
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("META/apkcerts.txt", 'name="DsaPackageInstallerOverlay.apk" certificate="x"\n')
+            make_image.modify(source, root / "modified.zip", overlays=overlays)
+            with zipfile.ZipFile(root / "modified.zip") as archive:
+                certs = archive.read("META/apkcerts.txt").decode()
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                for apk in make_image.DESIGN_OVERLAYS:
+                    self.assertEqual(archive.read(f"VENDOR/overlay/{apk}"), apk.encode())
+                    self.assertEqual(certs.count(f'name="{apk}"'), 1)
+                    self.assertIn(f'name="{apk}" certificate="build/make/target/product/security/platform.x509.pem"',
+                                  certs)
+                    self.assertIn(f"vendor/overlay/{apk} 0 0 644 capabilities=0x0", fs_config)
+        self.assertEqual(fs_config.count("vendor/overlay 0 0 755"), 1)
+
+    def test_fr34_settings_home_opens_with_a_large_title_in_a_tall_window_and_folded_below_600_dp(self):
+        files = self.every_overlay()["DsaSettingsOverlay.apk"]
+        tall = ET.fromstring(files["res/layout-h600dp/settings_homepage_container.xml"])
+        short = ET.fromstring(files["res/layout/settings_homepage_container.xml"])
+        self.assertEqual(make_image.DESIGN_TALL_WINDOW_DP, 600)
+
+        def app_bar(layout):
+            return layout.find("com.google.android.material.appbar.AppBarLayout")
+
+        title = app_bar(tall)[0]
+        self.assertEqual(title.tag, "TextView")
+        self.assertEqual(title.get(NS + "text"), "@*android:string/global_action_settings")
+        self.assertEqual(title.get(NS + "textStyle"), "bold")
+        # It scrolls away with the list and leaves the search bar as the toolbar.
+        self.assertEqual(title.get(APP_NS + "layout_scrollFlags"), "scroll|snap")
+        self.assertGreaterEqual(int(title.get(NS + "layout_height").removesuffix("dp")), 150)
+        self.assertEqual(app_bar(tall)[1].get(NS + "id"), "@+id/app_bar_container")
+        # Below 600 dp the app bar holds the search bar alone: folded from the start.
+        self.assertEqual([child.get(NS + "id") for child in app_bar(short)], ["@+id/app_bar_container"])
+        # Every view the home page's code finds keeps Settings' id, in both layouts.
+        for layout in (tall, short):
+            ids = {element.get(NS + "id") for element in layout.iter()}
+            for name in make_image.SETTINGS_HOME_IDS:
+                self.assertIn(f"@+id/{name}", ids)
+            self.assertEqual(layout.find("androidx.core.widget.NestedScrollView").get(APP_NS + "layout_behavior"),
+                             "com.android.settings.widget.HomepageAppBarScrollingViewBehavior")
+
+    def test_fr34_settings_pages_open_with_a_large_title_in_a_tall_window_and_folded_below_600_dp(self):
+        files = self.every_overlay()["DsaSettingsOverlay.apk"]
+
+        def theme(folder):
+            style = ET.fromstring(files[f"res/{folder}/dsa_title.xml"]).find("style")
+            items = {item.get("name"): item.text for item in style.findall("item")}
+            return style.get("name"), style.get("parent"), items
+
+        # The app bar's theme says whether it opens expanded: folded below 600 dp, expanded
+        # from 600 dp up, over Material's theme as SettingsLib's own style is.
+        self.assertEqual(theme("values-v36"),
+                         ("DsaAppBarTheme", "@style/Theme.MaterialComponents.DayNight", {"expanded": "false"}))
+        self.assertEqual(theme("values-h600dp-v36"),
+                         ("DsaAppBarTheme", "@style/Theme.MaterialComponents.DayNight", {"expanded": "true"}))
+        # Material's theme is named through a stand-in that never matches (watches only), so
+        # the parent resolves to Settings' own.
+        stand_in = ET.fromstring(files["res/values-watch/dsa_stand_ins.xml"]).find("style")
+        self.assertEqual((stand_in.get("name"), stand_in.get("parent")), ("Theme.MaterialComponents.DayNight", ""))
+        mapping = make_image.settings_overlay_map()
+        self.assertEqual(mapping["style/SettingsLibTheme.CollapsingToolbar.Expressive"], "style/DsaAppBarTheme")
+        self.assertEqual(mapping["style/Theme.MaterialComponents.DayNight"], "style/Theme.MaterialComponents.DayNight")
+        self.assertEqual(mapping["attr/expanded"], "attr/expanded")
+        # The app bar reads it from the theme, where SettingsLib's layout says false.
+        layout = compiled_layout((APP_BAR, [("id", ANDROID_ID, TYPE_REFERENCE, 0x7F0A00CB),
+                                            ("expanded", APP_EXPANDED, TYPE_BOOLEAN, 0)], []))
+        apk = ListBottomMarginTests.apk({SETTINGS_TITLE_LAYOUT: layout})
+        edited = make_image.edit_settings_apk(apk, "Settings.apk")
+        with zipfile.ZipFile(io.BytesIO(edited)) as archive:
+            found = layout_attributes(archive.read(SETTINGS_TITLE_LAYOUT))
+        self.assertEqual(found[0][2], [("id", TYPE_REFERENCE, 0x7F0A00CB), ("expanded", TYPE_ATTRIBUTE, APP_EXPANDED)])
+        self.assertEqual(make_image.apk_edits_left(edited, theme_attributes=make_image.SETTINGS_TITLE_EXPANDED), [])
+        self.assertNotEqual(make_image.apk_edits_left(apk, theme_attributes=make_image.SETTINGS_TITLE_EXPANDED), [])
+        # Both of SettingsLib's toolbar layouts, the one for AppCompat activities too.
+        self.assertEqual(set(make_image.SETTINGS_TITLE_EXPANDED), {
+            SETTINGS_TITLE_LAYOUT, "res/layout-v36/settingslib_expressive_support_toolbar_layout.xml"})
+
+    def test_fr34_settings_lists_are_grouped_in_rounded_cards(self):
+        files = self.every_overlay()["DsaSettingsOverlay.apk"]
+        corners = {"settingslib_round_background": (26, 26), "settingslib_round_background_top": (26, 0),
+                   "settingslib_round_background_center": (0, 0), "settingslib_round_background_bottom": (0, 26)}
+        for folder, theme in [("drawable-v36", "light"), ("drawable-night-v36", "dark")]:
+            for name, (top, bottom) in corners.items():
+                ripple = ET.fromstring(files[f"res/{folder}/{name}.xml"])
+                # SettingsLib's padding, which its adapter gives the row.
+                self.assertEqual(ripple.get(NS + "paddingStart"), "32dp")
+                item = ripple.find("item")
+                self.assertEqual(item.get(NS + "start"), "?android:attr/listPreferredItemPaddingStart")
+                shape = item.find("shape")
+                self.assertIn(f"system_surface_bright_{theme}", shape.find("solid").get(NS + "color"))
+                radii = shape.find("corners")
+                self.assertEqual([radii.get(NS + f"{side}Radius") for side in
+                                  ("topLeft", "topRight", "bottomLeft", "bottomRight")],
+                                 [f"{top}dp", f"{top}dp", f"{bottom}dp", f"{bottom}dp"], name)
+        values = ET.fromstring(files["res/values-v36/dsa_design.xml"])
+        self.assertEqual({d.get("name"): d.text for d in values.findall("dimen")},
+                         {"settingslib_preference_corner_radius": "26dp"})
+        # The page and the cards differ in both themes, so the cards show.
+        colors = make_image.DESIGN_COLORS
+        for theme in ("light", "dark"):
+            self.assertNotEqual(colors[f"system_surface_container_{theme}"], colors[f"system_surface_bright_{theme}"])
+
+    def test_fr34_permission_controller_lists_get_the_same_cards(self):
+        def corners(attrs):
+            return compiled_layout(("ripple", [], [("item", [], [("shape", [], [("corners", attrs, [])])])]))
+
+        top = corners([("topLeftRadius", 0x010101A9, TYPE_REFERENCE, 0x7F0705F5),
+                       ("topRightRadius", 0x010101AA, TYPE_REFERENCE, 0x7F0705F5),
+                       ("bottomLeftRadius", 0x010101AB, TYPE_DIMENSION, dp(4)),
+                       ("bottomRightRadius", 0x010101AC, TYPE_DIMENSION, dp(4))])
+        center = corners([("radius", 0x010101A8, TYPE_DIMENSION, dp(4))])
+        apk = ListBottomMarginTests.apk({"res/drawable-v36/settingslib_round_background_top.xml": top,
+                                         "res/drawable-v36/settingslib_round_background_center.xml": center})
+        edited = make_image.edit_permission_controller_apk(apk, "PermissionController.apk")
+        with zipfile.ZipFile(io.BytesIO(edited)) as archive:
+            found_top = layout_attributes(archive.read("res/drawable-v36/settingslib_round_background_top.xml"))
+            found_center = layout_attributes(archive.read("res/drawable-v36/settingslib_round_background_center.xml"))
+        self.assertEqual(found_top[3][2], [("topLeftRadius", TYPE_DIMENSION, dp(26)),
+                                           ("topRightRadius", TYPE_DIMENSION, dp(26)),
+                                           ("bottomLeftRadius", TYPE_DIMENSION, dp(0)),
+                                           ("bottomRightRadius", TYPE_DIMENSION, dp(0))])
+        self.assertEqual(found_center[3][2], [("radius", TYPE_DIMENSION, dp(0))])
+        self.assertEqual(make_image.apk_edits_left(edited, dimensions=make_image.permission_controller_edits()), [])
+
+    def test_fr34_the_accent_is_blue_in_the_light_and_the_dark_theme(self):
+        colors = make_image.DESIGN_COLORS
+
+        def rgb(name):
+            value = colors[name].lstrip("#")
+            return [int(value[i:i + 2], 16) for i in (0, 2, 4)]
+
+        for theme in ("light", "dark"):
+            for role in ("primary", "primary_container", "inverse_primary", "surface_tint"):
+                red, green, blue = rgb(f"system_{role}_{theme}")
+                self.assertGreater(blue, red, role)
+                self.assertGreater(blue, green, role)
+            for tone in range(200, 900, 100):
+                red, green, blue = rgb(f"system_accent1_{tone}_{theme}")
+                self.assertGreater(blue, max(red, green), tone)
+        # Every colour role the design sets for one theme it sets for the other.
+        for name in colors:
+            if name.endswith("_light"):
+                self.assertIn(name.removesuffix("_light") + "_dark", colors)
+        files = self.every_overlay()["DsaFrameworkOverlay.apk"]
+        values = ET.fromstring(files["res/values/dsa_design.xml"])
+        self.assertEqual({c.get("name"): c.text for c in values.findall("color")}, colors)
+
+    def test_fr34_titles_are_bold(self):
+        overlays = self.every_overlay()
+        framework = ET.fromstring(overlays["DsaFrameworkOverlay.apk"]["res/values/dsa_design.xml"])
+        styles = {s.get("name"): s for s in framework.findall("style")}
+        self.assertEqual(set(styles), set(make_image.DESIGN_FRAMEWORK_TITLES))
+        settings = ET.fromstring(overlays["DsaSettingsOverlay.apk"]["res/values-v36/dsa_design.xml"])
+        installer = ET.fromstring(overlays["DsaPackageInstallerOverlay.apk"]["res/values/dsa.xml"])
+        permission = [ET.fromstring(overlays["DsaPermissionControllerOverlay.apk"][f"res/{folder}/dsa.xml"])
+                      for folder in ("values-v36", "values-night-v36")]
+        every = [*styles.values(), *settings.findall("style"), *installer.findall("style"),
+                 *(style for values in permission for style in values.findall("style"))]
+        self.assertGreaterEqual(len(every), 9)
+        for style in every:
+            items = {item.get("name"): item.text for item in style.findall("item")}
+            self.assertEqual(items["android:textStyle"], "bold", style.get("name"))
+            self.assertEqual(items["android:fontFamily"], "sans-serif", style.get("name"))
+        # Each framework title keeps its own parent's other items.
+        for name, parent in make_image.DESIGN_FRAMEWORK_TITLES.items():
+            self.assertEqual(styles[name].get("parent"), f"@*android:style/{parent}")
+
+    def test_fr34_dialogs_have_rounded_corners_and_their_buttons_side_by_side(self):
+        files = self.every_overlay()["DsaFrameworkOverlay.apk"]
+        values = ET.fromstring(files["res/values/dsa_design.xml"])
+        dimens = {d.get("name"): d.text for d in values.findall("dimen")}
+        self.assertEqual(dimens["config_dialogCornerRadius"], "26dp")
+        self.assertEqual(dimens["config_bottomDialogCornerRadius"], "26dp")
+        panel = ET.fromstring(files["res/layout/alert_dialog_button_bar_material.xml"])
+        self.assertEqual(panel.get(NS + "id"), "@*android:id/buttonPanel")
+        bar = panel.find("com.android.internal.widget.ButtonBarLayout")
+        self.assertEqual(bar.get(NS + "orientation"), "horizontal")
+        buttons = bar.findall("Button")
+        # The framework's own ids, which AlertController finds the buttons by, each sharing the row.
+        self.assertEqual([b.get(NS + "id") for b in buttons],
+                         ["@android:id/button3", "@android:id/button2", "@android:id/button1"])
+        self.assertTrue(all(b.get(NS + "layout_weight") == "1" for b in buttons))
+        self.assertEqual(bar.find("Space").get(NS + "id"), "@*android:id/spacer")
+        toast = ET.fromstring(files["res/layout/transient_notification.xml"])
+        self.assertEqual(toast.get(NS + "background"), "@*android:drawable/toast_frame")
+        frame = ET.fromstring(files["res/drawable/toast_frame.xml"])
+        self.assertEqual(frame.find("corners").get(NS + "radius"), "26dp")
+
+    def test_fr34_the_overlays_use_no_samsung_name_or_artwork(self):
+        for apk, files in self.every_overlay(home_padding=True).items():
+            for path, text in files.items():
+                for word in ("one ui", "oneui", "samsung", "sec-roboto", "samsungone"):
+                    self.assertNotIn(word, text.lower(), f"{apk}:{path}")
+        # The font is the image's own sans-serif (Roboto), and the only drawings are DSA's.
+        self.assertEqual(make_image.DESIGN_FONT, "sans-serif")
 
 
 PUBLISHED_KEYCHAIN = "SYSTEM/app/KeyChain/KeyChain.apk"

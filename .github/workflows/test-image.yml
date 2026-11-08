@@ -497,10 +497,12 @@ jobs:
       # The inputs and the images take about 20 GB; the runner has less free by default.
       - name: Make room
         run: |
-          # aapt2, which builds the framework overlay, is in the SDK this step deletes.
+          # aapt2, which builds the system screen overlays, and adb, which reads the booted
+          # image's screens, are in the SDK this step deletes.
           tools=$(ls -d /usr/local/lib/android/sdk/build-tools/* | sort -V | tail -1)
           mkdir -p .scratch
           cp -r "$tools" .scratch/build-tools
+          cp -r /usr/local/lib/android/sdk/platform-tools .scratch/platform-tools
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
 
@@ -741,7 +743,7 @@ jobs:
       - name: Build the widget boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
+        run: cargo test -p dsa-host-linux --test widgets --test system_screens --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
 
       # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
       # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
@@ -792,4 +794,46 @@ jobs:
             /tmp/widget-test-*/guest.log
             /tmp/widget-test-*/first.png
             ~/.local/share/dsa/**/*.log
+          if-no-files-found: ignore
+
+      # The same image booted again, with Settings opened in a window 800 dp tall and one 520 dp
+      # tall and read through adb in developer mode: its view hierarchy and the screen. The home
+      # page's large title must open expanded in the tall window and fold when the list scrolls,
+      # and open folded in the short one, and the rows of a Settings list must be grouped in
+      # rounded cards on the screen.
+      - name: Check Android's system screens on the booted image
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        timeout-minutes: 14
+        working-directory: dsa
+        run: |
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          sudo mkdir -p "$XDG_RUNTIME_DIR"
+          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
+          chmod 0700 "$XDG_RUNTIME_DIR"
+          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
+          # The session bus and the headless compositor the widget check started, or new ones.
+          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
+            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
+          fi
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
+            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
+            for _ in $(seq 50); do
+              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+              sleep 0.2
+            done
+          fi
+          export WAYLAND_DISPLAY=wayland-dsa
+          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
+          cargo test -p dsa-host-linux --test system_screens -- --nocapture --test-threads 1
+
+      - name: Keep the system screens' captures
+        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-screens-captures
+          path: |
+            /tmp/screens-test-*/*.png
+            /tmp/screens-test-*/*.xml
+            /tmp/screens-test-*/*.log
           if-no-files-found: ignore
