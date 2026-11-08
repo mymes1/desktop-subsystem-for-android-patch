@@ -442,7 +442,9 @@ impl ITextStoreACP_Impl for Store_Impl {
             if queued == 0 {
                 break;
             }
-            self.shared.grant(&sink, queued);
+            // The framework asked for this lock earlier and was told TS_S_ASYNC; the sink's
+            // result goes to the sink, and nobody waits for it here.
+            let _ = self.shared.grant(&sink, queued);
         }
         self.shared.edited();
         if let Some(editor) = self.shared.take_pending() {
