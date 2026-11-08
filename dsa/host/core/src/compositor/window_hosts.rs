@@ -210,7 +210,7 @@ pub enum HostAction {
     /// known.
     Start {
         package: String,
-        app: Option<AppInfo>,
+        app: Option<Box<AppInfo>>,
     },
     /// Send `message` to the window host on connection `host`.
     Send { host: HostId, message: ToHost },
@@ -297,7 +297,7 @@ impl WindowHosts {
                 *since = now;
                 vec![HostAction::Start {
                     package: app.package_name.clone(),
-                    app: Some(app.clone()),
+                    app: Some(Box::new(app.clone())),
                 }]
             }
             _ => Vec::new(),
@@ -409,7 +409,7 @@ impl WindowHosts {
                     if named {
                         actions.push(HostAction::Start {
                             package: package_name.clone(),
-                            app: info,
+                            app: info.map(Box::new),
                         });
                     }
                     AppHost {
@@ -704,7 +704,7 @@ impl WindowHosts {
                     *since = now;
                     actions.push(HostAction::Start {
                         package: package.clone(),
-                        app: self.apps.get(package).cloned(),
+                        app: self.apps.get(package).cloned().map(Box::new),
                     });
                 }
             }
@@ -1210,7 +1210,7 @@ mod tests {
             hosts.change(&open(1, CLOCK), now),
             vec![HostAction::Start {
                 package: CLOCK.into(),
-                app: Some(clock)
+                app: Some(Box::new(clock))
             }]
         );
         // An app whose name is not known yet waits for it.
@@ -1219,7 +1219,7 @@ mod tests {
             hosts.app(&info(MAPS), now),
             vec![HostAction::Start {
                 package: MAPS.into(),
-                app: Some(info(MAPS))
+                app: Some(Box::new(info(MAPS)))
             }]
         );
         // A second task of the same app goes to the same window host.
@@ -1241,7 +1241,7 @@ mod tests {
             hosts.app(&info(CLOCK), now + APP_INFO_WAIT / 2),
             vec![HostAction::Start {
                 package: CLOCK.into(),
-                app: Some(info(CLOCK))
+                app: Some(Box::new(info(CLOCK)))
             }]
         );
         assert!(hosts.app(&info(CLOCK), now + APP_INFO_WAIT).is_empty());

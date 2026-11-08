@@ -232,7 +232,7 @@ fn watch_tasks(host_api: PathBuf, events: Sender<ManagerEvent>) {
                 loop {
                     match stream.next(Duration::from_secs(1)) {
                         Ok(Some(event)) => {
-                            if events.send(ManagerEvent::Task(event)).is_err() {
+                            if events.send(ManagerEvent::Task(Box::new(event))).is_err() {
                                 return;
                             }
                         }
