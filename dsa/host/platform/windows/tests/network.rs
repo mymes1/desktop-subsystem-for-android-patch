@@ -1,12 +1,14 @@
 //! The Android VM's HCN network documents and what the host reads back from HCN.
 
+use std::net::IpAddr;
+
 use dsa_host_windows::guid::Guid;
 use dsa_host_windows::network::{
     add_adapter_request, advanced_adapter, advanced_problem, all_query, choose_nat_subnet,
-    endpoint_document, endpoint_facts, endpoint_name, guid_from, host_has_ipv6, host_side_adapter,
-    ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
-    nat_network_document, nat_path_problem, network_facts, network_name, object_name,
-    properties_query, remove_adapter_request, reusable, subnets_in_use,
+    endpoint_document, endpoint_facts, endpoint_name, guest_behind_nat, guest_ipv4, guid_from,
+    host_has_ipv6, host_side_adapter, ids_from_enumeration, mac_bytes, moved_leftover, name_query,
+    nat_ipv6_subnet, nat_network_document, nat_path_problem, network_facts, network_name,
+    object_name, properties_query, remove_adapter_request, reusable, subnets_in_use,
     transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
     NetworkStatusFacts,
 };
@@ -330,12 +332,92 @@ fn fr28_the_host_reaches_the_guests_address_through_its_network_for_android() {
     assert!(problem.contains("172.28.5.2"), "{problem}");
     let problem = nat_path_problem(&name, &nat_endpoint(), &path(None)).unwrap();
     assert!(problem.contains("no route"), "{problem}");
-    // An endpoint without an IPv4 address has nothing for the host to reach.
+    // Before the guest has taken its address, the way to its network is checked all the same:
+    // a VPN that takes the subnet breaks it before the guest is up as much as after.
     let no_address = EndpointFacts {
         addresses: vec![],
         ..nat_endpoint()
     };
-    assert_eq!(nat_path_problem(&name, &no_address, &path(None)), None);
+    assert_eq!(
+        nat_path_problem(&name, &no_address, &path(Some(&own))),
+        None
+    );
+    let problem = nat_path_problem(&name, &no_address, &path(Some("Corporate VPN"))).unwrap();
+    assert!(problem.contains("Corporate VPN"), "{problem}");
+    assert!(problem.contains("172.28.5.1"), "{problem}");
+    let problem = nat_path_problem(&name, &no_address, &path(None)).unwrap();
+    assert!(problem.contains("no route"), "{problem}");
+}
+
+/// An endpoint on the NAT network as HCN describes it right after `HcnCreateEndpoint`, taken
+/// from the Installer test's runners (Windows Server 2022): schema 2, `Flags` 32
+/// (`EnableDhcp`), and no `IpConfigurations`, `Routes` or `Dns`.
+const DHCP_ENDPOINT: &str = r#"{"ID":"5a439de9-a244-43a4-8f03-44b69191ed28",
+    "Name":"DSA dsa-test-fr28-routes eth0","Version":55834574851,
+    "Health":{"Extra":{"Resources":{"AdditionalParams":{},"AllocationOrder":0,
+        "CompartmentOperationTime":0,"Flags":0,"Health":{"LastErrorCode":0},"State":1},
+        "SharedContainers":[]}},
+    "SchemaVersion":{"Major":2,"Minor":0},
+    "HostComputeNetwork":"dd23dcba-a374-46af-91c6-205960394a3a",
+    "MacAddress":"00-15-5D-4B-EC-95","Flags":32}"#;
+
+#[test]
+fn fr28_a_nat_endpoint_takes_its_address_by_dhcp_and_the_host_reads_it_once_the_guest_uses_it() {
+    let facts = endpoint_facts(DHCP_ENDPOINT).unwrap();
+    assert_eq!(
+        facts,
+        EndpointFacts {
+            mac_address: "00-15-5D-4B-EC-95".into(),
+            addresses: vec![],
+            gateway: None,
+            dns_servers: vec![],
+            dhcp: true,
+        }
+    );
+    assert!(!nat_endpoint().dhcp, "an endpoint without the flag");
+    let subnet = subnet("172.28.5.0/24");
+    assert!(subnet.contains("172.28.5.200".parse().unwrap()));
+    assert!(!subnet.contains("172.28.6.2".parse().unwrap()));
+    assert_eq!(subnet.guest_side().to_string(), "172.28.5.2");
+
+    // Right after the VM starts, before the guest's DHCP: no address yet, and the default
+    // route and DNS proxy are the network's gateway, which its DHCP server hands out.
+    let before = guest_behind_nat(&facts, subnet, &[]);
+    assert_eq!(guest_ipv4(&before), None);
+    assert_eq!(before.gateway, Some("172.28.5.1".parse().unwrap()));
+    let status = NetworkStatusFacts {
+        mode: NetworkMode::Nat,
+        endpoint: before,
+        seen: vec![],
+        problem: None,
+    }
+    .to_status();
+    assert!(status.addresses.is_empty(), "{:?}", status.addresses);
+    assert_eq!(status.gateway, "172.28.5.1");
+    assert_eq!(status.dns_servers, vec!["172.28.5.1"]);
+
+    // Once the guest has taken its lease and used it, the host's neighbour entries for its
+    // MAC address hold it. Entries outside the subnet and the gateway are not the guest's.
+    let seen: Vec<IpAddr> = vec![
+        "fd5a:d5a:1:2::7".parse().unwrap(),
+        "192.168.1.9".parse().unwrap(),
+        "172.28.5.1".parse().unwrap(),
+        "172.28.5.137".parse().unwrap(),
+    ];
+    let after = guest_behind_nat(&facts, subnet, &seen);
+    assert_eq!(guest_ipv4(&after), Some("172.28.5.137".parse().unwrap()));
+    let name = network_name(VM);
+    let path = NatPath {
+        gateway: subnet.gateway(),
+        host_has_gateway: true,
+        host_route: Some("Corporate VPN".into()),
+    };
+    let problem = nat_path_problem(&name, &after, &path).unwrap();
+    assert!(problem.contains("172.28.5.137"), "{problem}");
+
+    // An address HCN names is kept over one seen.
+    let named = guest_behind_nat(&nat_endpoint(), subnet, &seen);
+    assert_eq!(guest_ipv4(&named), Some("172.28.5.2".parse().unwrap()));
 }
 
 #[test]

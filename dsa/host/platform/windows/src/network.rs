@@ -118,6 +118,18 @@ impl Ipv4Subnet {
     pub fn gateway(&self) -> Ipv4Addr {
         Ipv4Addr::from(u32::from(self.prefix) + 1)
     }
+
+    /// Whether `address` is in this subnet.
+    pub fn contains(&self, address: Ipv4Addr) -> bool {
+        let mask = Ipv4Subnet::mask(self.length);
+        u32::from(address) & mask == u32::from(self.prefix) & mask
+    }
+
+    /// An address on the guest's side of the subnet, the one after the gateway: what the host
+    /// routes to when it checks its way to the guest before the guest has taken an address.
+    pub fn guest_side(&self) -> Ipv4Addr {
+        Ipv4Addr::from(u32::from(self.prefix) + 2)
+    }
 }
 
 impl std::fmt::Display for Ipv4Subnet {
@@ -220,7 +232,8 @@ pub fn transparent_network_document(name: &str, adapter: &str) -> Value {
 }
 
 /// The document that creates the VM's endpoint `name` on network `network`. HCN gives it its
-/// MAC address and, on a NAT network, its addresses.
+/// MAC address; the guest takes its addresses by DHCP, from the NAT network's connection
+/// sharing or from the LAN.
 pub fn endpoint_document(name: &str, network: Guid) -> Value {
     json!({
         "SchemaVersion": schema(),
@@ -283,8 +296,9 @@ pub struct NatPath {
     pub gateway: Ipv4Addr,
     /// Whether the gateway is one of the host's own addresses now.
     pub host_has_gateway: bool,
-    /// The host adapter the host sends to the guest's IPv4 address through, by name; `None`
-    /// when the host has no route to it.
+    /// The host adapter the host sends to the guest's IPv4 address through, by name, or to
+    /// the guest's side of the network ([`Ipv4Subnet::guest_side`]) before the guest has taken
+    /// an address; `None` when the host has no route there.
     pub host_route: Option<String>,
 }
 
@@ -314,26 +328,60 @@ pub fn nat_path_problem(
             path.gateway
         ));
     }
-    let guest = endpoint.addresses.iter().find_map(|a| match a {
-        IpAddr::V4(v4) => Some(*v4),
-        IpAddr::V6(_) => None,
-    });
-    if let Some(guest) = guest {
-        let own = host_side_adapter(network_name);
-        match path.host_route.as_deref() {
-            Some(route) if route.eq_ignore_ascii_case(&own) => {}
-            Some(route) => problems.push(format!(
-                "this computer sends to Android's address {guest} through {route} rather than its \
-                 network for Android, so programs here cannot reach Android's servers; a VPN that \
-                 takes {guest}'s subnet does this"
-            )),
-            None => problems.push(format!(
-                "this computer has no route to Android's address {guest}, so programs here cannot \
-                 reach Android's servers"
-            )),
-        }
+    // Before the guest has taken its address by DHCP, the route checked is the one to its
+    // network, which a VPN takes just the same.
+    let guest = guest_ipv4(endpoint)
+        .map(|guest| format!("Android's address {guest}"))
+        .unwrap_or_else(|| format!("Android's network (behind {})", path.gateway));
+    let own = host_side_adapter(network_name);
+    match path.host_route.as_deref() {
+        Some(route) if route.eq_ignore_ascii_case(&own) => {}
+        Some(route) => problems.push(format!(
+            "this computer sends to {guest} through {route} rather than its network for Android, \
+             so programs here cannot reach Android's servers; a VPN that takes that subnet does \
+             this"
+        )),
+        None => problems.push(format!(
+            "this computer has no route to {guest}, so programs here cannot reach Android's \
+             servers"
+        )),
     }
     (!problems.is_empty()).then(|| problems.join("; "))
+}
+
+/// The guest's IPv4 address in `endpoint`, if it has one.
+pub fn guest_ipv4(endpoint: &EndpointFacts) -> Option<Ipv4Addr> {
+    endpoint.addresses.iter().find_map(|a| match a {
+        IpAddr::V4(v4) => Some(*v4),
+        IpAddr::V6(_) => None,
+    })
+}
+
+/// The guest's side of a NAT endpoint on `subnet`, as the host knows it once the VM runs.
+///
+/// HCN gives an endpoint on a connection sharing (`ICS`) network no address: the endpoint asks
+/// for DHCP (see [`EndpointFacts::dhcp`]), and the guest takes its address from the network's
+/// DHCP server when it brings eth0 up. So the guest's IPv4 address is the one the host has seen
+/// it use on `subnet` (`seen`, its neighbour entries for the VM's MAC address) until HCN names
+/// one, and there is none before the guest has taken it. The default route the DHCP server
+/// gives is the network's gateway, which the network was made with.
+pub fn guest_behind_nat(
+    endpoint: &EndpointFacts,
+    subnet: Ipv4Subnet,
+    seen: &[IpAddr],
+) -> EndpointFacts {
+    let mut facts = endpoint.clone();
+    if guest_ipv4(&facts).is_none() {
+        let leased = seen.iter().find_map(|a| match a {
+            IpAddr::V4(v4) if subnet.contains(*v4) && *v4 != subnet.gateway() => Some(*v4),
+            _ => None,
+        });
+        facts.addresses.splice(0..0, leased.map(IpAddr::V4));
+    }
+    if facts.gateway.is_none() {
+        facts.gateway = Some(IpAddr::V4(subnet.gateway()));
+    }
+    facts
 }
 
 /// The IDs in an HCN enumeration (a JSON array of GUID strings, with or without braces).
@@ -436,7 +484,14 @@ pub struct EndpointFacts {
     pub addresses: Vec<IpAddr>,
     pub gateway: Option<IpAddr>,
     pub dns_servers: Vec<IpAddr>,
+    /// Whether the endpoint asks for DHCP (`EnableDhcp` in its `Flags`), as HCN makes every
+    /// endpoint on a connection sharing network: the guest takes its address from the
+    /// network's DHCP server, so HCN names none.
+    pub dhcp: bool,
 }
+
+/// HCN endpoint flag: the endpoint's addresses come from DHCP rather than from HCN.
+const ENDPOINT_FLAG_ENABLE_DHCP: u64 = 32;
 
 /// An address field of a schema 1 document, if it holds one that is not unspecified.
 fn address_field(value: &Value, name: &str) -> Option<IpAddr> {
@@ -490,11 +545,15 @@ pub fn endpoint_facts(properties: &str) -> Option<EndpointFacts> {
             .filter_map(|ip| ip.trim().parse().ok())
             .collect();
     }
+    let dhcp = field(&value, "Flags")
+        .and_then(Value::as_u64)
+        .is_some_and(|flags| flags & ENDPOINT_FLAG_ENABLE_DHCP != 0);
     Some(EndpointFacts {
         mac_address,
         addresses,
         gateway,
         dns_servers,
+        dhcp,
     })
 }
 
