@@ -896,12 +896,16 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     if let Some(source) = android_version {
         service = service.with_android_version(source);
     }
-    // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
-    // service's own folder.
-    service = service.with_gapps(dsa_host_core::gapps::Source::new(
+    // Google Play, for a user who asks: downloaded from LiteGapps, or the mirror the
+    // configuration names, and made ready in the service's own folder.
+    let mut gapps = dsa_host_core::gapps::Source::new(
         Arc::new(crate::fetch::CurlFetch),
         config.settings_dir().with_file_name("gapps"),
-    ));
+    );
+    if let Some(project) = config.gapps_project.as_deref().filter(|p| !p.is_empty()) {
+        gapps = gapps.with_project(project);
+    }
+    service = service.with_gapps(gapps);
     if let Some(updates) = &updates {
         service = service.with_android_versions(Arc::new(StoreVersions {
             store: Arc::clone(&updates.store),

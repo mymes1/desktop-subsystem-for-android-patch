@@ -74,7 +74,8 @@ VM 안에서도 CPU 연산과 메모리 접근은 하드웨어 가상화로 거�
 
 - 게스트에 남는 것: 리눅스 커널, ART, 안드로이드 프레임워크
 - 호스트로 옮기는 것: HAL 아래의 장치. 그래픽 합성(D3), Vulkan(D4), 동영상 코덱, 오디오, 카메라, 전원과 배터리, 클립보드, 위치
-- HAL은 원래 안드로이드와 하드웨어 사이의 경계로 설계된 곳이라 호출 빈도가 낮고 인터페이스가 명확하다. 안드로이드의 RPC Binder로 HAL 서비스를 호스트 쪽 프로세스와 소켓으로 잇는다.
+- HAL은 원래 안드로이드와 하드웨어 사이의 경계로 설계된 곳이라 호출 빈도가 낮고 인터페이스가 명확하다. 게스트에는 진짜 안드로이드 HAL 서비스를 두고, 그 서비스가 장치 일을 제어 채널과 같은 프로토콜 정의(proto3, D10)로 만든 메시지에 담아 vsock(Windows는 hvsocket)으로 호스트에 보낸다.
+- 검토한 대안: 안드로이드의 RPC Binder로 HAL 서비스를 호스트 쪽 프로세스와 직접 잇기. 2026-10-16 처음 설계는 이것이었다. 호스트가 HAL의 AIDL 인터페이스를 그대로 구현하니 게스트 쪽 중계가 필요 없다는 장점이 있다. 2026-11-09 소유자가 접었다. Windows와 macOS용 libbinder가 없어 이식이 큰 일이고, 제어 채널(proto3)과 HAL 채널(Binder)로 프로토콜이 두 벌이 되어 버전과 스키마 확인도 두 곳에서 하게 되기 때문이다. 실제 구현은 첫 호스트 HAL(2026-11-04)부터 proto3 방식이었다.
 - 검토한 대안: ART를 호스트에서 돌리고 시스템 콜만 게스트 커널로 넘기기. 시스템 콜이 초당 수만 번이고, mmap, 페이지 폴트, futex, 스레드, 시그널, binder처럼 프로세스 주소 공간에 묶인 호출은 넘길 수 없다. 결국 호스트가 리눅스 시스템 콜을 직접 구현하는 구조, 즉 WSL1이 되고, 그 전신인 Project Astoria와 WSL1은 호환성과 성능 문제로 Microsoft가 접었다.
 - 검토한 대안: ART를 GraalVM으로 바꾸기. 앱은 JVM이 아니라 DEX 바이트코드이고 `android.*` 프레임워크에 기댄다. GraalVM Native Image는 빌드할 때 모든 코드를 알아야 해서 APK를 나중에 설치하는 모델과 맞지 않는다. ART는 이미 AOT 컴파일과 미리 컴파일된 boot image를 쓴다.
 
@@ -140,7 +141,7 @@ Linux 호스트의 VM:
 - 게스트 제어 채널 데몬: Rust. 게스트에서 호스트와의 제어 채널(vsock)은 이 데몬 하나가 열고, 에이전트와 커스텀 hwcomposer는 게스트 안의 binder로 데몬과 통신한다. 에이전트가 다시 시작해도 연결이 유지되고, 버전과 스키마 해시 확인이 한 곳에서 끝난다. 호스트와 같은 전송 계층 코드(프레이밍, 검사 묶음)를 그대로 쓴다.
 - 게스트 HAL: AOSP 관례를 따른다.
 - 프로토콜: 한 곳에 정의하고 각 언어의 타입을 생성한다(SPEC PR-2). 정의 형식은 proto3이고, 세 언어가 같은 바이트를 내도록 map, `Any`, unknown field에 기대는 기능을 쓰지 않는다. 프로토콜 버전은 정의 안의 enum으로, 스키마 해시는 정의를 정규화한 텍스트의 SHA-256으로 생성해 각 언어에 상수로 넣는다.
-  - 다시 검토할 시점: 호스트 HAL(D5) 때문에 libbinder의 RPC Binder를 Windows로 옮기게 되면(M7), 제어 채널도 Stable AIDL로 합칠지 검토한다. Stable AIDL은 Rust, Java, C++ 코드를 생성하고 인터페이스 버전과 해시 확인이 내장되어 있지만, 지금은 Windows용 libbinder가 없다.
+  - 호스트 HAL(D5)도 이 정의를 쓴다. RPC Binder와 Stable AIDL로 옮기는 안은 2026-11-09 접었다(D5의 검토한 대안).
 
 ### D11. 이름
 
@@ -283,7 +284,7 @@ VM을 만드는 일은 대부분 높은 권한이 필요하다. 그래서 그 �
 - Windows: Fluent 2 스타일이다. 입체감 있는 그라데이션, 부드러운 그림자, 둥근 모서리로, Windows 11 기본 앱과 WSA의 분위기를 따른다. WSA의 아이콘을 베끼지 않고 Microsoft의 상표를 쓰지 않는다. 공통 상징을 그대로 쓴다. `.ico`에 16, 20, 24, 32, 40, 48, 64, 256 px를 담고, 작은 크기는 축소하지 않고 손으로 다듬는다. 24 px 이하는 점과 안쪽 판을 빼고 안테나를 굵게 한 그림이다([`dsa/brand/symbol-small.svg`](../dsa/brand/symbol-small.svg)). 알림 영역 아이콘은 단색이고, 밝은 작업 표시줄용과 어두운 작업 표시줄용을 따로 둔다.
 - macOS: Apple HIG(Big Sur 이후)의 둥근 사각형(squircle, 지수 5의 초타원) 바탕이다. 바탕은 짙은 초록 그라데이션(#14674b에서 #0a3e2e)이고, 그 위에 흰 창 하나가 아래쪽 두께를 보이며 놓인다. 창의 제목 표시줄과 안테나는 밝은 초록이다. 모든 macOS 버전에 이 아이콘 하나를 쓴다([`dsa/brand/macos.svg`](../dsa/brand/macos.svg)). `.icns`에 16 px부터 1024 px까지 담는다. Tahoe의 Liquid Glass가 쓸 수 있게 레이어로 나눠 만든다. 메뉴 막대 아이콘은 템플릿 이미지라 시스템이 색을 입힌다.
 - Linux: GNOME HIG와 Adwaita 스타일이다. 아래 두께(#08402f)가 있는 초록 판(#2fd37c) 위에 흰 제목 표시줄과 흰 안테나, 짙은 몸체의 창을 둔다([`dsa/brand/linux.svg`](../dsa/brand/linux.svg)). symbolic 아이콘은 같은 창 모양을 한 색으로 그리고 안쪽 판을 비운다([`dsa/brand/linux-symbolic.svg`](../dsa/brand/linux-symbolic.svg)). 크기 조절 가능한 SVG와 symbolic SVG를 두고, AppStream 메타데이터에 아이콘을 싣는다.
-- 딸린 앱(설정, APK 설치 관리자, 파일)의 아이콘은 공통 상징에 작은 배지를 붙인 것이다. 그래서 같은 제품의 일부로 보이면서 서로 구별된다.
+- 딸린 앱(설정, 파일)의 아이콘은 배지 없는 공통 상징 그대로다. APK 설치 관리자만 따로 그린 열린 상자 아이콘을 쓴다. 2026-11-09 소유자가 배지를 넣지 않기로 했다. 작은 배지는 작은 크기에서 알아보기 어렵고 상징을 어지럽히며, 같은 제품이라는 것은 상징만으로 드러나기 때문이다.
 - 안드로이드 로봇(Bugdroid)은 상징으로 쓰지 않는다. 상징이 Google의 것으로 보이면 안 되고, 로봇은 Google의 브랜드 가이드라인을 따라야 하기 때문이다. 안드로이드 초록색이나 로봇을 조금이라도 쓰면 가이드라인의 조건을 지키고, 그것을 싣는 곳에 "The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License." 문구를 둔다. 상표 표기는 D11과 NFR-6을 따른다.
 - 설정 화면도 운영체제마다 그 운영체제의 설정 앱처럼 만든다. Windows는 WPF와 WPF-UI로 Windows 11 설정 스타일을 따른다(WPF를 유지한다). macOS는 시스템 설정 스타일의 네이티브 설정 창(SwiftUI와 AppKit)이다. Linux는 GTK4와 libadwaita로 GNOME 설정 스타일을 따른다.
 - 세 설정 앱은 모두 같은 로컬 API(D15)의 얇은 클라이언트다. 설정의 검사, 저장, 상태 계산은 서비스에 있고, 앱마다 다시 구현하지 않는다. 그래서 화면을 셋 두어도 동작은 하나다.

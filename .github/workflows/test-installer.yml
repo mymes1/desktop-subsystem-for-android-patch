@@ -19,6 +19,7 @@ on:
     paths:
       - "dsa/**"
       - ".github/workflows/test-installer.yml"
+      - ".github/scripts/installer/**"
   workflow_dispatch:
 
 concurrency:
@@ -143,11 +144,14 @@ jobs:
       # input, so they are ignored on a developer's machine and run here, where nobody uses
       # the desktop. The release build above already holds most of what they need.
       #
-      # With Windows' three- and four-finger touch gestures on (Settings, Bluetooth & devices,
-      # Touch), the shell can take contacts of three or more fingers for itself, and then no
-      # app sees them: on the x64 runners ten fingers reached the task window as three or
-      # none. They are turned off for the runner's user, as a user who wants such gestures in
-      # apps turns them off, and the shell is started again to read the setting.
+      # With Windows 11's three- and four-finger touch gestures on (Settings, Bluetooth &
+      # devices, Touch), Windows keeps three or more fingers from every app: on the Windows 11
+      # and Server 2025 runners not one of ten fingers reached the task window, while one finger
+      # did, held back until it lifted. Server 2022 has no such gestures and passed. The
+      # gestures are turned off for the runner's user, as a user who wants such gestures in
+      # apps turns them off. Writing the registry alone takes effect only at the next sign-in,
+      # so the script sets them the way Settings does and checks they are off; the shell is
+      # then started again so it reads the setting too.
       #
       # DSA_INPUT_TRACE makes each task window log every touch and pen contact that comes
       # down or up in it, so a run that loses fingers says whether Windows delivered them to
@@ -157,14 +161,42 @@ jobs:
         env:
           DSA_INPUT_TRACE: "1"
         run: |
-          Write-Host "touch gestures before: $((Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TouchGestureSetting -ErrorAction SilentlyContinue).TouchGestureSetting)"
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name TouchGestureSetting -Value 0 -Type DWord
+          & ../.github/scripts/installer/touch-gestures-off.ps1
           Get-Process WWAHost, StartMenuExperienceHost -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "running before the tests: $($_.ProcessName) ($($_.Id)) '$($_.MainWindowTitle)'" }
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
+
+      # The Android VM's network made through this machine's Host Compute Network, as the
+      # service makes it: the NAT network and its endpoint are removed when the VM stops,
+      # when its start fails and when the service lets go of it; a network left by a service
+      # that ended uncleanly is used again, and one left from moving the VM is removed. No
+      # guest boots here, so the routes are checked from the host's side: the guest's default
+      # route is an address of this computer on its adapter for the network (so the guest's
+      # traffic follows this computer's routes, a VPN's included), and this computer sends to
+      # the guest's address through that adapter. HCN needs the Host Network Service; a runner
+      # image without it says so in a warning.
+      - name: fr28_the_vms_network_is_removed_when_it_stops_and_the_host_reaches_the_guest
+        working-directory: dsa
+        run: |
+          $hns = Get-Service hns -ErrorAction SilentlyContinue
+          if (-not $hns) {
+            Write-Host "::warning::this runner has no Host Network Service, so the VM's network is not checked here"
+            exit 0
+          }
+          Write-Host "Host Network Service: $($hns.Status)"
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test hcn_network -- --ignored --test-threads 1 --nocapture
+          if ($LASTEXITCODE -ne 0) { throw "the VM's network was not made, removed or routed as it must be" }
+          # Windows takes the host's adapter of a removed network away shortly after.
+          $deadline = (Get-Date).AddSeconds(20)
+          do {
+            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr28*'
+            if (-not $left) { break }
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+          if ($left) { throw "host adapters of the test networks are left: $($left.Name -join ', ')" }
 
       # Nothing is installed yet, so setup.exe opens on its first screen. Pictures of it in
       # the light and the dark theme, of Change, and of the command line help.
