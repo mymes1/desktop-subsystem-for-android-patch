@@ -1876,3 +1876,47 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 - 이미지를 만들거나 부팅하지 않았다. aapt2가 오버레이를 받아들이는지, idmap2가 각 오버레이를 받아들이는지(`adb shell cmd overlay list`), 오버레이 레이아웃의 `app:` 속성이 실제로 Settings의 속성으로 읽히는지, 컴파일된 레이아웃을 고친 Settings와 PermissionController가 그대로 뜨는지는 develop의 이미지 테스트가 처음 확인한다.
 - Android 16 Settings의 덤프는 없었다. 16의 이름은 소스로만 확인했고, 이미지 빌드가 대상 리소스 표로 다시 확인한다.
 - 밝은 테마와 어두운 테마에서 Settings, 파일 선택기, 권한 대화상자가 같은 규칙을 따르는지는 수동 확인이다(FR-34의 네 번째 수용 기준).
+
+## R24. v0.1.9 실기 시험의 실패: GPU 리셋 뒤 프레임워크 재시작, 남은 창, 두 번째 태스크의 강제 종료 (NFR-5, FR-3, FR-14, FR-21, FR-26)
+
+### 확인한 자료
+- 소유자 PC(Samsung Galaxy Book NT960XGP, Intel Arc, Windows 11 x64)에 설치한 DSA 0.1.9와 Android 17 이미지 `17.0.0-16373615-9`(고친 프레임워크 `17-1cda471fb363`). 2026-11-08 20:49 ~ 21:03 KST.
+- `dsa logs collect`가 만든 묶음(`.scratch/rel-0.1.9/diag.zip`): `android/logcat.txt`(2,109줄), `android/dumpsys.txt`, `host/dsa-wm.log`, `host/dsa-hostd.log`, `host/dsa-app-window.log`, `host/android-console.log`(게스트 콘솔, 6,078줄).
+- 창 캡처(`after-tap.png`, `click1..5.png`, `tap1..5.png`), 시험 스크립트(`click.ps1`, `uia.ps1`, `toast.ps1`), 설치 로그(`install2.log`), 응용 프로그램과 시스템 이벤트 로그, `%LOCALAPPDATA%\CrashDumps`.
+- Android 17 `frameworks/native` `ae266dc`의 RenderEngine 소스, gfxstream `d047a57`의 `DeviceOpTracker.cpp`와 `FrameBuffer.cpp`, WiX 5.0.2의 부트스트래퍼 API.
+
+### 방법
+- 게스트 시각과 호스트 시각을 맞추었다. logcat의 이벤트 37001은 벽시계와 부팅 뒤 시간을 함께 적으므로(11:59:54.524에 409.844 s), 게스트 콘솔의 부팅 뒤 시간을 벽시계로 바꿀 수 있다. 호스트의 오디오 닫힘(11:59:55.489)이 audioserver 재시작과 같은 순간이라 보고, 게스트 시계가 호스트보다 약 1.7 ~ 2.0 s 빠르다고 잡았다. 설정 앱 강제 종료(게스트 11:54:21.952)와 호스트의 VkDevice 정리(11:54:19.950)도 같은 차이를 준다.
+- 이 PC에서는 아무것도 실행하지 않았다. 로그와 이벤트 로그만 읽었다.
+
+### 찾은 것
+- **GPU 리셋과 프레임워크 재시작**: 렌더러가 11:59:54.692 UTC에 게스트의 `vkQueueSubmit`에서 `VK_ERROR_DEVICE_LOST`를 받았다. 렌더러는 끝나지 않았고(R18의 패치 0015), 장치 넷에 손실을 알리고 두 장치를 정리했다. 시스템 이벤트 로그에 TDR 기록(4101)은 없다(R18과 같다). 게스트 콘솔에서는 약 0.5 s 뒤(부팅 뒤 412.46 s) `Service 'surfaceflinger' (pid 677) received SIGSEGV`이고, init이 `onrestart`로 zygote를 끝내 프레임워크 전체가 다시 시작했다. abort가 아니라 SIGSEGV이므로 패치가 경고로 바꾼 `LOG_ALWAYS_FATAL` 자리는 아니다. 그 직전(412.165 s) 셸(uid 2000)의 프로세스 하나가 gralloc을 처음 열었다.
+- **스택이 없는 이유**: SurfaceFlinger의 tombstone은 묶음에 없다. 세 가지가 겹쳤다. (1) 에이전트가 dropbox를 읽지 못했다(`Neither user 10068 nor current process has android.permission.READ_DROPBOX_DATA`). Android 11부터 dropbox는 READ_LOGS와 사용 통계 말고도 이 권한을 요구한다. (2) Cuttlefish의 센서 멀티 HAL이 5초마다 abort하며 crash 버퍼와 main 버퍼를 약 70줄씩 채웠다. logcat의 main 버퍼는 12:03 무렵의 것만 남았고, 그 tombstone도 몇 분 만에 순번이 돌아 덮였다. (3) 시험 스크립트의 `logcat -c`. 그래서 SurfaceFlinger가 어디서 죽었는지는 이 묶음으로 알 수 없다.
+- **센서 HAL**: Android 17의 Cuttlefish는 센서 멀티 HAL을 APEX가 아니라 vendor 파일로 둔다(`bin/hw/android.hardware.sensors-service.multihal`, `etc/init/android.hardware.sensors-service-multihal.rc`, `lib64/hw/android.hardware.sensors@2.1-impl.cuttlefish.so`, `etc/sensors/hals.conf`). 이미지는 APEX 둘과 VINTF 조각만 지웠으므로 init이 이 서비스를 계속 띄웠고, 하위 HAL이 Cuttlefish의 센서 제어 소켓을 찾지 못해 abort했다(`Could not connect to sensors control: No such file or directory`).
+- **렌더러의 경고**: `had a waitable pending for -21043 milliseconds. Leaking object.`는 GPU 작업이 멈춘 표시가 아니다. `DeviceOpTracker::PollAndProcessGarbage`는 장치를 쓸 때만 쓰레기를 보고, 5초보다 오래된 것은 끝났는지와 상관없이 새게 두며, 나이를 `timepoint - now`로 거꾸로 적는다. 그 장치를 한동안 아무도 쓰지 않으면 매번 펜스나 세마포어 하나가 샌다. `openColorBuffer cb handle -2147483645 not found`도 오류가 아니다. 게스트의 gralloc(패치 0002)은 공유 ColorBuffer(맨 위 비트가 켜진 핸들)를 먼저 열어 보고, 없으면 만든다. 그 첫 열기마다 렌더러가 오류를 적었다. 둘 다 장치 손실의 원인으로 보이지 않는다.
+- **남은 창(FR-3)**: 프레임워크가 다시 시작하자 에이전트도 끝났다(`dsa-hostd.log`의 "the agent is gone", 이어서 "connected"). 서비스의 태스크 표는 에이전트의 보고로만 바뀌는데, 연결이 끊긴 것은 태스크를 지우지 않았다. 그래서 설정 창은 마지막 프레임(가동 시간 06:52)을 보였고, `dsa tasks`는 태스크 6을 초점이 있는 채로 보였으며, 클릭과 접근성 동작은 없는 태스크로 갔다.
+- **UI Automation Invoke(FR-18)**: Invoke 일곱 번은 모두 21:01:59 ~ 21:02:34에, 곧 재시작 뒤에 있었다. 앱 창 로그가 일곱 번 모두 "the screen changed; the node is no longer there"라고 적었다. 끝난 태스크의 노드에 보낸 동작이다. 재시작 전의 Invoke는 없었으므로 Invoke 자체의 결함은 찾지 못했다. 한 번의 Invoke에 결과 줄이 두 번씩 남은 것은 따로 살펴야 한다.
+- **두 번째 설정 태스크와 강제 종료**: `am start -a android.settings.DEVICE_INFO_SETTINGS`가 태스크 5를 만들고(게스트 11:54:21.795), 115 ms 뒤 에이전트가 태스크 4와 5를 `removeTask`로 지웠다(`remove-by-pid#2440`). 에이전트가 태스크를 지우는 길은 호스트의 `CloseTask`뿐이다. 이어서 에이전트의 닫힌 앱 정리(`ClosedApps`)가 창이 하나도 없게 된 설정 앱을 끝냈다(`stop com.android.settings due to from pid 2440`). 그 정리는 설계대로다. 원인은 그 앞이다. 창 관리자는 앱 창 프로그램과의 연결이 끝나면(`ManagerEvent::Gone`) 그 창들을 사용자가 닫은 것으로 치고 `CloseTask`를 보낸다. 같은 순간 창 관리자는 태스크 4의 프레임을 500 ms 안에 보이지 못했다고 적었고, 앱 창 로그와 창 관리자 로그에는 연결이 끝난 까닭이 없다. 이벤트 로그와 CrashDumps에 앱 창 프로그램의 충돌 기록은 없다. 곧 프로그램은 조용히 끝났다. 조용히 끝나는 길은 셋이다. 창 관리자가 연결을 닫은 경우(창 관리자의 수신 오류가 로그 없이 연결을 끝낸다), 앱 창의 UI 스레드에 깨우는 메시지를 넣지 못한 경우(그것을 UI 스레드가 끝난 것으로 쳤다), 프레임을 보였다는 답을 보내지 못한 경우다. 어느 쪽이었는지는 로그로 가를 수 없다.
+- **20:54:52의 "kill all background"**: 창이 하나도 없게 된 30초 뒤 에이전트가 Doze에 들어가며 `deviceidle force-idle deep`과 `activity kill-all`을 불렀다(이벤트 34000의 `s:shell`, 34009 `deep`). 캐시된 프로세스만 끝나는 설계된 동작이다(INTENT D7).
+- **이미지 배포의 판(FR-14)**: 릴리스 워크플로는 `inputs.json`의 수동 `revision`으로 판을 정하고, 같은 태그가 있으면 `gh release upload --clobber`로 파일을 바꿔 넣었다. 그래서 새 이미지가 `-9`로 다시 나갔다.
+- **설치 프로그램의 판**: CI의 실제 설치 프로그램은 게시된 최신 판보다 한 단계 높은 판(0.1.9)으로 만들고, 같은 판의 릴리스가 그것을 대신한다고 보았다. 그런데 Burn이 MSI를 `REINSTALLMODE="muso"`로 실행했다(`install2.log`). 명령줄의 속성이 패키지의 `REINSTALLMODE=amus`보다 우선하고, `o`는 판이 같은 파일을 두므로 릴리스가 CI 빌드의 파일을 거의 바꾸지 않았다. WiX 5의 부트스트래퍼 API는 `OnPlanMsiPackage`의 `FileVersioning`으로 이 글자를 고르게 한다.
+- **토스트(R23)**: logcat과 dumpsys에 토스트의 흔적은 없다. `NotificationManagerService`는 SystemUI가 없을 때 글자 토스트를 버린다고 따로 적지 않는다. 확인하려면 탭 바로 뒤에 `adb shell dumpsys notification`의 `Toast Queue`를 읽는다. 큐에 기록이 있고 `dumpsys window windows`에 토스트 창이 없으면, 기록은 받았지만 아무도 그리지 않은 것이다.
+
+### 결정
+- 이미지: 센서 HAL을 DSA 것으로 바꿀 때 plain 파일로 둔 다른 센서 서비스와 하위 HAL 목록도 지운다(`make-image.py`의 `cuttlefish_sensors_file`). `check-image.py`는 그런 파일이 남은 이미지를 거절한다.
+- 에이전트: `READ_DROPBOX_DATA`를 요청하고 특권 권한 목록에 넣어, 묶음에 tombstone이 들어가게 한다.
+- 렌더러: 패치 0016은 끝난 쓰레기를 지우고 아직 끝나지 않은 것만 새게 두며 나이를 바로 적는다. 패치 0017은 공유 ColorBuffer의 첫 열기 실패를 오류로 적지 않는다.
+- 서비스: 게스트가 에이전트가 끝났다고 알리면 그 에이전트가 보고한 태스크를 모두 지운다. 그래서 창이 닫히고, 새 프레임워크가 같은 번호를 다시 주어도 새 태스크로 다룬다. 에이전트만 끝난 경우에는 다음 에이전트가 태스크를 다시 보고해 창이 다시 열린다.
+- 앱 창 프로그램: 깨우는 메시지를 넣지 못해도 명령은 채널에 남고 UI 스레드의 타이머(200 ms)가 가져간다. UI 스레드가 끝났을 때만 프로그램이 끝난다. 앱 창과 창 관리자는 연결이 끝난 까닭과, 창이 열린 채 프로그램이 끝나 태스크가 끝나는 일을 로그에 남긴다.
+- 이미지 배포: 워크플로가 게시된 태그를 읽어 같은 빌드와 아키텍처의 가장 높은 판보다 하나 높은 판을 고르고(`make-image.py --next-revision`), 그 판으로 이미지를 만든다(`--revision`). 이미 있는 태그에는 올리지 않고 실패한다. 이미지의 빌드 번호가 AOSP 빌드 번호 × 100 + 판이므로 판은 99까지다.
+- 설치 프로그램: 설치 화면(`SetupApplication.OnPlanMsiPackage`)이 `FileVersioning`을 `All`로 정해, Burn이 `a`를 넣는다. 설치 시험이 Burn 로그에서 이를 확인한다.
+
+### 대가와 남은 것
+- 에이전트만 끝나고 앱은 살아 있는 경우에도 창이 닫혔다가 다시 열린다. 그 경우는 드물고, 끝난 태스크의 창이 남는 것보다 낫다고 보았다.
+- 앱 창 프로그램이 창을 연 채 끝나면 지금도 그 태스크가 끝난다. 작업 관리자의 "프로세스 끝내기"와 충돌을 가를 수 없기 때문이다. 충돌로 끝난 경우에는 창 프로그램을 다시 띄워 창을 다시 여는 쪽이 낫지만, 이것은 동작을 바꾸는 일이라 소유자의 결정이 필요하다.
+
+### 확인하지 못한 것
+- SurfaceFlinger가 GPU 리셋 뒤 SIGSEGV로 끝난 자리. 다음 실기 시험의 묶음에 tombstone이 들어와야 고칠 곳을 알 수 있다. 그 전에는 D24의 수동 기준(GPU 리셋 뒤 system_server의 pid가 바뀌지 않는다)을 충족한다고 말할 수 없다.
+- 두 번째 태스크를 열 때 앱 창 프로그램이 끝난 정확한 길. 이번 수정 뒤의 로그가 그 까닭을 적는다.
+- 리셋 자체의 원인(Intel 드라이버의 엔진 리셋을 부른 게스트 명령). 렌더러 로그는 어느 게스트 프로세스의 제출인지 적지 않는다.
+- 위의 모든 수정은 이 PC에서 빌드하거나 시험하지 않았다. `dsa-host-core`와 `dsa-host-windows`의 clippy와 설치 화면의 `dotnet build`만 `scripts/compile-check.ps1`로 확인했고, 시험과 이미지, 렌더러, 에이전트 빌드는 develop의 CI가 처음 확인한다.
