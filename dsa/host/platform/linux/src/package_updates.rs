@@ -44,6 +44,10 @@ impl UpdateProgram for PackageManagerUpdates {
     }
 }
 
+/// Points the text of one repository entry at a channel's repository, or gives `None` when the
+/// text is not an entry DSA's package wrote.
+type RewriteEntry = fn(&str, ReleaseChannel) -> Option<String>;
+
 /// The repository entries DSA's packages write when they are installed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryEntries {
@@ -70,12 +74,10 @@ impl RepositoryEntries {
         }
     }
 
-    fn all(&self) -> [(&Path, fn(&str, ReleaseChannel) -> Option<String>); 3] {
+    /// Every entry, with the rewrite that points it at a channel.
+    fn all(&self) -> [(&Path, RewriteEntry); 3] {
         [
-            (
-                self.apt.as_path(),
-                apt_entry_for as fn(&str, ReleaseChannel) -> Option<String>,
-            ),
+            (self.apt.as_path(), apt_entry_for as RewriteEntry),
             (self.dnf.as_path(), rpm_entry_for),
             (self.zypper.as_path(), rpm_entry_for),
         ]
