@@ -30,8 +30,8 @@
                 <TextBlock Text="{l:Text WidgetsPlacedHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <TextBlock Text="{l:Text WidgetsPlacedNone.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HasNoPlaced, Converter={StaticResource Visible}}" />
-                <ItemsControl ItemsSource="{Binding Placed, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
+                <l:RowList ItemsSource="{Binding Placed, Mode=OneWay}">
+                    <l:RowList.ItemTemplate>
                         <DataTemplate>
                             <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Apps24}">
                                 <ui:CardControl.Header>
@@ -45,14 +45,14 @@
                                            Icon="{ui:SymbolIcon Delete24}" />
                             </ui:CardControl>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </l:RowList.ItemTemplate>
+                </l:RowList>
 
                 <TextBlock Text="{l:Text WidgetsGalleryHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <TextBlock Text="{l:Text WidgetsGalleryNone.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HasNoOffers, Converter={StaticResource Visible}}" />
-                <ItemsControl ItemsSource="{Binding Offers, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
+                <l:RowList ItemsSource="{Binding Offers, Mode=OneWay}">
+                    <l:RowList.ItemTemplate>
                         <DataTemplate>
                             <ui:CardControl Margin="0,0,0,4">
                                 <ui:CardControl.Header>
@@ -76,8 +76,8 @@
                                            Appearance="Primary" Icon="{ui:SymbolIcon Add24}" />
                             </ui:CardControl>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </l:RowList.ItemTemplate>
+                </l:RowList>
             </StackPanel>
         </ScrollViewer>
     </Grid>

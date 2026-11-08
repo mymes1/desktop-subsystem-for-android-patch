@@ -30,8 +30,8 @@
                 <TextBlock Text="{l:Text BackgroundAppsHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <TextBlock Text="{l:Text BackgroundNone.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HasNone, Converter={StaticResource Visible}}" />
-                <ItemsControl ItemsSource="{Binding Apps, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
+                <l:RowList ItemsSource="{Binding Apps, Mode=OneWay}">
+                    <l:RowList.ItemTemplate>
                         <DataTemplate>
                             <ui:CardControl Margin="0,0,0,4">
                                 <ui:CardControl.Header>
@@ -53,8 +53,8 @@
                                 </StackPanel>
                             </ui:CardControl>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </l:RowList.ItemTemplate>
+                </l:RowList>
 
                 <TextBlock Text="{l:Text BackgroundStoppingHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Icon="{ui:SymbolIcon QuestionCircle24}">
