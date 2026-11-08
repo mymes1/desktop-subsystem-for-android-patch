@@ -4,7 +4,8 @@ using System.Windows.Controls;
 namespace Dsa.Settings;
 
 /// <summary>A list of rows on a settings page, such as the widgets, the apps or the memory
-/// figures. A plain ItemsControl puts each row behind a generic data item, and UI Automation's
+/// figures, or in the APK Installer's window, such as the permissions. The APK Installer builds
+/// this same file, so both apps' lists read alike. A plain ItemsControl puts each row behind a generic data item, and UI Automation's
 /// control view, which screen readers and the installer test read, showed nothing inside those
 /// items: the Widgets page read as headings with no widget under them although every row was
 /// drawn. This list exposes its rows' own text, buttons and switches directly as its
