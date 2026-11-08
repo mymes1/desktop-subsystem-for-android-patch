@@ -27,8 +27,8 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **안드로이드** | 실행 중인 버전, **사용할 버전**(관리자) | `dsa android version`, `dsa android use` |
 | **업데이트** | **DSA 자동 업데이트**(관리자), **프리릴리스 버전 받기**(관리자), **안드로이드 이미지 자동 업데이트**(관리자), **지금 설치** | `program-updates`, `prerelease-updates`, `image-updates`, `dsa update` |
 | **기기 정보** | Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
-| **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹** | `dsa network`, `advanced-networking` |
-| **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 개발자 모드, 추적(관리자), 로그 폴더 | 아래 표 |
+| **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹**, **개발자 모드**(adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
+| **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 추적(관리자), 로그 폴더 | 아래 표 |
 | **로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
 | **정보** | 버전, 라이선스, 소스 코드 | |
 
@@ -45,7 +45,6 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **ARM 전용 앱 실행** | | `arm-translation` |
 | **Google의 ARM 번역기** (ARM64 제외) | | `dsa arm-translation fetch google` |
 | **기본 번역기 사용** (ARM64 제외) | | `dsa arm-translation use-default` |
-| **개발자 모드** | 끔 | `developer-mode`, `adb-port` |
 | **입력 추적**(관리자) | 끔 | `input-trace` |
 | **크기 조정 추적**(관리자) | 끔 | `resize-trace` |
 

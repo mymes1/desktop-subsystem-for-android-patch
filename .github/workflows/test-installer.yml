@@ -429,7 +429,7 @@ jobs:
             Remove-Item Env:DSA_CLI
           }
 
-      # The adb card sits below the fold of the Advanced page, so the page is scrolled to it.
+      # The adb card sits below the fold of the Network page, so the page is scrolled to it.
       # Each theme and language gets a picture at rest and one with the port box focused, and
       # the box's height is measured. The Network page's read-only values get a picture too.
       - name: fr17_text_boxes_and_selectable_values_match_winui
@@ -443,11 +443,11 @@ jobs:
                 Set-AppTheme -Dark:($theme -eq 'dark')
                 $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
-                if (-not $window) { throw "DSA Settings showed no window for the Advanced page within 90 seconds" }
-                Open-SettingsPage $window 'advanced' $lang
+                if (-not $window) { throw "DSA Settings showed no window for the Network page within 90 seconds" }
+                Open-SettingsPage $window 'network' $lang
                 Start-Sleep -Seconds 5
                 $box = $window.FindFirst($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::AutomationIdProperty, 'AdbPortBox')))
-                if (-not $box) { throw "the Advanced page has no adb port box" }
+                if (-not $box) { throw "the Network page has no adb port box" }
                 $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
                 $viewer = $walker.GetParent($box)
                 while ($viewer -and -not $viewer.GetCurrentPropertyValue($Auto::IsScrollPatternAvailableProperty)) {

@@ -125,7 +125,7 @@ public class TextInputStyleTests
         Assert.Equal("4", Setter(block, "CornerRadius"));
         Assert.Equal("0,8,0,0", Setter(block, "Margin"));
 
-        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var command = page.Descendants(Wpf + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbCommand");
         var border = command.Ancestors(Wpf + "Border").First();
         Assert.Equal("{StaticResource CodeBlock}", (string?)border.Attribute("Style"));
@@ -135,10 +135,23 @@ public class TextInputStyleTests
     [Fact]
     public void Fr17_the_adb_port_is_a_library_box_with_a_body_text_label()
     {
-        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var box = page.Descendants(Ui + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbPortBox");
         var label = box.Parent!.Elements(Wpf + "TextBlock").Single();
         Assert.Equal("{StaticResource CardTitle}", (string?)label.Attribute("Style"));
         Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment"));
+    }
+
+    [Fact]
+    public void Fr17_developer_mode_and_adb_are_on_the_network_page_only()
+    {
+        string[] adb = { "DeveloperModeSwitch", "AdbAutoConnectSwitch", "AdbCommand", "AdbPortBox" };
+        var network = File_(Path.Combine("Pages", "NetworkPage.xaml"));
+        var advanced = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        foreach (var name in adb)
+        {
+            Assert.Contains(network.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+            Assert.DoesNotContain(advanced.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+        }
     }
 }

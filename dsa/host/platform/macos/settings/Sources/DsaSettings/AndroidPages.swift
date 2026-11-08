@@ -331,9 +331,11 @@ struct DeviceIdentityPage: View {
     }
 }
 
-/// Network: how Android reaches the network now, and the advanced networking switch.
+/// Network: how Android reaches the network now, the advanced networking switch, and developer
+/// mode, through which adb on this Mac reaches Android.
 struct NetworkPage: View {
     @ObservedObject var vm: SettingsViewModel
+    @State private var adbPort = ""
 
     var body: some View {
         Form {
@@ -360,21 +362,47 @@ struct NetworkPage: View {
                     Banner(kind: .info, title: T("NetworkRestartBar.Title"), message: T("NetworkRestartBar.Message"))
                 }
             }
+            Section(T("DeveloperHeader.Text")) {
+                SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
+                          isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
+                SwitchRow(title: T("AdbAutoConnectCard.Header"), detail: T("AdbAutoConnectCard.Description"),
+                          isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
+                Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
+                LabeledContent {
+                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                } label: {
+                    RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
+                }
+                LabeledContent(T("AdbPortLabel.Text")) {
+                    TextField("", text: $adbPort)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                        .onSubmit { Task { await vm.setAdbPort(adbPort) } }
+                        .disabled(!vm.canChange)
+                }
+            }
         }
         .settingsPage()
         .task {
             await vm.load()
+            adbPort = String(vm.adbPort)
             await vm.refreshNetwork()
+            // Where auto-connect stands changes by itself, so it is read again while the page
+            // is shown; the task ends when the page goes away.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await vm.pollAdbAutoConnect()
+            }
         }
+        .onChange(of: vm.adbPort) { port in adbPort = String(port) }
     }
 }
 
-/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps,
-/// developer mode, the traces, the logs and the command line.
+/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps, the
+/// traces, the logs and the command line.
 struct AdvancedPage: View {
     @ObservedObject var vm: SettingsViewModel
     @ObservedObject var gapps: GappsViewModel
-    @State private var adbPort = ""
 
     var body: some View {
         Form {
@@ -455,25 +483,6 @@ struct AdvancedPage: View {
                 }
             }
             GappsSection(vm: gapps)
-            Section(T("DeveloperHeader.Text")) {
-                SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
-                          isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
-                SwitchRow(title: T("AdbAutoConnectCard.Header"), detail: T("AdbAutoConnectCard.Description"),
-                          isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
-                Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
-                LabeledContent {
-                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                } label: {
-                    RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
-                }
-                LabeledContent(T("AdbPortLabel.Text")) {
-                    TextField("", text: $adbPort)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 90)
-                        .onSubmit { Task { await vm.setAdbPort(adbPort) } }
-                        .disabled(!vm.canChange)
-                }
-            }
             Section(T("DiagnosticsHeader.Text")) {
                 AdministratorSwitchRow(
                     title: T("InputTraceCard.Header"), detail: T("InputTraceCard.Description"), isOn: vm.inputTrace,
@@ -504,17 +513,7 @@ struct AdvancedPage: View {
             }
         }
         .settingsPage()
-        .task {
-            await vm.load()
-            adbPort = String(vm.adbPort)
-            // Where auto-connect stands changes by itself, so it is read again while the page
-            // is shown; the task ends when the page goes away.
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                await vm.pollAdbAutoConnect()
-            }
-        }
-        .onChange(of: vm.adbPort) { port in adbPort = String(port) }
+        .task { await vm.load() }
     }
 }
 

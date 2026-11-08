@@ -29,8 +29,8 @@ one. They are marked "(admin)" below.
 | **Android** | The running version, **Version to use** (admin) | `dsa android version`, `dsa android use` |
 | **Updates** | **Update DSA automatically** (admin), **Get pre-release versions** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `prerelease-updates`, `image-updates`, `dsa update` |
 | **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
-| **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking** | `dsa network`, `advanced-networking` |
-| **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, developer mode, traces (admin), log folders | see below |
+| **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking**, **Developer mode** (adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
+| **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, traces (admin), log folders | see below |
 | **Logs** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
 | **About** | Versions, licences, source code | |
 
@@ -47,7 +47,6 @@ one. They are marked "(admin)" below.
 | **Run apps built only for ARM** | | `arm-translation` |
 | **Google's ARM translator** (not on ARM64) | | `dsa arm-translation fetch google` |
 | **Use the default translator** (not on ARM64) | | `dsa arm-translation use-default` |
-| **Developer mode** | Off | `developer-mode`, `adb-port` |
 | **Input trace** (admin) | Off | `input-trace` |
 | **Resize trace** (admin) | Off | `resize-trace` |
 

@@ -365,6 +365,7 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
     advanced.add(&restart);
     *switch.borrow_mut() = Some(advanced_switch);
     page.add(&advanced);
+    page.add(&developer(ctx, &page));
 
     let reload = {
         let (ctx, show, switch) = (ctx.clone(), show.clone(), switch.clone());
@@ -397,16 +398,13 @@ struct Switches {
     links: Switch,
     clipboard: Switch,
     arm: Switch,
-    developer: Switch,
-    auto_connect: Switch,
-    auto_connect_state: adw::ActionRow,
     freeze: Switch,
     input_trace: Switch,
     resize_trace: Switch,
 }
 
-/// Files, links, ARM apps, developer mode, the clipboard, freezing, the diagnostics, the logs,
-/// the command line and resetting Android's data.
+/// Files, links, ARM apps, the clipboard, freezing, the diagnostics, the logs, the command line
+/// and resetting Android's data.
 pub fn advanced(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
     let settings: Rc<RefCell<Option<Settings>>> = Rc::default();
@@ -595,49 +593,8 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     // Google Play.
     google_play(ctx, &page);
 
-    // Developer.
-    let developer_group = group(&tr("Developer"), None);
-    let developer = user_switch(
-        "developer-mode",
-        tr("Developer mode"),
-        tr("Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."),
-    );
-    developer_group.add(&developer.row);
-    let auto_connect = user_switch(
-        "adb-auto-connect",
-        tr("Connect adb automatically"),
-        tr("On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."),
-    );
-    developer_group.add(&auto_connect.row);
-    let auto_connect_state = action_row(
-        &tr("Automatic connection"),
-        &view::adb_auto_connect_text(AdbAutoConnectState::Off),
-    );
-    developer_group.add(&auto_connect_state);
-    let (adb_row, adb_command) = value_row(
-        &tr("Connect adb"),
-        &format!("adb connect 127.0.0.1:{}", crate::model::DEFAULT_ADB_PORT),
-    );
-    adb_row.set_subtitle(&tr(
-        "While developer mode is on and Android is running, run this command:",
-    ));
-    adb_command.add_css_class("monospace");
-    developer_group.add(&adb_row);
-    let port = adw::EntryRow::builder()
-        .title(tr("Port"))
-        .show_apply_button(true)
-        .input_purpose(gtk::InputPurpose::Digits)
-        .use_markup(false)
-        .build();
-    {
-        let (ctx, show) = (ctx.clone(), show.clone());
-        port.connect_apply(move |entry| {
-            let value = entry.text().trim().to_string();
-            let show = show.clone();
-            request(&ctx, move |c| c.set("adb-port", &value), move |r| show(r));
-        });
-    }
-    developer_group.add(&port);
+    // The clipboard and freezing.
+    let developer_group = group("", None);
     let clipboard = user_switch(
         "clipboard",
         tr("Share the clipboard with Android"),
@@ -748,26 +705,100 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         links,
         clipboard,
         arm,
-        developer,
-        auto_connect,
-        auto_connect_state: auto_connect_state.clone(),
         freeze,
         input_trace,
         resize_trace,
     });
-    {
-        let (show, port) = (show.clone(), port.clone());
-        request(
-            ctx,
-            |c| c.settings(),
-            move |r| {
-                if let Ok(settings) = r.as_ref() {
-                    port.set_text(&settings.adb_port.to_string());
-                    adb_command.set_label(&settings.adb_connect());
-                }
-                show(r);
-            },
+    request(ctx, |c| c.settings(), move |r| show(r));
+    page.root.clone().upcast()
+}
+
+/// Developer mode: whether adb reaches Android through this computer's loopback port, the
+/// port, attaching it to the adb server by itself, and the command that connects. It is on
+/// the Network page, since it is how a program on this computer reaches Android.
+fn developer(ctx: &Shared, page: &Rc<Page>) -> adw::PreferencesGroup {
+    let settings: Rc<RefCell<Option<Settings>>> = Rc::default();
+    let switches: Rc<RefCell<Option<(Switch, Switch)>>> = Rc::default();
+    let developer_group = group(&tr("Developer"), None);
+    let auto_connect_state = action_row(
+        &tr("Automatic connection"),
+        &view::adb_auto_connect_text(AdbAutoConnectState::Off),
+    );
+    let (adb_row, adb_command) = value_row(
+        &tr("Connect adb"),
+        &format!("adb connect 127.0.0.1:{}", crate::model::DEFAULT_ADB_PORT),
+    );
+    let port = adw::EntryRow::builder()
+        .title(tr("Port"))
+        .show_apply_button(true)
+        .input_purpose(gtk::InputPurpose::Digits)
+        .use_markup(false)
+        .build();
+    // Shows what the service now keeps; every row follows it.
+    let show: Rc<dyn Fn(Result<Settings, crate::api::Failure>)> = {
+        let (page, settings, switches) = (page.clone(), settings.clone(), switches.clone());
+        let (state, command, port) = (
+            auto_connect_state.clone(),
+            adb_command.clone(),
+            port.clone(),
         );
+        Rc::new(move |r: Result<Settings, crate::api::Failure>| {
+            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+            let now = match r {
+                Ok(now) => now,
+                Err(_) => match settings.borrow().clone() {
+                    Some(kept) => kept,
+                    None => return,
+                },
+            };
+            if let Some((developer, auto_connect)) = switches.borrow().as_ref() {
+                developer.set(now.developer_mode);
+                auto_connect.set(now.adb_auto_connect);
+            }
+            state.set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
+            command.set_label(&now.adb_connect());
+            port.set_text(&now.adb_port.to_string());
+            *settings.borrow_mut() = Some(now);
+        })
+    };
+    let user_switch = |name: &'static str, title: String, subtitle: String| {
+        let (ctx, show) = (ctx.clone(), show.clone());
+        Switch::new(&title, &subtitle, move |on| {
+            let show = show.clone();
+            request(&ctx, move |c| c.switch(name, on), move |r| show(r));
+        })
+    };
+    let developer = user_switch(
+        "developer-mode",
+        tr("Developer mode"),
+        tr("Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."),
+    );
+    developer_group.add(&developer.row);
+    let auto_connect = user_switch(
+        "adb-auto-connect",
+        tr("Connect adb automatically"),
+        tr("On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."),
+    );
+    developer_group.add(&auto_connect.row);
+    developer_group.add(&auto_connect_state);
+    adb_row.set_subtitle(&tr(
+        "While developer mode is on and Android is running, run this command:",
+    ));
+    adb_command.add_css_class("monospace");
+    developer_group.add(&adb_row);
+    {
+        let (ctx, show) = (ctx.clone(), show.clone());
+        port.connect_apply(move |entry| {
+            let value = entry.text().trim().to_string();
+            let show = show.clone();
+            request(&ctx, move |c| c.set("adb-port", &value), move |r| show(r));
+        });
+    }
+    developer_group.add(&port);
+    *switches.borrow_mut() = Some((developer, auto_connect));
+    {
+        let show = show.clone();
+        request(ctx, |c| c.settings(), move |r| show(r));
     }
     // Where auto-connect stands changes by itself, so it is read again every few seconds
     // while the page is shown and developer mode is on. Only the state row follows it, so a
@@ -802,7 +833,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
             gtk::glib::ControlFlow::Continue
         });
     }
-    page.root.clone().upcast()
+    developer_group
 }
 
 /// The rows of the ARM apps section for Google's ARM translator: getting it, the notice while
@@ -1039,10 +1070,6 @@ fn apply(s: &Switches, now: &Settings) {
     s.links.set(now.links_in_android);
     s.clipboard.set(now.clipboard);
     s.arm.set(now.arm_translation);
-    s.developer.set(now.developer_mode);
-    s.auto_connect.set(now.adb_auto_connect);
-    s.auto_connect_state
-        .set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
     s.freeze.set(now.freeze);
     s.input_trace.set(now.input_trace);
     s.resize_trace.set(now.resize_trace);
