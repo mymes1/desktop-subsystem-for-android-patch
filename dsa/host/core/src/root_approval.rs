@@ -539,7 +539,8 @@ pub fn service_log() -> LogLine {
     Arc::new(|line: &str| eprintln!("{line}"))
 }
 
-/// The policy for the running boot, and whether the boot was started with the feature on.
+/// The policy for the running boot, and whether the boot was started with the feature on and
+/// has not seen it turned off since.
 struct BootPolicy {
     booted_enabled: bool,
     policy: Policy,
@@ -631,7 +632,13 @@ impl RootApproval {
     fn decide_now(&self, package: &str) -> (Decision, Level) {
         let (enabled, levels) = (self.levels)();
         let mut boot = self.boot();
-        let enabled = boot.booted_enabled && enabled;
+        // Off applies at once and stays off for the rest of the boot: the guest's su guard
+        // and relay are set up at boot, so turning the feature on again waits for the next
+        // start of Android.
+        if !enabled {
+            boot.booted_enabled = false;
+        }
+        let enabled = boot.booted_enabled;
         let policy = &mut boot.policy;
         if policy.enabled() != enabled {
             policy.set_enabled(enabled);

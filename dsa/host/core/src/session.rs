@@ -722,6 +722,9 @@ struct RootElevationNow {
     /// kernel's su guard and the relay are set up at boot, so a boot that started with the
     /// feature off keeps it off until the next start, and is told nothing.
     boot_on: Option<bool>,
+    /// Whether the switch was turned off while the running boot runs. Off applies at once,
+    /// and the boot stays off until the next start even when the switch is turned on again.
+    off_since_boot: bool,
     /// What the running boot was last told, so an unchanged config is not sent again.
     sent: Option<control::RootElevationConfig>,
 }
@@ -735,7 +738,7 @@ impl RootElevationNow {
             return None;
         }
         Some(control::RootElevationConfig {
-            enabled: self.on,
+            enabled: self.on && !self.off_since_boot,
             apps: self
                 .apps
                 .iter()
@@ -891,6 +894,7 @@ impl Shared {
     fn root_elevation_boot(&self, running: bool) {
         let mut now = self.root_config.lock().unwrap_or_else(|e| e.into_inner());
         now.boot_on = running.then_some(now.on);
+        now.off_since_boot = false;
         now.sent = None;
     }
 
@@ -1560,6 +1564,9 @@ impl Session {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             now.on = on;
+            if !on && now.boot_on.is_some() {
+                now.off_since_boot = true;
+            }
             now.apps = apps
                 .into_iter()
                 .filter(|app| app.level != Level::Off)
