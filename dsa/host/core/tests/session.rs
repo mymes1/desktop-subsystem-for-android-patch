@@ -1568,6 +1568,52 @@ fn fr6_the_cursor_of_a_tasks_editor_reaches_a_watcher() {
     );
 }
 
+#[test]
+fn fr6_the_editor_of_a_task_reaches_a_watcher_and_a_description_that_makes_no_sense_does_not() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_tasks();
+    send_body(&mut agent, task_updated(7, "Clock"));
+    let described = |selection_end| {
+        Body::ImeEditor(dsa_protocol::control::ImeEditor {
+            task_id: 7,
+            kind: dsa_protocol::control::ImeInputKind::Password as i32,
+            text: "ab".into(),
+            text_start: 10,
+            selection_start: 12,
+            selection_end,
+            composition_start: 0,
+            composition_end: 0,
+        })
+    };
+    // A selection past the end of the text is dropped; the next description is taken.
+    send_body(&mut agent, described(40));
+    send_body(&mut agent, described(11));
+    send_body(
+        &mut agent,
+        Body::TaskRemoved(dsa_protocol::control::TaskRemoved { task_id: 7 }),
+    );
+    let events: Vec<TaskEvent> = (0..3)
+        .map(|_| watch.events.recv_timeout(WAIT).expect("a task event"))
+        .collect();
+    assert_eq!(
+        events,
+        vec![
+            TaskEvent::Updated(clock(7, "Clock")),
+            TaskEvent::ImeEditor {
+                task_id: 7,
+                editor: dsa_host_core::ime::ImeEditor {
+                    kind: dsa_host_core::ime::InputKind::Password,
+                    text: "ab".into(),
+                    text_start: 10,
+                    selection: (12, 11),
+                    composition: None,
+                },
+            },
+            TaskEvent::Removed { task_id: 7 },
+        ]
+    );
+}
+
 /// A control channel over a loopback socket, which can share its socket between a reader
 /// and a sender as hvsocket and vsock do; the in-memory one cannot.
 struct Tcp(std::net::TcpStream);
@@ -2015,6 +2061,44 @@ fn fr10_the_wait_before_the_host_sleeps_ends_in_time_without_an_answer() {
     assert!(!hub.host_sleeping(Duration::from_millis(300)));
     let waited = started.elapsed();
     assert!(waited < Duration::from_secs(2), "waited {waited:?}");
+}
+
+#[test]
+fn fr10_every_hosts_sleep_notification_waits_at_most_two_seconds_for_the_guest() {
+    use dsa_host_core::power::{SleepEvent, SLEEP_WAIT};
+    assert_eq!(SLEEP_WAIT, Duration::from_secs(2));
+    let hub = Arc::new(PowerHub::new());
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    let session = Arc::new(session);
+    session.windows_shown(true).unwrap();
+    hub.attach(&session);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+
+    // A guest that answers ends the wait with its answer.
+    let sleeping = {
+        let hub = Arc::clone(&hub);
+        thread::spawn(move || hub.on_sleep_event(SleepEvent::Sleeping))
+    };
+    assert_eq!(next_body(&mut agent), screen(false));
+    assert_eq!(next_body(&mut agent), host_sleep(true, 0));
+    send_body(&mut agent, sleep_ready());
+    assert!(sleeping.join().unwrap());
+    assert!(hub.on_sleep_event(SleepEvent::Woke));
+    assert!(matches!(next_body(&mut agent), Body::HostSleep(_)));
+    assert_eq!(next_body(&mut agent), screen(true));
+    assert!(session.wait_for(SessionState::Active, WAIT));
+
+    // A guest that does not answer holds the host's sleep for no more than two seconds.
+    let started = std::time::Instant::now();
+    assert!(!hub.on_sleep_event(SleepEvent::Sleeping));
+    let waited = started.elapsed();
+    assert!(
+        waited < SLEEP_WAIT + Duration::from_millis(500),
+        "waited {waited:?}"
+    );
 }
 
 #[test]

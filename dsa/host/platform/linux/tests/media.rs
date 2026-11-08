@@ -67,11 +67,14 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
     // The codec services' buffer pool queues.
     "dsa_codec2_tmpfs",
 ];
-/// The media and root checks include three boots.
-const BUDGET: Duration = Duration::from_secs(1260);
-/// How long past its budget the test may run before it stops everything it started and
-/// ends: inside the job step's 25 minutes, so the step never kills it with its VM still
-/// running.
+/// The media check, boot included, stays under twelve minutes.
+const MEDIA_BUDGET: Duration = Duration::from_secs(690);
+/// The root check boots three times (as it starts, then with root elevation on and off), so
+/// it stays under twenty-one minutes.
+const ROOT_BUDGET: Duration = Duration::from_secs(1260);
+/// How long past its budget a check may run before it stops everything it started and ends:
+/// inside its job step's limit (14 minutes for media, 23 for root), so the step never kills
+/// it with its VM still running.
 const OVERRUN: Duration = Duration::from_secs(60);
 /// How long one adb command may take. The probe's longest check plays a second of sound and
 /// encodes and decodes a second of video and audio with each decoder; a log dump of the
@@ -634,8 +637,13 @@ fn boot_check(check_media: bool, check_root: bool) {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("adb"));
     let started = Instant::now();
-    let deadline = started + BUDGET;
-    let _watchdog = Watchdog::start("the media check", BUDGET + OVERRUN);
+    let (budget, what) = if check_root {
+        (ROOT_BUDGET, "the root check")
+    } else {
+        (MEDIA_BUDGET, "the media check")
+    };
+    let deadline = started + budget;
+    let _watchdog = Watchdog::start(what, budget + OVERRUN);
     let dir = scratch(if check_root { "root" } else { "media" });
     let approver = dir.join("approver");
     std::fs::create_dir_all(&approver).unwrap();

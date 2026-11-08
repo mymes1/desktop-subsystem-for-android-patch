@@ -161,8 +161,8 @@ pub struct SetTaskCaption {
     pub end_width: u32,
 }
 /// Turns the connection into a stream of input for the caller's Android: after the answer
-/// (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
-/// as they come, without answering them. Input is never waited on, so a pointer that moves
+/// (Done), the client sends only PointerEvent, KeyEvent and text input frames, which the
+/// service passes on as they come, without answering them. Input is never waited on, so a pointer that moves
 /// fast is not held back by the answers.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct StreamInput {}
@@ -175,6 +175,18 @@ pub struct StreamInput {}
 pub struct SetWindowsShown {
     #[prost(bool, tag = "1")]
     pub shown: bool,
+}
+/// Says whether the caller's window manager can turn the host's three- and four-finger touch
+/// gestures off (Settings.touch_gestures_off): `state` is "unsupported", "available" or
+/// "failed", and `problem` says why while it is "failed". The window manager sends it when
+/// it connects and whenever it changes. The service keeps the latest for the caller until it
+/// stops, and reports it in Settings. The service answers Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReportTouchGestures {
+    #[prost(string, tag = "1")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub problem: ::prost::alloc::string::String,
 }
 /// Freezes the caller's Android: its processes stop until a task window is shown again. Its
 /// notifications, alarms and widgets stop with them. Returns at once with the status.
@@ -981,6 +993,53 @@ pub struct ImeCursor {
     #[prost(message, optional, tag = "2")]
     pub cursor: ::core::option::Option<Rect>,
 }
+/// The editor focused in a task, as the input method reads it: its kind, and its text around
+/// the selection. Offsets are in UTF-16 code units from the start of the editor's whole text;
+/// the selection and the composition lie within `text`, and there is no composition when its
+/// start equals its end.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImeEditor {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(enumeration = "ImeInputKind", tag = "2")]
+    pub kind: i32,
+    #[prost(string, tag = "3")]
+    pub text: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "4")]
+    pub text_start: u32,
+    #[prost(uint32, tag = "5")]
+    pub selection_start: u32,
+    #[prost(uint32, tag = "6")]
+    pub selection_end: u32,
+    #[prost(uint32, tag = "7")]
+    pub composition_start: u32,
+    #[prost(uint32, tag = "8")]
+    pub composition_end: u32,
+}
+/// The host's input method selects text in the focused editor of a task, sent on a connection
+/// that streams input: from `start` to `end` in UTF-16 code units from the start of the
+/// editor's text, or the cursor at `start` when they are equal.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImeSetSelection {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub start: u32,
+    #[prost(uint32, tag = "3")]
+    pub end: u32,
+}
+/// The host's input method makes text already in the focused editor of a task its
+/// composition, sent on a connection that streams input, as it does when it reconverts a word.
+/// Equal `start` and `end` end the composition and keep its text.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImeSetComposingRegion {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub start: u32,
+    #[prost(uint32, tag = "3")]
+    pub end: u32,
+}
 /// A rectangle in Android display pixels: left and top inclusive, right and bottom
 /// exclusive.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1123,12 +1182,6 @@ pub struct AppInfo {
     /// Whether the app supports several windows at once, so its windows offer New window.
     #[prost(bool, tag = "15")]
     pub multiple_windows: bool,
-    /// How far the app may elevate to root: "off" (the default, su does not exist
-    /// for it), "ask" (each su call waits for the host's administrator approval) or "remember"
-    /// (approved without asking, within the grace). "unavailable" when root elevation is off for
-    /// the whole computer, so the level cannot be set. Set it with SetAppRoot.
-    #[prost(string, tag = "16")]
-    pub root: ::prost::alloc::string::String,
 }
 /// Installs an app of the caller's Android again from the APKs it has there, with its native
 /// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
@@ -1159,31 +1212,6 @@ pub struct RunAsArmResult {
     #[prost(bool, tag = "4")]
     pub on: bool,
 }
-/// Sets how far one app may elevate to root. `level` is "off", "ask" or
-/// "remember". Moving an app to "remember" needs the host's administrator approval, as turning
-/// the whole feature on does; the service refuses a caller who is not an administrator with
-/// ERROR_CODE_NOT_PERMITTED. A change clears that app's grace. The answer is AppRootResult.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SetAppRoot {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub level: ::prost::alloc::string::String,
-}
-/// The answer to SetAppRoot.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AppRootResult {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(enumeration = "AppRootStatus", tag = "2")]
-    pub status: i32,
-    /// The app's level as it stands now: "off", "ask" or "remember".
-    #[prost(string, tag = "3")]
-    pub level: ::prost::alloc::string::String,
-    /// Words a person can act on, for the log and the settings app.
-    #[prost(string, tag = "4")]
-    pub message: ::prost::alloc::string::String,
-}
 /// The apps installed in the caller's Android that a launcher lists. The list is kept while
 /// the Android is stopped, because its apps stay installed.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1199,7 +1227,7 @@ pub struct InstalledApps {
 /// A change to the tasks of the caller's Android, sent after the answer to WatchTasks.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskEvent {
-    #[prost(oneof = "task_event::Body", tags = "1, 2, 3, 4, 5, 6")]
+    #[prost(oneof = "task_event::Body", tags = "1, 2, 3, 4, 5, 7, 6")]
     pub body: ::core::option::Option<task_event::Body>,
 }
 /// Nested message and enum types in `TaskEvent`.
@@ -1216,6 +1244,9 @@ pub mod task_event {
         App(super::AppInfo),
         #[prost(message, tag = "5")]
         ImeCursor(super::ImeCursor),
+        /// The editor focused in the task changed, as the input method reads it.
+        #[prost(message, tag = "7")]
+        ImeEditor(super::ImeEditor),
         /// The apps installed in the caller's Android changed: the whole list, as it is now.
         #[prost(message, tag = "6")]
         Installed(super::InstalledApps),
@@ -1593,13 +1624,22 @@ pub struct Settings {
     /// client cannot change it.
     #[prost(bool, tag = "33")]
     pub update_channel_available: bool,
-    /// Whether apps in the caller's Android may elevate to root through the host's administrator
-    /// approval. Off by default. It applies to every user of the computer, so only
-    /// an administrator may change it, and it takes effect from the next start of Android. With
-    /// it off, su exists for no app and the per-app levels do nothing. A client sends back the
-    /// value it read.
+    /// Whether the host's own three- and four-finger touch gestures are turned off while one of
+    /// the caller's task windows is in front, so apps get every finger, and put back to the
+    /// user's value when another window comes to the front. On unless the user turned it off; a
+    /// client sends back the value it read. The caller's window manager applies it.
     #[prost(bool, tag = "34")]
-    pub root_elevation: bool,
+    pub touch_gestures_off: bool,
+    /// Whether the caller's window manager can turn those gestures off: "unsupported" (the host
+    /// has no such gestures, so a client hides the setting), "available", or "failed" (the
+    /// host refused, so a client shows the setting disabled with touch_gestures_problem). Empty
+    /// while the window manager has not said. A client cannot change it.
+    #[prost(string, tag = "35")]
+    pub touch_gestures_state: ::prost::alloc::string::String,
+    /// Why the host refused, in words, while touch_gestures_state is "failed". A client cannot
+    /// change it.
+    #[prost(string, tag = "36")]
+    pub touch_gestures_problem: ::prost::alloc::string::String,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2209,7 +2249,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340, 341"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340, 350"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2349,8 +2389,8 @@ pub mod request {
         RemoveGapps(super::RemoveGapps),
         #[prost(message, tag = "340")]
         SetRunAsArm(super::SetRunAsArm),
-        #[prost(message, tag = "341")]
-        SetAppRoot(super::SetAppRoot),
+        #[prost(message, tag = "350")]
+        ReportTouchGestures(super::ReportTouchGestures),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2359,7 +2399,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340, 341"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2419,8 +2459,6 @@ pub mod response {
         GappsProgress(super::GappsProgress),
         #[prost(message, tag = "340")]
         RunAsArmResult(super::RunAsArmResult),
-        #[prost(message, tag = "341")]
-        AppRootResult(super::AppRootResult),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2428,7 +2466,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2458,6 +2496,10 @@ pub mod envelope {
         ImeCommit(super::ImeCommit),
         #[prost(message, tag = "333")]
         ImeDeleteSurrounding(super::ImeDeleteSurrounding),
+        #[prost(message, tag = "334")]
+        ImeSetSelection(super::ImeSetSelection),
+        #[prost(message, tag = "335")]
+        ImeSetComposingRegion(super::ImeSetComposingRegion),
         #[prost(message, tag = "12")]
         OpenLink(super::OpenLink),
         #[prost(message, tag = "13")]
@@ -3139,6 +3181,69 @@ impl KeyAction {
         }
     }
 }
+/// What kind of text the editor focused in a task takes, as its app declared it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ImeInputKind {
+    /// The guest did not say. Taken as ordinary text.
+    Unspecified = 0,
+    /// No editor in the task takes text; typed characters reach it as keys.
+    None = 1,
+    Text = 2,
+    Password = 3,
+    Number = 4,
+    /// A number that is a password, such as a PIN.
+    NumberPassword = 5,
+    Phone = 6,
+    Email = 7,
+    Url = 8,
+    PersonName = 9,
+    Date = 10,
+    Time = 11,
+    Search = 12,
+}
+impl ImeInputKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "IME_INPUT_KIND_UNSPECIFIED",
+            Self::None => "IME_INPUT_KIND_NONE",
+            Self::Text => "IME_INPUT_KIND_TEXT",
+            Self::Password => "IME_INPUT_KIND_PASSWORD",
+            Self::Number => "IME_INPUT_KIND_NUMBER",
+            Self::NumberPassword => "IME_INPUT_KIND_NUMBER_PASSWORD",
+            Self::Phone => "IME_INPUT_KIND_PHONE",
+            Self::Email => "IME_INPUT_KIND_EMAIL",
+            Self::Url => "IME_INPUT_KIND_URL",
+            Self::PersonName => "IME_INPUT_KIND_PERSON_NAME",
+            Self::Date => "IME_INPUT_KIND_DATE",
+            Self::Time => "IME_INPUT_KIND_TIME",
+            Self::Search => "IME_INPUT_KIND_SEARCH",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "IME_INPUT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "IME_INPUT_KIND_NONE" => Some(Self::None),
+            "IME_INPUT_KIND_TEXT" => Some(Self::Text),
+            "IME_INPUT_KIND_PASSWORD" => Some(Self::Password),
+            "IME_INPUT_KIND_NUMBER" => Some(Self::Number),
+            "IME_INPUT_KIND_NUMBER_PASSWORD" => Some(Self::NumberPassword),
+            "IME_INPUT_KIND_PHONE" => Some(Self::Phone),
+            "IME_INPUT_KIND_EMAIL" => Some(Self::Email),
+            "IME_INPUT_KIND_URL" => Some(Self::Url),
+            "IME_INPUT_KIND_PERSON_NAME" => Some(Self::PersonName),
+            "IME_INPUT_KIND_DATE" => Some(Self::Date),
+            "IME_INPUT_KIND_TIME" => Some(Self::Time),
+            "IME_INPUT_KIND_SEARCH" => Some(Self::Search),
+            _ => None,
+        }
+    }
+}
 /// The orientation a task's top activity asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -3248,50 +3353,6 @@ impl RunAsArmStatus {
             "RUN_AS_ARM_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
             "RUN_AS_ARM_STATUS_TRANSLATION_OFF" => Some(Self::TranslationOff),
             "RUN_AS_ARM_STATUS_OTHER" => Some(Self::Other),
-            _ => None,
-        }
-    }
-}
-/// How a SetAppRoot went.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum AppRootStatus {
-    Unspecified = 0,
-    /// The app's level is set as asked.
-    Success = 1,
-    /// Root elevation is off for the whole computer, so no app level can be set.
-    FeatureOff = 2,
-    /// The caller is not an administrator, and the change needs one ("remember").
-    NotPermitted = 3,
-    /// `level` was not "off", "ask" or "remember".
-    InvalidLevel = 4,
-    /// Anything else. The message says what.
-    Other = 5,
-}
-impl AppRootStatus {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "APP_ROOT_STATUS_UNSPECIFIED",
-            Self::Success => "APP_ROOT_STATUS_SUCCESS",
-            Self::FeatureOff => "APP_ROOT_STATUS_FEATURE_OFF",
-            Self::NotPermitted => "APP_ROOT_STATUS_NOT_PERMITTED",
-            Self::InvalidLevel => "APP_ROOT_STATUS_INVALID_LEVEL",
-            Self::Other => "APP_ROOT_STATUS_OTHER",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "APP_ROOT_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
-            "APP_ROOT_STATUS_SUCCESS" => Some(Self::Success),
-            "APP_ROOT_STATUS_FEATURE_OFF" => Some(Self::FeatureOff),
-            "APP_ROOT_STATUS_NOT_PERMITTED" => Some(Self::NotPermitted),
-            "APP_ROOT_STATUS_INVALID_LEVEL" => Some(Self::InvalidLevel),
-            "APP_ROOT_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }

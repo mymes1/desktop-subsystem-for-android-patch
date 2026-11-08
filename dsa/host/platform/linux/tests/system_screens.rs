@@ -8,6 +8,11 @@
 //! tall, and that the rows of a Settings list are grouped in rounded cards: the first row of a
 //! group has rounded corners, and a row joined to the one above it square ones.
 //!
+//! It also checks that `screencap` shows what the GPU drew: the guest driver copies a
+//! capture's drawing back from the host for the CPU that reads it, so no capture may come back
+//! blank. When one does, the screen is still read from screenrecord so the checks above run,
+//! and the test fails.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test,
 //! `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when the folder carries none, and
@@ -18,14 +23,18 @@
 
 mod boot_check;
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use boot_check::adb::{
+    blank_picture, blank_screencaps_failure, empty_picture, newest_raw_frame, screenrecord_failure,
+    Adb,
+};
 use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 
-use dsa_host_core::apk_info::inflate::inflate;
 use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_unix::socket::UnixLocalConnector;
@@ -45,13 +54,6 @@ const BUDGET: Duration = Duration::from_secs(690);
 /// ends: inside the job step's 14 minutes, so the step never kills it with its VM still
 /// running.
 const OVERRUN: Duration = Duration::from_secs(60);
-/// How long one adb command may take. A dump or a capture takes seconds.
-const ADB_LIMIT: Duration = Duration::from_secs(120);
-/// How long the screenrecord fallback may take: it records for 3 s.
-const SCREENRECORD_LIMIT: Duration = Duration::from_secs(30);
-/// How many frames the screenrecord fallback reads before it stops: the newest of them is
-/// kept, and raw frames are large (6 MiB at 1920x1080).
-const SCREENRECORD_FRAMES: usize = 4;
 
 fn scratch() -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
@@ -220,29 +222,6 @@ fn large_title(nodes: &[Node]) -> Result<Option<Rect>, String> {
         .find(|bounds| bounds.bottom <= below && bounds.height() > 0 && bounds.height() >= least))
 }
 
-/// Whether a picture is nothing but zeros: a capture that never received the screen, since
-/// a drawn screen is opaque.
-fn empty_picture(pixels: &[u8]) -> bool {
-    pixels.iter().all(|&byte| byte == 0)
-}
-
-/// The newest whole frame of `screenrecord --output-format=raw-frames`, which writes each
-/// frame as `width` x `height` RGB pixels and nothing between them, as opaque RGBA. `None`
-/// when not even one whole frame came.
-fn newest_raw_frame(frames: &[u8], width: usize, height: usize) -> Option<Vec<u8>> {
-    let size = width * height * 3;
-    if size == 0 || frames.len() < size {
-        return None;
-    }
-    let start = (frames.len() / size - 1) * size;
-    Some(
-        frames[start..start + size]
-            .chunks_exact(3)
-            .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
-            .collect(),
-    )
-}
-
 /// The pixel at (x, y) of an RGBA picture `width` wide.
 fn pixel(pixels: &[u8], width: usize, x: i32, y: i32) -> [u8; 3] {
     let at = (y as usize * width + x as usize) * 4;
@@ -316,228 +295,13 @@ fn rounded_cards(nodes: &[Node], pixels: &[u8], width: usize) -> Result<(), Stri
     Ok(())
 }
 
-/// The pixels of a PNG with 8 bits per sample, as `(width, height, channels, rows)`.
-fn decode_png(png: &[u8]) -> Result<(usize, usize, usize, Vec<u8>), String> {
-    const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-    if png.len() < 8 || png[..8] != SIGNATURE {
-        return Err("not a PNG".into());
-    }
-    let (mut at, mut header, mut data) = (8, None, Vec::new());
-    while at + 8 <= png.len() {
-        let len = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
-        let kind = &png[at + 4..at + 8];
-        let body = png
-            .get(at + 8..at + 8 + len)
-            .ok_or("a PNG chunk runs past the end")?;
-        match kind {
-            b"IHDR" => header = Some(body.to_vec()),
-            b"IDAT" => data.extend_from_slice(body),
-            b"IEND" => break,
-            _ => {}
-        }
-        at += 12 + len;
-    }
-    let header = header.ok_or("the PNG has no header")?;
-    let width = u32::from_be_bytes(header[0..4].try_into().unwrap()) as usize;
-    let height = u32::from_be_bytes(header[4..8].try_into().unwrap()) as usize;
-    let (depth, colour, interlace) = (header[8], header[9], header[12]);
-    let channels = match colour {
-        2 => 3,
-        6 => 4,
-        other => {
-            return Err(format!(
-                "the PNG has colour type {other}, which is not checked"
-            ))
-        }
-    };
-    if depth != 8 || interlace != 0 {
-        return Err(format!(
-            "the PNG has {depth} bits per sample and interlace {interlace}; 8 and none are checked"
-        ));
-    }
-    if data.len() < 2 {
-        return Err("the PNG has no image data".into());
-    }
-    let stride = width * channels;
-    // A zlib stream: two bytes of header before the DEFLATE data.
-    let raw = inflate(&data[2..], height * (stride + 1))?;
-    if raw.len() < height * (stride + 1) {
-        return Err("the PNG's image data is short".into());
-    }
-    let mut out = vec![0u8; height * stride];
-    for y in 0..height {
-        let filter = raw[y * (stride + 1)];
-        let line = &raw[y * (stride + 1) + 1..(y + 1) * (stride + 1)];
-        for x in 0..stride {
-            let a = if x >= channels {
-                out[y * stride + x - channels]
-            } else {
-                0
-            };
-            let b = if y > 0 { out[(y - 1) * stride + x] } else { 0 };
-            let c = if x >= channels && y > 0 {
-                out[(y - 1) * stride + x - channels]
-            } else {
-                0
-            };
-            let predicted = match filter {
-                0 => 0,
-                1 => a,
-                2 => b,
-                3 => ((a as u16 + b as u16) / 2) as u8,
-                4 => {
-                    let p = a as i16 + b as i16 - c as i16;
-                    let pa = (p - a as i16).abs();
-                    let pb = (p - b as i16).abs();
-                    let pc = (p - c as i16).abs();
-                    if pa <= pb && pa <= pc {
-                        a
-                    } else if pb <= pc {
-                        b
-                    } else {
-                        c
-                    }
-                }
-                other => return Err(format!("the PNG uses filter {other}")),
-            };
-            out[y * stride + x] = line[x].wrapping_add(predicted);
-        }
-    }
-    // RGBA, whatever the PNG carried.
-    if channels == 3 {
-        out = out
-            .chunks_exact(3)
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect();
-    }
-    Ok((width, height, 4, out))
-}
-
-/// adb, talking to the guest through the service's developer mode port.
-struct Adb {
-    program: PathBuf,
-    serial: String,
-}
-
 impl Adb {
-    /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most: a command that
-    /// hangs fails the check with what it was, instead of holding it until the job's timeout.
-    fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
-        let out = run_bounded(
-            Command::new(&self.program)
-                .arg("-s")
-                .arg(&self.serial)
-                .args(args),
-            ADB_LIMIT,
-            usize::MAX,
-        )?;
-        match out.status {
-            Some(status) if status.success() => Ok(out.stdout),
-            Some(_) => Err(format!(
-                "adb {} failed: {}{}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stdout),
-                String::from_utf8_lossy(&out.stderr)
-            )),
-            None => Err(format!(
-                "adb {} did not finish within {} s and was stopped",
-                args.join(" "),
-                ADB_LIMIT.as_secs()
-            )),
-        }
-    }
-
-    fn shell(&self, command: &str) -> Result<String, String> {
-        self.run(&["shell", command])
-            .map(|out| String::from_utf8_lossy(&out).into_owned())
-    }
-
-    /// Connects, and waits until the guest's shell answers.
-    fn connect(&self, wait: Duration) -> Result<(), String> {
-        let deadline = Instant::now() + wait;
-        let _ = run_bounded(
-            Command::new(&self.program).arg("start-server"),
-            ADB_LIMIT,
-            usize::MAX,
-        );
-        loop {
-            let _ = run_bounded(
-                Command::new(&self.program).arg("connect").arg(&self.serial),
-                ADB_LIMIT,
-                usize::MAX,
-            );
-            match self.shell("echo ready") {
-                Ok(out) if out.trim() == "ready" => return Ok(()),
-                Ok(out) if Instant::now() >= deadline => {
-                    return Err(format!("the guest's shell answered {out:?}"))
-                }
-                Err(why) if Instant::now() >= deadline => return Err(why),
-                _ => std::thread::sleep(Duration::from_secs(2)),
-            }
-        }
-    }
-
     /// The view hierarchy of the focused window, kept in `dir` as `name.xml`.
     fn dump(&self, dir: &Path, name: &str) -> Result<Vec<Node>, String> {
         self.shell("uiautomator dump /data/local/tmp/dsa-screens.xml")?;
         let xml = self.run(&["exec-out", "cat", "/data/local/tmp/dsa-screens.xml"])?;
         let _ = std::fs::write(dir.join(format!("{name}.xml")), &xml);
         Ok(nodes(&String::from_utf8_lossy(&xml)))
-    }
-
-    /// The screen, kept in `dir` as `name.png`, as `(width, RGBA pixels)`.
-    ///
-    /// `screencap` maps SurfaceFlinger's capture for the CPU, and in the guest a buffer the
-    /// GPU drew can map as nothing but zeros. Then the screen is read again from a
-    /// `screenrecord` frame, which the GPU reads back itself (`glReadPixels`), and that
-    /// picture is kept as `name-record.png`. screenrecord runs for [SCREENRECORD_LIMIT] at
-    /// most, and stops once it has sent [SCREENRECORD_FRAMES] frames: a screenrecord that sends
-    /// nothing held the whole check until the job's timeout.
-    fn screen(&self, dir: &Path, name: &str) -> Result<(usize, Vec<u8>), String> {
-        let png = self.run(&["exec-out", "screencap", "-p"])?;
-        let _ = std::fs::write(dir.join(format!("{name}.png")), &png);
-        let (width, height, _, pixels) = decode_png(&png)?;
-        if !empty_picture(&pixels) {
-            return Ok((width, pixels));
-        }
-        eprintln!(
-            "screencap gave an empty picture of {name} ({width}x{height}); reading a screenrecord frame instead"
-        );
-        let size = format!("{width}x{height}");
-        let recorded = run_bounded(
-            Command::new(&self.program)
-                .arg("-s")
-                .arg(&self.serial)
-                .args([
-                    "exec-out",
-                    "screenrecord",
-                    "--output-format=raw-frames",
-                    "--size",
-                    size.as_str(),
-                    "--time-limit",
-                    "3",
-                    "-",
-                ]),
-            SCREENRECORD_LIMIT,
-            width * height * 3 * SCREENRECORD_FRAMES,
-        )?;
-        let pixels = newest_raw_frame(&recorded.stdout, width, height)
-            .ok_or_else(|| screenrecord_failure(name, &size, &recorded))?;
-        let picture = dsa_host_linux::shell::png::Rgba {
-            width: width as u32,
-            height: height as u32,
-            pixels,
-        };
-        let _ = std::fs::write(
-            dir.join(format!("{name}-record.png")),
-            dsa_host_linux::shell::png::encode(&picture, false),
-        );
-        if empty_picture(&picture.pixels) {
-            return Err(format!(
-                "both screencap and screenrecord gave an empty picture of {name}"
-            ));
-        }
-        Ok((width, picture.pixels))
     }
 
     /// The overlays that apply to Settings and their state, kept in `dir` as `overlays.log`.
@@ -550,30 +314,93 @@ impl Adb {
     }
 }
 
-/// Why the screenrecord fallback gave no picture of `name`, which is `size` large.
-fn screenrecord_failure(name: &str, size: &str, recorded: &boot_check::Bounded) -> String {
-    let how = match recorded.status {
-        _ if recorded.timed_out => format!(
-            "did not finish within {} s and was stopped",
-            SCREENRECORD_LIMIT.as_secs()
-        ),
-        Some(status) => format!("ended ({status})"),
-        None => "was stopped".to_string(),
-    };
-    format!(
-        "screencap gave an empty picture of {name}, and screenrecord {how} after sending {} bytes in {:.1} s, not one whole {size} frame{}",
-        recorded.stdout.len(),
-        recorded.took.as_secs_f64(),
-        match String::from_utf8_lossy(&recorded.stderr).trim() {
-            "" => String::new(),
-            said => format!("; it said: {said}"),
+/// The density a task's app draws at, in dpi: the one Android reports, or 160 (a scale of
+/// 100%) when it reports none.
+fn drawing_dpi(density_dpi: u32) -> u32 {
+    if density_dpi == 0 {
+        160
+    } else {
+        density_dpi
+    }
+}
+
+/// `dp` in pixels at `dpi`.
+fn px_at(dp: u32, dpi: u32) -> u32 {
+    dp * dpi / 160
+}
+
+/// `px` pixels in dp at `dpi`.
+fn dp_at(px: u32, dpi: u32) -> u32 {
+    px * 160 / dpi
+}
+
+/// What to do next to have a page laid out in a task window of a size in dp.
+#[derive(Debug, PartialEq, Eq)]
+enum Step {
+    /// Ask for the window in pixels.
+    Resize { width: u32, height: u32 },
+    /// The size asked for has not come yet.
+    Wait,
+    /// The window has the size: open the page afresh in it.
+    Open,
+    /// The page was opened in the window as it still is, `height_dp` tall.
+    Ready { height_dp: u32 },
+}
+
+/// Brings a task window to `width_dp` x `height_dp` and has the page opened in it at that size.
+///
+/// A size in dp is pixels at the density the task's app draws at now, which can change after
+/// the task appears: the window manager gives the task the density of the monitor its window
+/// is on, and until then the task has the display's. So each look at the task converts with
+/// the density it has then, asks for the window again when that gives another size, and opens
+/// the page again when the window changed after the page was opened in it.
+struct Sizing {
+    width_dp: u32,
+    height_dp: u32,
+    /// The size last asked for, in pixels.
+    asked: Option<(u32, u32)>,
+    /// The density and the size in pixels the window had when the page was opened in it.
+    opened: Option<(u32, u32, u32)>,
+}
+
+impl Sizing {
+    fn new(width_dp: u32, height_dp: u32) -> Self {
+        Sizing {
+            width_dp,
+            height_dp,
+            asked: None,
+            opened: None,
         }
-    )
+    }
+
+    /// The next step for a window `width` x `height` pixels whose app draws at `density_dpi`.
+    fn step(&mut self, width: u32, height: u32, density_dpi: u32) -> Step {
+        let dpi = drawing_dpi(density_dpi);
+        let height_dp = dp_at(height, dpi);
+        if height_dp.abs_diff(self.height_dp) > 2 {
+            self.opened = None;
+            let wanted = (px_at(self.width_dp, dpi), px_at(self.height_dp, dpi));
+            if self.asked == Some(wanted) {
+                return Step::Wait;
+            }
+            self.asked = Some(wanted);
+            return Step::Resize {
+                width: wanted.0,
+                height: wanted.1,
+            };
+        }
+        let now = (dpi, width, height);
+        if self.opened == Some(now) {
+            return Step::Ready { height_dp };
+        }
+        self.opened = Some(now);
+        Step::Open
+    }
 }
 
 /// Gives Settings' task a window `height_dp` tall, then opens its home page afresh in it, so
 /// the page is laid out for that height: the home page keeps its views when its window is
-/// resized. Returns the task's height in dp as Android has it.
+/// resized. Returns the task's height in dp as Android has it once the page opened in it.
 fn open_settings_at(
     api: &mut HostApiClient,
     adb: &Adb,
@@ -595,48 +422,58 @@ fn open_settings_at(
     let _ = adb.shell(&format!("am force-stop {SETTINGS}"));
     api.launch_app(SETTINGS)
         .map_err(|why| format!("opening Settings: {why}"))?;
-    let task = loop {
+    let mut task_id = None;
+    let mut sizing = Sizing::new(WIDTH_DP, height_dp);
+    loop {
         let tasks = api.tasks().map_err(|why| format!("listing tasks: {why}"))?;
-        if let Some(task) = tasks
-            .tasks
-            .into_iter()
-            .find(|task| task.package_name == SETTINGS && !before.contains(&task.task_id))
-        {
-            break task;
-        }
-        if Instant::now() >= deadline {
-            return Err("Settings' task never appeared".into());
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    };
-    let dpi = if task.density_dpi == 0 {
-        160
-    } else {
-        task.density_dpi
-    };
-    let px = |dp: u32| dp * dpi / 160;
-    api.resize_task(task.task_id, px(WIDTH_DP), px(height_dp), false)
-        .map_err(|why| format!("resizing Settings' task: {why}"))?;
-    let height = loop {
-        let tasks = api.tasks().map_err(|why| format!("listing tasks: {why}"))?;
-        let bounds = tasks
+        let new = |task: &dsa_host_core::tasks::Task| {
+            task.package_name == SETTINGS && !before.contains(&task.task_id)
+        };
+        // The task this launch opened, or the one Settings has after its page was opened
+        // afresh, should that be another.
+        let task = tasks
             .tasks
             .iter()
-            .find(|t| t.task_id == task.task_id)
-            .map(|t| t.bounds)
-            .ok_or("Settings' task went away")?;
-        let height = (bounds.bottom - bounds.top).max(0) as u32 * 160 / dpi;
-        if height.abs_diff(height_dp) <= 2 || Instant::now() >= deadline {
-            break height;
+            .find(|task| Some(task.task_id) == task_id && new(task))
+            .or_else(|| tasks.tasks.iter().find(|task| new(task)));
+        let Some(task) = task else {
+            if Instant::now() >= deadline {
+                return Err(match task_id {
+                    Some(_) => "Settings' task went away".into(),
+                    None => "Settings' task never appeared".into(),
+                });
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        };
+        task_id = Some(task.task_id);
+        let (width, height) = (task.bounds.width(), task.bounds.height());
+        let step = sizing.step(width, height, task.density_dpi);
+        if Instant::now() >= deadline && !matches!(step, Step::Ready { .. }) {
+            let dpi = drawing_dpi(task.density_dpi);
+            return Err(format!(
+                "Settings' task is {width}x{height} pixels at {dpi} dpi, {} dp tall, and did \
+                 not settle at the {height_dp} dp asked for with its home page opened in it",
+                dp_at(height, dpi)
+            ));
         }
-        std::thread::sleep(Duration::from_millis(500));
-    };
-    adb.shell(&format!(
-        "am start -W --activity-clear-task -n {SETTINGS_HOME}"
-    ))?;
-    // The page lays out and draws its list.
-    std::thread::sleep(Duration::from_secs(5));
-    Ok(height)
+        match step {
+            Step::Resize { width, height } => {
+                api.resize_task(task.task_id, width, height, false)
+                    .map_err(|why| format!("resizing Settings' task: {why}"))?;
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            Step::Wait => std::thread::sleep(Duration::from_millis(500)),
+            Step::Open => {
+                adb.shell(&format!(
+                    "am start -W --activity-clear-task -n {SETTINGS_HOME}"
+                ))?;
+                // The page lays out and draws its list.
+                std::thread::sleep(Duration::from_secs(5));
+            }
+            Step::Ready { height_dp } => return Ok(height_dp),
+        }
+    }
 }
 
 #[test]
@@ -673,6 +510,61 @@ fn fr34_the_dump_parser_reads_nodes_their_parents_and_bounds() {
         .cloned()
         .collect();
     assert_eq!(large_title(&folded).unwrap(), None);
+}
+
+#[test]
+fn fr34_a_window_s_height_in_dp_is_read_at_the_density_its_app_draws_at() {
+    // 692 pixels are under 600 dp at the display's 213 dpi, but not at the 160 dpi the
+    // window manager gives a task on a monitor at a scale of 100%: there the large title
+    // rightly opens expanded.
+    assert_eq!(dp_at(692, drawing_dpi(213)), 519);
+    assert_eq!(dp_at(692, drawing_dpi(160)), 692);
+    assert_eq!(px_at(SHORT_DP, drawing_dpi(160)), SHORT_DP);
+    // A task whose density is not known draws at a scale of 100%.
+    assert_eq!(drawing_dpi(0), 160);
+}
+
+#[test]
+fn fr34_a_window_sized_before_its_density_changed_is_sized_and_opened_again() {
+    let mut sizing = Sizing::new(WIDTH_DP, SHORT_DP);
+    // Listed at the display's 213 dpi: asked for 520 dp in those pixels.
+    assert_eq!(
+        sizing.step(639, 1065, 213),
+        Step::Resize {
+            width: 639,
+            height: 692
+        }
+    );
+    assert_eq!(sizing.step(639, 1065, 213), Step::Wait);
+    assert_eq!(sizing.step(639, 692, 213), Step::Open);
+    // The window manager then sets the monitor's 160 dpi: the window is 692 dp tall, and the
+    // page opened in it is not the short window's.
+    assert_eq!(
+        sizing.step(639, 692, 160),
+        Step::Resize {
+            width: 480,
+            height: 520
+        }
+    );
+    assert_eq!(sizing.step(480, 520, 160), Step::Open);
+    assert_eq!(sizing.step(480, 520, 160), Step::Ready { height_dp: 520 });
+}
+
+#[test]
+fn fr34_a_page_counts_as_opened_at_a_size_only_while_its_window_keeps_it() {
+    let mut sizing = Sizing::new(WIDTH_DP, TALL_DP);
+    assert_eq!(sizing.step(480, 800, 160), Step::Open);
+    // The window moved to a monitor of another scale after the page opened: the same pixels
+    // are another size, so the page is opened again once the window has the size again.
+    assert_eq!(
+        sizing.step(480, 800, 240),
+        Step::Resize {
+            width: 720,
+            height: 1200
+        }
+    );
+    assert_eq!(sizing.step(720, 1200, 240), Step::Open);
+    assert_eq!(sizing.step(720, 1200, 240), Step::Ready { height_dp: 800 });
 }
 
 #[test]
@@ -744,6 +636,20 @@ fn fr34_an_empty_capture_is_read_again_from_the_newest_whole_screenrecord_frame(
     );
     assert_eq!(newest_raw_frame(&frames[..5], 2, 1), None);
     assert_eq!(newest_raw_frame(&frames, 0, 1), None);
+}
+
+#[test]
+fn pr3_a_screencap_of_one_colour_is_blank_and_fails_the_check() {
+    // What screencap gave before the driver copied the GPU's drawing back: all zeros.
+    assert!(blank_picture(&[0; 16]));
+    // One opaque colour over the whole screen is no drawing either.
+    assert!(blank_picture(&[0, 0, 0, 255, 0, 0, 0, 255]));
+    assert!(blank_picture(&[]));
+    // A drawn screen has more than one colour.
+    assert!(!blank_picture(&[0, 0, 0, 255, 250, 250, 250, 255]));
+    let why = blank_screencaps_failure(&["home-tall".into(), "display".into()]);
+    assert!(why.contains("of home-tall, display:"), "{why}");
+    assert!(why.contains("did not come back"), "{why}");
 }
 
 #[test]
@@ -892,6 +798,7 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
     let adb = Adb {
         program: adb_program,
         serial: format!("127.0.0.1:{port}"),
+        blank_screencaps: RefCell::default(),
     };
     if let Err(why) = adb.connect(Duration::from_secs(120)) {
         fail(
@@ -1003,6 +910,12 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
             )),
             Err(why) => failures.push(why),
         }
+    }
+
+    // screencap reads what the GPU drew, with no screenrecord in between.
+    let blank = adb.blank_screencaps.borrow().clone();
+    if !blank.is_empty() {
+        failures.push(blank_screencaps_failure(&blank));
     }
 
     if !failures.is_empty() {

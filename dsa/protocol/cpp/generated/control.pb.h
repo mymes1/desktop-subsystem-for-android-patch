@@ -297,6 +297,15 @@ extern ImeCursorDefaultTypeInternal _ImeCursor_default_instance_;
 class ImeDeleteSurrounding;
 struct ImeDeleteSurroundingDefaultTypeInternal;
 extern ImeDeleteSurroundingDefaultTypeInternal _ImeDeleteSurrounding_default_instance_;
+class ImeEditor;
+struct ImeEditorDefaultTypeInternal;
+extern ImeEditorDefaultTypeInternal _ImeEditor_default_instance_;
+class ImeSetComposingRegion;
+struct ImeSetComposingRegionDefaultTypeInternal;
+extern ImeSetComposingRegionDefaultTypeInternal _ImeSetComposingRegion_default_instance_;
+class ImeSetSelection;
+struct ImeSetSelectionDefaultTypeInternal;
+extern ImeSetSelectionDefaultTypeInternal _ImeSetSelection_default_instance_;
 class InstallApk;
 struct InstallApkDefaultTypeInternal;
 extern InstallApkDefaultTypeInternal _InstallApk_default_instance_;
@@ -438,12 +447,6 @@ extern ResizeTaskDefaultTypeInternal _ResizeTask_default_instance_;
 class ResizeWidget;
 struct ResizeWidgetDefaultTypeInternal;
 extern ResizeWidgetDefaultTypeInternal _ResizeWidget_default_instance_;
-class RootApp;
-struct RootAppDefaultTypeInternal;
-extern RootAppDefaultTypeInternal _RootApp_default_instance_;
-class RootElevationConfig;
-struct RootElevationConfigDefaultTypeInternal;
-extern RootElevationConfigDefaultTypeInternal _RootElevationConfig_default_instance_;
 class ScreenState;
 struct ScreenStateDefaultTypeInternal;
 extern ScreenStateDefaultTypeInternal _ScreenState_default_instance_;
@@ -471,12 +474,6 @@ extern SetTaskDensityDefaultTypeInternal _SetTaskDensity_default_instance_;
 class StopApp;
 struct StopAppDefaultTypeInternal;
 extern StopAppDefaultTypeInternal _StopApp_default_instance_;
-class SuDecision;
-struct SuDecisionDefaultTypeInternal;
-extern SuDecisionDefaultTypeInternal _SuDecision_default_instance_;
-class SuRequest;
-struct SuRequestDefaultTypeInternal;
-extern SuRequestDefaultTypeInternal _SuRequest_default_instance_;
 class SystemSettings;
 struct SystemSettingsDefaultTypeInternal;
 extern SystemSettingsDefaultTypeInternal _SystemSettings_default_instance_;
@@ -631,6 +628,9 @@ template<> ::dsa::control::v1::ImeCommit* Arena::CreateMaybeMessage<::dsa::contr
 template<> ::dsa::control::v1::ImeComposition* Arena::CreateMaybeMessage<::dsa::control::v1::ImeComposition>(Arena*);
 template<> ::dsa::control::v1::ImeCursor* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCursor>(Arena*);
 template<> ::dsa::control::v1::ImeDeleteSurrounding* Arena::CreateMaybeMessage<::dsa::control::v1::ImeDeleteSurrounding>(Arena*);
+template<> ::dsa::control::v1::ImeEditor* Arena::CreateMaybeMessage<::dsa::control::v1::ImeEditor>(Arena*);
+template<> ::dsa::control::v1::ImeSetComposingRegion* Arena::CreateMaybeMessage<::dsa::control::v1::ImeSetComposingRegion>(Arena*);
+template<> ::dsa::control::v1::ImeSetSelection* Arena::CreateMaybeMessage<::dsa::control::v1::ImeSetSelection>(Arena*);
 template<> ::dsa::control::v1::InstallApk* Arena::CreateMaybeMessage<::dsa::control::v1::InstallApk>(Arena*);
 template<> ::dsa::control::v1::InstallPart* Arena::CreateMaybeMessage<::dsa::control::v1::InstallPart>(Arena*);
 template<> ::dsa::control::v1::InstallProgress* Arena::CreateMaybeMessage<::dsa::control::v1::InstallProgress>(Arena*);
@@ -678,8 +678,6 @@ template<> ::dsa::control::v1::RemoveWidget* Arena::CreateMaybeMessage<::dsa::co
 template<> ::dsa::control::v1::RequestGuestMemory* Arena::CreateMaybeMessage<::dsa::control::v1::RequestGuestMemory>(Arena*);
 template<> ::dsa::control::v1::ResizeTask* Arena::CreateMaybeMessage<::dsa::control::v1::ResizeTask>(Arena*);
 template<> ::dsa::control::v1::ResizeWidget* Arena::CreateMaybeMessage<::dsa::control::v1::ResizeWidget>(Arena*);
-template<> ::dsa::control::v1::RootApp* Arena::CreateMaybeMessage<::dsa::control::v1::RootApp>(Arena*);
-template<> ::dsa::control::v1::RootElevationConfig* Arena::CreateMaybeMessage<::dsa::control::v1::RootElevationConfig>(Arena*);
 template<> ::dsa::control::v1::ScreenState* Arena::CreateMaybeMessage<::dsa::control::v1::ScreenState>(Arena*);
 template<> ::dsa::control::v1::SensorActivate* Arena::CreateMaybeMessage<::dsa::control::v1::SensorActivate>(Arena*);
 template<> ::dsa::control::v1::SensorDescription* Arena::CreateMaybeMessage<::dsa::control::v1::SensorDescription>(Arena*);
@@ -689,8 +687,6 @@ template<> ::dsa::control::v1::SensorReadings* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::SetTaskCaption* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskCaption>(Arena*);
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
 template<> ::dsa::control::v1::StopApp* Arena::CreateMaybeMessage<::dsa::control::v1::StopApp>(Arena*);
-template<> ::dsa::control::v1::SuDecision* Arena::CreateMaybeMessage<::dsa::control::v1::SuDecision>(Arena*);
-template<> ::dsa::control::v1::SuRequest* Arena::CreateMaybeMessage<::dsa::control::v1::SuRequest>(Arena*);
 template<> ::dsa::control::v1::SystemSettings* Arena::CreateMaybeMessage<::dsa::control::v1::SystemSettings>(Arena*);
 template<> ::dsa::control::v1::TaskFrames* Arena::CreateMaybeMessage<::dsa::control::v1::TaskFrames>(Arena*);
 template<> ::dsa::control::v1::TaskRemoved* Arena::CreateMaybeMessage<::dsa::control::v1::TaskRemoved>(Arena*);
@@ -980,6 +976,38 @@ inline const std::string& KeyAction_Name(T enum_t_value) {
 }
 bool KeyAction_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, KeyAction* value);
+enum ImeInputKind : int {
+  IME_INPUT_KIND_UNSPECIFIED = 0,
+  IME_INPUT_KIND_NONE = 1,
+  IME_INPUT_KIND_TEXT = 2,
+  IME_INPUT_KIND_PASSWORD = 3,
+  IME_INPUT_KIND_NUMBER = 4,
+  IME_INPUT_KIND_NUMBER_PASSWORD = 5,
+  IME_INPUT_KIND_PHONE = 6,
+  IME_INPUT_KIND_EMAIL = 7,
+  IME_INPUT_KIND_URL = 8,
+  IME_INPUT_KIND_PERSON_NAME = 9,
+  IME_INPUT_KIND_DATE = 10,
+  IME_INPUT_KIND_TIME = 11,
+  IME_INPUT_KIND_SEARCH = 12,
+  ImeInputKind_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  ImeInputKind_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool ImeInputKind_IsValid(int value);
+constexpr ImeInputKind ImeInputKind_MIN = IME_INPUT_KIND_UNSPECIFIED;
+constexpr ImeInputKind ImeInputKind_MAX = IME_INPUT_KIND_SEARCH;
+constexpr int ImeInputKind_ARRAYSIZE = ImeInputKind_MAX + 1;
+
+const std::string& ImeInputKind_Name(ImeInputKind value);
+template<typename T>
+inline const std::string& ImeInputKind_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, ImeInputKind>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function ImeInputKind_Name.");
+  return ImeInputKind_Name(static_cast<ImeInputKind>(enum_t_value));
+}
+bool ImeInputKind_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ImeInputKind* value);
 enum PowerHintKind : int {
   POWER_HINT_KIND_UNSPECIFIED = 0,
   POWER_HINT_KIND_MODE = 1,
@@ -1025,28 +1053,6 @@ inline const std::string& LocationAccess_Name(T enum_t_value) {
 }
 bool LocationAccess_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, LocationAccess* value);
-enum RootLevel : int {
-  ROOT_LEVEL_OFF = 0,
-  ROOT_LEVEL_ASK = 1,
-  ROOT_LEVEL_REMEMBER = 2,
-  RootLevel_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  RootLevel_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool RootLevel_IsValid(int value);
-constexpr RootLevel RootLevel_MIN = ROOT_LEVEL_OFF;
-constexpr RootLevel RootLevel_MAX = ROOT_LEVEL_REMEMBER;
-constexpr int RootLevel_ARRAYSIZE = RootLevel_MAX + 1;
-
-const std::string& RootLevel_Name(RootLevel value);
-template<typename T>
-inline const std::string& RootLevel_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, RootLevel>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function RootLevel_Name.");
-  return RootLevel_Name(static_cast<RootLevel>(enum_t_value));
-}
-bool RootLevel_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, RootLevel* value);
 enum BackgroundAppCommand : int {
   BACKGROUND_APP_COMMAND_UNSPECIFIED = 0,
   BACKGROUND_APP_COMMAND_OPEN = 1,
@@ -6759,6 +6765,522 @@ class ImeCursor final :
 };
 // -------------------------------------------------------------------
 
+class ImeEditor final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ImeEditor) */ {
+ public:
+  inline ImeEditor() : ImeEditor(nullptr) {}
+  ~ImeEditor() override;
+  explicit PROTOBUF_CONSTEXPR ImeEditor(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ImeEditor(const ImeEditor& from);
+  ImeEditor(ImeEditor&& from) noexcept
+    : ImeEditor() {
+    *this = ::std::move(from);
+  }
+
+  inline ImeEditor& operator=(const ImeEditor& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ImeEditor& operator=(ImeEditor&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ImeEditor& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ImeEditor* internal_default_instance() {
+    return reinterpret_cast<const ImeEditor*>(
+               &_ImeEditor_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    32;
+
+  friend void swap(ImeEditor& a, ImeEditor& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ImeEditor* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ImeEditor* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ImeEditor* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ImeEditor>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ImeEditor& from);
+  void MergeFrom(const ImeEditor& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ImeEditor* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ImeEditor";
+  }
+  protected:
+  explicit ImeEditor(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTextFieldNumber = 3,
+    kTaskIdFieldNumber = 1,
+    kKindFieldNumber = 2,
+    kTextStartFieldNumber = 4,
+    kSelectionStartFieldNumber = 5,
+    kSelectionEndFieldNumber = 6,
+    kCompositionStartFieldNumber = 7,
+    kCompositionEndFieldNumber = 8,
+  };
+  // string text = 3;
+  void clear_text();
+  const std::string& text() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_text(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_text();
+  PROTOBUF_NODISCARD std::string* release_text();
+  void set_allocated_text(std::string* text);
+  private:
+  const std::string& _internal_text() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_text(const std::string& value);
+  std::string* _internal_mutable_text();
+  public:
+
+  // int32 task_id = 1;
+  void clear_task_id();
+  int32_t task_id() const;
+  void set_task_id(int32_t value);
+  private:
+  int32_t _internal_task_id() const;
+  void _internal_set_task_id(int32_t value);
+  public:
+
+  // .dsa.control.v1.ImeInputKind kind = 2;
+  void clear_kind();
+  ::dsa::control::v1::ImeInputKind kind() const;
+  void set_kind(::dsa::control::v1::ImeInputKind value);
+  private:
+  ::dsa::control::v1::ImeInputKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::ImeInputKind value);
+  public:
+
+  // uint32 text_start = 4;
+  void clear_text_start();
+  uint32_t text_start() const;
+  void set_text_start(uint32_t value);
+  private:
+  uint32_t _internal_text_start() const;
+  void _internal_set_text_start(uint32_t value);
+  public:
+
+  // uint32 selection_start = 5;
+  void clear_selection_start();
+  uint32_t selection_start() const;
+  void set_selection_start(uint32_t value);
+  private:
+  uint32_t _internal_selection_start() const;
+  void _internal_set_selection_start(uint32_t value);
+  public:
+
+  // uint32 selection_end = 6;
+  void clear_selection_end();
+  uint32_t selection_end() const;
+  void set_selection_end(uint32_t value);
+  private:
+  uint32_t _internal_selection_end() const;
+  void _internal_set_selection_end(uint32_t value);
+  public:
+
+  // uint32 composition_start = 7;
+  void clear_composition_start();
+  uint32_t composition_start() const;
+  void set_composition_start(uint32_t value);
+  private:
+  uint32_t _internal_composition_start() const;
+  void _internal_set_composition_start(uint32_t value);
+  public:
+
+  // uint32 composition_end = 8;
+  void clear_composition_end();
+  uint32_t composition_end() const;
+  void set_composition_end(uint32_t value);
+  private:
+  uint32_t _internal_composition_end() const;
+  void _internal_set_composition_end(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ImeEditor)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr text_;
+    int32_t task_id_;
+    int kind_;
+    uint32_t text_start_;
+    uint32_t selection_start_;
+    uint32_t selection_end_;
+    uint32_t composition_start_;
+    uint32_t composition_end_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ImeSetSelection final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ImeSetSelection) */ {
+ public:
+  inline ImeSetSelection() : ImeSetSelection(nullptr) {}
+  ~ImeSetSelection() override;
+  explicit PROTOBUF_CONSTEXPR ImeSetSelection(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ImeSetSelection(const ImeSetSelection& from);
+  ImeSetSelection(ImeSetSelection&& from) noexcept
+    : ImeSetSelection() {
+    *this = ::std::move(from);
+  }
+
+  inline ImeSetSelection& operator=(const ImeSetSelection& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ImeSetSelection& operator=(ImeSetSelection&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ImeSetSelection& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ImeSetSelection* internal_default_instance() {
+    return reinterpret_cast<const ImeSetSelection*>(
+               &_ImeSetSelection_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    33;
+
+  friend void swap(ImeSetSelection& a, ImeSetSelection& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ImeSetSelection* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ImeSetSelection* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ImeSetSelection* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ImeSetSelection>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ImeSetSelection& from);
+  void MergeFrom(const ImeSetSelection& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ImeSetSelection* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ImeSetSelection";
+  }
+  protected:
+  explicit ImeSetSelection(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTaskIdFieldNumber = 1,
+    kStartFieldNumber = 2,
+    kEndFieldNumber = 3,
+  };
+  // int32 task_id = 1;
+  void clear_task_id();
+  int32_t task_id() const;
+  void set_task_id(int32_t value);
+  private:
+  int32_t _internal_task_id() const;
+  void _internal_set_task_id(int32_t value);
+  public:
+
+  // uint32 start = 2;
+  void clear_start();
+  uint32_t start() const;
+  void set_start(uint32_t value);
+  private:
+  uint32_t _internal_start() const;
+  void _internal_set_start(uint32_t value);
+  public:
+
+  // uint32 end = 3;
+  void clear_end();
+  uint32_t end() const;
+  void set_end(uint32_t value);
+  private:
+  uint32_t _internal_end() const;
+  void _internal_set_end(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ImeSetSelection)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int32_t task_id_;
+    uint32_t start_;
+    uint32_t end_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ImeSetComposingRegion final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ImeSetComposingRegion) */ {
+ public:
+  inline ImeSetComposingRegion() : ImeSetComposingRegion(nullptr) {}
+  ~ImeSetComposingRegion() override;
+  explicit PROTOBUF_CONSTEXPR ImeSetComposingRegion(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ImeSetComposingRegion(const ImeSetComposingRegion& from);
+  ImeSetComposingRegion(ImeSetComposingRegion&& from) noexcept
+    : ImeSetComposingRegion() {
+    *this = ::std::move(from);
+  }
+
+  inline ImeSetComposingRegion& operator=(const ImeSetComposingRegion& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ImeSetComposingRegion& operator=(ImeSetComposingRegion&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ImeSetComposingRegion& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ImeSetComposingRegion* internal_default_instance() {
+    return reinterpret_cast<const ImeSetComposingRegion*>(
+               &_ImeSetComposingRegion_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    34;
+
+  friend void swap(ImeSetComposingRegion& a, ImeSetComposingRegion& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ImeSetComposingRegion* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ImeSetComposingRegion* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ImeSetComposingRegion* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ImeSetComposingRegion>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ImeSetComposingRegion& from);
+  void MergeFrom(const ImeSetComposingRegion& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ImeSetComposingRegion* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ImeSetComposingRegion";
+  }
+  protected:
+  explicit ImeSetComposingRegion(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTaskIdFieldNumber = 1,
+    kStartFieldNumber = 2,
+    kEndFieldNumber = 3,
+  };
+  // int32 task_id = 1;
+  void clear_task_id();
+  int32_t task_id() const;
+  void set_task_id(int32_t value);
+  private:
+  int32_t _internal_task_id() const;
+  void _internal_set_task_id(int32_t value);
+  public:
+
+  // uint32 start = 2;
+  void clear_start();
+  uint32_t start() const;
+  void set_start(uint32_t value);
+  private:
+  uint32_t _internal_start() const;
+  void _internal_set_start(uint32_t value);
+  public:
+
+  // uint32 end = 3;
+  void clear_end();
+  uint32_t end() const;
+  void set_end(uint32_t value);
+  private:
+  uint32_t _internal_end() const;
+  void _internal_set_end(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ImeSetComposingRegion)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int32_t task_id_;
+    uint32_t start_;
+    uint32_t end_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ScreenState final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ScreenState) */ {
  public:
@@ -6798,7 +7320,7 @@ class ScreenState final :
                &_ScreenState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    35;
 
   friend void swap(ScreenState& a, ScreenState& b) {
     a.Swap(&b);
@@ -6928,7 +7450,7 @@ class PowerState final :
                &_PowerState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    36;
 
   friend void swap(PowerState& a, PowerState& b) {
     a.Swap(&b);
@@ -7102,7 +7624,7 @@ class DisplayRefresh final :
                &_DisplayRefresh_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    34;
+    37;
 
   friend void swap(DisplayRefresh& a, DisplayRefresh& b) {
     a.Swap(&b);
@@ -7232,7 +7754,7 @@ class GuestMemoryPressure final :
                &_GuestMemoryPressure_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    35;
+    38;
 
   friend void swap(GuestMemoryPressure& a, GuestMemoryPressure& b) {
     a.Swap(&b);
@@ -7384,7 +7906,7 @@ class HostMemory final :
                &_HostMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    36;
+    39;
 
   friend void swap(HostMemory& a, HostMemory& b) {
     a.Swap(&b);
@@ -7514,7 +8036,7 @@ class HostSleep final :
                &_HostSleep_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    37;
+    40;
 
   friend void swap(HostSleep& a, HostSleep& b) {
     a.Swap(&b);
@@ -7655,7 +8177,7 @@ class GuestSleepReady final :
                &_GuestSleepReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    38;
+    41;
 
   friend void swap(GuestSleepReady& a, GuestSleepReady& b) {
     a.Swap(&b);
@@ -7772,7 +8294,7 @@ class PowerHint final :
                &_PowerHint_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    39;
+    42;
 
   friend void swap(PowerHint& a, PowerHint& b) {
     a.Swap(&b);
@@ -7935,7 +8457,7 @@ class LocationRequest final :
                &_LocationRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    43;
 
   friend void swap(LocationRequest& a, LocationRequest& b) {
     a.Swap(&b);
@@ -8076,7 +8598,7 @@ class LocationStatus final :
                &_LocationStatus_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    44;
 
   friend void swap(LocationStatus& a, LocationStatus& b) {
     a.Swap(&b);
@@ -8222,7 +8744,7 @@ class LocationFix final :
                &_LocationFix_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    45;
 
   friend void swap(LocationFix& a, LocationFix& b) {
     a.Swap(&b);
@@ -8462,7 +8984,7 @@ class DeviceIdle final :
                &_DeviceIdle_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    46;
 
   friend void swap(DeviceIdle& a, DeviceIdle& b) {
     a.Swap(&b);
@@ -8592,7 +9114,7 @@ class ClipboardText final :
                &_ClipboardText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    47;
 
   friend void swap(ClipboardText& a, ClipboardText& b) {
     a.Swap(&b);
@@ -8727,7 +9249,7 @@ class ClipboardSharing final :
                &_ClipboardSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    48;
 
   friend void swap(ClipboardSharing& a, ClipboardSharing& b) {
     a.Swap(&b);
@@ -8857,7 +9379,7 @@ class DeveloperMode final :
                &_DeveloperMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    49;
 
   friend void swap(DeveloperMode& a, DeveloperMode& b) {
     a.Swap(&b);
@@ -8987,7 +9509,7 @@ class ArmTranslationInstall final :
                &_ArmTranslationInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    50;
 
   friend void swap(ArmTranslationInstall& a, ArmTranslationInstall& b) {
     a.Swap(&b);
@@ -9144,7 +9666,7 @@ class ArmTranslationChunk final :
                &_ArmTranslationChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    51;
 
   friend void swap(ArmTranslationChunk& a, ArmTranslationChunk& b) {
     a.Swap(&b);
@@ -9301,7 +9823,7 @@ class ArmTranslationRemove final :
                &_ArmTranslationRemove_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    52;
 
   friend void swap(ArmTranslationRemove& a, ArmTranslationRemove& b) {
     a.Swap(&b);
@@ -9418,7 +9940,7 @@ class ArmTranslationQuery final :
                &_ArmTranslationQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    53;
 
   friend void swap(ArmTranslationQuery& a, ArmTranslationQuery& b) {
     a.Swap(&b);
@@ -9535,7 +10057,7 @@ class ArmTranslationState final :
                &_ArmTranslationState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    54;
 
   friend void swap(ArmTranslationState& a, ArmTranslationState& b) {
     a.Swap(&b);
@@ -9741,7 +10263,7 @@ class GappsInstall final :
                &_GappsInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    55;
 
   friend void swap(GappsInstall& a, GappsInstall& b) {
     a.Swap(&b);
@@ -9898,7 +10420,7 @@ class GappsChunk final :
                &_GappsChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    56;
 
   friend void swap(GappsChunk& a, GappsChunk& b) {
     a.Swap(&b);
@@ -10055,7 +10577,7 @@ class GappsRemove final :
                &_GappsRemove_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    57;
 
   friend void swap(GappsRemove& a, GappsRemove& b) {
     a.Swap(&b);
@@ -10172,7 +10694,7 @@ class GappsQuery final :
                &_GappsQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    58;
 
   friend void swap(GappsQuery& a, GappsQuery& b) {
     a.Swap(&b);
@@ -10289,7 +10811,7 @@ class GappsState final :
                &_GappsState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    59;
 
   friend void swap(GappsState& a, GappsState& b) {
     a.Swap(&b);
@@ -10522,7 +11044,7 @@ class GoogleDeviceIdQuery final :
                &_GoogleDeviceIdQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    60;
 
   friend void swap(GoogleDeviceIdQuery& a, GoogleDeviceIdQuery& b) {
     a.Swap(&b);
@@ -10639,7 +11161,7 @@ class GoogleDeviceId final :
                &_GoogleDeviceId_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    61;
 
   friend void swap(GoogleDeviceId& a, GoogleDeviceId& b) {
     a.Swap(&b);
@@ -10735,664 +11257,6 @@ class GoogleDeviceId final :
 };
 // -------------------------------------------------------------------
 
-class RootApp final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.RootApp) */ {
- public:
-  inline RootApp() : RootApp(nullptr) {}
-  ~RootApp() override;
-  explicit PROTOBUF_CONSTEXPR RootApp(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  RootApp(const RootApp& from);
-  RootApp(RootApp&& from) noexcept
-    : RootApp() {
-    *this = ::std::move(from);
-  }
-
-  inline RootApp& operator=(const RootApp& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline RootApp& operator=(RootApp&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const RootApp& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const RootApp* internal_default_instance() {
-    return reinterpret_cast<const RootApp*>(
-               &_RootApp_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    59;
-
-  friend void swap(RootApp& a, RootApp& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(RootApp* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(RootApp* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  RootApp* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<RootApp>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const RootApp& from);
-  void MergeFrom(const RootApp& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(RootApp* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.RootApp";
-  }
-  protected:
-  explicit RootApp(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageFieldNumber = 1,
-    kUidFieldNumber = 2,
-    kLevelFieldNumber = 3,
-  };
-  // string package = 1;
-  void clear_package();
-  const std::string& package() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package();
-  PROTOBUF_NODISCARD std::string* release_package();
-  void set_allocated_package(std::string* package);
-  private:
-  const std::string& _internal_package() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package(const std::string& value);
-  std::string* _internal_mutable_package();
-  public:
-
-  // uint32 uid = 2;
-  void clear_uid();
-  uint32_t uid() const;
-  void set_uid(uint32_t value);
-  private:
-  uint32_t _internal_uid() const;
-  void _internal_set_uid(uint32_t value);
-  public:
-
-  // .dsa.control.v1.RootLevel level = 3;
-  void clear_level();
-  ::dsa::control::v1::RootLevel level() const;
-  void set_level(::dsa::control::v1::RootLevel value);
-  private:
-  ::dsa::control::v1::RootLevel _internal_level() const;
-  void _internal_set_level(::dsa::control::v1::RootLevel value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.RootApp)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_;
-    uint32_t uid_;
-    int level_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class RootElevationConfig final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.RootElevationConfig) */ {
- public:
-  inline RootElevationConfig() : RootElevationConfig(nullptr) {}
-  ~RootElevationConfig() override;
-  explicit PROTOBUF_CONSTEXPR RootElevationConfig(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  RootElevationConfig(const RootElevationConfig& from);
-  RootElevationConfig(RootElevationConfig&& from) noexcept
-    : RootElevationConfig() {
-    *this = ::std::move(from);
-  }
-
-  inline RootElevationConfig& operator=(const RootElevationConfig& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline RootElevationConfig& operator=(RootElevationConfig&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const RootElevationConfig& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const RootElevationConfig* internal_default_instance() {
-    return reinterpret_cast<const RootElevationConfig*>(
-               &_RootElevationConfig_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    60;
-
-  friend void swap(RootElevationConfig& a, RootElevationConfig& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(RootElevationConfig* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(RootElevationConfig* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  RootElevationConfig* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<RootElevationConfig>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const RootElevationConfig& from);
-  void MergeFrom(const RootElevationConfig& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(RootElevationConfig* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.RootElevationConfig";
-  }
-  protected:
-  explicit RootElevationConfig(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kAppsFieldNumber = 2,
-    kEnabledFieldNumber = 1,
-  };
-  // repeated .dsa.control.v1.RootApp apps = 2;
-  int apps_size() const;
-  private:
-  int _internal_apps_size() const;
-  public:
-  void clear_apps();
-  ::dsa::control::v1::RootApp* mutable_apps(int index);
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::RootApp >*
-      mutable_apps();
-  private:
-  const ::dsa::control::v1::RootApp& _internal_apps(int index) const;
-  ::dsa::control::v1::RootApp* _internal_add_apps();
-  public:
-  const ::dsa::control::v1::RootApp& apps(int index) const;
-  ::dsa::control::v1::RootApp* add_apps();
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::RootApp >&
-      apps() const;
-
-  // bool enabled = 1;
-  void clear_enabled();
-  bool enabled() const;
-  void set_enabled(bool value);
-  private:
-  bool _internal_enabled() const;
-  void _internal_set_enabled(bool value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.RootElevationConfig)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::RootApp > apps_;
-    bool enabled_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class SuRequest final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SuRequest) */ {
- public:
-  inline SuRequest() : SuRequest(nullptr) {}
-  ~SuRequest() override;
-  explicit PROTOBUF_CONSTEXPR SuRequest(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  SuRequest(const SuRequest& from);
-  SuRequest(SuRequest&& from) noexcept
-    : SuRequest() {
-    *this = ::std::move(from);
-  }
-
-  inline SuRequest& operator=(const SuRequest& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline SuRequest& operator=(SuRequest&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const SuRequest& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const SuRequest* internal_default_instance() {
-    return reinterpret_cast<const SuRequest*>(
-               &_SuRequest_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    61;
-
-  friend void swap(SuRequest& a, SuRequest& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(SuRequest* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(SuRequest* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  SuRequest* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<SuRequest>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const SuRequest& from);
-  void MergeFrom(const SuRequest& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(SuRequest* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.SuRequest";
-  }
-  protected:
-  explicit SuRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kCommandFieldNumber = 4,
-    kPackageFieldNumber = 2,
-    kRequestIdFieldNumber = 1,
-    kUidFieldNumber = 3,
-    kInteractiveFieldNumber = 5,
-  };
-  // repeated string command = 4;
-  int command_size() const;
-  private:
-  int _internal_command_size() const;
-  public:
-  void clear_command();
-  const std::string& command(int index) const;
-  std::string* mutable_command(int index);
-  void set_command(int index, const std::string& value);
-  void set_command(int index, std::string&& value);
-  void set_command(int index, const char* value);
-  void set_command(int index, const char* value, size_t size);
-  std::string* add_command();
-  void add_command(const std::string& value);
-  void add_command(std::string&& value);
-  void add_command(const char* value);
-  void add_command(const char* value, size_t size);
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& command() const;
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_command();
-  private:
-  const std::string& _internal_command(int index) const;
-  std::string* _internal_add_command();
-  public:
-
-  // string package = 2;
-  void clear_package();
-  const std::string& package() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package();
-  PROTOBUF_NODISCARD std::string* release_package();
-  void set_allocated_package(std::string* package);
-  private:
-  const std::string& _internal_package() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package(const std::string& value);
-  std::string* _internal_mutable_package();
-  public:
-
-  // uint64 request_id = 1;
-  void clear_request_id();
-  uint64_t request_id() const;
-  void set_request_id(uint64_t value);
-  private:
-  uint64_t _internal_request_id() const;
-  void _internal_set_request_id(uint64_t value);
-  public:
-
-  // uint32 uid = 3;
-  void clear_uid();
-  uint32_t uid() const;
-  void set_uid(uint32_t value);
-  private:
-  uint32_t _internal_uid() const;
-  void _internal_set_uid(uint32_t value);
-  public:
-
-  // bool interactive = 5;
-  void clear_interactive();
-  bool interactive() const;
-  void set_interactive(bool value);
-  private:
-  bool _internal_interactive() const;
-  void _internal_set_interactive(bool value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.SuRequest)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> command_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_;
-    uint64_t request_id_;
-    uint32_t uid_;
-    bool interactive_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class SuDecision final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SuDecision) */ {
- public:
-  inline SuDecision() : SuDecision(nullptr) {}
-  ~SuDecision() override;
-  explicit PROTOBUF_CONSTEXPR SuDecision(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  SuDecision(const SuDecision& from);
-  SuDecision(SuDecision&& from) noexcept
-    : SuDecision() {
-    *this = ::std::move(from);
-  }
-
-  inline SuDecision& operator=(const SuDecision& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline SuDecision& operator=(SuDecision&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const SuDecision& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const SuDecision* internal_default_instance() {
-    return reinterpret_cast<const SuDecision*>(
-               &_SuDecision_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    62;
-
-  friend void swap(SuDecision& a, SuDecision& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(SuDecision* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(SuDecision* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  SuDecision* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<SuDecision>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const SuDecision& from);
-  void MergeFrom(const SuDecision& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(SuDecision* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.SuDecision";
-  }
-  protected:
-  explicit SuDecision(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kReasonFieldNumber = 3,
-    kRequestIdFieldNumber = 1,
-    kApprovedFieldNumber = 2,
-  };
-  // string reason = 3;
-  void clear_reason();
-  const std::string& reason() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_reason(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_reason();
-  PROTOBUF_NODISCARD std::string* release_reason();
-  void set_allocated_reason(std::string* reason);
-  private:
-  const std::string& _internal_reason() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const std::string& value);
-  std::string* _internal_mutable_reason();
-  public:
-
-  // uint64 request_id = 1;
-  void clear_request_id();
-  uint64_t request_id() const;
-  void set_request_id(uint64_t value);
-  private:
-  uint64_t _internal_request_id() const;
-  void _internal_set_request_id(uint64_t value);
-  public:
-
-  // bool approved = 2;
-  void clear_approved();
-  bool approved() const;
-  void set_approved(bool value);
-  private:
-  bool _internal_approved() const;
-  void _internal_set_approved(bool value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.SuDecision)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr reason_;
-    uint64_t request_id_;
-    bool approved_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
 class GuestNotification final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GuestNotification) */ {
  public:
@@ -11432,7 +11296,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    62;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -11691,7 +11555,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    63;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -11826,7 +11690,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    64;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -11961,7 +11825,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    65;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -12096,7 +11960,7 @@ class BackgroundApp final :
                &_BackgroundApp_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    66;
 
   friend void swap(BackgroundApp& a, BackgroundApp& b) {
     a.Swap(&b);
@@ -12321,7 +12185,7 @@ class BackgroundAppGone final :
                &_BackgroundAppGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    67;
 
   friend void swap(BackgroundAppGone& a, BackgroundAppGone& b) {
     a.Swap(&b);
@@ -12456,7 +12320,7 @@ class BackgroundAppAction final :
                &_BackgroundAppAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    68;
 
   friend void swap(BackgroundAppAction& a, BackgroundAppAction& b) {
     a.Swap(&b);
@@ -12613,7 +12477,7 @@ class MediaSession final :
                &_MediaSession_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    69;
 
   friend void swap(MediaSession& a, MediaSession& b) {
     a.Swap(&b);
@@ -12883,7 +12747,7 @@ class MediaSessionGone final :
                &_MediaSessionGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    70;
 
   friend void swap(MediaSessionGone& a, MediaSessionGone& b) {
     a.Swap(&b);
@@ -13018,7 +12882,7 @@ class MediaControl final :
                &_MediaControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    71;
 
   friend void swap(MediaControl& a, MediaControl& b) {
     a.Swap(&b);
@@ -13164,7 +13028,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    72;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -13281,7 +13145,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    73;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -13449,7 +13313,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    74;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -13819,7 +13683,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    75;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -13936,7 +13800,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    76;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -14077,7 +13941,7 @@ class InstallPart final :
                &_InstallPart_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    77;
 
   friend void swap(InstallPart& a, InstallPart& b) {
     a.Swap(&b);
@@ -14234,7 +14098,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    78;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -14427,7 +14291,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    79;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -14584,7 +14448,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    80;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -14730,7 +14594,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    81;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -14924,7 +14788,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    82;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -15059,7 +14923,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    83;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -15189,7 +15053,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    84;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -15373,7 +15237,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    85;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -15530,7 +15394,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    86;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -15660,7 +15524,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    87;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -15801,7 +15665,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    88;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -15974,7 +15838,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    89;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -16131,7 +15995,7 @@ class FileSharing final :
                &_FileSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    90;
 
   friend void swap(FileSharing& a, FileSharing& b) {
     a.Swap(&b);
@@ -16314,7 +16178,7 @@ class AndroidFiles final :
                &_AndroidFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    91;
 
   friend void swap(AndroidFiles& a, AndroidFiles& b) {
     a.Swap(&b);
@@ -16460,7 +16324,7 @@ class DragItem final :
                &_DragItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    92;
 
   friend void swap(DragItem& a, DragItem& b) {
     a.Swap(&b);
@@ -16660,7 +16524,7 @@ class DragOut final :
                &_DragOut_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    93;
 
   friend void swap(DragOut& a, DragOut& b) {
     a.Swap(&b);
@@ -16845,7 +16709,7 @@ class DragOffer final :
                &_DragOffer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    94;
 
   friend void swap(DragOffer& a, DragOffer& b) {
     a.Swap(&b);
@@ -17022,7 +16886,7 @@ class DragRead final :
                &_DragRead_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    95;
 
   friend void swap(DragRead& a, DragRead& b) {
     a.Swap(&b);
@@ -17196,7 +17060,7 @@ class DragData final :
                &_DragData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    96;
 
   friend void swap(DragData& a, DragData& b) {
     a.Swap(&b);
@@ -17369,7 +17233,7 @@ class DragEnd final :
                &_DragEnd_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    97;
 
   friend void swap(DragEnd& a, DragEnd& b) {
     a.Swap(&b);
@@ -17510,7 +17374,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    98;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -17640,7 +17504,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    99;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -17792,7 +17656,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    100;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -17931,7 +17795,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    101;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -18083,7 +17947,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    102;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -18229,7 +18093,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    103;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -18408,7 +18272,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    104;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -18609,7 +18473,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    105;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -18726,7 +18590,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    106;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -18843,7 +18707,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    107;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -18978,7 +18842,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    108;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -19173,7 +19037,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    109;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -19312,7 +19176,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    110;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -19464,7 +19328,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    111;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -19629,7 +19493,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    112;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -19768,7 +19632,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    113;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -19909,7 +19773,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    114;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -20039,7 +19903,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    115;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -20326,7 +20190,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    116;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -20487,7 +20351,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    117;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -20633,7 +20497,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    118;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -20790,7 +20654,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    119;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -20940,7 +20804,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    120;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -21084,7 +20948,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    121;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -21214,7 +21078,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    122;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -21399,7 +21263,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    123;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -21567,7 +21431,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    124;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -21741,7 +21605,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    125;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -21882,7 +21746,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    126;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -22034,7 +21898,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    127;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -22477,7 +22341,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    128;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -22710,7 +22574,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    129;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -22900,7 +22764,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    130;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -23068,7 +22932,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    131;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -23247,7 +23111,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    132;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -23388,7 +23252,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    133;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -23534,7 +23398,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    134;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -23713,7 +23577,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    135;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -23859,7 +23723,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    136;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -23989,7 +23853,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    137;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -24152,7 +24016,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    138;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -24304,7 +24168,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    139;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -24532,7 +24396,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    140;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -24709,7 +24573,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    142;
+    141;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -24839,7 +24703,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    143;
+    142;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -25012,7 +24876,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    143;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -25158,7 +25022,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    144;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -25424,7 +25288,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    145;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -25581,7 +25445,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    146;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -25711,7 +25575,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    148;
+    147;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -25868,7 +25732,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    149;
+    148;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -26031,7 +25895,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    150;
+    149;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -26224,7 +26088,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    151;
+    150;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -26363,7 +26227,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    152;
+    151;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -26531,7 +26395,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    153;
+    152;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -26710,7 +26574,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    154;
+    153;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -26900,7 +26764,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    155;
+    154;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -27017,7 +26881,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    156;
+    155;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -27180,7 +27044,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    157;
+    156;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -27342,7 +27206,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    158;
+    157;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -27477,7 +27341,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    159;
+    158;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -27698,7 +27562,7 @@ class DeviceName final :
                &_DeviceName_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    160;
+    159;
 
   friend void swap(DeviceName& a, DeviceName& b) {
     a.Swap(&b);
@@ -27833,7 +27697,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    161;
+    160;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -28012,7 +27876,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    162;
+    161;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -28142,7 +28006,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    163;
+    162;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -28349,7 +28213,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    164;
+    163;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -28527,6 +28391,9 @@ class Envelope final :
     kImeCommit = 18,
     kImeDeleteSurrounding = 377,
     kImeCursor = 19,
+    kImeEditor = 408,
+    kImeSetSelection = 409,
+    kImeSetComposingRegion = 410,
     kRequestGuestMemory = 20,
     kGuestMemory = 21,
     kInstalledApp = 22,
@@ -28554,9 +28421,6 @@ class Envelope final :
     kGappsState = 404,
     kGoogleDeviceIdQuery = 405,
     kGoogleDeviceId = 406,
-    kRootElevationConfig = 408,
-    kSuRequest = 409,
-    kSuDecision = 410,
     kDeviceIdle = 42,
     kHostMemory = 43,
     kHostSleep = 44,
@@ -28666,7 +28530,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    165;
+    164;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -28749,6 +28613,9 @@ class Envelope final :
     kImeCommitFieldNumber = 18,
     kImeDeleteSurroundingFieldNumber = 377,
     kImeCursorFieldNumber = 19,
+    kImeEditorFieldNumber = 408,
+    kImeSetSelectionFieldNumber = 409,
+    kImeSetComposingRegionFieldNumber = 410,
     kRequestGuestMemoryFieldNumber = 20,
     kGuestMemoryFieldNumber = 21,
     kInstalledAppFieldNumber = 22,
@@ -28776,9 +28643,6 @@ class Envelope final :
     kGappsStateFieldNumber = 404,
     kGoogleDeviceIdQueryFieldNumber = 405,
     kGoogleDeviceIdFieldNumber = 406,
-    kRootElevationConfigFieldNumber = 408,
-    kSuRequestFieldNumber = 409,
-    kSuDecisionFieldNumber = 410,
     kDeviceIdleFieldNumber = 42,
     kHostMemoryFieldNumber = 43,
     kHostSleepFieldNumber = 44,
@@ -29222,6 +29086,60 @@ class Envelope final :
   void unsafe_arena_set_allocated_ime_cursor(
       ::dsa::control::v1::ImeCursor* ime_cursor);
   ::dsa::control::v1::ImeCursor* unsafe_arena_release_ime_cursor();
+
+  // .dsa.control.v1.ImeEditor ime_editor = 408;
+  bool has_ime_editor() const;
+  private:
+  bool _internal_has_ime_editor() const;
+  public:
+  void clear_ime_editor();
+  const ::dsa::control::v1::ImeEditor& ime_editor() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ImeEditor* release_ime_editor();
+  ::dsa::control::v1::ImeEditor* mutable_ime_editor();
+  void set_allocated_ime_editor(::dsa::control::v1::ImeEditor* ime_editor);
+  private:
+  const ::dsa::control::v1::ImeEditor& _internal_ime_editor() const;
+  ::dsa::control::v1::ImeEditor* _internal_mutable_ime_editor();
+  public:
+  void unsafe_arena_set_allocated_ime_editor(
+      ::dsa::control::v1::ImeEditor* ime_editor);
+  ::dsa::control::v1::ImeEditor* unsafe_arena_release_ime_editor();
+
+  // .dsa.control.v1.ImeSetSelection ime_set_selection = 409;
+  bool has_ime_set_selection() const;
+  private:
+  bool _internal_has_ime_set_selection() const;
+  public:
+  void clear_ime_set_selection();
+  const ::dsa::control::v1::ImeSetSelection& ime_set_selection() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ImeSetSelection* release_ime_set_selection();
+  ::dsa::control::v1::ImeSetSelection* mutable_ime_set_selection();
+  void set_allocated_ime_set_selection(::dsa::control::v1::ImeSetSelection* ime_set_selection);
+  private:
+  const ::dsa::control::v1::ImeSetSelection& _internal_ime_set_selection() const;
+  ::dsa::control::v1::ImeSetSelection* _internal_mutable_ime_set_selection();
+  public:
+  void unsafe_arena_set_allocated_ime_set_selection(
+      ::dsa::control::v1::ImeSetSelection* ime_set_selection);
+  ::dsa::control::v1::ImeSetSelection* unsafe_arena_release_ime_set_selection();
+
+  // .dsa.control.v1.ImeSetComposingRegion ime_set_composing_region = 410;
+  bool has_ime_set_composing_region() const;
+  private:
+  bool _internal_has_ime_set_composing_region() const;
+  public:
+  void clear_ime_set_composing_region();
+  const ::dsa::control::v1::ImeSetComposingRegion& ime_set_composing_region() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ImeSetComposingRegion* release_ime_set_composing_region();
+  ::dsa::control::v1::ImeSetComposingRegion* mutable_ime_set_composing_region();
+  void set_allocated_ime_set_composing_region(::dsa::control::v1::ImeSetComposingRegion* ime_set_composing_region);
+  private:
+  const ::dsa::control::v1::ImeSetComposingRegion& _internal_ime_set_composing_region() const;
+  ::dsa::control::v1::ImeSetComposingRegion* _internal_mutable_ime_set_composing_region();
+  public:
+  void unsafe_arena_set_allocated_ime_set_composing_region(
+      ::dsa::control::v1::ImeSetComposingRegion* ime_set_composing_region);
+  ::dsa::control::v1::ImeSetComposingRegion* unsafe_arena_release_ime_set_composing_region();
 
   // .dsa.control.v1.RequestGuestMemory request_guest_memory = 20;
   bool has_request_guest_memory() const;
@@ -29708,60 +29626,6 @@ class Envelope final :
   void unsafe_arena_set_allocated_google_device_id(
       ::dsa::control::v1::GoogleDeviceId* google_device_id);
   ::dsa::control::v1::GoogleDeviceId* unsafe_arena_release_google_device_id();
-
-  // .dsa.control.v1.RootElevationConfig root_elevation_config = 408;
-  bool has_root_elevation_config() const;
-  private:
-  bool _internal_has_root_elevation_config() const;
-  public:
-  void clear_root_elevation_config();
-  const ::dsa::control::v1::RootElevationConfig& root_elevation_config() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::RootElevationConfig* release_root_elevation_config();
-  ::dsa::control::v1::RootElevationConfig* mutable_root_elevation_config();
-  void set_allocated_root_elevation_config(::dsa::control::v1::RootElevationConfig* root_elevation_config);
-  private:
-  const ::dsa::control::v1::RootElevationConfig& _internal_root_elevation_config() const;
-  ::dsa::control::v1::RootElevationConfig* _internal_mutable_root_elevation_config();
-  public:
-  void unsafe_arena_set_allocated_root_elevation_config(
-      ::dsa::control::v1::RootElevationConfig* root_elevation_config);
-  ::dsa::control::v1::RootElevationConfig* unsafe_arena_release_root_elevation_config();
-
-  // .dsa.control.v1.SuRequest su_request = 409;
-  bool has_su_request() const;
-  private:
-  bool _internal_has_su_request() const;
-  public:
-  void clear_su_request();
-  const ::dsa::control::v1::SuRequest& su_request() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::SuRequest* release_su_request();
-  ::dsa::control::v1::SuRequest* mutable_su_request();
-  void set_allocated_su_request(::dsa::control::v1::SuRequest* su_request);
-  private:
-  const ::dsa::control::v1::SuRequest& _internal_su_request() const;
-  ::dsa::control::v1::SuRequest* _internal_mutable_su_request();
-  public:
-  void unsafe_arena_set_allocated_su_request(
-      ::dsa::control::v1::SuRequest* su_request);
-  ::dsa::control::v1::SuRequest* unsafe_arena_release_su_request();
-
-  // .dsa.control.v1.SuDecision su_decision = 410;
-  bool has_su_decision() const;
-  private:
-  bool _internal_has_su_decision() const;
-  public:
-  void clear_su_decision();
-  const ::dsa::control::v1::SuDecision& su_decision() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::SuDecision* release_su_decision();
-  ::dsa::control::v1::SuDecision* mutable_su_decision();
-  void set_allocated_su_decision(::dsa::control::v1::SuDecision* su_decision);
-  private:
-  const ::dsa::control::v1::SuDecision& _internal_su_decision() const;
-  ::dsa::control::v1::SuDecision* _internal_mutable_su_decision();
-  public:
-  void unsafe_arena_set_allocated_su_decision(
-      ::dsa::control::v1::SuDecision* su_decision);
-  ::dsa::control::v1::SuDecision* unsafe_arena_release_su_decision();
 
   // .dsa.control.v1.DeviceIdle device_idle = 42;
   bool has_device_idle() const;
@@ -31605,6 +31469,9 @@ class Envelope final :
   void set_has_ime_commit();
   void set_has_ime_delete_surrounding();
   void set_has_ime_cursor();
+  void set_has_ime_editor();
+  void set_has_ime_set_selection();
+  void set_has_ime_set_composing_region();
   void set_has_request_guest_memory();
   void set_has_guest_memory();
   void set_has_installed_app();
@@ -31632,9 +31499,6 @@ class Envelope final :
   void set_has_gapps_state();
   void set_has_google_device_id_query();
   void set_has_google_device_id();
-  void set_has_root_elevation_config();
-  void set_has_su_request();
-  void set_has_su_decision();
   void set_has_device_idle();
   void set_has_host_memory();
   void set_has_host_sleep();
@@ -31766,6 +31630,9 @@ class Envelope final :
       ::dsa::control::v1::ImeCommit* ime_commit_;
       ::dsa::control::v1::ImeDeleteSurrounding* ime_delete_surrounding_;
       ::dsa::control::v1::ImeCursor* ime_cursor_;
+      ::dsa::control::v1::ImeEditor* ime_editor_;
+      ::dsa::control::v1::ImeSetSelection* ime_set_selection_;
+      ::dsa::control::v1::ImeSetComposingRegion* ime_set_composing_region_;
       ::dsa::control::v1::RequestGuestMemory* request_guest_memory_;
       ::dsa::control::v1::GuestMemory* guest_memory_;
       ::dsa::control::v1::InstalledApp* installed_app_;
@@ -31793,9 +31660,6 @@ class Envelope final :
       ::dsa::control::v1::GappsState* gapps_state_;
       ::dsa::control::v1::GoogleDeviceIdQuery* google_device_id_query_;
       ::dsa::control::v1::GoogleDeviceId* google_device_id_;
-      ::dsa::control::v1::RootElevationConfig* root_elevation_config_;
-      ::dsa::control::v1::SuRequest* su_request_;
-      ::dsa::control::v1::SuDecision* su_decision_;
       ::dsa::control::v1::DeviceIdle* device_idle_;
       ::dsa::control::v1::HostMemory* host_memory_;
       ::dsa::control::v1::HostSleep* host_sleep_;
@@ -35812,6 +35676,328 @@ inline void ImeCursor::set_allocated_cursor(::dsa::control::v1::Rect* cursor) {
 
 // -------------------------------------------------------------------
 
+// ImeEditor
+
+// int32 task_id = 1;
+inline void ImeEditor::clear_task_id() {
+  _impl_.task_id_ = 0;
+}
+inline int32_t ImeEditor::_internal_task_id() const {
+  return _impl_.task_id_;
+}
+inline int32_t ImeEditor::task_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.task_id)
+  return _internal_task_id();
+}
+inline void ImeEditor::_internal_set_task_id(int32_t value) {
+  
+  _impl_.task_id_ = value;
+}
+inline void ImeEditor::set_task_id(int32_t value) {
+  _internal_set_task_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.task_id)
+}
+
+// .dsa.control.v1.ImeInputKind kind = 2;
+inline void ImeEditor::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::ImeInputKind ImeEditor::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::ImeInputKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::ImeInputKind ImeEditor::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.kind)
+  return _internal_kind();
+}
+inline void ImeEditor::_internal_set_kind(::dsa::control::v1::ImeInputKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void ImeEditor::set_kind(::dsa::control::v1::ImeInputKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.kind)
+}
+
+// string text = 3;
+inline void ImeEditor::clear_text() {
+  _impl_.text_.ClearToEmpty();
+}
+inline const std::string& ImeEditor::text() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.text)
+  return _internal_text();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ImeEditor::set_text(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.text_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.text)
+}
+inline std::string* ImeEditor::mutable_text() {
+  std::string* _s = _internal_mutable_text();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ImeEditor.text)
+  return _s;
+}
+inline const std::string& ImeEditor::_internal_text() const {
+  return _impl_.text_.Get();
+}
+inline void ImeEditor::_internal_set_text(const std::string& value) {
+  
+  _impl_.text_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ImeEditor::_internal_mutable_text() {
+  
+  return _impl_.text_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ImeEditor::release_text() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.ImeEditor.text)
+  return _impl_.text_.Release();
+}
+inline void ImeEditor::set_allocated_text(std::string* text) {
+  if (text != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.text_.SetAllocated(text, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.text_.IsDefault()) {
+    _impl_.text_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ImeEditor.text)
+}
+
+// uint32 text_start = 4;
+inline void ImeEditor::clear_text_start() {
+  _impl_.text_start_ = 0u;
+}
+inline uint32_t ImeEditor::_internal_text_start() const {
+  return _impl_.text_start_;
+}
+inline uint32_t ImeEditor::text_start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.text_start)
+  return _internal_text_start();
+}
+inline void ImeEditor::_internal_set_text_start(uint32_t value) {
+  
+  _impl_.text_start_ = value;
+}
+inline void ImeEditor::set_text_start(uint32_t value) {
+  _internal_set_text_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.text_start)
+}
+
+// uint32 selection_start = 5;
+inline void ImeEditor::clear_selection_start() {
+  _impl_.selection_start_ = 0u;
+}
+inline uint32_t ImeEditor::_internal_selection_start() const {
+  return _impl_.selection_start_;
+}
+inline uint32_t ImeEditor::selection_start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.selection_start)
+  return _internal_selection_start();
+}
+inline void ImeEditor::_internal_set_selection_start(uint32_t value) {
+  
+  _impl_.selection_start_ = value;
+}
+inline void ImeEditor::set_selection_start(uint32_t value) {
+  _internal_set_selection_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.selection_start)
+}
+
+// uint32 selection_end = 6;
+inline void ImeEditor::clear_selection_end() {
+  _impl_.selection_end_ = 0u;
+}
+inline uint32_t ImeEditor::_internal_selection_end() const {
+  return _impl_.selection_end_;
+}
+inline uint32_t ImeEditor::selection_end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.selection_end)
+  return _internal_selection_end();
+}
+inline void ImeEditor::_internal_set_selection_end(uint32_t value) {
+  
+  _impl_.selection_end_ = value;
+}
+inline void ImeEditor::set_selection_end(uint32_t value) {
+  _internal_set_selection_end(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.selection_end)
+}
+
+// uint32 composition_start = 7;
+inline void ImeEditor::clear_composition_start() {
+  _impl_.composition_start_ = 0u;
+}
+inline uint32_t ImeEditor::_internal_composition_start() const {
+  return _impl_.composition_start_;
+}
+inline uint32_t ImeEditor::composition_start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.composition_start)
+  return _internal_composition_start();
+}
+inline void ImeEditor::_internal_set_composition_start(uint32_t value) {
+  
+  _impl_.composition_start_ = value;
+}
+inline void ImeEditor::set_composition_start(uint32_t value) {
+  _internal_set_composition_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.composition_start)
+}
+
+// uint32 composition_end = 8;
+inline void ImeEditor::clear_composition_end() {
+  _impl_.composition_end_ = 0u;
+}
+inline uint32_t ImeEditor::_internal_composition_end() const {
+  return _impl_.composition_end_;
+}
+inline uint32_t ImeEditor::composition_end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeEditor.composition_end)
+  return _internal_composition_end();
+}
+inline void ImeEditor::_internal_set_composition_end(uint32_t value) {
+  
+  _impl_.composition_end_ = value;
+}
+inline void ImeEditor::set_composition_end(uint32_t value) {
+  _internal_set_composition_end(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeEditor.composition_end)
+}
+
+// -------------------------------------------------------------------
+
+// ImeSetSelection
+
+// int32 task_id = 1;
+inline void ImeSetSelection::clear_task_id() {
+  _impl_.task_id_ = 0;
+}
+inline int32_t ImeSetSelection::_internal_task_id() const {
+  return _impl_.task_id_;
+}
+inline int32_t ImeSetSelection::task_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetSelection.task_id)
+  return _internal_task_id();
+}
+inline void ImeSetSelection::_internal_set_task_id(int32_t value) {
+  
+  _impl_.task_id_ = value;
+}
+inline void ImeSetSelection::set_task_id(int32_t value) {
+  _internal_set_task_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetSelection.task_id)
+}
+
+// uint32 start = 2;
+inline void ImeSetSelection::clear_start() {
+  _impl_.start_ = 0u;
+}
+inline uint32_t ImeSetSelection::_internal_start() const {
+  return _impl_.start_;
+}
+inline uint32_t ImeSetSelection::start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetSelection.start)
+  return _internal_start();
+}
+inline void ImeSetSelection::_internal_set_start(uint32_t value) {
+  
+  _impl_.start_ = value;
+}
+inline void ImeSetSelection::set_start(uint32_t value) {
+  _internal_set_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetSelection.start)
+}
+
+// uint32 end = 3;
+inline void ImeSetSelection::clear_end() {
+  _impl_.end_ = 0u;
+}
+inline uint32_t ImeSetSelection::_internal_end() const {
+  return _impl_.end_;
+}
+inline uint32_t ImeSetSelection::end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetSelection.end)
+  return _internal_end();
+}
+inline void ImeSetSelection::_internal_set_end(uint32_t value) {
+  
+  _impl_.end_ = value;
+}
+inline void ImeSetSelection::set_end(uint32_t value) {
+  _internal_set_end(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetSelection.end)
+}
+
+// -------------------------------------------------------------------
+
+// ImeSetComposingRegion
+
+// int32 task_id = 1;
+inline void ImeSetComposingRegion::clear_task_id() {
+  _impl_.task_id_ = 0;
+}
+inline int32_t ImeSetComposingRegion::_internal_task_id() const {
+  return _impl_.task_id_;
+}
+inline int32_t ImeSetComposingRegion::task_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetComposingRegion.task_id)
+  return _internal_task_id();
+}
+inline void ImeSetComposingRegion::_internal_set_task_id(int32_t value) {
+  
+  _impl_.task_id_ = value;
+}
+inline void ImeSetComposingRegion::set_task_id(int32_t value) {
+  _internal_set_task_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetComposingRegion.task_id)
+}
+
+// uint32 start = 2;
+inline void ImeSetComposingRegion::clear_start() {
+  _impl_.start_ = 0u;
+}
+inline uint32_t ImeSetComposingRegion::_internal_start() const {
+  return _impl_.start_;
+}
+inline uint32_t ImeSetComposingRegion::start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetComposingRegion.start)
+  return _internal_start();
+}
+inline void ImeSetComposingRegion::_internal_set_start(uint32_t value) {
+  
+  _impl_.start_ = value;
+}
+inline void ImeSetComposingRegion::set_start(uint32_t value) {
+  _internal_set_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetComposingRegion.start)
+}
+
+// uint32 end = 3;
+inline void ImeSetComposingRegion::clear_end() {
+  _impl_.end_ = 0u;
+}
+inline uint32_t ImeSetComposingRegion::_internal_end() const {
+  return _impl_.end_;
+}
+inline uint32_t ImeSetComposingRegion::end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ImeSetComposingRegion.end)
+  return _internal_end();
+}
+inline void ImeSetComposingRegion::_internal_set_end(uint32_t value) {
+  
+  _impl_.end_ = value;
+}
+inline void ImeSetComposingRegion::set_end(uint32_t value) {
+  _internal_set_end(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ImeSetComposingRegion.end)
+}
+
+// -------------------------------------------------------------------
+
 // ScreenState
 
 // bool on = 1;
@@ -37576,447 +37762,6 @@ inline void GoogleDeviceId::set_allocated_id(std::string* id) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GoogleDeviceId.id)
-}
-
-// -------------------------------------------------------------------
-
-// RootApp
-
-// string package = 1;
-inline void RootApp::clear_package() {
-  _impl_.package_.ClearToEmpty();
-}
-inline const std::string& RootApp::package() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.RootApp.package)
-  return _internal_package();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void RootApp::set_package(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.RootApp.package)
-}
-inline std::string* RootApp::mutable_package() {
-  std::string* _s = _internal_mutable_package();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.RootApp.package)
-  return _s;
-}
-inline const std::string& RootApp::_internal_package() const {
-  return _impl_.package_.Get();
-}
-inline void RootApp::_internal_set_package(const std::string& value) {
-  
-  _impl_.package_.Set(value, GetArenaForAllocation());
-}
-inline std::string* RootApp::_internal_mutable_package() {
-  
-  return _impl_.package_.Mutable(GetArenaForAllocation());
-}
-inline std::string* RootApp::release_package() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.RootApp.package)
-  return _impl_.package_.Release();
-}
-inline void RootApp::set_allocated_package(std::string* package) {
-  if (package != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_.SetAllocated(package, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_.IsDefault()) {
-    _impl_.package_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.RootApp.package)
-}
-
-// uint32 uid = 2;
-inline void RootApp::clear_uid() {
-  _impl_.uid_ = 0u;
-}
-inline uint32_t RootApp::_internal_uid() const {
-  return _impl_.uid_;
-}
-inline uint32_t RootApp::uid() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.RootApp.uid)
-  return _internal_uid();
-}
-inline void RootApp::_internal_set_uid(uint32_t value) {
-  
-  _impl_.uid_ = value;
-}
-inline void RootApp::set_uid(uint32_t value) {
-  _internal_set_uid(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.RootApp.uid)
-}
-
-// .dsa.control.v1.RootLevel level = 3;
-inline void RootApp::clear_level() {
-  _impl_.level_ = 0;
-}
-inline ::dsa::control::v1::RootLevel RootApp::_internal_level() const {
-  return static_cast< ::dsa::control::v1::RootLevel >(_impl_.level_);
-}
-inline ::dsa::control::v1::RootLevel RootApp::level() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.RootApp.level)
-  return _internal_level();
-}
-inline void RootApp::_internal_set_level(::dsa::control::v1::RootLevel value) {
-  
-  _impl_.level_ = value;
-}
-inline void RootApp::set_level(::dsa::control::v1::RootLevel value) {
-  _internal_set_level(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.RootApp.level)
-}
-
-// -------------------------------------------------------------------
-
-// RootElevationConfig
-
-// bool enabled = 1;
-inline void RootElevationConfig::clear_enabled() {
-  _impl_.enabled_ = false;
-}
-inline bool RootElevationConfig::_internal_enabled() const {
-  return _impl_.enabled_;
-}
-inline bool RootElevationConfig::enabled() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.RootElevationConfig.enabled)
-  return _internal_enabled();
-}
-inline void RootElevationConfig::_internal_set_enabled(bool value) {
-  
-  _impl_.enabled_ = value;
-}
-inline void RootElevationConfig::set_enabled(bool value) {
-  _internal_set_enabled(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.RootElevationConfig.enabled)
-}
-
-// repeated .dsa.control.v1.RootApp apps = 2;
-inline int RootElevationConfig::_internal_apps_size() const {
-  return _impl_.apps_.size();
-}
-inline int RootElevationConfig::apps_size() const {
-  return _internal_apps_size();
-}
-inline void RootElevationConfig::clear_apps() {
-  _impl_.apps_.Clear();
-}
-inline ::dsa::control::v1::RootApp* RootElevationConfig::mutable_apps(int index) {
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.RootElevationConfig.apps)
-  return _impl_.apps_.Mutable(index);
-}
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::RootApp >*
-RootElevationConfig::mutable_apps() {
-  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.RootElevationConfig.apps)
-  return &_impl_.apps_;
-}
-inline const ::dsa::control::v1::RootApp& RootElevationConfig::_internal_apps(int index) const {
-  return _impl_.apps_.Get(index);
-}
-inline const ::dsa::control::v1::RootApp& RootElevationConfig::apps(int index) const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.RootElevationConfig.apps)
-  return _internal_apps(index);
-}
-inline ::dsa::control::v1::RootApp* RootElevationConfig::_internal_add_apps() {
-  return _impl_.apps_.Add();
-}
-inline ::dsa::control::v1::RootApp* RootElevationConfig::add_apps() {
-  ::dsa::control::v1::RootApp* _add = _internal_add_apps();
-  // @@protoc_insertion_point(field_add:dsa.control.v1.RootElevationConfig.apps)
-  return _add;
-}
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::RootApp >&
-RootElevationConfig::apps() const {
-  // @@protoc_insertion_point(field_list:dsa.control.v1.RootElevationConfig.apps)
-  return _impl_.apps_;
-}
-
-// -------------------------------------------------------------------
-
-// SuRequest
-
-// uint64 request_id = 1;
-inline void SuRequest::clear_request_id() {
-  _impl_.request_id_ = uint64_t{0u};
-}
-inline uint64_t SuRequest::_internal_request_id() const {
-  return _impl_.request_id_;
-}
-inline uint64_t SuRequest::request_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuRequest.request_id)
-  return _internal_request_id();
-}
-inline void SuRequest::_internal_set_request_id(uint64_t value) {
-  
-  _impl_.request_id_ = value;
-}
-inline void SuRequest::set_request_id(uint64_t value) {
-  _internal_set_request_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.request_id)
-}
-
-// string package = 2;
-inline void SuRequest::clear_package() {
-  _impl_.package_.ClearToEmpty();
-}
-inline const std::string& SuRequest::package() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuRequest.package)
-  return _internal_package();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void SuRequest::set_package(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.package)
-}
-inline std::string* SuRequest::mutable_package() {
-  std::string* _s = _internal_mutable_package();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SuRequest.package)
-  return _s;
-}
-inline const std::string& SuRequest::_internal_package() const {
-  return _impl_.package_.Get();
-}
-inline void SuRequest::_internal_set_package(const std::string& value) {
-  
-  _impl_.package_.Set(value, GetArenaForAllocation());
-}
-inline std::string* SuRequest::_internal_mutable_package() {
-  
-  return _impl_.package_.Mutable(GetArenaForAllocation());
-}
-inline std::string* SuRequest::release_package() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.SuRequest.package)
-  return _impl_.package_.Release();
-}
-inline void SuRequest::set_allocated_package(std::string* package) {
-  if (package != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_.SetAllocated(package, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_.IsDefault()) {
-    _impl_.package_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SuRequest.package)
-}
-
-// uint32 uid = 3;
-inline void SuRequest::clear_uid() {
-  _impl_.uid_ = 0u;
-}
-inline uint32_t SuRequest::_internal_uid() const {
-  return _impl_.uid_;
-}
-inline uint32_t SuRequest::uid() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuRequest.uid)
-  return _internal_uid();
-}
-inline void SuRequest::_internal_set_uid(uint32_t value) {
-  
-  _impl_.uid_ = value;
-}
-inline void SuRequest::set_uid(uint32_t value) {
-  _internal_set_uid(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.uid)
-}
-
-// repeated string command = 4;
-inline int SuRequest::_internal_command_size() const {
-  return _impl_.command_.size();
-}
-inline int SuRequest::command_size() const {
-  return _internal_command_size();
-}
-inline void SuRequest::clear_command() {
-  _impl_.command_.Clear();
-}
-inline std::string* SuRequest::add_command() {
-  std::string* _s = _internal_add_command();
-  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.SuRequest.command)
-  return _s;
-}
-inline const std::string& SuRequest::_internal_command(int index) const {
-  return _impl_.command_.Get(index);
-}
-inline const std::string& SuRequest::command(int index) const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuRequest.command)
-  return _internal_command(index);
-}
-inline std::string* SuRequest::mutable_command(int index) {
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SuRequest.command)
-  return _impl_.command_.Mutable(index);
-}
-inline void SuRequest::set_command(int index, const std::string& value) {
-  _impl_.command_.Mutable(index)->assign(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::set_command(int index, std::string&& value) {
-  _impl_.command_.Mutable(index)->assign(std::move(value));
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::set_command(int index, const char* value) {
-  GOOGLE_DCHECK(value != nullptr);
-  _impl_.command_.Mutable(index)->assign(value);
-  // @@protoc_insertion_point(field_set_char:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::set_command(int index, const char* value, size_t size) {
-  _impl_.command_.Mutable(index)->assign(
-    reinterpret_cast<const char*>(value), size);
-  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.SuRequest.command)
-}
-inline std::string* SuRequest::_internal_add_command() {
-  return _impl_.command_.Add();
-}
-inline void SuRequest::add_command(const std::string& value) {
-  _impl_.command_.Add()->assign(value);
-  // @@protoc_insertion_point(field_add:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::add_command(std::string&& value) {
-  _impl_.command_.Add(std::move(value));
-  // @@protoc_insertion_point(field_add:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::add_command(const char* value) {
-  GOOGLE_DCHECK(value != nullptr);
-  _impl_.command_.Add()->assign(value);
-  // @@protoc_insertion_point(field_add_char:dsa.control.v1.SuRequest.command)
-}
-inline void SuRequest::add_command(const char* value, size_t size) {
-  _impl_.command_.Add()->assign(reinterpret_cast<const char*>(value), size);
-  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.SuRequest.command)
-}
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
-SuRequest::command() const {
-  // @@protoc_insertion_point(field_list:dsa.control.v1.SuRequest.command)
-  return _impl_.command_;
-}
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
-SuRequest::mutable_command() {
-  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SuRequest.command)
-  return &_impl_.command_;
-}
-
-// bool interactive = 5;
-inline void SuRequest::clear_interactive() {
-  _impl_.interactive_ = false;
-}
-inline bool SuRequest::_internal_interactive() const {
-  return _impl_.interactive_;
-}
-inline bool SuRequest::interactive() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuRequest.interactive)
-  return _internal_interactive();
-}
-inline void SuRequest::_internal_set_interactive(bool value) {
-  
-  _impl_.interactive_ = value;
-}
-inline void SuRequest::set_interactive(bool value) {
-  _internal_set_interactive(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuRequest.interactive)
-}
-
-// -------------------------------------------------------------------
-
-// SuDecision
-
-// uint64 request_id = 1;
-inline void SuDecision::clear_request_id() {
-  _impl_.request_id_ = uint64_t{0u};
-}
-inline uint64_t SuDecision::_internal_request_id() const {
-  return _impl_.request_id_;
-}
-inline uint64_t SuDecision::request_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuDecision.request_id)
-  return _internal_request_id();
-}
-inline void SuDecision::_internal_set_request_id(uint64_t value) {
-  
-  _impl_.request_id_ = value;
-}
-inline void SuDecision::set_request_id(uint64_t value) {
-  _internal_set_request_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuDecision.request_id)
-}
-
-// bool approved = 2;
-inline void SuDecision::clear_approved() {
-  _impl_.approved_ = false;
-}
-inline bool SuDecision::_internal_approved() const {
-  return _impl_.approved_;
-}
-inline bool SuDecision::approved() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuDecision.approved)
-  return _internal_approved();
-}
-inline void SuDecision::_internal_set_approved(bool value) {
-  
-  _impl_.approved_ = value;
-}
-inline void SuDecision::set_approved(bool value) {
-  _internal_set_approved(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuDecision.approved)
-}
-
-// string reason = 3;
-inline void SuDecision::clear_reason() {
-  _impl_.reason_.ClearToEmpty();
-}
-inline const std::string& SuDecision::reason() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.SuDecision.reason)
-  return _internal_reason();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void SuDecision::set_reason(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.reason_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.SuDecision.reason)
-}
-inline std::string* SuDecision::mutable_reason() {
-  std::string* _s = _internal_mutable_reason();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SuDecision.reason)
-  return _s;
-}
-inline const std::string& SuDecision::_internal_reason() const {
-  return _impl_.reason_.Get();
-}
-inline void SuDecision::_internal_set_reason(const std::string& value) {
-  
-  _impl_.reason_.Set(value, GetArenaForAllocation());
-}
-inline std::string* SuDecision::_internal_mutable_reason() {
-  
-  return _impl_.reason_.Mutable(GetArenaForAllocation());
-}
-inline std::string* SuDecision::release_reason() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.SuDecision.reason)
-  return _impl_.reason_.Release();
-}
-inline void SuDecision::set_allocated_reason(std::string* reason) {
-  if (reason != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.reason_.SetAllocated(reason, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.reason_.IsDefault()) {
-    _impl_.reason_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SuDecision.reason)
 }
 
 // -------------------------------------------------------------------
@@ -51155,6 +50900,228 @@ inline ::dsa::control::v1::ImeCursor* Envelope::mutable_ime_cursor() {
   return _msg;
 }
 
+// .dsa.control.v1.ImeEditor ime_editor = 408;
+inline bool Envelope::_internal_has_ime_editor() const {
+  return body_case() == kImeEditor;
+}
+inline bool Envelope::has_ime_editor() const {
+  return _internal_has_ime_editor();
+}
+inline void Envelope::set_has_ime_editor() {
+  _impl_._oneof_case_[0] = kImeEditor;
+}
+inline void Envelope::clear_ime_editor() {
+  if (_internal_has_ime_editor()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.ime_editor_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ImeEditor* Envelope::release_ime_editor() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.ime_editor)
+  if (_internal_has_ime_editor()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeEditor* temp = _impl_.body_.ime_editor_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.ime_editor_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ImeEditor& Envelope::_internal_ime_editor() const {
+  return _internal_has_ime_editor()
+      ? *_impl_.body_.ime_editor_
+      : reinterpret_cast< ::dsa::control::v1::ImeEditor&>(::dsa::control::v1::_ImeEditor_default_instance_);
+}
+inline const ::dsa::control::v1::ImeEditor& Envelope::ime_editor() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.ime_editor)
+  return _internal_ime_editor();
+}
+inline ::dsa::control::v1::ImeEditor* Envelope::unsafe_arena_release_ime_editor() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.ime_editor)
+  if (_internal_has_ime_editor()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeEditor* temp = _impl_.body_.ime_editor_;
+    _impl_.body_.ime_editor_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_ime_editor(::dsa::control::v1::ImeEditor* ime_editor) {
+  clear_body();
+  if (ime_editor) {
+    set_has_ime_editor();
+    _impl_.body_.ime_editor_ = ime_editor;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.ime_editor)
+}
+inline ::dsa::control::v1::ImeEditor* Envelope::_internal_mutable_ime_editor() {
+  if (!_internal_has_ime_editor()) {
+    clear_body();
+    set_has_ime_editor();
+    _impl_.body_.ime_editor_ = CreateMaybeMessage< ::dsa::control::v1::ImeEditor >(GetArenaForAllocation());
+  }
+  return _impl_.body_.ime_editor_;
+}
+inline ::dsa::control::v1::ImeEditor* Envelope::mutable_ime_editor() {
+  ::dsa::control::v1::ImeEditor* _msg = _internal_mutable_ime_editor();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.ime_editor)
+  return _msg;
+}
+
+// .dsa.control.v1.ImeSetSelection ime_set_selection = 409;
+inline bool Envelope::_internal_has_ime_set_selection() const {
+  return body_case() == kImeSetSelection;
+}
+inline bool Envelope::has_ime_set_selection() const {
+  return _internal_has_ime_set_selection();
+}
+inline void Envelope::set_has_ime_set_selection() {
+  _impl_._oneof_case_[0] = kImeSetSelection;
+}
+inline void Envelope::clear_ime_set_selection() {
+  if (_internal_has_ime_set_selection()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.ime_set_selection_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ImeSetSelection* Envelope::release_ime_set_selection() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.ime_set_selection)
+  if (_internal_has_ime_set_selection()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeSetSelection* temp = _impl_.body_.ime_set_selection_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.ime_set_selection_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ImeSetSelection& Envelope::_internal_ime_set_selection() const {
+  return _internal_has_ime_set_selection()
+      ? *_impl_.body_.ime_set_selection_
+      : reinterpret_cast< ::dsa::control::v1::ImeSetSelection&>(::dsa::control::v1::_ImeSetSelection_default_instance_);
+}
+inline const ::dsa::control::v1::ImeSetSelection& Envelope::ime_set_selection() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.ime_set_selection)
+  return _internal_ime_set_selection();
+}
+inline ::dsa::control::v1::ImeSetSelection* Envelope::unsafe_arena_release_ime_set_selection() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.ime_set_selection)
+  if (_internal_has_ime_set_selection()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeSetSelection* temp = _impl_.body_.ime_set_selection_;
+    _impl_.body_.ime_set_selection_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_ime_set_selection(::dsa::control::v1::ImeSetSelection* ime_set_selection) {
+  clear_body();
+  if (ime_set_selection) {
+    set_has_ime_set_selection();
+    _impl_.body_.ime_set_selection_ = ime_set_selection;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.ime_set_selection)
+}
+inline ::dsa::control::v1::ImeSetSelection* Envelope::_internal_mutable_ime_set_selection() {
+  if (!_internal_has_ime_set_selection()) {
+    clear_body();
+    set_has_ime_set_selection();
+    _impl_.body_.ime_set_selection_ = CreateMaybeMessage< ::dsa::control::v1::ImeSetSelection >(GetArenaForAllocation());
+  }
+  return _impl_.body_.ime_set_selection_;
+}
+inline ::dsa::control::v1::ImeSetSelection* Envelope::mutable_ime_set_selection() {
+  ::dsa::control::v1::ImeSetSelection* _msg = _internal_mutable_ime_set_selection();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.ime_set_selection)
+  return _msg;
+}
+
+// .dsa.control.v1.ImeSetComposingRegion ime_set_composing_region = 410;
+inline bool Envelope::_internal_has_ime_set_composing_region() const {
+  return body_case() == kImeSetComposingRegion;
+}
+inline bool Envelope::has_ime_set_composing_region() const {
+  return _internal_has_ime_set_composing_region();
+}
+inline void Envelope::set_has_ime_set_composing_region() {
+  _impl_._oneof_case_[0] = kImeSetComposingRegion;
+}
+inline void Envelope::clear_ime_set_composing_region() {
+  if (_internal_has_ime_set_composing_region()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.ime_set_composing_region_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ImeSetComposingRegion* Envelope::release_ime_set_composing_region() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.ime_set_composing_region)
+  if (_internal_has_ime_set_composing_region()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeSetComposingRegion* temp = _impl_.body_.ime_set_composing_region_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.ime_set_composing_region_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ImeSetComposingRegion& Envelope::_internal_ime_set_composing_region() const {
+  return _internal_has_ime_set_composing_region()
+      ? *_impl_.body_.ime_set_composing_region_
+      : reinterpret_cast< ::dsa::control::v1::ImeSetComposingRegion&>(::dsa::control::v1::_ImeSetComposingRegion_default_instance_);
+}
+inline const ::dsa::control::v1::ImeSetComposingRegion& Envelope::ime_set_composing_region() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.ime_set_composing_region)
+  return _internal_ime_set_composing_region();
+}
+inline ::dsa::control::v1::ImeSetComposingRegion* Envelope::unsafe_arena_release_ime_set_composing_region() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.ime_set_composing_region)
+  if (_internal_has_ime_set_composing_region()) {
+    clear_has_body();
+    ::dsa::control::v1::ImeSetComposingRegion* temp = _impl_.body_.ime_set_composing_region_;
+    _impl_.body_.ime_set_composing_region_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_ime_set_composing_region(::dsa::control::v1::ImeSetComposingRegion* ime_set_composing_region) {
+  clear_body();
+  if (ime_set_composing_region) {
+    set_has_ime_set_composing_region();
+    _impl_.body_.ime_set_composing_region_ = ime_set_composing_region;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.ime_set_composing_region)
+}
+inline ::dsa::control::v1::ImeSetComposingRegion* Envelope::_internal_mutable_ime_set_composing_region() {
+  if (!_internal_has_ime_set_composing_region()) {
+    clear_body();
+    set_has_ime_set_composing_region();
+    _impl_.body_.ime_set_composing_region_ = CreateMaybeMessage< ::dsa::control::v1::ImeSetComposingRegion >(GetArenaForAllocation());
+  }
+  return _impl_.body_.ime_set_composing_region_;
+}
+inline ::dsa::control::v1::ImeSetComposingRegion* Envelope::mutable_ime_set_composing_region() {
+  ::dsa::control::v1::ImeSetComposingRegion* _msg = _internal_mutable_ime_set_composing_region();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.ime_set_composing_region)
+  return _msg;
+}
+
 // .dsa.control.v1.RequestGuestMemory request_guest_memory = 20;
 inline bool Envelope::_internal_has_request_guest_memory() const {
   return body_case() == kRequestGuestMemory;
@@ -53150,228 +53117,6 @@ inline ::dsa::control::v1::GoogleDeviceId* Envelope::_internal_mutable_google_de
 inline ::dsa::control::v1::GoogleDeviceId* Envelope::mutable_google_device_id() {
   ::dsa::control::v1::GoogleDeviceId* _msg = _internal_mutable_google_device_id();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.google_device_id)
-  return _msg;
-}
-
-// .dsa.control.v1.RootElevationConfig root_elevation_config = 408;
-inline bool Envelope::_internal_has_root_elevation_config() const {
-  return body_case() == kRootElevationConfig;
-}
-inline bool Envelope::has_root_elevation_config() const {
-  return _internal_has_root_elevation_config();
-}
-inline void Envelope::set_has_root_elevation_config() {
-  _impl_._oneof_case_[0] = kRootElevationConfig;
-}
-inline void Envelope::clear_root_elevation_config() {
-  if (_internal_has_root_elevation_config()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.root_elevation_config_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::RootElevationConfig* Envelope::release_root_elevation_config() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.root_elevation_config)
-  if (_internal_has_root_elevation_config()) {
-    clear_has_body();
-    ::dsa::control::v1::RootElevationConfig* temp = _impl_.body_.root_elevation_config_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.root_elevation_config_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::RootElevationConfig& Envelope::_internal_root_elevation_config() const {
-  return _internal_has_root_elevation_config()
-      ? *_impl_.body_.root_elevation_config_
-      : reinterpret_cast< ::dsa::control::v1::RootElevationConfig&>(::dsa::control::v1::_RootElevationConfig_default_instance_);
-}
-inline const ::dsa::control::v1::RootElevationConfig& Envelope::root_elevation_config() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.root_elevation_config)
-  return _internal_root_elevation_config();
-}
-inline ::dsa::control::v1::RootElevationConfig* Envelope::unsafe_arena_release_root_elevation_config() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.root_elevation_config)
-  if (_internal_has_root_elevation_config()) {
-    clear_has_body();
-    ::dsa::control::v1::RootElevationConfig* temp = _impl_.body_.root_elevation_config_;
-    _impl_.body_.root_elevation_config_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_root_elevation_config(::dsa::control::v1::RootElevationConfig* root_elevation_config) {
-  clear_body();
-  if (root_elevation_config) {
-    set_has_root_elevation_config();
-    _impl_.body_.root_elevation_config_ = root_elevation_config;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.root_elevation_config)
-}
-inline ::dsa::control::v1::RootElevationConfig* Envelope::_internal_mutable_root_elevation_config() {
-  if (!_internal_has_root_elevation_config()) {
-    clear_body();
-    set_has_root_elevation_config();
-    _impl_.body_.root_elevation_config_ = CreateMaybeMessage< ::dsa::control::v1::RootElevationConfig >(GetArenaForAllocation());
-  }
-  return _impl_.body_.root_elevation_config_;
-}
-inline ::dsa::control::v1::RootElevationConfig* Envelope::mutable_root_elevation_config() {
-  ::dsa::control::v1::RootElevationConfig* _msg = _internal_mutable_root_elevation_config();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.root_elevation_config)
-  return _msg;
-}
-
-// .dsa.control.v1.SuRequest su_request = 409;
-inline bool Envelope::_internal_has_su_request() const {
-  return body_case() == kSuRequest;
-}
-inline bool Envelope::has_su_request() const {
-  return _internal_has_su_request();
-}
-inline void Envelope::set_has_su_request() {
-  _impl_._oneof_case_[0] = kSuRequest;
-}
-inline void Envelope::clear_su_request() {
-  if (_internal_has_su_request()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.su_request_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::SuRequest* Envelope::release_su_request() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.su_request)
-  if (_internal_has_su_request()) {
-    clear_has_body();
-    ::dsa::control::v1::SuRequest* temp = _impl_.body_.su_request_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.su_request_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::SuRequest& Envelope::_internal_su_request() const {
-  return _internal_has_su_request()
-      ? *_impl_.body_.su_request_
-      : reinterpret_cast< ::dsa::control::v1::SuRequest&>(::dsa::control::v1::_SuRequest_default_instance_);
-}
-inline const ::dsa::control::v1::SuRequest& Envelope::su_request() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.su_request)
-  return _internal_su_request();
-}
-inline ::dsa::control::v1::SuRequest* Envelope::unsafe_arena_release_su_request() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.su_request)
-  if (_internal_has_su_request()) {
-    clear_has_body();
-    ::dsa::control::v1::SuRequest* temp = _impl_.body_.su_request_;
-    _impl_.body_.su_request_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_su_request(::dsa::control::v1::SuRequest* su_request) {
-  clear_body();
-  if (su_request) {
-    set_has_su_request();
-    _impl_.body_.su_request_ = su_request;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.su_request)
-}
-inline ::dsa::control::v1::SuRequest* Envelope::_internal_mutable_su_request() {
-  if (!_internal_has_su_request()) {
-    clear_body();
-    set_has_su_request();
-    _impl_.body_.su_request_ = CreateMaybeMessage< ::dsa::control::v1::SuRequest >(GetArenaForAllocation());
-  }
-  return _impl_.body_.su_request_;
-}
-inline ::dsa::control::v1::SuRequest* Envelope::mutable_su_request() {
-  ::dsa::control::v1::SuRequest* _msg = _internal_mutable_su_request();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.su_request)
-  return _msg;
-}
-
-// .dsa.control.v1.SuDecision su_decision = 410;
-inline bool Envelope::_internal_has_su_decision() const {
-  return body_case() == kSuDecision;
-}
-inline bool Envelope::has_su_decision() const {
-  return _internal_has_su_decision();
-}
-inline void Envelope::set_has_su_decision() {
-  _impl_._oneof_case_[0] = kSuDecision;
-}
-inline void Envelope::clear_su_decision() {
-  if (_internal_has_su_decision()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.su_decision_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::SuDecision* Envelope::release_su_decision() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.su_decision)
-  if (_internal_has_su_decision()) {
-    clear_has_body();
-    ::dsa::control::v1::SuDecision* temp = _impl_.body_.su_decision_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.su_decision_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::SuDecision& Envelope::_internal_su_decision() const {
-  return _internal_has_su_decision()
-      ? *_impl_.body_.su_decision_
-      : reinterpret_cast< ::dsa::control::v1::SuDecision&>(::dsa::control::v1::_SuDecision_default_instance_);
-}
-inline const ::dsa::control::v1::SuDecision& Envelope::su_decision() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.su_decision)
-  return _internal_su_decision();
-}
-inline ::dsa::control::v1::SuDecision* Envelope::unsafe_arena_release_su_decision() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.su_decision)
-  if (_internal_has_su_decision()) {
-    clear_has_body();
-    ::dsa::control::v1::SuDecision* temp = _impl_.body_.su_decision_;
-    _impl_.body_.su_decision_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_su_decision(::dsa::control::v1::SuDecision* su_decision) {
-  clear_body();
-  if (su_decision) {
-    set_has_su_decision();
-    _impl_.body_.su_decision_ = su_decision;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.su_decision)
-}
-inline ::dsa::control::v1::SuDecision* Envelope::_internal_mutable_su_decision() {
-  if (!_internal_has_su_decision()) {
-    clear_body();
-    set_has_su_decision();
-    _impl_.body_.su_decision_ = CreateMaybeMessage< ::dsa::control::v1::SuDecision >(GetArenaForAllocation());
-  }
-  return _impl_.body_.su_decision_;
-}
-inline ::dsa::control::v1::SuDecision* Envelope::mutable_su_decision() {
-  ::dsa::control::v1::SuDecision* _msg = _internal_mutable_su_decision();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.su_decision)
   return _msg;
 }
 
@@ -61189,8 +60934,6 @@ inline Envelope::BodyCase Envelope::body_case() const {
 
 // -------------------------------------------------------------------
 
-// -------------------------------------------------------------------
-
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -61211,9 +60954,9 @@ template <> struct is_proto_enum< ::dsa::control::v1::UninstallStatus> : ::std::
 template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PointerTool> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::KeyAction> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::ImeInputKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::LocationAccess> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::RootLevel> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::BackgroundAppCommand> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::MediaPlayback> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::MediaCommand> : ::std::true_type {};

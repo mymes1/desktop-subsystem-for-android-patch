@@ -7,7 +7,7 @@ task windows, and three workloads are measured.
 
 ## What CI does and what needs a PC
 
-The "Graphics test" workflow checks what a hosted runner can:
+The "Graphics test" workflow checks what a hosted runner can without a guest:
 
 - every pattern in `vk-cts-subset.txt` still names cases of the pinned Android CTS
   (`verify.py check-subset`), and the expanded case list is kept;
@@ -15,8 +15,25 @@ The "Graphics test" workflow checks what a hosted runner can:
   commit by `build-test-apps.sh`) and kept as the `graphics-test-apps` artifact;
 - the host renderer runs on software Vulkan (Lavapipe) and serves a gfxstream client.
 
-Running the CTS cases, the apps and the measurements needs a booted guest. That needs
-Windows with Hyper-V and a GPU, which hosted runners do not have, so these run on a PC.
+The "Image test" workflow boots the image it made under the Linux host, with the renderer on
+Lavapipe, and on that one boot (`dsa/host/platform/linux/tests/graphics.rs`):
+
+- installs hello-gl2 (OpenGL ES, drawn through ANGLE) and hello-vulkan through the local API,
+  opens each in a task window, and waits until the host places the task's frames in a window;
+- reads each window through adb (`screencap`, or a `screenrecord` frame when the capture is
+  empty) and checks it shows the app's triangle (green for hello-gl2, dark red for
+  hello-vulkan), point up, in the middle of a grey background, and that the background has
+  faded on 3 s later, since both apps change it on every frame;
+- runs the CTS subset with `verify.py cts --software-vulkan`, and keeps each case's result
+  (`vk-cts-results.json` and `.txt`), the dEQP log and the guest log in the
+  `graphics-check-results` artifact, beside the window pictures.
+
+Lavapipe is not a GPU. A case that cannot pass on it for a reason Lavapipe gives is listed in
+`vk-cts-subset.txt` as `lavapipe: <pattern>  # <the reason>`: it still runs in CI and its
+result is kept, but its failure fails only a run without `--software-vulkan`. None is listed
+yet.
+
+The measurements need a real GPU, so they run on a PC, as does the CTS subset on that GPU.
 
 ## On a PC
 
@@ -35,8 +52,12 @@ uv run dsa/graphics/verify/verify.py measure --seconds 30
 - `fetch` downloads the Vulkan CTS APK (only that member of the pinned CTS archive, by range
   requests) and the test apps from the latest successful "Graphics test" run (needs `gh`).
   Everything goes to `.scratch/graphics-verify/`.
+- `fetch-cts` downloads only the Vulkan CTS APK and writes the expanded case list, for a
+  machine that has the test apps already.
 - `cts` checks that the guest reports ANGLE and the remoting Vulkan driver, runs the subset,
-  and prints each case that did not pass. It exits non-zero on any failure.
+  and prints each case that did not pass. It exits non-zero on any failure. `--results DIR`
+  keeps each case's result, the dEQP log and the guest log in `DIR`; `--software-vulkan`
+  excuses the `lavapipe:` cases, for a renderer on Lavapipe. `DSA_ADB` names the adb to use.
 - `apps` starts hello-gl2 and hello-vulkan, checks that each presents frames, and asks
   whether each window shows what it should (`--yes` skips the question).
 - `measure` scrolls Settings, then runs hello-gl2 and hello-vulkan as continuously rendering
