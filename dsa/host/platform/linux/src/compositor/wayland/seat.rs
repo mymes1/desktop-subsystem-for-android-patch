@@ -479,6 +479,31 @@ impl State {
         self.send_key(task_id, keycode::BACK, false, time_ms);
     }
 
+    /// Does what a click on a title bar button does, for an accessibility client that
+    /// activated the button. Back goes only while the title bar shows the back arrow.
+    pub fn title_bar_action(
+        &mut self,
+        task_id: i32,
+        action: crate::accessibility::objects::TitleAction,
+    ) {
+        use crate::accessibility::objects::TitleAction;
+        let Some(window) = self.windows.get(&task_id) else {
+            return;
+        };
+        match action {
+            TitleAction::Back => {
+                if window.title_bar.back {
+                    let time = self.key_time(Instant::now());
+                    self.send_back(task_id, time);
+                }
+            }
+            TitleAction::Minimize => window.toplevel.set_minimized(),
+            TitleAction::Maximize => window.toplevel.set_maximized(),
+            TitleAction::Restore => window.toplevel.unset_maximized(),
+            TitleAction::Close => self.report(FromHost::Closed { task_id }),
+        }
+    }
+
     fn key(&mut self, serial: u32, time: u32, code: u32, down: bool) {
         self.serial = serial;
         // The release of the key that opened the window menu goes nowhere.

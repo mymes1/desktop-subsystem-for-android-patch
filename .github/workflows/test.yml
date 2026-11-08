@@ -319,12 +319,17 @@ jobs:
           echo 'man-db man-db/auto-update boolean false' | sudo debconf-set-selections
           sudo apt-get update
           for try in 1 2 3; do
-            timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y weston libxkbcommon0 && break
+            timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y weston libxkbcommon0 dbus && break
             test "$try" -lt 3 || exit 1
           done
 
       - name: Run the Linux host's tests
         run: cargo test --no-fail-fast -p dsa-host-linux
+
+      # A screen reader's view of a task window: a client on a private session bus reads the
+      # window's AT-SPI tree and activates its nodes and title bar buttons.
+      - name: Run the AT-SPI provider over D-Bus
+        run: dbus-run-session -- cargo test -p dsa-host-linux --features atspi-bus-tests --test atspi_bus -- --nocapture
 
       - name: Build the compositor
         run: cargo build -p dsa-host-linux --bin dsa-compositor
