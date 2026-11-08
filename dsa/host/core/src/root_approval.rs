@@ -1,54 +1,118 @@
-//! Answering an Android app's su call on the host.
+//! Answering an Android app's su call on the host, and asking the host's administrator.
 //!
 //! The guest's su relay sends a [`control::SuRequest`] for each su call and waits up to
-//! [`ANSWER_TIMEOUT`] for the [`control::SuDecision`]. [`RootApproval`] makes that decision for
-//! one user's Android: it asks the [`Policy`] first, and only when the policy says the host's
+//! [`ANSWER_TIMEOUT`](crate::root_elevation::ANSWER_TIMEOUT) for the [`control::SuDecision`].
+//! [`RootApproval`] makes that decision for one user's Android: it asks the [`Policy`] first,
+//! and only when the policy says the host's
 //! administrator has to approve does it show the platform's administrator prompt
 //! ([`ApprovalPrompt`]: UAC on Windows, Authorization Services on macOS, polkit on Linux). An
 //! approval starts the app's grace, so the app's next su call within it is not asked again.
 //!
-//! Every request and every decision goes to the host log with the app, the time, the command
-//! and the outcome, so the computer's owner can read back what ran as root.
+//! The prompt has [`PROMPT_TIMEOUT`] to answer, shorter than su's own limit, so the host's
+//! "timed out" reaches su. It runs on a thread of its own: past its time the request has timed
+//! out, the prompt is withdrawn where the platform can withdraw it, and its late answer is
+//! ignored. A prompt that panics is a refusal, not a crash. Prompts go one at a time, so a
+//! second call from an app waits for the first to be answered and is then approved within the
+//! grace that answer started.
+//!
+//! The same prompt approves moving an app to the level that keeps root without asking
+//! ([`RootApproval::approve_keep_root`]), so a user who is not an administrator can still
+//! have an administrator approve it in their own session.
+//!
+//! Every decision goes to the host log with the app, the time, the command and the outcome,
+//! so the computer's owner can read back what ran as root.
 //!
 //! The policy is rebuilt from the settings at each start of Android ([`RootApproval::restart`]),
 //! which clears every grace. Between starts the per-app levels are read again at each request,
 //! so a level changed in the settings applies to the next su call and clears that app's grace;
 //! turning the whole feature off stops every approval at once, while turning it on applies only
 //! from the next start, as the guest's su is set up at boot.
+//!
+//! The prompt is the only part that names a host OS API, so everything here runs and is
+//! tested on every platform with a fake prompt.
 
-use std::sync::{Arc, Mutex, TryLockError};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use dsa_protocol::control;
 
 use crate::resize_trace::utc_stamp;
-use crate::root_elevation::{AppLevel, Decision, DecisionDenied, Level, Policy, ANSWER_TIMEOUT};
+use crate::root_elevation::{AppLevel, Decision, DecisionDenied, Level, Policy};
 use crate::settings::SettingsStore;
 use crate::tasks::AppInfo;
 
 /// How long the host's administrator prompt may stay open. Shorter than the guest's
-/// [`ANSWER_TIMEOUT`], so the host's "timed out" reaches su (and the log) before su gives up
-/// on its own.
+/// [`ANSWER_TIMEOUT`](crate::root_elevation::ANSWER_TIMEOUT), so the host's "timed out"
+/// reaches su (and the log) before su gives up on its own.
 pub const PROMPT_TIMEOUT: Duration = Duration::from_secs(55);
 
-/// How often a request that waits for another app's prompt to close looks again.
+/// How often a request that waits for another prompt to close looks again.
 const TURN_POLL: Duration = Duration::from_millis(50);
 
-/// One su call the host's administrator is asked to approve, with what the prompt shows.
-#[derive(Debug, Clone, PartialEq)]
+/// What the administrator is asked to approve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Purpose {
+    /// One su call: the command, or a shell.
+    #[default]
+    Run,
+    /// Letting the app run anything as root from now on without asking each time.
+    KeepRoot,
+}
+
+/// What the administrator prompt is asked about, with what the prompt shows.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ApprovalRequest {
+    /// The guest's ID of the su call, unique while its daemon runs; 0 for a level change.
     pub request_id: u64,
     /// The calling app, with its name and icon as the guest last listed them. An app the guest
     /// has not listed has its package as its name and no icon.
     pub app: AppInfo,
+    /// The app's Android uid; 0 when unknown (a level change).
     pub uid: u32,
     /// The command su runs, split as a shell would; empty for an interactive shell.
     pub command: Vec<String>,
+    /// Whether su has a terminal (an interactive shell).
     pub interactive: bool,
+    pub purpose: Purpose,
 }
 
 impl ApprovalRequest {
+    /// The request a su call makes. `app` is the app as the guest last listed it.
+    pub fn from_su(request: &control::SuRequest, app: Option<&AppInfo>) -> ApprovalRequest {
+        ApprovalRequest {
+            request_id: request.request_id,
+            app: app.cloned().unwrap_or_else(|| AppInfo {
+                package_name: request.package.clone(),
+                ..Default::default()
+            }),
+            uid: request.uid,
+            command: request.command.clone(),
+            interactive: request.interactive,
+            purpose: Purpose::Run,
+        }
+    }
+
+    /// The request to let `app` keep root without asking each time.
+    pub fn keep_root(app: AppInfo) -> ApprovalRequest {
+        ApprovalRequest {
+            app,
+            purpose: Purpose::KeepRoot,
+            ..Default::default()
+        }
+    }
+
+    /// The requesting app's package.
+    pub fn package(&self) -> &str {
+        &self.app.package_name
+    }
+
+    /// The app's launcher icon as a PNG image; empty when the guest has not drawn one.
+    pub fn icon_png(&self) -> &[u8] {
+        &self.app.icon_png
+    }
+
     /// The app's name for the prompt and the log: its label, else its package.
     pub fn app_name(&self) -> &str {
         let label = self.app.label.trim();
@@ -59,9 +123,49 @@ impl ApprovalRequest {
         }
     }
 
-    /// What su runs, in words for the prompt and the log.
+    /// What is asked for, in words for a prompt that shows it on a line of its own: the
+    /// command as a shell would read it, "an interactive shell", or keeping root.
     pub fn command_text(&self) -> String {
-        command_text(&self.command, self.interactive)
+        match self.purpose {
+            Purpose::Run => command_text(&self.command, self.interactive),
+            Purpose::KeepRoot => "any command, from now on without asking each time".to_string(),
+        }
+    }
+
+    /// The command as one line, each word quoted when it needs to be. Empty for a shell.
+    pub fn command_line(&self) -> String {
+        self.command
+            .iter()
+            .map(|word| quote_word(word))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// What the app wants, in words for a sentence and the log: the command in backticks, or
+    /// a shell.
+    pub fn what(&self) -> String {
+        match self.purpose {
+            Purpose::KeepRoot => "root without asking each time".to_string(),
+            Purpose::Run if self.command.is_empty() => command_text(&[], self.interactive),
+            Purpose::Run => format!("`{}`", self.command_line()),
+        }
+    }
+
+    /// The sentence the administrator prompt shows: the app by name and package, and what it
+    /// wants.
+    pub fn message(&self) -> String {
+        let app = if self.app_name() == self.package() {
+            format!("The Android app {}", self.package())
+        } else {
+            format!("The Android app {} ({})", self.app_name(), self.package())
+        };
+        match self.purpose {
+            Purpose::KeepRoot => {
+                format!("{app} wants to run commands as root without asking each time.")
+            }
+            Purpose::Run if self.command.is_empty() => format!("{app} wants to open a root shell."),
+            Purpose::Run => format!("{app} wants to run {} as root.", self.what()),
+        }
     }
 }
 
@@ -77,44 +181,174 @@ pub fn command_text(command: &[String], interactive: bool) -> String {
     }
     command
         .iter()
-        .map(|word| {
-            let plain = !word.is_empty()
-                && word
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "-_./=:,+@%".contains(c));
-            if plain {
-                word.clone()
-            } else {
-                format!("'{}'", word.replace('\'', r"'\''"))
-            }
-        })
+        .map(|word| quote_word(word))
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-/// How the host's administrator answered a prompt.
+/// A word quoted for a shell when it holds anything but plain characters.
+fn quote_word(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./=:,+@%".contains(c));
+    if plain {
+        word.to_string()
+    } else {
+        format!("'{}'", word.replace('\'', r"'\''"))
+    }
+}
+
+/// How the platform's administrator prompt answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptAnswer {
     /// An administrator approved: the platform confirmed the answer came with administrator
     /// rights (an elevated process, an authorization right, a polkit decision).
     Approved,
-    /// The prompt was refused or cancelled.
-    Refused,
+    /// The prompt refused: wrong credentials, a refusal, or the account may not approve.
+    Denied,
+    /// The person dismissed the prompt without answering.
+    Cancelled,
     /// The person at the computer is not one of its administrators, and no administrator
     /// answered for them.
     NotAdministrator,
     /// Nobody answered within the time the prompt had.
     TimedOut,
-    /// The prompt could not be shown, or its answer could not be read. Counts as a refusal.
-    Failed(String),
+    /// The prompt could not be shown, or its answer could not be read; the detail says why.
+    Unavailable(String),
 }
 
-/// The platform's administrator prompt for one user's su calls.
+/// The host OS's administrator prompt for one user.
 pub trait ApprovalPrompt: Send + Sync {
     /// Shows the prompt for `request` in the user's session, naming the app and showing its
-    /// icon, and waits at most `timeout` for the answer. It must not approve on anything less
-    /// than an answer made with administrator rights.
+    /// icon where the platform can, and waits at most `timeout` for the answer. It must not
+    /// approve on anything less than an answer made with administrator rights. It runs on a
+    /// thread of its own, so a prompt that does not return in time only costs that thread.
     fn ask(&self, request: &ApprovalRequest, timeout: Duration) -> PromptAnswer;
+
+    /// Takes down the prompt for `request` after it timed out, where the platform can. Its
+    /// later answer, if any, is ignored either way.
+    fn withdraw(&self, request: &ApprovalRequest) {
+        let _ = request;
+    }
+}
+
+/// The end of one request to the administrator prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    Approved,
+    /// Refused by the prompt.
+    Denied,
+    /// Dismissed by the person: denied too.
+    Cancelled,
+    /// The person is not an administrator and none answered: denied.
+    NotAdministrator,
+    /// No answer within the prompt's time.
+    TimedOut,
+    /// The prompt could not be shown: denied, with the reason.
+    Unavailable(String),
+}
+
+impl Outcome {
+    fn of(answer: PromptAnswer) -> Outcome {
+        match answer {
+            PromptAnswer::Approved => Outcome::Approved,
+            PromptAnswer::Denied => Outcome::Denied,
+            PromptAnswer::Cancelled => Outcome::Cancelled,
+            PromptAnswer::NotAdministrator => Outcome::NotAdministrator,
+            PromptAnswer::TimedOut => Outcome::TimedOut,
+            PromptAnswer::Unavailable(why) => Outcome::Unavailable(why),
+        }
+    }
+
+    /// The result the policy's caller gets: approved, or denied with the reason.
+    pub fn result(&self) -> Result<(), DecisionDenied> {
+        match self {
+            Outcome::Approved => Ok(()),
+            Outcome::Denied
+            | Outcome::Cancelled
+            | Outcome::NotAdministrator
+            | Outcome::Unavailable(_) => Err(DecisionDenied::Refused),
+            Outcome::TimedOut => Err(DecisionDenied::TimedOut),
+        }
+    }
+
+    /// The sentence su prints and the log keeps, empty when approved.
+    pub fn reason(&self) -> String {
+        match self {
+            Outcome::Approved => String::new(),
+            Outcome::Denied => DecisionDenied::Refused.describe().to_string(),
+            Outcome::Cancelled => {
+                "the computer's administrator dismissed the root request".to_string()
+            }
+            Outcome::NotAdministrator => "the root request needs one of the computer's \
+                                          administrators, and you are not one"
+                .to_string(),
+            Outcome::TimedOut => DecisionDenied::TimedOut.describe().to_string(),
+            Outcome::Unavailable(why) => {
+                format!("the computer could not ask its administrator: {why}")
+            }
+        }
+    }
+
+    /// How it went, for the log.
+    fn how(&self, timeout: Duration) -> String {
+        match self {
+            Outcome::Approved => "approved by the computer's administrator".to_string(),
+            Outcome::Denied => "refused by the computer's administrator".to_string(),
+            Outcome::Cancelled => "refused: the administrator prompt was dismissed".to_string(),
+            Outcome::NotAdministrator => {
+                "refused: the person asked is not one of the computer's administrators".to_string()
+            }
+            Outcome::TimedOut => format!(
+                "refused: timed out with no answer within {} seconds",
+                timeout.as_secs()
+            ),
+            Outcome::Unavailable(why) => {
+                format!("refused: the administrator prompt could not be shown ({why})")
+            }
+        }
+    }
+}
+
+/// Asks `prompt` about `request` and waits at most `timeout` for its answer. A prompt that
+/// does not answer in time is withdrawn and the request has timed out; a prompt that fails
+/// (its thread panics) leaves the request denied, and the host keeps running.
+pub fn ask_admin(
+    prompt: &Arc<dyn ApprovalPrompt>,
+    request: &ApprovalRequest,
+    timeout: Duration,
+) -> Outcome {
+    let (tx, rx) = mpsc::channel();
+    let (asked, question) = (Arc::clone(prompt), request.clone());
+    let spawned = thread::Builder::new()
+        .name("dsa-admin-prompt".into())
+        .spawn(move || {
+            let _ = tx.send(asked.ask(&question, timeout));
+        });
+    if let Err(why) = spawned {
+        return Outcome::Unavailable(format!("no thread for the prompt: {why}"));
+    }
+    match rx.recv_timeout(timeout) {
+        Ok(answer) => Outcome::of(answer),
+        Err(RecvTimeoutError::Timeout) => {
+            prompt.withdraw(request);
+            Outcome::TimedOut
+        }
+        Err(RecvTimeoutError::Disconnected) => {
+            Outcome::Unavailable("the prompt ended without an answer".to_string())
+        }
+    }
+}
+
+/// Says whether the feature is on and each app's level, as the settings have them now.
+pub type LevelSource = Arc<dyn Fn() -> (bool, Vec<AppLevel>) + Send + Sync>;
+
+/// A [`LevelSource`] that reads `user`'s levels from `store` at each request. A level the
+/// store cannot read is off.
+pub fn levels_from_settings(store: Arc<dyn SettingsStore>, user: &str) -> LevelSource {
+    let user = user.to_string();
+    Arc::new(move || crate::root_elevation::stored(&*store, &user))
 }
 
 /// Where the decisions are written: the host log.
@@ -134,7 +368,7 @@ struct BootPolicy {
 /// Decides each su call of one user's Android.
 pub struct RootApproval {
     user: String,
-    store: Arc<dyn SettingsStore>,
+    levels: LevelSource,
     prompt: Arc<dyn ApprovalPrompt>,
     log: LogLine,
     timeout: Duration,
@@ -153,9 +387,20 @@ impl RootApproval {
         prompt: Arc<dyn ApprovalPrompt>,
         log: LogLine,
     ) -> RootApproval {
+        let levels = levels_from_settings(store, user);
+        RootApproval::with_levels(user, prompt, levels, log)
+    }
+
+    /// The same, with the switch and the levels read from `levels` at each request.
+    pub fn with_levels(
+        user: &str,
+        prompt: Arc<dyn ApprovalPrompt>,
+        levels: LevelSource,
+        log: LogLine,
+    ) -> RootApproval {
         let approval = RootApproval {
             user: user.to_string(),
-            store,
+            levels,
             prompt,
             log,
             timeout: PROMPT_TIMEOUT,
@@ -175,57 +420,55 @@ impl RootApproval {
         self
     }
 
+    /// Writes each decision with `log` instead.
+    pub fn with_log(mut self, log: LogLine) -> RootApproval {
+        self.log = log;
+        self
+    }
+
     /// Starts the policy of a new boot of Android: the feature as the settings say now, the
     /// stored levels, and no grace for any app.
     pub fn restart(&self) {
-        let enabled = self.store.machine().root_elevation;
-        let levels = self.stored_levels();
-        *self.boot.lock().unwrap_or_else(|e| e.into_inner()) = BootPolicy {
+        let (enabled, levels) = (self.levels)();
+        *self.boot() = BootPolicy {
             booted_enabled: enabled,
             policy: Policy::with_levels(enabled, levels),
         };
     }
 
-    fn stored_levels(&self) -> Vec<AppLevel> {
-        match self.store.root_apps(&self.user) {
-            Ok(apps) => apps
-                .into_iter()
-                .filter_map(|app| {
-                    Level::from_code(&app.level).map(|level| AppLevel {
-                        package: app.package,
-                        level,
-                    })
-                })
-                .collect(),
-            Err(why) => {
-                (self.log)(&format!(
-                    "root: {}: the apps' root levels cannot be read, so every app is off: {why}",
-                    self.user
-                ));
-                Vec::new()
-            }
-        }
+    fn boot(&self) -> MutexGuard<'_, BootPolicy> {
+        self.boot.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Brings the boot's policy up to the settings for `package`: the feature turned off since
-    /// the boot stops approvals, and a level changed since the last request applies (and
-    /// clears the app's grace). Returns the decision at `now`.
-    fn decide_now(&self, package: &str, now: Instant) -> Decision {
-        let enabled = self.store.machine().root_elevation;
-        let stored = self
-            .stored_levels()
-            .into_iter()
-            .find(|app| app.package == package)
-            .map_or(Level::Off, |app| app.level);
-        let mut boot = self.boot.lock().unwrap_or_else(|e| e.into_inner());
+    /// Brings the boot's policy up to the settings: the feature turned off since the boot
+    /// stops approvals, and a level changed since the last request applies (and clears that
+    /// app's grace). Returns the decision for `package` now, and its level.
+    fn decide_now(&self, package: &str) -> (Decision, Level) {
+        let (enabled, levels) = (self.levels)();
+        let mut boot = self.boot();
         let enabled = boot.booted_enabled && enabled;
-        if boot.policy.enabled() != enabled {
-            boot.policy.set_enabled(enabled);
+        let policy = &mut boot.policy;
+        if policy.enabled() != enabled {
+            policy.set_enabled(enabled);
         }
-        if boot.policy.level(package) != stored {
-            boot.policy.set_level(package, stored);
+        for app in policy.app_levels() {
+            if !levels.iter().any(|a| a.package == app.package) {
+                policy.set_level(&app.package, Level::Off);
+            }
         }
-        boot.policy.decide(package, now)
+        for app in levels {
+            if policy.level(&app.package) != app.level {
+                policy.set_level(&app.package, app.level);
+            }
+        }
+        (
+            policy.decide(package, Instant::now()),
+            policy.level(package),
+        )
+    }
+
+    fn record_approval(&self, package: &str) {
+        self.boot().policy.approved(package, Instant::now());
     }
 
     /// Decides one su call. `app` is the calling app as the guest last listed it, for the name
@@ -235,155 +478,485 @@ impl RootApproval {
         request: &control::SuRequest,
         app: Option<&AppInfo>,
     ) -> control::SuDecision {
-        let received = Instant::now();
-        let deadline = received + self.timeout;
-        let asking = ApprovalRequest {
+        self.answer(&ApprovalRequest::from_su(request, app))
+    }
+
+    /// Answers one su request: by the policy, and by the administrator prompt when the policy
+    /// asks for one. Writes one line with the decision to the log.
+    pub fn answer(&self, request: &ApprovalRequest) -> control::SuDecision {
+        let deadline = Instant::now() + self.timeout;
+        let package = request.package();
+        let (decision, level) = self.decide_now(package);
+        let result = match decision {
+            Decision::Deny => Err((
+                DecisionDenied::NotAllowed.describe().to_string(),
+                "refused: the app may not use root".to_string(),
+            )),
+            Decision::ApproveWithoutPrompt => Ok(self.approve_without_prompt(package, level)),
+            Decision::PromptHost => self.prompt(request, deadline),
+        };
+        let (approved, reason, how) = match result {
+            Ok(how) => (true, String::new(), how),
+            Err((reason, how)) => (false, reason, how),
+        };
+        self.write(request, &how);
+        control::SuDecision {
             request_id: request.request_id,
-            app: app.cloned().unwrap_or_else(|| AppInfo {
-                package_name: request.package.clone(),
-                label: request.package.clone(),
-                ..Default::default()
-            }),
-            uid: request.uid,
-            command: request.command.clone(),
-            interactive: request.interactive,
-        };
-        self.write(
-            &asking,
-            &format!(
-                "asks to run {} as root (request {})",
-                asking.command_text(),
-                asking.request_id
-            ),
-        );
-        let package = request.package.as_str();
-        let first = self.decide_now(package, received);
-        let outcome = match first {
-            Decision::Deny => Err(DecisionDenied::NotAllowed.describe().to_string()),
-            Decision::ApproveWithoutPrompt => Ok(self.approve_without_prompt(package, received)),
-            Decision::PromptHost => self.ask(&asking, deadline),
-        };
-        match outcome {
-            Ok(how) => {
-                self.write(
-                    &asking,
-                    &format!("approved {how} (request {})", asking.request_id),
-                );
-                control::SuDecision {
-                    request_id: request.request_id,
-                    approved: true,
-                    reason: String::new(),
-                }
-            }
-            Err(reason) => {
-                self.write(
-                    &asking,
-                    &format!("refused (request {}): {reason}", asking.request_id),
-                );
-                control::SuDecision {
-                    request_id: request.request_id,
-                    approved: false,
-                    reason,
-                }
-            }
+            approved,
+            reason,
         }
     }
 
     /// A call the policy approves at once: a remember app, which also renews its standing
     /// state, or an app within its grace. Says how, for the log.
-    fn approve_without_prompt(&self, package: &str, now: Instant) -> &'static str {
-        let mut boot = self.boot.lock().unwrap_or_else(|e| e.into_inner());
-        if boot.policy.level(package) == Level::Remember {
-            boot.policy.approved(package, now);
-            "without asking (the app may keep root)"
+    fn approve_without_prompt(&self, package: &str, level: Level) -> String {
+        if level == Level::Remember {
+            self.record_approval(package);
+            "approved without asking (the app may keep root)".to_string()
         } else {
-            "without asking (within the app's 15-minute grace)"
+            "approved without asking (within the grace of an earlier approval)".to_string()
         }
     }
 
     /// Waits for the prompt's turn, decides again (an approval in another prompt may have
     /// started the app's grace meanwhile), and asks the administrator. `Ok` says how it was
-    /// approved; `Err` says why not, in words su prints.
-    fn ask(&self, asking: &ApprovalRequest, deadline: Instant) -> Result<&'static str, String> {
-        let package = asking.app.package_name.as_str();
-        let _turn = loop {
-            match self.turn.try_lock() {
-                Ok(turn) => break turn,
-                Err(TryLockError::Poisoned(poisoned)) => break poisoned.into_inner(),
-                Err(TryLockError::WouldBlock) => {
-                    if Instant::now() >= deadline {
-                        return Err(DecisionDenied::TimedOut.describe().to_string());
-                    }
-                    thread::sleep(TURN_POLL);
-                }
-            }
+    /// approved; `Err` gives the reason su prints and how it went for the log.
+    fn prompt(
+        &self,
+        request: &ApprovalRequest,
+        deadline: Instant,
+    ) -> Result<String, (String, String)> {
+        let package = request.package();
+        let timed_out = || {
+            let outcome = Outcome::TimedOut;
+            (outcome.reason(), outcome.how(self.timeout))
         };
-        match self.decide_now(package, Instant::now()) {
-            Decision::Deny => return Err(DecisionDenied::NotAllowed.describe().to_string()),
+        let Some(_turn) = self.wait_for_turn(deadline) else {
+            return Err(timed_out());
+        };
+        let (decision, level) = self.decide_now(package);
+        match decision {
+            Decision::Deny => {
+                return Err((
+                    DecisionDenied::NotAllowed.describe().to_string(),
+                    "refused: the app may not use root".to_string(),
+                ))
+            }
             Decision::ApproveWithoutPrompt => {
-                return Ok(self.approve_without_prompt(package, Instant::now()))
+                return Ok(self.approve_without_prompt(package, level))
             }
             Decision::PromptHost => {}
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if left.is_zero() {
-            return Err(DecisionDenied::TimedOut.describe().to_string());
+            return Err(timed_out());
         }
-        self.write(
-            asking,
-            &format!(
-                "asking the computer's administrator (request {})",
-                asking.request_id
-            ),
-        );
-        let answer = self.prompt.ask(asking, left);
-        // An answer that comes after su gave up runs nothing, so it starts no grace either.
-        let answer = if answer == PromptAnswer::Approved && Instant::now() > deadline {
-            PromptAnswer::TimedOut
-        } else {
-            answer
-        };
-        match answer {
-            PromptAnswer::Approved => {
-                let now = Instant::now();
-                // The feature or the level may have changed while the prompt was open.
-                match self.decide_now(package, now) {
-                    Decision::Deny => Err(DecisionDenied::NotAllowed.describe().to_string()),
-                    _ => {
-                        self.boot
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .policy
-                            .approved(package, now);
-                        Ok("by the computer's administrator")
+        let outcome = ask_admin(&self.prompt, request, left);
+        if outcome != Outcome::Approved {
+            return Err((outcome.reason(), outcome.how(self.timeout)));
+        }
+        // The feature or the level may have changed while the prompt was open.
+        if self.decide_now(package).0 == Decision::Deny {
+            return Err((
+                DecisionDenied::NotAllowed.describe().to_string(),
+                "refused: the app may no longer use root".to_string(),
+            ));
+        }
+        self.record_approval(package);
+        Ok(outcome.how(self.timeout))
+    }
+
+    /// The prompt's turn, or `None` when `deadline` passes first.
+    fn wait_for_turn(&self, deadline: Instant) -> Option<MutexGuard<'_, ()>> {
+        loop {
+            match self.turn.try_lock() {
+                Ok(turn) => return Some(turn),
+                Err(TryLockError::Poisoned(poisoned)) => return Some(poisoned.into_inner()),
+                Err(TryLockError::WouldBlock) => {
+                    if Instant::now() >= deadline {
+                        return None;
                     }
+                    thread::sleep(TURN_POLL);
                 }
             }
-            PromptAnswer::Refused => Err(DecisionDenied::Refused.describe().to_string()),
-            PromptAnswer::NotAdministrator => Err(
-                "the root request needs one of the computer's administrators, and you are not \
-                 one"
-                .to_string(),
-            ),
-            PromptAnswer::TimedOut => Err(DecisionDenied::TimedOut.describe().to_string()),
-            PromptAnswer::Failed(why) => Err(format!(
-                "the computer's administrator could not be asked: {why}"
-            )),
         }
     }
 
-    /// One line in the host log about `asking`, with the time, the user and the app.
-    fn write(&self, asking: &ApprovalRequest, what: &str) {
+    /// Asks the administrator to let `app` keep root without asking each time, as moving it
+    /// to that level needs. Blocks at most the prompt's time. `Err` says why not.
+    pub fn approve_keep_root(&self, app: AppInfo) -> Result<(), String> {
+        let request = ApprovalRequest::keep_root(app);
+        let deadline = Instant::now() + self.timeout;
+        let outcome = match self.wait_for_turn(deadline) {
+            None => Outcome::TimedOut,
+            Some(_turn) => {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    Outcome::TimedOut
+                } else {
+                    ask_admin(&self.prompt, &request, left)
+                }
+            }
+        };
+        self.write(&request, &outcome.how(self.timeout));
+        match outcome {
+            Outcome::Approved => Ok(()),
+            other => Err(other.reason()),
+        }
+    }
+
+    /// One line in the host log about `request`, with the time, the user and the app.
+    fn write(&self, request: &ApprovalRequest, how: &str) {
         let since_epoch = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default();
+        let id = if request.purpose == Purpose::Run {
+            format!(" (request {})", request.request_id)
+        } else {
+            String::new()
+        };
         (self.log)(&format!(
-            "root: {} {}: {} ({}, uid {}) {what}",
+            "root: {} {}: {} ({}, uid {}) asked to run {}{id}: {how}",
             utc_stamp(since_epoch),
             self.user,
-            asking.app_name(),
-            asking.app.package_name,
-            asking.uid
+            request.app_name(),
+            request.package(),
+            request.uid,
+            request.what(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A prompt that gives the same answer each time, after `delay`, and counts its prompts.
+    struct FakePrompt {
+        answer: PromptAnswer,
+        delay: Duration,
+        asked: AtomicUsize,
+        withdrawn: AtomicUsize,
+        seen: Mutex<Vec<ApprovalRequest>>,
+    }
+
+    impl FakePrompt {
+        fn new(answer: PromptAnswer) -> Arc<FakePrompt> {
+            FakePrompt::slow(answer, Duration::ZERO)
+        }
+        fn slow(answer: PromptAnswer, delay: Duration) -> Arc<FakePrompt> {
+            Arc::new(FakePrompt {
+                answer,
+                delay,
+                asked: AtomicUsize::new(0),
+                withdrawn: AtomicUsize::new(0),
+                seen: Mutex::new(Vec::new()),
+            })
+        }
+    }
+
+    impl ApprovalPrompt for FakePrompt {
+        fn ask(&self, request: &ApprovalRequest, _timeout: Duration) -> PromptAnswer {
+            self.asked.fetch_add(1, Ordering::SeqCst);
+            self.seen.lock().unwrap().push(request.clone());
+            thread::sleep(self.delay);
+            self.answer.clone()
+        }
+        fn withdraw(&self, _request: &ApprovalRequest) {
+            self.withdrawn.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    struct PanickingPrompt;
+
+    impl ApprovalPrompt for PanickingPrompt {
+        fn ask(&self, _request: &ApprovalRequest, _timeout: Duration) -> PromptAnswer {
+            panic!("the prompt broke");
+        }
+    }
+
+    fn levels(enabled: bool, apps: &[(&str, Level)]) -> LevelSource {
+        let apps: Vec<AppLevel> = apps
+            .iter()
+            .map(|(package, level)| AppLevel {
+                package: package.to_string(),
+                level: *level,
+            })
+            .collect();
+        Arc::new(move || (enabled, apps.clone()))
+    }
+
+    fn request(package: &str) -> ApprovalRequest {
+        ApprovalRequest {
+            request_id: 7,
+            app: AppInfo {
+                package_name: package.to_string(),
+                label: "Root Checker".to_string(),
+                icon_png: vec![0x89, b'P', b'N', b'G'],
+                ..Default::default()
+            },
+            uid: 10_123,
+            command: vec!["id".to_string()],
+            interactive: false,
+            purpose: Purpose::Run,
+        }
+    }
+
+    fn quiet() -> LogLine {
+        Arc::new(|_: &str| {})
+    }
+
+    fn logged() -> (LogLine, Arc<Mutex<Vec<String>>>) {
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&lines);
+        (
+            Arc::new(move |line: &str| sink.lock().unwrap().push(line.to_string())),
+            lines,
+        )
+    }
+
+    fn elevation(prompt: Arc<dyn ApprovalPrompt>, source: LevelSource) -> RootApproval {
+        RootApproval::with_levels("ann", prompt, source, quiet())
+    }
+
+    #[test]
+    fn fr35_each_prompt_answer_maps_to_approved_or_denied() {
+        let cases = [
+            (PromptAnswer::Approved, Outcome::Approved, Ok(())),
+            (
+                PromptAnswer::Denied,
+                Outcome::Denied,
+                Err(DecisionDenied::Refused),
+            ),
+            (
+                PromptAnswer::Cancelled,
+                Outcome::Cancelled,
+                Err(DecisionDenied::Refused),
+            ),
+            (
+                PromptAnswer::NotAdministrator,
+                Outcome::NotAdministrator,
+                Err(DecisionDenied::Refused),
+            ),
+            (
+                PromptAnswer::TimedOut,
+                Outcome::TimedOut,
+                Err(DecisionDenied::TimedOut),
+            ),
+            (
+                PromptAnswer::Unavailable("no polkit agent".into()),
+                Outcome::Unavailable("no polkit agent".into()),
+                Err(DecisionDenied::Refused),
+            ),
+        ];
+        for (answer, outcome, result) in cases {
+            let prompt: Arc<dyn ApprovalPrompt> = FakePrompt::new(answer);
+            let got = ask_admin(&prompt, &request("com.ask.app"), Duration::from_secs(5));
+            assert_eq!(got, outcome);
+            assert_eq!(got.result(), result);
+        }
+    }
+
+    #[test]
+    fn fr35_a_prompt_that_does_not_answer_in_time_times_out_and_is_withdrawn() {
+        let fake = FakePrompt::slow(PromptAnswer::Approved, Duration::from_secs(2));
+        let prompt: Arc<dyn ApprovalPrompt> = fake.clone();
+        let got = ask_admin(&prompt, &request("com.ask.app"), Duration::from_millis(50));
+        assert_eq!(got, Outcome::TimedOut);
+        assert_eq!(got.result(), Err(DecisionDenied::TimedOut));
+        assert_eq!(fake.withdrawn.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fr35_a_prompt_that_breaks_denies_and_the_host_keeps_running() {
+        let prompt: Arc<dyn ApprovalPrompt> = Arc::new(PanickingPrompt);
+        let got = ask_admin(&prompt, &request("com.ask.app"), Duration::from_secs(5));
+        assert!(matches!(got, Outcome::Unavailable(_)));
+        assert_eq!(got.result(), Err(DecisionDenied::Refused));
+    }
+
+    #[test]
+    fn fr35_an_ask_app_is_approved_by_the_prompt_and_then_within_grace() {
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let (log, lines) = logged();
+        let root =
+            elevation(fake.clone(), levels(true, &[("com.ask.app", Level::Ask)])).with_log(log);
+        let first = root.answer(&request("com.ask.app"));
+        assert!(first.approved);
+        assert_eq!(first.request_id, 7);
+        assert!(first.reason.is_empty());
+        let second = root.answer(&request("com.ask.app"));
+        assert!(second.approved);
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 1);
+        let seen = fake.seen.lock().unwrap();
+        assert_eq!(seen[0].app_name(), "Root Checker");
+        assert_eq!(
+            seen[0].message(),
+            "The Android app Root Checker (com.ask.app) wants to run `id` as root."
+        );
+        let lines = lines.lock().unwrap();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("Root Checker (com.ask.app, uid 10123)"));
+        assert!(lines[0].contains("`id`"));
+        assert!(lines[0].contains("approved by the computer's administrator"));
+        // The time, as an ISO 8601 UTC stamp.
+        assert!(lines[0].contains('T') && lines[0].contains("Z "));
+        assert!(lines[1].contains("within the grace"));
+    }
+
+    #[test]
+    fn fr35_a_refused_dismissed_or_timed_out_prompt_fails_su_with_its_reason() {
+        for (answer, delay, words) in [
+            (PromptAnswer::Denied, Duration::ZERO, "refused"),
+            (PromptAnswer::Cancelled, Duration::ZERO, "dismissed"),
+            (PromptAnswer::Approved, Duration::from_secs(2), "timed out"),
+        ] {
+            let fake = FakePrompt::slow(answer, delay);
+            let (log, lines) = logged();
+            let root = elevation(fake.clone(), levels(true, &[("com.ask.app", Level::Ask)]))
+                .with_timeout(Duration::from_millis(100))
+                .with_log(log);
+            let decision = root.answer(&request("com.ask.app"));
+            assert!(!decision.approved);
+            assert!(decision.reason.contains(words), "{}", decision.reason);
+            assert!(lines.lock().unwrap()[0].contains("refused"));
+            // No grace was started: the next request asks again.
+            let _ = root.answer(&request("com.ask.app"));
+            assert_eq!(fake.asked.load(Ordering::SeqCst), 2);
+        }
+    }
+
+    #[test]
+    fn fr35_remember_and_off_apps_never_reach_the_prompt() {
+        let fake = FakePrompt::new(PromptAnswer::Denied);
+        let (log, lines) = logged();
+        let root = elevation(
+            fake.clone(),
+            levels(true, &[("com.remember.app", Level::Remember)]),
+        )
+        .with_log(log);
+        assert!(root.answer(&request("com.remember.app")).approved);
+        let off = root.answer(&request("com.other.app"));
+        assert!(!off.approved);
+        assert_eq!(off.reason, DecisionDenied::NotAllowed.describe());
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 0);
+        let lines = lines.lock().unwrap();
+        assert!(lines[0].contains("without asking"));
+        assert!(lines[1].contains("may not use root"));
+    }
+
+    #[test]
+    fn fr35_a_restart_clears_the_grace_and_asks_again() {
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let root = elevation(fake.clone(), levels(true, &[("com.ask.app", Level::Ask)]));
+        root.answer(&request("com.ask.app"));
+        root.restart();
+        root.answer(&request("com.ask.app"));
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn fr35_a_level_change_in_the_settings_clears_the_grace() {
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let level = Arc::new(Mutex::new(Level::Ask));
+        let current = Arc::clone(&level);
+        let source: LevelSource = Arc::new(move || {
+            (
+                true,
+                vec![AppLevel {
+                    package: "com.ask.app".into(),
+                    level: *current.lock().unwrap(),
+                }],
+            )
+        });
+        let root = elevation(fake.clone(), source);
+        root.answer(&request("com.ask.app"));
+        *level.lock().unwrap() = Level::Off;
+        assert!(!root.answer(&request("com.ask.app")).approved);
+        *level.lock().unwrap() = Level::Ask;
+        assert!(root.answer(&request("com.ask.app")).approved);
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn fr35_requests_that_arrive_together_get_one_prompt() {
+        let fake = FakePrompt::slow(PromptAnswer::Approved, Duration::from_millis(200));
+        let root = Arc::new(elevation(
+            fake.clone(),
+            levels(true, &[("com.ask.app", Level::Ask)]),
+        ));
+        let others: Vec<_> = (0..3)
+            .map(|_| {
+                let root = Arc::clone(&root);
+                thread::spawn(move || root.answer(&request("com.ask.app")).approved)
+            })
+            .collect();
+        for other in others {
+            assert!(other.join().unwrap());
+        }
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fr35_the_levels_follow_the_computers_switch_and_the_users_apps() {
+        use crate::settings::{MemorySettings, SettingsStore};
+        let store = Arc::new(MemorySettings::default());
+        store.set_root_app("ann", "com.ask.app", "ask").unwrap();
+        store
+            .set_root_app("ann", "com.keep.app", "remember")
+            .unwrap();
+        store.set_root_app("bob", "com.bob.app", "ask").unwrap();
+        let source = levels_from_settings(store.clone(), "ann");
+        let (enabled, apps) = source();
+        assert!(!enabled);
+        assert_eq!(apps.len(), 2);
+        let mut machine = store.machine();
+        machine.root_elevation = true;
+        store.set_machine(machine).unwrap();
+        let (enabled, apps) = source();
+        assert!(enabled);
+        assert!(apps.contains(&AppLevel {
+            package: "com.keep.app".into(),
+            level: Level::Remember,
+        }));
+        assert!(!apps.iter().any(|a| a.package == "com.bob.app"));
+    }
+
+    #[test]
+    fn fr35_the_prompt_names_a_shell_and_quotes_the_command() {
+        let mut shell = request("com.ask.app");
+        shell.command.clear();
+        shell.interactive = true;
+        shell.app.label.clear();
+        assert_eq!(
+            shell.message(),
+            "The Android app com.ask.app wants to open a root shell."
+        );
+        let mut quoted = request("com.ask.app");
+        quoted.command = vec!["sh".into(), "-c".into(), "echo 'hi' > /x".into()];
+        assert_eq!(quoted.command_line(), r"sh -c 'echo '\''hi'\'' > /x'");
+    }
+
+    #[test]
+    fn fr35_keeping_root_is_asked_of_the_administrator_under_the_apps_name() {
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let (log, lines) = logged();
+        let root = elevation(fake.clone(), levels(true, &[])).with_log(log);
+        let app = request("com.keep.app").app;
+        assert_eq!(root.approve_keep_root(app.clone()), Ok(()));
+        let seen = fake.seen.lock().unwrap();
+        assert_eq!(seen[0].purpose, Purpose::KeepRoot);
+        assert_eq!(seen[0].icon_png(), app.icon_png.as_slice());
+        assert_eq!(
+            seen[0].message(),
+            "The Android app Root Checker (com.keep.app) wants to run commands as root \
+             without asking each time."
+        );
+        assert!(lines.lock().unwrap()[0].contains("approved by the computer's administrator"));
+
+        let refusing = elevation(FakePrompt::new(PromptAnswer::Denied), levels(true, &[]));
+        let refused = refusing.approve_keep_root(app).unwrap_err();
+        assert!(refused.contains("refused"), "{refused}");
     }
 }

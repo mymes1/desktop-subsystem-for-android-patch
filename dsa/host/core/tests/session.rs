@@ -5127,7 +5127,7 @@ fn fr35_the_root_elevation_config_is_sent_once_the_agent_connects() {
     use dsa_protocol::control::RootLevel;
     let launcher = FakeLauncher::default();
     let (session, mut connector) = session_with(launcher.clone(), WAIT);
-    session.set_root_elevation(
+    session.set_root_elevation_config(
         true,
         vec![
             root_app("com.example.ask", Level::Ask),
@@ -5167,29 +5167,29 @@ fn fr35_a_change_is_sent_to_the_running_android_at_once() {
     use dsa_protocol::control::RootLevel;
     let launcher = FakeLauncher::default();
     let (session, mut connector) = session_with(launcher.clone(), WAIT);
-    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Ask)]);
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Ask)]);
     session.start();
     let mut agent = connect_agent(&mut connector, &launcher);
     assert!(session.wait_for(SessionState::Active, WAIT));
     next_root_config(&mut agent);
 
     // A level changes: the running Android is told, with no restart.
-    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Remember)]);
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Remember)]);
     let config = next_root_config(&mut agent);
     assert!(config.enabled);
     assert_eq!(config.apps.len(), 1);
     assert_eq!(config.apps[0].level(), RootLevel::Remember);
 
     // The same settings again send nothing.
-    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Remember)]);
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Remember)]);
     no_root_config(&mut agent);
 
     // The app set to off is no longer listed.
-    session.set_root_elevation(true, Vec::new());
+    session.set_root_elevation_config(true, Vec::new());
     assert!(next_root_config(&mut agent).apps.is_empty());
 
     // The switch turned off: the running Android hides su from every app at once.
-    session.set_root_elevation(false, vec![root_app("com.example.ask", Level::Ask)]);
+    session.set_root_elevation_config(false, vec![root_app("com.example.ask", Level::Ask)]);
     assert!(!next_root_config(&mut agent).enabled);
 }
 
@@ -5204,7 +5204,7 @@ fn fr35_turning_root_elevation_on_applies_from_the_next_start() {
     // A boot that started with the feature off is told nothing: its daemon hides su from
     // every app on its own, and keeps it hidden until the next start.
     no_root_config(&mut agent);
-    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Ask)]);
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Ask)]);
     no_root_config(&mut agent);
 
     session.stop();
@@ -5290,4 +5290,95 @@ fn fr35_a_host_that_cannot_ask_its_administrator_refuses_at_once() {
     assert_eq!(refused.request_id, 7);
     assert!(!refused.approved);
     assert!(!refused.reason.is_empty());
+}
+
+/// An administrator prompt that answers each request with the next of its answers.
+struct ScriptedPrompt {
+    answers: Mutex<Vec<dsa_host_core::root_approval::PromptAnswer>>,
+    asked: Mutex<Vec<String>>,
+}
+
+impl dsa_host_core::root_approval::ApprovalPrompt for ScriptedPrompt {
+    fn ask(
+        &self,
+        request: &dsa_host_core::root_approval::ApprovalRequest,
+        _timeout: Duration,
+    ) -> dsa_host_core::root_approval::PromptAnswer {
+        self.asked
+            .lock()
+            .unwrap()
+            .push(request.package().to_string());
+        self.answers.lock().unwrap().remove(0)
+    }
+}
+
+#[test]
+fn fr35_an_ask_apps_su_request_is_answered_by_the_hosts_administrator_prompt() {
+    use dsa_host_core::root_approval::{PromptAnswer, RootApproval};
+    use dsa_host_core::root_elevation::{AppLevel, Level};
+    let (session, mut agent, _launcher) = active_session();
+    let prompt = Arc::new(ScriptedPrompt {
+        answers: Mutex::new(vec![PromptAnswer::Denied, PromptAnswer::Approved]),
+        asked: Mutex::new(Vec::new()),
+    });
+    let root = RootApproval::with_levels(
+        "user",
+        prompt.clone(),
+        Arc::new(|| {
+            (
+                true,
+                vec![AppLevel {
+                    package: "com.ask.app".into(),
+                    level: Level::Ask,
+                }],
+            )
+        }),
+        Arc::new(|_: &str| {}),
+    );
+    session.set_root_approval(Arc::new(root));
+
+    send_body(&mut agent, su_request(1, "com.ask.app"));
+    let refused = next_su_decision(&mut agent);
+    assert_eq!(refused.request_id, 1);
+    assert!(!refused.approved);
+    assert!(refused.reason.contains("refused"), "{}", refused.reason);
+
+    send_body(&mut agent, su_request(2, "com.ask.app"));
+    let approved = next_su_decision(&mut agent);
+    assert_eq!(approved.request_id, 2);
+    assert!(approved.approved);
+
+    // Within the grace: approved without a third prompt.
+    send_body(&mut agent, su_request(3, "com.ask.app"));
+    let again = next_su_decision(&mut agent);
+    assert!(again.approved);
+    // An app that may not use root never reaches the prompt.
+    send_body(&mut agent, su_request(4, "com.other.app"));
+    assert!(!next_su_decision(&mut agent).approved);
+    assert_eq!(prompt.asked.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn fr35_letting_an_app_keep_root_is_asked_through_the_sessions_prompt() {
+    use dsa_host_core::root_approval::{PromptAnswer, RootApproval};
+    let (session, _agent, _launcher) = active_session();
+    // Without a prompt, nobody can approve it.
+    assert!(session.approve_keep_root("com.keep.app").is_err());
+    let prompt = Arc::new(ScriptedPrompt {
+        answers: Mutex::new(vec![PromptAnswer::Approved, PromptAnswer::Cancelled]),
+        asked: Mutex::new(Vec::new()),
+    });
+    session.set_root_approval(Arc::new(RootApproval::with_levels(
+        "user",
+        prompt.clone(),
+        Arc::new(|| (true, Vec::new())),
+        Arc::new(|_: &str| {}),
+    )));
+    assert_eq!(session.approve_keep_root("com.keep.app"), Ok(()));
+    let dismissed = session.approve_keep_root("com.keep.app").unwrap_err();
+    assert!(dismissed.contains("dismissed"), "{dismissed}");
+    assert_eq!(
+        *prompt.asked.lock().unwrap(),
+        vec!["com.keep.app".to_string(), "com.keep.app".to_string()]
+    );
 }

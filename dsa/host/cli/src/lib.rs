@@ -1787,7 +1787,7 @@ fn apps(
             let result = client
                 .set_app_root(&package, &level)
                 .map_err(|e| e.to_string())?;
-            let ok = result.status() == dsa_protocol::host_api::types::AppRootStatus::Success;
+            let ok = result.status() == dsa_host_core::host_api::AppRootStatus::Success;
             if !ok {
                 return Err(format!(
                     "not changed: {package}: {}",

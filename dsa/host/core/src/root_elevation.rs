@@ -36,9 +36,10 @@ pub const GRACE: Duration = Duration::from_secs(15 * 60);
 pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// How far an app may elevate to root.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Level {
     /// su does not exist for the app.
+    #[default]
     Off,
     /// Each su call waits for the host's administrator approval.
     Ask,
@@ -78,12 +79,6 @@ impl Level {
     /// each call until this module decides it.
     pub fn su_visible(self) -> bool {
         matches!(self, Level::Ask | Level::Remember)
-    }
-}
-
-impl Default for Level {
-    fn default() -> Level {
-        Level::Off
     }
 }
 
@@ -294,7 +289,7 @@ pub fn stored(store: &dyn SettingsStore, user: &str) -> (bool, Vec<AppLevel>) {
 /// Android is made, and after every change to the switch or to an app's level.
 pub fn apply(android: &dyn UserAndroid, store: &dyn SettingsStore, user: &str) {
     let (on, apps) = stored(store, user);
-    android.set_root_elevation(on, apps);
+    android.set_root_elevation_config(on, apps);
 }
 
 #[cfg(test)]

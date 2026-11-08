@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::root_approval::PromptAnswer;
 use dsa_transport::local::LocalListener;
-use dsa_transport::{Connection, TransportError};
+use dsa_transport::TransportError;
 
 /// The argument the service starts an app's window program with to ask for approval. The
 /// pipe's name follows.
@@ -86,21 +86,21 @@ pub mod exit {
 /// What the window program's exit code says, when it ended before an approval arrived.
 pub fn answer_of_exit(code: u32) -> PromptAnswer {
     match code {
-        exit::REFUSED => PromptAnswer::Refused,
+        exit::REFUSED => PromptAnswer::Denied,
         exit::NOT_ADMINISTRATOR => PromptAnswer::NotAdministrator,
         exit::APPROVED => {
-            PromptAnswer::Failed("the approval prompt ended without an answer".to_string())
+            PromptAnswer::Unavailable("the approval prompt ended without an answer".to_string())
         }
         exit::NOT_DELIVERED => {
-            PromptAnswer::Failed("the approval could not reach the DSA service".to_string())
+            PromptAnswer::Unavailable("the approval could not reach the DSA service".to_string())
         }
-        exit::ELEVATION_FAILED => PromptAnswer::Failed(
+        exit::ELEVATION_FAILED => PromptAnswer::Unavailable(
             "Windows could not show the User Account Control prompt".to_string(),
         ),
         exit::BAD_ARGUMENTS => {
-            PromptAnswer::Failed("the approval prompt was started wrongly".to_string())
+            PromptAnswer::Unavailable("the approval prompt was started wrongly".to_string())
         }
-        other => PromptAnswer::Failed(format!("the approval prompt ended with code {other}")),
+        other => PromptAnswer::Unavailable(format!("the approval prompt ended with code {other}")),
     }
 }
 
@@ -220,7 +220,7 @@ pub fn wait_for_answer(
             Err(TransportError::Timeout) => {}
             Err(error) => {
                 helper.end();
-                return PromptAnswer::Failed(format!("the approval's pipe failed: {error}"));
+                return PromptAnswer::Unavailable(format!("the approval's pipe failed: {error}"));
             }
         }
         if let Some(code) = helper.exit_code() {
@@ -252,7 +252,7 @@ mod os {
     use std::time::Duration;
 
     use dsa_host_core::root_approval::{ApprovalPrompt, ApprovalRequest, PromptAnswer};
-    use dsa_transport::{Connection, Connector};
+    use dsa_transport::Connector;
     use windows_sys::Win32::Foundation::{ERROR_CANCELLED, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
@@ -327,22 +327,24 @@ mod os {
         fn ask(&self, request: &ApprovalRequest, timeout: Duration) -> PromptAnswer {
             let secret = match dsa_protocol::auth::nonce() {
                 Ok(secret) => secret,
-                Err(why) => return PromptAnswer::Failed(why),
+                Err(why) => return PromptAnswer::Unavailable(why),
             };
             let pipe = pipe_name(&secret);
             let mut listener = match NamedPipeListener::bind(&pipe, APPROVAL_PIPE_SDDL) {
                 Ok(listener) => listener,
-                Err(error) => return PromptAnswer::Failed(format!("the approval pipe: {error}")),
+                Err(error) => {
+                    return PromptAnswer::Unavailable(format!("the approval pipe: {error}"))
+                }
             };
             let program = match self.program(request) {
                 Ok(program) => program,
-                Err(why) => return PromptAnswer::Failed(why),
+                Err(why) => return PromptAnswer::Unavailable(why),
             };
             let arguments = approval_arguments(&pipe, request.app_name(), &request.command_text());
             let process =
                 match crate::window_manager::start_as_user(&self.sid, &program, &arguments) {
                     Ok(process) => process,
-                    Err(why) => return PromptAnswer::Failed(why),
+                    Err(why) => return PromptAnswer::Unavailable(why),
                 };
             let mut helper = WindowsProcess(process);
             wait_for_answer(&mut listener, pipe.as_bytes(), &mut helper, timeout)

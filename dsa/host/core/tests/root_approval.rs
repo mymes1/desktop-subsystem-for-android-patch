@@ -40,16 +40,21 @@ impl FakePrompt {
 impl ApprovalPrompt for FakePrompt {
     fn ask(&self, request: &ApprovalRequest, timeout: Duration) -> PromptAnswer {
         self.asked.lock().unwrap().push((request.clone(), timeout));
+        // The answer is taken when the prompt opens, so a prompt the host gave up on does not
+        // take the answer meant for the next one.
+        let answer = {
+            let mut answers = self.answers.lock().unwrap();
+            if answers.is_empty() {
+                PromptAnswer::Unavailable("the test gave no answer".into())
+            } else {
+                answers.remove(0)
+            }
+        };
         let delay = *self.delay.lock().unwrap();
         if !delay.is_zero() {
             thread::sleep(delay);
         }
-        let mut answers = self.answers.lock().unwrap();
-        if answers.is_empty() {
-            PromptAnswer::Failed("the test gave no answer".into())
-        } else {
-            answers.remove(0)
-        }
+        answer
     }
 }
 
@@ -148,7 +153,7 @@ fn fr35_an_app_the_guest_has_not_listed_is_asked_for_by_its_package() {
 
 #[test]
 fn fr35_refused_prompt_fails_su_with_a_reason() {
-    let fixture = Fixture::new(&[(ASK_APP, "ask")], vec![PromptAnswer::Refused]);
+    let fixture = Fixture::new(&[(ASK_APP, "ask")], vec![PromptAnswer::Denied]);
     let decision = fixture
         .approval()
         .decide(&su(2, ASK_APP, &["id"]), Some(&backup_app()));
@@ -163,7 +168,7 @@ fn fr35_cancelled_or_failed_prompt_is_denied() {
     let fixture = Fixture::new(
         &[(ASK_APP, "ask")],
         vec![
-            PromptAnswer::Failed("no signed-in session".into()),
+            PromptAnswer::Unavailable("no signed-in session".into()),
             PromptAnswer::NotAdministrator,
         ],
     );
@@ -200,7 +205,7 @@ fn fr35_unanswered_prompt_times_out() {
 fn fr35_an_approval_after_the_limit_counts_as_timed_out_and_starts_no_grace() {
     let fixture = Fixture::new(
         &[(ASK_APP, "ask")],
-        vec![PromptAnswer::Approved, PromptAnswer::Refused],
+        vec![PromptAnswer::Approved, PromptAnswer::Denied],
     );
     *fixture.prompt.delay.lock().unwrap() = Duration::from_millis(300);
     let approval = fixture.approval().with_timeout(Duration::from_millis(100));
@@ -218,7 +223,7 @@ fn fr35_an_approval_after_the_limit_counts_as_timed_out_and_starts_no_grace() {
 fn fr35_second_request_within_the_grace_is_not_asked() {
     let fixture = Fixture::new(
         &[(ASK_APP, "ask"), ("com.other.app", "ask")],
-        vec![PromptAnswer::Approved, PromptAnswer::Refused],
+        vec![PromptAnswer::Approved, PromptAnswer::Denied],
     );
     let approval = fixture.approval();
     assert!(
@@ -369,7 +374,7 @@ fn fr35_one_prompt_at_a_time_and_a_waiting_call_finds_the_grace() {
 fn fr35_requests_and_decisions_are_in_the_host_log() {
     let fixture = Fixture::new(
         &[(ASK_APP, "ask")],
-        vec![PromptAnswer::Approved, PromptAnswer::Refused],
+        vec![PromptAnswer::Approved, PromptAnswer::Denied],
     );
     let approval = fixture.approval();
     approval.decide(

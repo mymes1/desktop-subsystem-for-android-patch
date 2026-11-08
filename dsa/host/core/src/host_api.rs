@@ -62,6 +62,9 @@ use dsa_protocol::host_api::{
 use dsa_transport::local::{LocalListener, Peer};
 use dsa_transport::{Connection, Connector, TransportError};
 
+/// How setting an app's root level went, as [`HostApiClient::set_app_root`] reports it.
+pub use dsa_protocol::host_api::types::AppRootStatus;
+
 use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
@@ -239,9 +242,15 @@ pub trait UserAndroid: Send + Sync {
     }
     /// Sets the user's root elevation settings: the computer's switch and the apps with a
     /// level other than off. The running Android is told at once (see
-    /// [`Session::set_root_elevation`]).
-    fn set_root_elevation(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+    /// [`Session::set_root_elevation_config`]).
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
         let _ = (on, apps);
+    }
+    /// Asks the computer's administrator, in this user's session and through the prompt su
+    /// calls use, to let `package` keep root without asking each time. `Err` says why not.
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        let _ = package;
+        Err("this computer cannot ask its administrator for root approval".into())
     }
     /// The address (a WebDAV URL on the loopback address) the host's file manager opens this
     /// Android's shared storage at. It starts this Android when it is stopped.
@@ -706,8 +715,11 @@ impl UserAndroid for Session {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         Session::share_folders(self, on, folders)
     }
-    fn set_root_elevation(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
-        Session::set_root_elevation(self, on, apps)
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        Session::set_root_elevation_config(self, on, apps)
+    }
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        Session::approve_keep_root(self, package)
     }
     fn android_files(&self) -> Result<String, String> {
         Session::android_files(self)
@@ -3160,10 +3172,10 @@ impl HostApiService {
         }
     }
 
-    /// Sets how far one app may elevate to root. The feature must be on;
-    /// moving an app to "remember" needs an administrator, as does the whole feature. A
-    /// change clears that app's grace. The new level applies to the running Android from the
-    /// next root elevation config the service sends, which it does on this change.
+    /// Sets how far one app may elevate to root. The feature must be on. Moving an app to
+    /// "remember" needs an administrator: a caller who is not one gets the administrator
+    /// prompt in their own session. A change clears that app's grace, and the running Android
+    /// is sent the new config at once.
     fn set_app_root(&self, peer: &Peer, set: types::SetAppRoot) -> response::Body {
         use crate::root_elevation::Level;
         if !apk::valid_package_name(&set.package_name) {
@@ -3194,21 +3206,37 @@ impl HostApiService {
                 "root elevation is off for this computer; turn it on first",
             );
         }
-        if level.change_needs_admin() && !peer.administrator {
-            return app_root(
-                types::AppRootStatus::NotPermitted,
-                &store
-                    .root_apps(&peer.user)
-                    .ok()
-                    .and_then(|apps| {
-                        apps.into_iter()
-                            .find(|a| a.package == set.package_name)
-                            .map(|a| a.level)
-                    })
-                    .unwrap_or_else(|| "off".to_string()),
-                "letting an app keep root without asking needs an administrator. Run the \
-                 command as an administrator.",
-            );
+        let current = store
+            .root_apps(&peer.user)
+            .ok()
+            .and_then(|apps| {
+                apps.into_iter()
+                    .find(|a| a.package == set.package_name)
+                    .map(|a| a.level)
+            })
+            .unwrap_or_else(|| "off".to_string());
+        if level.change_needs_admin() && !peer.administrator && current != level.code() {
+            // The caller is not an administrator, so one is asked in the caller's own session,
+            // through the prompt the app's su calls use. Running the command elevated would
+            // not do: it would connect as another account and set that account's level.
+            let approved = self
+                .androids
+                .android(&peer.user)
+                .and_then(|android| android.approve_keep_root(&set.package_name));
+            if let Err(why) = approved {
+                eprintln!(
+                    "local API: {} was not allowed to let {} keep root: {why}",
+                    peer.user, set.package_name
+                );
+                return app_root(
+                    types::AppRootStatus::NotPermitted,
+                    &current,
+                    &format!(
+                        "letting an app keep root without asking needs the approval of one \
+                         of the computer's administrators, and it was not given: {why}"
+                    ),
+                );
+            }
         }
         match store.set_root_app(&peer.user, &set.package_name, level.code()) {
             Ok(()) => {
@@ -4065,7 +4093,8 @@ impl HostApiService {
                         | request::Body::ResetData(_)
                         | request::Body::GetAndroidVersions(_)
                         | request::Body::UseAndroidVersion(_)
-                        | request::Body::SetRunAsArm(_) => unreachable!("answered above"),
+                        | request::Body::SetRunAsArm(_)
+                        | request::Body::SetAppRoot(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }

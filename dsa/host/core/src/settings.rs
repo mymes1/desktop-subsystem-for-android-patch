@@ -985,6 +985,7 @@ mod tests {
                     arm_translation: false,
                     file_sharing: false,
                     shared_folders: vec!["Pictures".into()],
+                    root_elevation: false,
                 },
             )
             .unwrap();

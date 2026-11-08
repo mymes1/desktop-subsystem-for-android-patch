@@ -149,8 +149,8 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
-use crate::root_elevation::{AppLevel, Level};
 use crate::root_approval::RootApproval;
+use crate::root_elevation::{AppLevel, Level};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -705,7 +705,7 @@ struct Shared {
     device_name: Mutex<Option<DeviceNameSource>>,
     /// The user's root elevation settings, and whether the running boot started with the
     /// feature on.
-    root_elevation: Mutex<RootElevationNow>,
+    root_config: Mutex<RootElevationNow>,
     /// Who decides the su calls of the guest's apps, once the platform says, with a way to
     /// send each decision from the thread that waits for the administrator.
     root_approval: Mutex<Option<(Arc<RootApproval>, Sender<Command>)>>,
@@ -875,10 +875,7 @@ impl Shared {
     /// it has been told this one already, or is told nothing (see [`RootElevationNow`]).
     /// `again` forgets what was sent, for a daemon or an agent that connected anew.
     fn root_elevation_body(&self, again: bool) -> Option<Body> {
-        let mut now = self
-            .root_elevation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut now = self.root_config.lock().unwrap_or_else(|e| e.into_inner());
         if again {
             now.sent = None;
         }
@@ -892,10 +889,7 @@ impl Shared {
 
     /// Notes whether a boot runs, and with the switch as it stands as that boot's.
     fn root_elevation_boot(&self, running: bool) {
-        let mut now = self
-            .root_elevation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut now = self.root_config.lock().unwrap_or_else(|e| e.into_inner());
         now.boot_on = running.then_some(now.on);
         now.sent = None;
     }
@@ -1295,7 +1289,7 @@ impl Session {
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
             device_name: Mutex::new(None),
-            root_elevation: Mutex::new(RootElevationNow::default()),
+            root_config: Mutex::new(RootElevationNow::default()),
             root_approval: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
@@ -1558,11 +1552,11 @@ impl Session {
     /// without a restart; so does turning the switch off. Turning it on applies from the next
     /// start of Android, as the kernel's su guard and the relay are set up at boot. Each boot
     /// is told again once its agent connects.
-    pub fn set_root_elevation(&self, on: bool, apps: Vec<AppLevel>) {
+    pub fn set_root_elevation_config(&self, on: bool, apps: Vec<AppLevel>) {
         {
             let mut now = self
                 .shared
-                .root_elevation
+                .root_config
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             now.on = on;
@@ -2509,6 +2503,31 @@ impl Session {
             .root_approval
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some((approval, self.commands.clone()));
+    }
+
+    /// Asks the computer's administrator, through the same prompt as su calls, to let
+    /// `package` keep root without asking each time. The prompt shows the app's name and icon
+    /// as the guest last listed them. `Err` says why not, including when this host has no
+    /// prompt to ask through.
+    pub fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        let approval = self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(approval, _)| Arc::clone(approval));
+        let Some(approval) = approval else {
+            return Err("this computer cannot ask its administrator for root approval".into());
+        };
+        let app = self
+            .shared
+            .installed_app(package)
+            .unwrap_or_else(|| AppInfo {
+                package_name: package.to_string(),
+                ..Default::default()
+            });
+        approval.approve_keep_root(app)
     }
 
     /// Gives the guest's agent the device name `source` says each time it connects, which the

@@ -31,6 +31,7 @@ use dsa_host_core::host_config::DEFAULT_MEMORY_MB;
 use dsa_host_core::host_paths::HostPaths;
 use dsa_host_core::memory::{summary_lines, HostMemory, LOG_INTERVAL};
 use dsa_host_core::power::PowerHub;
+use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::{Session, SessionState};
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
@@ -465,6 +466,25 @@ pub fn create_user_android(
         Arc::new(MonotonicClock),
         Arc::new(move |line: &str| eprintln!("{line_user}: {line}")),
     )));
+    // An app's root request that needs the administrator is asked through polkit, in the
+    // user's desktop session, by the levels in the user's settings.
+    match crate::root_approval::SystemBusAuthority::connect() {
+        Ok(authority) => {
+            let prompt = Arc::new(
+                crate::root_approval::PolkitPrompt::new(authority, uid).with_home(&account.home),
+            );
+            let log_user = user.to_string();
+            session.set_root_approval(Arc::new(RootApproval::new(
+                user,
+                Arc::clone(&store),
+                prompt,
+                Arc::new(move |line: &str| eprintln!("{log_user}: {line}")),
+            )));
+        }
+        Err(why) => eprintln!(
+            "{user}: root: polkit cannot be reached, so every root request is refused: {why}"
+        ),
+    }
     let session = Arc::new(session);
     {
         let watched = Arc::downgrade(&session);

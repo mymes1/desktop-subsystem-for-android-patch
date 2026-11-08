@@ -13,7 +13,6 @@ use dsa_host_windows::root_approval::{
     wait_for_answer, HelperMode, PromptProcess, APPROVAL_ARGUMENT, APPROVED_ARGUMENT, RECEIVED,
 };
 use dsa_transport::local::{self, Peer};
-use dsa_transport::Connection;
 
 /// A window program that ends with `code` after `after`, or runs until it is ended.
 struct FakeProgram {
@@ -128,7 +127,7 @@ fn fr35_a_cancelled_uac_prompt_is_refused() {
         &mut program,
         Duration::from_secs(10),
     );
-    assert_eq!(got, PromptAnswer::Refused);
+    assert_eq!(got, PromptAnswer::Denied);
     // The refusal comes as soon as the prompt closes, not at the limit.
     assert!(started.elapsed() < Duration::from_secs(5));
 }
@@ -176,11 +175,11 @@ fn fr35_a_program_that_ends_without_an_approval_never_approves() {
         77,
     ] {
         assert!(
-            matches!(answer_of_exit(code), PromptAnswer::Failed(_)),
+            matches!(answer_of_exit(code), PromptAnswer::Unavailable(_)),
             "code {code}"
         );
     }
-    assert_eq!(answer_of_exit(exit::REFUSED), PromptAnswer::Refused);
+    assert_eq!(answer_of_exit(exit::REFUSED), PromptAnswer::Denied);
     assert_eq!(
         answer_of_exit(exit::NOT_ADMINISTRATOR),
         PromptAnswer::NotAdministrator

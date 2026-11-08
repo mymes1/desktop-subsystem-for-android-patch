@@ -745,6 +745,10 @@ fn fr15_only_an_administrator_chooses_the_release_channel_and_every_user_sees_it
 #[derive(Default)]
 struct RootRecorder {
     given: std::sync::Mutex<Vec<(bool, Vec<dsa_host_core::root_elevation::AppLevel>)>>,
+    /// The administrator prompt's answers to letting an app keep root, in order, and the
+    /// packages it was shown for.
+    keep_root_answers: std::sync::Mutex<Vec<Result<(), String>>>,
+    keep_root_asked: std::sync::Mutex<Vec<String>>,
 }
 
 impl RootRecorder {
@@ -776,9 +780,102 @@ impl UserAndroid for RootRecorder {
     fn watch_clipboard(&self) -> Option<std::sync::mpsc::Receiver<String>> {
         None
     }
-    fn set_root_elevation(&self, on: bool, apps: Vec<dsa_host_core::root_elevation::AppLevel>) {
+    fn set_root_elevation_config(
+        &self,
+        on: bool,
+        apps: Vec<dsa_host_core::root_elevation::AppLevel>,
+    ) {
         self.given.lock().unwrap().push((on, apps));
     }
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        self.keep_root_asked
+            .lock()
+            .unwrap()
+            .push(package.to_string());
+        let mut answers = self.keep_root_answers.lock().unwrap();
+        if answers.is_empty() {
+            Err("the test gave no answer".into())
+        } else {
+            answers.remove(0)
+        }
+    }
+}
+
+#[test]
+fn fr35_a_user_who_is_not_an_administrator_has_one_approve_remember_in_their_session() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::{MachineSettings, SettingsStore};
+    use dsa_protocol::host_api::types::AppRootStatus;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    let (listener, connector) = local::pair();
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    store
+        .set_machine(MachineSettings {
+            root_elevation: true,
+            ..Default::default()
+        })
+        .unwrap();
+    let made: Arc<Mutex<HashMap<String, Arc<RootRecorder>>>> = Arc::default();
+    let androids = {
+        let made = Arc::clone(&made);
+        Arc::new(PerUser::new(move |user: &str| {
+            let android = Arc::new(RootRecorder::default());
+            *android.keep_root_answers.lock().unwrap() = vec![
+                Err("the computer's administrator refused the root request".into()),
+                Ok(()),
+            ];
+            made.lock()
+                .unwrap()
+                .insert(user.to_string(), Arc::clone(&android));
+            Ok(android as Arc<dyn UserAndroid>)
+        }))
+    };
+    let service = HostApiService::new(androids, "test service")
+        .with_settings(store.clone(), ServiceFacts::default());
+    let _service = RunningService::start_service(Box::new(listener), service);
+    let android_of = |user: &str| made.lock().unwrap().get(user).cloned().unwrap();
+    let level_of = |user: &str| {
+        store
+            .root_apps(user)
+            .unwrap()
+            .into_iter()
+            .find(|app| app.package == "com.example.root")
+            .map(|app| app.level)
+    };
+
+    // The administrator's prompt refuses: the level stays as it was, and the service says why.
+    let mut alice =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "alice", false), "a", WAIT).unwrap();
+    alice.set_app_root("com.example.root", "ask").unwrap();
+    let refused = alice.set_app_root("com.example.root", "remember").unwrap();
+    assert_eq!(refused.status(), AppRootStatus::NotPermitted);
+    assert_eq!(refused.level, "ask");
+    assert!(refused.message.contains("refused"), "{}", refused.message);
+    assert_eq!(level_of("alice").as_deref(), Some("ask"));
+
+    // An administrator approves in alice's session: the level is hers, set for her Android.
+    let approved = alice.set_app_root("com.example.root", "remember").unwrap();
+    assert_eq!(approved.status(), AppRootStatus::Success);
+    assert_eq!(level_of("alice").as_deref(), Some("remember"));
+    assert_eq!(
+        *android_of("alice").keep_root_asked.lock().unwrap(),
+        vec![
+            "com.example.root".to_string(),
+            "com.example.root".to_string()
+        ]
+    );
+    // Setting it again asks nobody, and neither do the other levels.
+    alice.set_app_root("com.example.root", "remember").unwrap();
+    alice.set_app_root("com.example.root", "off").unwrap();
+    assert_eq!(android_of("alice").keep_root_asked.lock().unwrap().len(), 2);
+
+    // An administrator sets it without a prompt.
+    let mut bob = HostApiClient::connect(&mut AsAdmin(connector, "bob", true), "b", WAIT).unwrap();
+    let theirs = bob.set_app_root("com.example.root", "remember").unwrap();
+    assert_eq!(theirs.status(), AppRootStatus::Success);
+    assert!(android_of("bob").keep_root_asked.lock().unwrap().is_empty());
 }
 
 #[test]
