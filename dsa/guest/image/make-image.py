@@ -1047,12 +1047,14 @@ def toast_layout():
 
 
 def toast_frame():
-    """The toast's frame: a pill on the theme's surface."""
+    """The toast's frame: a pill on the theme's background. The framework's own frame takes
+    the theme's colorSurface, which is private to the framework, so an overlay cannot name it;
+    every DeviceDefault theme gives colorBackground the same colour."""
     return (
         XML_HEADER
         + f'<shape {ANDROID_XMLNS}\n'
         '    android:shape="rectangle">\n'
-        '    <solid android:color="?android:attr/colorSurface" />\n'
+        '    <solid android:color="?android:attr/colorBackground" />\n'
         f'    <corners android:radius="{DESIGN_CORNER_DP}dp" />\n'
         '</shape>\n'
     )
@@ -1473,10 +1475,16 @@ def overlaid_resources(apk, home_padding=False):
 
 # A compiled resource table (resources.arsc): a table chunk holding a string pool and one
 # package chunk per package. A package holds its type names and its entry names (key
-# strings), then a type chunk per type and configuration, each with an offset per entry.
+# strings), then per type a spec chunk with a flag word per entry (whether the entry is
+# public among them) and a type chunk per configuration, each with an offset per entry.
+# framework-res keeps its private attributes in a type of their own, ARSC_PRIVATE_ATTR, so
+# the public ones keep their ids.
 ARSC_TABLE = 0x0002
 ARSC_PACKAGE = 0x0200
 ARSC_TYPE = 0x0201
+ARSC_TYPE_SPEC = 0x0202
+ARSC_SPEC_PUBLIC = 0x40000000
+ARSC_PRIVATE_ATTR = "^attr-private"
 ARSC_TYPE_SPARSE = 0x01
 ARSC_TYPE_OFFSET16 = 0x02
 ARSC_ENTRY_COMPACT = 0x0008
@@ -1485,21 +1493,30 @@ ARSC_NO_ENTRY16 = 0xFFFF
 
 
 def _arsc_entry_offsets(table, at, flags, count):
-    """The offsets of the entries a type chunk holds, from its offset array at `at`."""
+    """The index and offset of each entry a type chunk holds, from its offset array at `at`."""
     if flags & ARSC_TYPE_SPARSE:
-        return [4 * struct.unpack_from("<HH", table, at + 4 * i)[1] for i in range(count)]
+        pairs = [struct.unpack_from("<HH", table, at + 4 * i) for i in range(count)]
+        return [(index, 4 * offset) for index, offset in pairs]
     if flags & ARSC_TYPE_OFFSET16:
         offsets = struct.unpack_from(f"<{count}H", table, at)
-        return [4 * offset for offset in offsets if offset != ARSC_NO_ENTRY16]
-    return [offset for offset in struct.unpack_from(f"<{count}I", table, at) if offset != ARSC_NO_ENTRY]
+        return [(index, 4 * offset) for index, offset in enumerate(offsets) if offset != ARSC_NO_ENTRY16]
+    offsets = struct.unpack_from(f"<{count}I", table, at)
+    return [(index, offset) for index, offset in enumerate(offsets) if offset != ARSC_NO_ENTRY]
 
 
 def arsc_resource_names(table):
     """The resources a compiled resource table defines in any configuration, as "type/name"."""
+    return set(arsc_resources(table))
+
+
+def arsc_resources(table):
+    """The resources a compiled resource table defines in any configuration, as "type/name",
+    each with whether it is public. A private attribute of framework-res is "attr/name", as
+    a reference names it."""
     chunk_type, header_size, _ = struct.unpack_from("<HHI", table, 0)
     if chunk_type != ARSC_TABLE:
         raise ValueError("not a compiled resource table")
-    names = set()
+    resources = {}
     offset = header_size
     while offset < len(table):
         chunk_type, header_size, size = struct.unpack_from("<HHI", table, offset)
@@ -1509,19 +1526,68 @@ def arsc_resource_names(table):
             type_strings, _, key_strings = struct.unpack_from("<III", table, offset + 8 + 4 + 256)
             types = xml_strings(table, offset + type_strings)
             keys = xml_strings(table, offset + key_strings)
+            specs = {}
             child = offset + header_size
             while child < offset + size:
                 kind, child_header, child_size = struct.unpack_from("<HHI", table, child)
-                if kind == ARSC_TYPE:
+                if kind == ARSC_TYPE_SPEC:
+                    type_id, _, _, count = struct.unpack_from("<BBHI", table, child + 8)
+                    specs[type_id] = struct.unpack_from(f"<{count}I", table, child + child_header)
+                elif kind == ARSC_TYPE:
                     type_id, flags, _, count, entries_start = struct.unpack_from("<BBHII", table, child + 8)
-                    for entry in _arsc_entry_offsets(table, child + child_header, flags, count):
+                    kind_name = types[type_id - 1]
+                    kind_name = "attr" if kind_name == ARSC_PRIVATE_ATTR else kind_name
+                    spec = specs.get(type_id, ())
+                    for index, entry in _arsc_entry_offsets(table, child + child_header, flags, count):
                         at = child + entries_start + entry
                         first, entry_flags = struct.unpack_from("<HH", table, at)
                         key = first if entry_flags & ARSC_ENTRY_COMPACT else struct.unpack_from("<I", table, at + 4)[0]
-                        names.add(f"{types[type_id - 1]}/{keys[key]}")
+                        public = index < len(spec) and bool(spec[index] & ARSC_SPEC_PUBLIC)
+                        name = f"{kind_name}/{keys[key]}"
+                        resources[name] = resources.get(name, False) or public
                 child += child_size
         offset += size
-    return names
+    return resources
+
+
+# What an overlay's sources name of the framework: android: attributes on elements and in
+# style items, and @android:, @*android: and ?android: references.
+FRAMEWORK_ATTRIBUTE = re.compile(r'(?<![\w:])android:(\w+)\s*=')
+FRAMEWORK_STYLE_ITEM = re.compile(r'<item\s+name="android:(\w+)"')
+FRAMEWORK_REFERENCE = re.compile(r'([@?])(\*?)android:(?:(\w+)/)?([\w.]+)')
+
+
+def framework_references(sources):
+    """Every framework resource the overlay sources in `sources` name, by the text that names
+    it: the resource ("type/name") and whether the overlay needs it public. aapt2 links an
+    overlay to framework-res only through its public resources, except where a reference
+    says @*android:, which may name a private one; an attribute has no such form."""
+    references = {}
+    for path in sorted(Path(sources).rglob("*.xml")):
+        text = path.read_text()
+        for match in [*FRAMEWORK_ATTRIBUTE.finditer(text), *FRAMEWORK_STYLE_ITEM.finditer(text)]:
+            references[f"android:{match[1]}"] = (f"attr/{match[1]}", True)
+        for match in FRAMEWORK_REFERENCE.finditer(text):
+            sigil, private, kind, name = match.groups()
+            kind = kind or ("attr" if sigil == "?" else None)
+            if kind is not None:
+                references[match[0]] = (f"{kind}/{name}", sigil == "?" or not private)
+    return references
+
+
+def framework_reference_problems(sources, framework_table):
+    """What the overlay sources in `sources` name of the framework that aapt2 would not link
+    against `framework_table`, the image's framework-res: a resource it lacks, or one it
+    keeps private that the overlay names as public."""
+    resources = arsc_resources(framework_table)
+    problems = []
+    for text, (name, needs_public) in sorted(framework_references(sources).items()):
+        if name not in resources:
+            problems.append(f"{text} names {name}, which this image's framework-res does not have")
+        elif needs_public and not resources[name]:
+            problems.append(f"{text} names {name}, which this image's framework-res keeps private, "
+                            "and an overlay can name only its public resources there")
+    return problems
 
 
 def apk_resource_table(apk):
@@ -1595,6 +1661,16 @@ def system_overlay_targets(z, otatools, work, env):
     return tables
 
 
+def system_overlay_sources(dest, apk, home_padding=False, record=None):
+    """Writes the sources of the system screen overlay file `apk` into `dest`."""
+    if apk == "DsaFrameworkOverlay.apk":
+        framework_overlay_sources(dest, record)
+    elif apk == "DsaSettingsOverlay.apk":
+        settings_overlay_sources(dest, home_padding, record)
+    else:
+        design_overlay_sources(dest, apk, record)
+
+
 def build_system_overlays(aapt2, framework_res, work, tables, home_padding=False):
     """Builds every system screen overlay against `framework_res`, each first checked against
     the resource table of the package it overlays (`tables`, by overlay file): an overlay
@@ -1603,6 +1679,7 @@ def build_system_overlays(aapt2, framework_res, work, tables, home_padding=False
     ({file name: APK})."""
     framework_table = tables["DsaFrameworkOverlay.apk"]
     records = {}
+    unlinkable = []
     for overlay in SYSTEM_OVERLAYS:
         apk = overlay["apk"]
         missing = missing_overlaid(overlaid_resources(apk, home_padding), tables[apk])
@@ -1610,6 +1687,16 @@ def build_system_overlays(aapt2, framework_res, work, tables, home_padding=False
             raise ValueError(f"{apk} replaces {', '.join(missing)}, which {overlay['target']} in this "
                              "image does not have: the overlay was written for another build of it")
         records[apk] = overlay_record(overlay["target"], framework_table, tables[apk])
+        # Every overlay's references are checked before any is linked, so one run names them
+        # all, where aapt2 would stop at the first.
+        sources = Path(work) / "overlay-references" / Path(apk).stem
+        shutil.rmtree(sources, ignore_errors=True)
+        system_overlay_sources(sources, apk, home_padding)
+        unlinkable += [f"{apk}: {problem}" for problem in framework_reference_problems(sources, framework_table)]
+        shutil.rmtree(sources, ignore_errors=True)
+    if unlinkable:
+        raise ValueError("the overlays name framework resources that cannot be linked against this image's "
+                         "framework-res:\n  " + "\n  ".join(unlinkable))
     framework_overlay = build_framework_overlay(aapt2, framework_res, work, records["DsaFrameworkOverlay.apk"])
     settings_overlay = build_settings_overlay(aapt2, framework_res, work, home_padding,
                                               records["DsaSettingsOverlay.apk"])
@@ -3265,7 +3352,8 @@ DESIGN_FRAMEWORK_TITLES = {
 # dialog whose buttons cannot fit still stacks them, as ButtonBarLayout does.
 DIALOG_BUTTON_BAR_LAYOUT = "alert_dialog_button_bar_material"
 # A toast of an app that draws its own (one that targets Android 10 or earlier): a pill on
-# the theme's surface, as the framework's own toast frame draws it, rather than a square.
+# the theme's background, the colour the framework's own toast frame has in every DeviceDefault
+# theme, rather than a square.
 TOAST_LAYOUT = "transient_notification"
 TOAST_FRAME = "toast_frame"
 FRAMEWORK_DESIGN_OVERLAID = (
