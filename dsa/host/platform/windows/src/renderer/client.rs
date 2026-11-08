@@ -13,7 +13,7 @@ use std::os::windows::io::AsRawHandle;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -180,8 +180,12 @@ pub struct ProgramLauncher {
     pub args: Option<Vec<String>>,
     /// Where the started renderer's process handle goes.
     pub process: RendererProcess,
-    count: u64,
 }
+
+/// How many renderer pipes this process has opened. The count is the process's, not one
+/// launcher's: two launchers in one process (as two tests in one test program have) would
+/// otherwise name the same pipe, and the second could not open it.
+static PIPES: AtomicU64 = AtomicU64::new(0);
 
 impl ProgramLauncher {
     /// Starts `program`, handing its process to `process`.
@@ -191,7 +195,6 @@ impl ProgramLauncher {
             env: Vec::new(),
             args: None,
             process,
-            count: 0,
         }
     }
 
@@ -210,12 +213,11 @@ impl RendererLauncher for ProgramLauncher {
         if !self.program.is_file() {
             return Err(format!("{} is not installed", self.program.display()));
         }
-        self.count += 1;
+        let count = PIPES.fetch_add(1, Ordering::Relaxed) + 1;
         let name = format!(
-            "dsa-gfx-{}-{}-{}",
+            "dsa-gfx-{}-{}-{count}",
             crate::compositor::current_session(),
             std::process::id(),
-            self.count
         );
         let sddl = current_user_only_sddl().map_err(|e| format!("reading this user: {e}"))?;
         let mut listener = NamedPipeListener::bind(&name, &sddl)

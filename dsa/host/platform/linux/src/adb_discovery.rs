@@ -105,15 +105,18 @@ pub fn user_server_port(uid: u32) -> Option<u16> {
     None
 }
 
+/// When the user's adb server port was last looked up, and what was found.
+type LastLookup = Option<(Instant, Option<u16>)>;
+
 /// A link to the adb server of the user `uid`. While they run none it is refused, so
 /// auto-connect waits for one.
 pub fn adb_server_of(uid: u32) -> AdbServerLink {
-    let found: Arc<Mutex<Option<(Instant, Option<u16>)>>> = Arc::default();
+    let found: Arc<Mutex<LastLookup>> = Arc::default();
     let inner = dsa_host_core::adb_discovery::loopback_link({
         let found = Arc::clone(&found);
         move || {
             let mut found = found.lock().unwrap_or_else(|e| e.into_inner());
-            let current: Option<(Instant, Option<u16>)> = *found;
+            let current: LastLookup = *found;
             let port = match current {
                 Some((at, Some(port))) if at.elapsed() < LOOK_AGAIN => Some(port),
                 _ => {

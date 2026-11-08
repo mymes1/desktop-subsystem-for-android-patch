@@ -2952,6 +2952,13 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         removed_variants = set(replaced_apex_variants(
             names, zin.read, removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)))
         removed_variant_stems = {apex_file_stem(name) for name in removed_variants}
+        # What the published build compiled, for the apps the image keeps: compile_apps
+        # compiles an app again once its dex no longer matches, and the checks hold the image
+        # to it. It is read before the members are copied: writestr takes each member's
+        # ZipInfo and points it into the new archive, so a member read from zin after it is
+        # copied would be looked for at the wrong place.
+        prebuilt = {apk: entry for apk, entry in prebuilt_oat(names, zin.read).items()
+                    if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
         for info in zin.infolist():
             name = info.filename
             if (removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
@@ -3077,11 +3084,6 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
             zout.writestr(info, data)
-        # What the published build compiled, for the apps the image keeps: compile_apps
-        # compiles an app again once its dex no longer matches, and the checks hold the image
-        # to it.
-        prebuilt = {apk: entry for apk, entry in prebuilt_oat(names, zin.read).items()
-                    if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
         zout.writestr(PREBUILT_OAT_RECORD, json.dumps(prebuilt, indent=2, sort_keys=True) + "\n")
         for directory in FSTAB_DIRS:
             zout.writestr(directory + "fstab.dsa", fstab)

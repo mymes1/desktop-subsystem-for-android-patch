@@ -23,7 +23,8 @@
 //! (OBB) files in the bundle go with the install and land in `Android/obb/<package>/`.
 //!
 //! APKs stored in the bundle are read where they are. A compressed one is unpacked into a file
-//! of its own in the temporary folder, removed with the [`Bundle`]; an expansion file is
+//! of its own in the folder the caller gives for temporary files, removed with the [`Bundle`];
+//! an expansion file is
 //! unpacked as it is sent instead, since it can be gigabytes.
 
 use std::collections::BTreeMap;
@@ -440,6 +441,8 @@ pub struct Bundle {
     pub apks: Vec<BundleApk>,
     pub obbs: Vec<BundleObb>,
     path: PathBuf,
+    /// The folder unpacked APKs go in.
+    tmp: PathBuf,
     temp: Vec<TempFile>,
 }
 
@@ -665,8 +668,9 @@ fn libraries_of(entries: &[Entry]) -> NativeLibraries {
     libraries
 }
 
-fn temp_path() -> PathBuf {
-    std::env::temp_dir().join(format!(
+/// A file name in `tmp` that no other process and no other unpacked APK uses.
+fn temp_path(tmp: &Path) -> PathBuf {
+    tmp.join(format!(
         "dsa-bundle-{}-{}.apk",
         std::process::id(),
         NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
@@ -676,7 +680,8 @@ fn temp_path() -> PathBuf {
 impl Bundle {
     /// Opens the bundle at `path` and reads every APK in it, refusing a file that is not a
     /// bundle taken here, a bundle Android would refuse, or one whose splits disagree.
-    pub fn open(path: &Path) -> Result<Bundle, Refusal> {
+    /// Compressed APKs are unpacked into files in `tmp`, which is made when needed.
+    pub fn open(path: &Path, tmp: &Path) -> Result<Bundle, Refusal> {
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -702,6 +707,7 @@ impl Bundle {
             apks: Vec::new(),
             obbs: Vec::new(),
             path: path.to_path_buf(),
+            tmp: tmp.to_path_buf(),
             temp: Vec::new(),
         };
         let entries = archive.entries.clone();
@@ -773,7 +779,8 @@ impl Bundle {
         size: u64,
     ) -> Result<PathBuf, Refusal> {
         let failed = |why: String| Refusal::Invalid(format!("{entry} cannot be unpacked: {why}"));
-        let path = temp_path();
+        std::fs::create_dir_all(&self.tmp).map_err(|e| failed(e.to_string()))?;
+        let path = temp_path(&self.tmp);
         let file = File::create(&path).map_err(|e| failed(e.to_string()))?;
         self.temp.push(TempFile(path.clone()));
         let input = Window::open(&self.path, offset, length).map_err(|e| failed(e.to_string()))?;
@@ -1015,7 +1022,8 @@ impl InstallFile {
     /// extension, or an APK named as a bundle, installs too. An App Bundle, an encrypted
     /// bundle and a bundle whose splits disagree are refused with their reasons, and a file
     /// that is none of these with [`Refusal::NotAnApp`], before Android is started for it.
-    pub fn open(path: &Path) -> Result<InstallFile, Refusal> {
+    /// A bundle's compressed APKs are unpacked into `tmp`.
+    pub fn open(path: &Path, tmp: &Path) -> Result<InstallFile, Refusal> {
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -1036,7 +1044,7 @@ impl InstallFile {
                     .map_err(Refusal::NotAnApp)
             }
             FileKind::Bundle(_) => {
-                Bundle::open(path).map(|bundle| InstallFile::Bundle(Box::new(bundle)))
+                Bundle::open(path, tmp).map(|bundle| InstallFile::Bundle(Box::new(bundle)))
             }
             FileKind::AppBundle => Err(Refusal::AppBundle),
             FileKind::EncryptedBundle => Err(Refusal::Encrypted),
@@ -1289,7 +1297,7 @@ mod tests {
     #[test]
     fn fr11_an_xapk_on_an_x86_64_device_takes_its_abi_density_and_languages_and_the_obb() {
         let path = file("xapk", "notes.xapk", &xapk(false));
-        let bundle = Bundle::open(&path).unwrap();
+        let bundle = Bundle::open(&path, &std::env::temp_dir()).unwrap();
         assert_eq!(bundle.format, Format::Xapk);
         assert_eq!(bundle.base.package, "com.example.notes");
         assert_eq!(bundle.base.version_code, 42);
@@ -1329,7 +1337,7 @@ mod tests {
     #[test]
     fn fr11_with_translation_on_whole_x86_64_libraries_still_win() {
         let path = file("translation-on", "notes.xapk", &xapk(false));
-        let bundle = Bundle::open(&path).unwrap();
+        let bundle = Bundle::open(&path, &std::env::temp_dir()).unwrap();
         let selection = bundle.select(&device(&[X86_64, ARM64], 480, &[]));
         assert_eq!(selection.abi.as_deref(), Some(X86_64));
         assert_eq!(
@@ -1347,7 +1355,7 @@ mod tests {
     #[test]
     fn fr11_of_two_densities_as_near_the_higher_one_is_taken() {
         let path = file("density", "notes.xapk", &xapk(false));
-        let bundle = Bundle::open(&path).unwrap();
+        let bundle = Bundle::open(&path, &std::env::temp_dir()).unwrap();
         let names = names(&bundle, &bundle.select(&device(&[X86_64], 240, &["de"])));
         let has = |name: &str| names.iter().any(|taken| taken == name);
         assert!(has("split_config.xhdpi.apk"), "{names:?}");
@@ -1378,7 +1386,7 @@ mod tests {
     #[test]
     fn fr11_incomplete_x86_64_libraries_take_arm64_only_while_translation_is_on() {
         let path = file("apks", "notes.apks", &apks());
-        let bundle = Bundle::open(&path).unwrap();
+        let bundle = Bundle::open(&path, &std::env::temp_dir()).unwrap();
         assert_eq!(bundle.format, Format::Apks);
         // The standalone APK is another way to ship the app, not a second base.
         assert_eq!(bundle.apks.len(), 4);
@@ -1424,7 +1432,7 @@ mod tests {
             stored("split_camera.config.x86_64.apk", &camera_x86_64),
         ]);
         let path = file("apkm", "notes.apkm", &apkm);
-        let bundle = Bundle::open(&path).unwrap();
+        let bundle = Bundle::open(&path, &std::env::temp_dir()).unwrap();
         assert_eq!(bundle.format, Format::Apkm);
         let selection = bundle.select(&device(&[ARM64], 480, &["ko"]));
         assert_eq!(selection.abi.as_deref(), Some(ARM64));
@@ -1452,7 +1460,7 @@ mod tests {
             stored("config.ko.apk", &foreign),
         ]);
         let path = file("signature", "notes.xapk", &xapk);
-        let refusal = Bundle::open(&path).unwrap_err();
+        let refusal = Bundle::open(&path, &std::env::temp_dir()).unwrap_err();
         assert_eq!(
             refusal,
             Refusal::SignatureMismatch {
@@ -1472,7 +1480,7 @@ mod tests {
             stored("base/dex/classes.dex", b"dex\n"),
         ]);
         let path = file("aab", "notes.aab", &aab);
-        let refusal = Bundle::open(&path).unwrap_err();
+        let refusal = Bundle::open(&path, &std::env::temp_dir()).unwrap_err();
         assert_eq!(refusal, Refusal::AppBundle);
         assert_eq!(refusal.code(), "app-bundle");
         let text = refusal.to_string();
@@ -1488,14 +1496,17 @@ mod tests {
         let flagged = zip(&entries, 1, b"");
         let path = file("encrypted", "flagged.apkm", &flagged);
         assert_eq!(detect(&path), Ok(FileKind::EncryptedBundle));
-        assert_eq!(Bundle::open(&path).unwrap_err(), Refusal::Encrypted);
+        assert_eq!(
+            Bundle::open(&path, &std::env::temp_dir()).unwrap_err(),
+            Refusal::Encrypted
+        );
         // Older APKMirror bundles keep the APKs' names but not what is in them.
         let scrambled = bundle_of(&[
             stored("info.json", b"{}"),
             stored("base.apk", b"\x13\x37 sealed with a key only the maker has"),
         ]);
         let path = file("encrypted", "scrambled.apkm", &scrambled);
-        let refusal = Bundle::open(&path).unwrap_err();
+        let refusal = Bundle::open(&path, &std::env::temp_dir()).unwrap_err();
         assert_eq!(refusal, Refusal::Encrypted);
         assert_eq!(refusal.code(), "encrypted-bundle");
         assert!(refusal.to_string().contains("encrypted"), "{refusal}");
@@ -1503,8 +1514,16 @@ mod tests {
 
     #[test]
     fn fr11_compressed_apks_and_expansion_files_are_unpacked() {
-        let compressed = Bundle::open(&file("deflated", "notes.xapk", &xapk(true))).unwrap();
-        let stored = Bundle::open(&file("deflated", "stored.xapk", &xapk(false))).unwrap();
+        let compressed = Bundle::open(
+            &file("deflated", "notes.xapk", &xapk(true)),
+            &std::env::temp_dir(),
+        )
+        .unwrap();
+        let stored = Bundle::open(
+            &file("deflated", "stored.xapk", &xapk(false)),
+            &std::env::temp_dir(),
+        )
+        .unwrap();
         let device = device(&[X86_64], 320, &["ko"]);
         let selection = compressed.select(&device);
         let reference = stored.select(&device);
@@ -1532,12 +1551,14 @@ mod tests {
     fn fr11_a_bundle_of_two_bases_or_none_is_refused() {
         let base = base();
         let two = bundle_of(&[stored("base.apk", &base), stored("other.apk", &base)]);
-        let refusal = Bundle::open(&file("bases", "two.apks", &two)).unwrap_err();
+        let refusal =
+            Bundle::open(&file("bases", "two.apks", &two), &std::env::temp_dir()).unwrap_err();
         assert_eq!(refusal.code(), "invalid-bundle");
         assert!(refusal.to_string().contains("two base APKs"), "{refusal}");
         let en = split("config.en", &[]);
         let none = bundle_of(&[stored("split.apk", &en)]);
-        let refusal = Bundle::open(&file("bases", "none.apks", &none)).unwrap_err();
+        let refusal =
+            Bundle::open(&file("bases", "none.apks", &none), &std::env::temp_dir()).unwrap_err();
         assert!(refusal.to_string().contains("no base APK"), "{refusal}");
     }
 
@@ -1546,21 +1567,27 @@ mod tests {
         let test = "install-file";
         let bundle = file(test, "notes.bin", &xapk(false));
         assert!(matches!(
-            InstallFile::open(&bundle),
+            InstallFile::open(&bundle, &std::env::temp_dir()),
             Ok(InstallFile::Bundle(_))
         ));
-        match InstallFile::open(&file(test, "notes.xapk", &notes_apk())) {
+        match InstallFile::open(
+            &file(test, "notes.xapk", &notes_apk()),
+            &std::env::temp_dir(),
+        ) {
             Ok(InstallFile::Apk(apk)) => assert_eq!(apk.name, "notes.apk"),
             Ok(InstallFile::Bundle(_)) => panic!("an APK was read as a bundle"),
             Err(refusal) => panic!("an APK named as a bundle was refused: {refusal}"),
         }
         // A file named .apk goes to Android as before, which judges what is in it.
         let named = file(test, "broken.apk", b"PK\x03\x04 not really");
-        assert!(matches!(InstallFile::open(&named), Ok(InstallFile::Apk(_))));
+        assert!(matches!(
+            InstallFile::open(&named, &std::env::temp_dir()),
+            Ok(InstallFile::Apk(_))
+        ));
         let aab = bundle_of(&[stored("BundleConfig.pb", b"")]);
-        let aab = InstallFile::open(&file(test, "notes.aab", &aab));
+        let aab = InstallFile::open(&file(test, "notes.aab", &aab), &std::env::temp_dir());
         assert_eq!(aab.err(), Some(Refusal::AppBundle));
-        match InstallFile::open(&file(test, "notes.zip", b"PK")) {
+        match InstallFile::open(&file(test, "notes.zip", b"PK"), &std::env::temp_dir()) {
             Err(Refusal::NotAnApp(why)) => assert!(why.contains("not an APK file"), "{why}"),
             Err(other) => panic!("expected the file to be no APK, got {other}"),
             Ok(_) => panic!("a file that is no APK was taken"),

@@ -4180,6 +4180,11 @@ class PublishedOdexTests(unittest.TestCase):
             root = Path(tmp)
             source = root / "target-files.zip"
             with zipfile.ZipFile(source, "w") as archive:
+                # A removed app first, as the published build has them among the rest: the
+                # members after it lie elsewhere in the new archive than in the published one,
+                # so a member read from the published archive after it is copied is read at
+                # its new place, which is no member's start there.
+                archive.writestr("SYSTEM/app/Traceur/Traceur.apk", b"removed" * 64)
                 for name, data in files.items():
                     archive.writestr(name, data)
             make_image.modify(source, root / "modified.zip")

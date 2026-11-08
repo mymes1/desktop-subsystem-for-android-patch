@@ -2746,7 +2746,8 @@ fn install(
         .as_deref()
         .unwrap_or(std::path::Path::new(""));
     // A file that cannot be installed is refused before Android is started for it.
-    let file = InstallFile::open(path).map_err(|refusal| describe_file_refusal(path, &refusal))?;
+    let file = InstallFile::open(path, &user_tmp()?)
+        .map_err(|refusal| describe_file_refusal(path, &refusal))?;
     let step = |line: &str| {
         if invocation.progress {
             use std::io::Write as _;
@@ -3231,7 +3232,8 @@ fn fetch_google(
         );
     }
     let id = std::process::id();
-    let base = std::env::temp_dir().join(format!("dsa-google-arm-translator-{id}"));
+    // The process ID between dashes keeps the folder while this run uses it.
+    let base = user_tmp()?.join(format!("dsa-google-arm-translator-{id}-0"));
     let _ = std::fs::remove_dir_all(&base);
     let package = base.join("package");
     let quiet = invocation.json;
@@ -3558,7 +3560,8 @@ fn read_install_file(path: &std::path::Path) -> Result<(ApkInfo, Option<Bundle>)
     if named_apk {
         return Ok((ApkInfo::read(path)?, None));
     }
-    match InstallFile::open(path).map_err(|refusal| describe_file_refusal(path, &refusal))? {
+    let file = InstallFile::open(path, &user_tmp()?);
+    match file.map_err(|refusal| describe_file_refusal(path, &refusal))? {
         InstallFile::Apk(_) => Ok((ApkInfo::read(path)?, None)),
         InstallFile::Bundle(bundle) => Ok((bundle.base.clone(), Some(*bundle))),
     }
@@ -4092,6 +4095,33 @@ pub fn connector(endpoint: Option<&str>) -> Result<Box<dyn Connector>, String> {
     {
         let _ = endpoint;
         Err("this platform has no DSA service".into())
+    }
+}
+
+/// The `tmp` folder in the DSA folder of the user `dsa` runs as, where the files it cannot
+/// avoid making go: unpacked APKs of a bundle, a download being taken apart.
+fn user_tmp() -> Result<std::path::PathBuf, String> {
+    #[cfg(windows)]
+    {
+        dsa_host_windows::paths::UserRoot::current()
+            .map(|root| root.tmp())
+            .ok_or_else(|| {
+                "neither LOCALAPPDATA nor USERPROFILE is set, so DSA has no folder of yours".into()
+            })
+    }
+    #[cfg(unix)]
+    {
+        use dsa_host_unix::paths::{current_user_tmp, Layout};
+        let layout = if cfg!(target_os = "macos") {
+            Layout::MacOs
+        } else {
+            Layout::Linux
+        };
+        current_user_tmp(layout)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        Err("this platform has no DSA folders".into())
     }
 }
 
