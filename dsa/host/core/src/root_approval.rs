@@ -31,6 +31,9 @@
 //! The prompt is the only part that names a host OS API, so everything here runs and is
 //! tested on every platform with a fake prompt.
 
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread;
@@ -42,6 +45,16 @@ use crate::resize_trace::utc_stamp;
 use crate::root_elevation::{AppLevel, Decision, DecisionDenied, Level, Policy};
 use crate::settings::SettingsStore;
 use crate::tasks::AppInfo;
+
+/// The file in a [`FolderApprover`]'s folder where each asked request is appended as one JSON
+/// line.
+pub const REQUESTS_FILE: &str = "requests.jsonl";
+
+/// The file in a [`FolderApprover`]'s folder that holds the administrator's next answer (`allow`,
+/// `deny`, `cancel` or `timeout`).
+pub const ANSWER_FILE: &str = "answer";
+
+const FOLDER_POLL: Duration = Duration::from_millis(25);
 
 /// How long the host's administrator prompt may stay open. Shorter than the guest's
 /// [`ANSWER_TIMEOUT`](crate::root_elevation::ANSWER_TIMEOUT), so the host's "timed out"
@@ -76,11 +89,29 @@ pub struct ApprovalRequest {
     /// Whether su has a terminal (an interactive shell).
     pub interactive: bool,
     pub purpose: Purpose,
+    /// When the calling app shares its Android user ID (`android:sharedUserId`) with other apps,
+    /// every app in the group, so the prompt shows all of them and says they share a user ID.
+    pub shared_apps: Vec<AppInfo>,
 }
 
 impl ApprovalRequest {
     /// The request a su call makes. `app` is the app as the guest last listed it.
     pub fn from_su(request: &control::SuRequest, app: Option<&AppInfo>) -> ApprovalRequest {
+        let packages = package_group(&request.package);
+        let shared_apps = if packages.len() > 1 {
+            packages
+                .iter()
+                .map(|pkg| match app {
+                    Some(info) if info.package_name == *pkg => info.clone(),
+                    _ => AppInfo {
+                        package_name: (*pkg).to_string(),
+                        ..Default::default()
+                    },
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         ApprovalRequest {
             request_id: request.request_id,
             app: app.cloned().unwrap_or_else(|| AppInfo {
@@ -91,7 +122,15 @@ impl ApprovalRequest {
             command: request.command.clone(),
             interactive: request.interactive,
             purpose: Purpose::Run,
+            shared_apps,
         }
+    }
+
+    /// Sets the apps in a shared user ID group, with their names and icons as the guest listed
+    /// them.
+    pub fn with_shared_apps(mut self, shared_apps: Vec<AppInfo>) -> ApprovalRequest {
+        self.shared_apps = shared_apps;
+        self
     }
 
     /// The request to let `app` keep root without asking each time.
@@ -152,8 +191,37 @@ impl ApprovalRequest {
     }
 
     /// The sentence the administrator prompt shows: the app by name and package, and what it
-    /// wants.
+    /// wants. When several apps share the user ID, it lists all of them and says they share a
+    /// user ID.
     pub fn message(&self) -> String {
+        if self.shared_apps.len() > 1 {
+            let names = self
+                .shared_apps
+                .iter()
+                .map(|app| {
+                    let label = app.label.trim();
+                    if label.is_empty() || label == app.package_name {
+                        app.package_name.clone()
+                    } else {
+                        format!("{label} ({})", app.package_name)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return match self.purpose {
+                Purpose::KeepRoot => format!(
+                    "The Android apps {names} share a user ID and want to run commands as root \
+                     without asking each time."
+                ),
+                Purpose::Run if self.command.is_empty() => format!(
+                    "The Android apps {names} share a user ID and want to open a root shell."
+                ),
+                Purpose::Run => format!(
+                    "The Android apps {names} share a user ID and want to run {} as root.",
+                    self.what()
+                ),
+            };
+        }
         let app = if self.app_name() == self.package() {
             format!("The Android app {}", self.package())
         } else {
@@ -167,6 +235,15 @@ impl ApprovalRequest {
             Purpose::Run => format!("{app} wants to run {} as root.", self.what()),
         }
     }
+}
+
+/// Splits a package field into the individual packages of a shared user ID group.
+fn package_group(package: &str) -> Vec<&str> {
+    package
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect()
 }
 
 /// What su runs, in words: the command with each word that needs it quoted, or "an
@@ -231,6 +308,109 @@ pub trait ApprovalPrompt: Send + Sync {
     fn withdraw(&self, request: &ApprovalRequest) {
         let _ = request;
     }
+}
+
+/// An [`ApprovalPrompt`] backed by a folder on disk, for automated boot checks where no desktop
+/// prompt is open. Each prompt appends one JSON line to [`REQUESTS_FILE`] and reads its answer
+/// from [`ANSWER_FILE`].
+#[derive(Debug, Clone)]
+pub struct FolderApprover {
+    dir: PathBuf,
+}
+
+impl FolderApprover {
+    pub fn new(dir: &Path) -> FolderApprover {
+        FolderApprover {
+            dir: dir.to_path_buf(),
+        }
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    fn record_request(&self, request: &ApprovalRequest) -> Result<(), String> {
+        fs::create_dir_all(&self.dir)
+            .map_err(|e| format!("creating {}: {e}", self.dir.display()))?;
+        let path = self.dir.join(REQUESTS_FILE);
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|e| format!("opening {}: {e}", path.display()))?;
+        let command = request
+            .command
+            .iter()
+            .map(|arg| format!("\"{}\"", escape_json(arg)))
+            .collect::<Vec<_>>()
+            .join(",");
+        let line = format!(
+            "{{\"request_id\":{},\"package\":\"{}\",\"uid\":{},\"command\":[{}],\"interactive\":{},\"message\":\"{}\"}}\n",
+            request.request_id,
+            escape_json(request.package()),
+            request.uid,
+            command,
+            request.interactive,
+            escape_json(&request.message()),
+        );
+        file.write_all(line.as_bytes())
+            .map_err(|e| format!("writing {}: {e}", path.display()))
+    }
+}
+
+impl ApprovalPrompt for FolderApprover {
+    fn ask(&self, request: &ApprovalRequest, timeout: Duration) -> PromptAnswer {
+        if let Err(why) = self.record_request(request) {
+            return PromptAnswer::Unavailable(why);
+        }
+        let path = self.dir.join(ANSWER_FILE);
+        let deadline = Instant::now() + timeout;
+        loop {
+            if let Ok(text) = fs::read_to_string(&path) {
+                let word = text.trim();
+                if !word.is_empty() {
+                    return match word {
+                        "allow" | "approve" | "approved" => PromptAnswer::Approved,
+                        "deny" | "refuse" | "refused" => PromptAnswer::Denied,
+                        "cancel" | "cancelled" | "dismiss" => PromptAnswer::Cancelled,
+                        "not-admin" | "not_administrator" => PromptAnswer::NotAdministrator,
+                        "timeout" => {
+                            let left = deadline.saturating_duration_since(Instant::now());
+                            if !left.is_zero() {
+                                thread::sleep(left);
+                            }
+                            PromptAnswer::TimedOut
+                        }
+                        other => PromptAnswer::Unavailable(format!(
+                            "unknown answer {other:?} in {}",
+                            path.display()
+                        )),
+                    };
+                }
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return PromptAnswer::TimedOut;
+            }
+            thread::sleep(FOLDER_POLL.min(deadline - now));
+        }
+    }
+}
+
+fn escape_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// The end of one request to the administrator prompt.
@@ -443,6 +623,11 @@ impl RootApproval {
     /// Brings the boot's policy up to the settings: the feature turned off since the boot
     /// stops approvals, and a level changed since the last request applies (and clears that
     /// app's grace). Returns the decision for `package` now, and its level.
+    ///
+    /// Apps that share an Android user ID (`package` holds their comma-separated names) are
+    /// decided as one group: if any app in the group is explicitly `Off` in the settings, the
+    /// whole group is `Off` and its grace is cleared; otherwise the group takes its level and
+    /// grace together.
     fn decide_now(&self, package: &str) -> (Decision, Level) {
         let (enabled, levels) = (self.levels)();
         let mut boot = self.boot();
@@ -451,24 +636,72 @@ impl RootApproval {
         if policy.enabled() != enabled {
             policy.set_enabled(enabled);
         }
+        let group = package_group(package);
+        let group_has_explicit_off = group.len() > 1
+            && group.iter().any(|member| {
+                levels
+                    .iter()
+                    .any(|app| app.package == *member && app.level == Level::Off)
+            });
         for app in policy.app_levels() {
-            if !levels.iter().any(|a| a.package == app.package) {
+            if !levels
+                .iter()
+                .any(|a| a.package == app.package && a.level != Level::Off)
+            {
                 policy.set_level(&app.package, Level::Off);
             }
         }
-        for app in levels {
+        for app in &levels {
             if policy.level(&app.package) != app.level {
                 policy.set_level(&app.package, app.level);
             }
         }
-        (
-            policy.decide(package, Instant::now()),
-            policy.level(package),
-        )
+        if group.len() <= 1 {
+            let member = group.first().copied().unwrap_or(package);
+            return (policy.decide(member, Instant::now()), policy.level(member));
+        }
+        if !enabled || group_has_explicit_off {
+            for member in &group {
+                if policy.level(member) != Level::Off {
+                    policy.set_level(member, Level::Off);
+                }
+            }
+            return (Decision::Deny, Level::Off);
+        }
+        let mut group_level = Level::Off;
+        for member in &group {
+            match policy.level(member) {
+                Level::Remember => group_level = Level::Remember,
+                Level::Ask if group_level == Level::Off => group_level = Level::Ask,
+                _ => {}
+            }
+        }
+        let now = Instant::now();
+        let decision = match group_level {
+            Level::Off => Decision::Deny,
+            Level::Remember => Decision::ApproveWithoutPrompt,
+            Level::Ask => {
+                if group.iter().any(|member| policy.in_grace(member, now)) {
+                    Decision::ApproveWithoutPrompt
+                } else {
+                    Decision::PromptHost
+                }
+            }
+        };
+        (decision, group_level)
     }
 
     fn record_approval(&self, package: &str) {
-        self.boot().policy.approved(package, Instant::now());
+        let mut boot = self.boot();
+        let now = Instant::now();
+        let group = package_group(package);
+        if group.is_empty() {
+            boot.policy.approved(package, now);
+            return;
+        }
+        for member in group {
+            boot.policy.approved(member, now);
+        }
     }
 
     /// Decides one su call. `app` is the calling app as the guest last listed it, for the name
@@ -700,6 +933,7 @@ mod tests {
             command: vec!["id".to_string()],
             interactive: false,
             purpose: Purpose::Run,
+            shared_apps: Vec::new(),
         }
     }
 
@@ -958,5 +1192,87 @@ mod tests {
         let refusing = elevation(FakePrompt::new(PromptAnswer::Denied), levels(true, &[]));
         let refused = refusing.approve_keep_root(app).unwrap_err();
         assert!(refused.contains("refused"), "{refused}");
+    }
+
+    #[test]
+    fn fr35_apps_sharing_a_user_id_are_approved_as_one_group() {
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let current = Arc::new(Mutex::new(vec![AppLevel {
+            package: "com.shared.one".into(),
+            level: Level::Ask,
+        }]));
+        let shared_levels = Arc::clone(&current);
+        let source: LevelSource = Arc::new(move || (true, shared_levels.lock().unwrap().clone()));
+        let root = elevation(fake.clone(), source);
+
+        let su = control::SuRequest {
+            request_id: 11,
+            package: "com.shared.one, com.shared.two".into(),
+            uid: 10_150,
+            command: vec!["id".into()],
+            interactive: false,
+        };
+        let req = ApprovalRequest::from_su(&su, None).with_shared_apps(vec![
+            AppInfo {
+                package_name: "com.shared.one".into(),
+                label: "Shared One".into(),
+                ..Default::default()
+            },
+            AppInfo {
+                package_name: "com.shared.two".into(),
+                label: "Shared Two".into(),
+                ..Default::default()
+            },
+        ]);
+        let first = root.answer(&req);
+        assert!(first.approved);
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 1);
+        let seen = fake.seen.lock().unwrap();
+        assert!(seen[0].message().contains("Shared One (com.shared.one)"));
+        assert!(seen[0].message().contains("Shared Two (com.shared.two)"));
+        assert!(seen[0].message().contains("share a user ID"));
+        drop(seen);
+
+        // The second app in the group shares the grace started by the first approval.
+        let second = root.answer(&req);
+        assert!(second.approved);
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 1);
+
+        // If any app in the group is set to Off, the whole group is denied and cannot use root.
+        current.lock().unwrap().push(AppLevel {
+            package: "com.shared.two".into(),
+            level: Level::Off,
+        });
+        let denied = root.answer(&req);
+        assert!(!denied.approved);
+        assert_eq!(denied.reason, DecisionDenied::NotAllowed.describe());
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn fr35_the_folder_approver_records_each_request_and_answers_from_its_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "dsa-folder-approver-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let approver = FolderApprover::new(&dir);
+        fs::write(dir.join(ANSWER_FILE), "allow\n").unwrap();
+        let answer = approver.ask(&request("com.ask.app"), Duration::from_secs(1));
+        assert_eq!(answer, PromptAnswer::Approved);
+        let recorded = fs::read_to_string(dir.join(REQUESTS_FILE)).unwrap();
+        assert!(recorded.contains("\"package\":\"com.ask.app\""));
+        assert!(recorded.contains("\"uid\":10123"));
+
+        fs::write(dir.join(ANSWER_FILE), "deny\n").unwrap();
+        let denied = approver.ask(&request("com.ask.app"), Duration::from_secs(1));
+        assert_eq!(denied, PromptAnswer::Denied);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

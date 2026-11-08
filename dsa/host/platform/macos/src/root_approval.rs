@@ -387,6 +387,7 @@ mod tests {
                 icon_png: vec![0x89, b'P', b'N', b'G'],
                 ..Default::default()
             },
+            shared_apps: Vec::new(),
             uid: 10_200,
             command: vec!["id".into()],
             interactive: false,

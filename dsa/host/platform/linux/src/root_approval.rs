@@ -427,6 +427,7 @@ mod tests {
                 label: "Backup".into(),
                 ..Default::default()
             },
+            shared_apps: Vec::new(),
             uid: 10_200,
             command: vec!["id".into()],
             interactive: false,

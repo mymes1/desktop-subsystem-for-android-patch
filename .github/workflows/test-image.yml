@@ -462,7 +462,7 @@ jobs:
     needs: [guest-programs, agent]
     runs-on: ubuntu-latest
     # Android 17 on x86_64 also boots the image and checks a widget, below.
-    timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 140 || 60 }}
+    timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 210 || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -669,8 +669,8 @@ jobs:
       # The image just made, booted under crosvm by the service, with the digital clock widget
       # placed through the local API: its pictures must reach the client, show something and
       # change as the clock ticks, and the guest log must not say a widget failed to draw. One
-      # combination is enough, and the runner's KVM is x86_64. The kernel is the newest
-      # published one, because this workflow does not build the kernel.
+      # combination is enough, and the runner's KVM is x86_64. The kernel comes from the
+      # current inputs, so the boot checks exercise the guard in this change.
       - name: Free the image inputs for the boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         run: |
@@ -706,16 +706,18 @@ jobs:
           sudo chmod 666 /dev/kvm /dev/vhost-vsock
           ls -l /dev/kvm /dev/vhost-vsock
 
-      - name: Download the newest published kernel
+      - name: Build the kernel for the boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
-        env:
-          GH_TOKEN: ${{ github.token }}
+        uses: ./.github/actions/guest-kernel
+        with:
+          arch: x86_64
+          out: ${{ github.workspace }}/.scratch/kernel-boot
+
+      - name: Select the boot check image and kernel
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
         run: |
-          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17") and (endswith("-arm64") | not))][0].tagName')"
-          test -n "$tag" || { echo "no published x86_64 Android 17 image release"; exit 1; }
-          echo "kernel release: $tag"
-          gh release download "$tag" -R "${{ github.repository }}" -p bzImage -D "$RUNNER_TEMP"
-          echo "DSA_WIDGET_TEST_KERNEL=$RUNNER_TEMP/bzImage" >> "$GITHUB_ENV"
+          kernel="$(ls "$PWD"/.scratch/kernel-boot/bzImage-*)"
+          echo "DSA_WIDGET_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
           image="$(ls -d "$PWD"/dsa/target/image/*/ | head -1)"
           ls -l "$image"
           echo "DSA_WIDGET_TEST_IMAGE=$image" >> "$GITHUB_ENV"
@@ -851,11 +853,11 @@ jobs:
           name: guest-media-probe
           path: .scratch/media-probe
 
-      - name: Play sound and run codecs in an app on the booted image
+      - name: Check media and root approval in an app
         if: >-
           !cancelled() && steps.probe.outcome == 'success'
           && matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 14
+        timeout-minutes: 40
         working-directory: dsa
         run: |
           # What an earlier check that timed out left running holds the VM's vsock ports.
@@ -887,6 +889,8 @@ jobs:
         with:
           name: media-check-logs
           path: |
-            /tmp/media-test-*/*.log
-            /tmp/media-test-*/*.txt
+            .scratch/media-*/*.log
+            .scratch/media-*/*.txt
+            .scratch/root-*/*.log
+            .scratch/root-*/*.txt
           if-no-files-found: ignore
