@@ -286,21 +286,14 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn switch_adb(_on: bool) {}
 
-    /// Has init start or stop the root elevation helper (`dsa-channeld.rc` runs
-    /// `dsa-channeld --su-relay` as root while the property is 1).
     #[cfg(target_os = "android")]
     fn switch_su_helper(on: bool) -> Result<(), String> {
         set_property("vendor.dsa.root_elevation", if on { "1" } else { "0" })
     }
 
-    /// Off Android there is no init to start the helper.
     #[cfg(not(target_os = "android"))]
-    fn switch_su_helper(on: bool) -> Result<(), String> {
-        if on {
-            Err("this system has no elevation helper".into())
-        } else {
-            Ok(())
-        }
+    fn switch_su_helper(_on: bool) -> Result<(), String> {
+        Err("Android init is not available".into())
     }
 
     /// Has init mount the host's folders the host shares and take the others away
@@ -506,6 +499,15 @@ mod daemon {
         // The two jobs init runs this program for besides the daemon: mounting the host's
         // folders (as root), and serving the shared storage to the host (as media_rw).
         let say_line = |line: &str| say!("{line}");
+        if std::env::args().nth(1).as_deref() == Some("--su-relay") {
+            return match dsa_guest_channeld::su_helper::run() {
+                Ok(()) => 0,
+                Err(error) => {
+                    say!("su helper failed: {error}");
+                    1
+                }
+            };
+        }
         if std::env::args().nth(1).as_deref() == Some("--share-mount") {
             return dsa_guest_channeld::share_mount::run(&read_property, &say_line);
         }
@@ -556,10 +558,12 @@ mod daemon {
         // Root elevation: the host's config drives the kernel's su guard, on connect and on
         // every change, and the host's decisions answer the su calls the relay holds.
         let su_relay = Arc::new(SuRelay::new());
-        let su_config =
-            ConfigApplier::of_system(Arc::clone(&su_relay), Box::new(switch_su_helper), |line| {
-                say!("{line}")
-            });
+        let su_config = ConfigApplier::of_system_with_host(
+            Arc::clone(&su_relay),
+            to_host.clone(),
+            Box::new(switch_su_helper),
+            |line| say!("{line}"),
+        );
         // Until the host says otherwise, su exists for no app, whatever the image holds.
         su_config.hide_all();
         let router = Arc::new(

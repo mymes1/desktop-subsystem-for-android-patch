@@ -221,11 +221,9 @@ fn resolved(enabled: bool) -> RootElevationConfig {
 fn fr35_the_daemon_never_writes_the_guard_itself_but_starts_and_stops_the_helper() {
     use dsa_guest_channeld::su_relay::HelperGuard;
     let (switch, calls) = switch_recorder();
-    let guard = HelperGuard {
-        socket: std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("fr35-no-helper"),
-        switch,
-        start_wait: std::time::Duration::ZERO,
-    };
+    let mut guard = HelperGuard::new(switch);
+    guard.socket = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("fr35-no-helper");
+    guard.start_wait = std::time::Duration::ZERO;
     // The guard's lines alone are refused: the helper takes the whole config.
     assert!(guard.write(&["reset".to_string()]).is_err());
     // On: the helper is started, and with no helper listening the config is not applied.
@@ -268,11 +266,9 @@ fn fr35_the_helper_is_handed_the_config_with_the_apps_uids() {
         listener
     };
     let (switch, calls) = switch_recorder();
-    let guard = HelperGuard {
-        socket: path.clone(),
-        switch,
-        start_wait: std::time::Duration::from_secs(5),
-    };
+    let mut guard = HelperGuard::new(switch);
+    guard.socket = path.clone();
+    guard.start_wait = std::time::Duration::from_secs(5);
     let relay = Arc::new(SuRelay::new());
     let applier = ConfigApplier::new(
         Arc::clone(&relay),

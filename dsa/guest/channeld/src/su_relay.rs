@@ -25,16 +25,18 @@
 //! are the only parts that touch the system; this logic drives them. They are wired into the
 //! daemon's main loop, which this module does not reach into.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use dsa_protocol::control::envelope::Body;
-use dsa_protocol::control::{Envelope, RootElevationConfig, RootLevel, SuDecision, SuRequest};
+use dsa_protocol::control::{
+    Envelope, RootApp, RootElevationConfig, RootLevel, SuDecision, SuRequest,
+};
 
 /// How long a su call waits for the host before it fails, matching the host's own limit.
 pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
@@ -80,22 +82,63 @@ pub fn control_lines(config: &RootElevationConfig) -> Vec<String> {
     lines
 }
 
+/// Writes `config`'s [`control_lines`] in one write with `write_line`.
+pub fn update_guard(
+    config: &RootElevationConfig,
+    mut write_line: impl FnMut(&str) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let mut text = control_lines(config).join("\n");
+    text.push('\n');
+    write_line(&text)
+}
+
 /// The uids that may see su under `config`: the ask and remember apps while the feature is
-/// on, none while it is off, and never uid 0 (an app the package list did not name).
-fn allowed_uids(config: &RootElevationConfig) -> Vec<u32> {
+/// on, none while it is off, and never uid 0 (an app the package list did not name). When
+/// apps share an Android user ID (`android:sharedUserId`), if any app in the group is set to
+/// `Off`, none of the apps in the group may see su.
+pub fn allowed_uids(config: &RootElevationConfig) -> Vec<u32> {
     if !config.enabled {
         return Vec::new();
     }
+    let denied: BTreeSet<u32> = config
+        .apps
+        .iter()
+        .filter(|app| app.uid != 0 && app.level() == RootLevel::Off)
+        .map(|app| app.uid)
+        .collect();
     let mut uids: Vec<u32> = config
         .apps
         .iter()
-        .filter(|app| app.uid != 0)
+        .filter(|app| app.uid != 0 && !app.package.is_empty() && !denied.contains(&app.uid))
         .filter(|app| app.level() == RootLevel::Ask || app.level() == RootLevel::Remember)
         .map(|app| app.uid)
         .collect();
     uids.sort_unstable();
     uids.dedup();
     uids
+}
+
+/// The package name (or comma-separated group of package names when several apps share `uid`)
+/// that may ask for root under `config`, or `None` when `uid` may not ask.
+pub fn package_for_uid(config: &RootElevationConfig, uid: u32) -> Option<String> {
+    if !config.enabled || uid == 0 {
+        return None;
+    }
+    let mut packages = BTreeSet::new();
+    let mut allowed = false;
+    for app in config.apps.iter().filter(|app| app.uid == uid) {
+        if app.package.is_empty() || app.level() == RootLevel::Off {
+            return None;
+        }
+        if matches!(app.level(), RootLevel::Ask | RootLevel::Remember) {
+            allowed = true;
+            packages.insert(app.package.as_str());
+        }
+    }
+    if !allowed || packages.is_empty() {
+        return None;
+    }
+    Some(packages.into_iter().collect::<Vec<_>>().join(", "))
 }
 
 /// Each package's uid from the package manager's list (`/data/system/packages.list`), whose
@@ -114,6 +157,10 @@ pub fn uids_from_packages_list(text: &str) -> HashMap<String, u32> {
 /// `config` with each app's uid filled in from `uids` where the host left it 0: the host
 /// knows an app by its package, the kernel by its uid. An app the list does not name keeps
 /// uid 0 and so sees no su.
+///
+/// When installed apps share a user ID (`android:sharedUserId`) with an app in `config`, the
+/// other packages sharing that user ID are included in the group so the helper and the host
+/// prompt name every app in the group together.
 pub fn with_uids(config: &RootElevationConfig, uids: &HashMap<String, u32>) -> RootElevationConfig {
     let mut resolved = config.clone();
     for app in &mut resolved.apps {
@@ -123,6 +170,41 @@ pub fn with_uids(config: &RootElevationConfig, uids: &HashMap<String, u32>) -> R
             }
         }
     }
+    let mut shared_levels: HashMap<u32, RootLevel> = HashMap::new();
+    for app in &resolved.apps {
+        if app.uid == 0 {
+            continue;
+        }
+        let level = app.level();
+        shared_levels
+            .entry(app.uid)
+            .and_modify(|current| {
+                if level == RootLevel::Off {
+                    *current = RootLevel::Off;
+                } else if *current != RootLevel::Off && level == RootLevel::Remember {
+                    *current = RootLevel::Remember;
+                }
+            })
+            .or_insert(level);
+    }
+    let mut siblings: Vec<RootApp> = Vec::new();
+    for (package, uid) in uids {
+        if *uid == 0 {
+            continue;
+        }
+        let Some(&level) = shared_levels.get(uid) else {
+            continue;
+        };
+        if !resolved.apps.iter().any(|app| app.package == *package) {
+            siblings.push(RootApp {
+                package: package.clone(),
+                uid: *uid,
+                level: level.into(),
+            });
+        }
+    }
+    siblings.sort_by(|a, b| a.package.cmp(&b.package));
+    resolved.apps.extend(siblings);
     resolved
 }
 
@@ -147,8 +229,12 @@ impl Default for SuRelay {
 
 impl SuRelay {
     pub fn new() -> SuRelay {
+        SuRelay::with_start(1)
+    }
+
+    pub fn with_start(start: u64) -> SuRelay {
         SuRelay {
-            next_id: AtomicU64::new(1),
+            next_id: AtomicU64::new(start.max(1)),
             waiting: Mutex::new(HashMap::new()),
             config: Mutex::new(RootElevationConfig::default()),
         }
@@ -180,6 +266,22 @@ impl SuRelay {
             )));
         }
         lines
+    }
+
+    /// Refuses every waiting su call, as when the connection to the daemon is lost.
+    pub fn cancel_all(&self) {
+        let calls: Vec<WaitingCall> = self
+            .waiting
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain()
+            .map(|(_, call)| call)
+            .collect();
+        for call in calls {
+            let _ = call
+                .answer
+                .send(Outcome::Refused("the host disconnected".to_string()));
+        }
     }
 
     /// Whether the app with `uid` may ask for root under the config last applied.
@@ -305,6 +407,10 @@ pub type HelperSwitch = Box<dyn Fn(bool) -> Result<(), String> + Send + Sync>;
 /// config, with the apps' uids filled in, as one `RootElevationConfig` control message per
 /// packet on [`HELPER_SOCKET`]; the helper writes [`control_lines`] of it in one write.
 ///
+/// When connected with a [`SuRelay`] and the host sender ([`HelperGuard::with_host`]), the
+/// guard also keeps its connection to the helper open so `SuRequest` messages from the helper
+/// are forwarded to the host and `SuDecision` answers return to the helper.
+///
 /// A config with root elevation on starts the helper first. One with it off is handed to the
 /// running helper, which hides su from every app at once, and then the helper is stopped. With
 /// no helper running, su is hidden already: init hides it at boot, and only the helper shows
@@ -313,6 +419,17 @@ pub struct HelperGuard {
     pub socket: PathBuf,
     pub switch: HelperSwitch,
     pub start_wait: Duration,
+    bridge: Option<Arc<HelperBridge>>,
+}
+
+#[cfg_attr(not(any(target_os = "linux", target_os = "android")), allow(dead_code))]
+struct HelperBridge {
+    relay: Arc<SuRelay>,
+    to_host: Sender<Vec<u8>>,
+    latest: Mutex<Option<RootElevationConfig>>,
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    active: Mutex<Option<Arc<crate::su_packet::Packet>>>,
+    running: AtomicBool,
 }
 
 impl HelperGuard {
@@ -322,6 +439,29 @@ impl HelperGuard {
             socket: PathBuf::from(HELPER_SOCKET),
             switch,
             start_wait: HELPER_START_WAIT,
+            bridge: None,
+        }
+    }
+
+    /// The guard for this guest, also bridging the helper's su requests to `to_host` through
+    /// `relay`.
+    pub fn with_host(
+        switch: HelperSwitch,
+        relay: Arc<SuRelay>,
+        to_host: Sender<Vec<u8>>,
+    ) -> HelperGuard {
+        HelperGuard {
+            socket: PathBuf::from(HELPER_SOCKET),
+            switch,
+            start_wait: HELPER_START_WAIT,
+            bridge: Some(Arc::new(HelperBridge {
+                relay,
+                to_host,
+                latest: Mutex::new(None),
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                active: Mutex::new(None),
+                running: AtomicBool::new(false),
+            })),
         }
     }
 
@@ -329,6 +469,9 @@ impl HelperGuard {
     /// not there yet.
     fn send(&self, config: &RootElevationConfig, wait: Duration) -> std::io::Result<()> {
         let packet = encode(Body::RootElevationConfig(config.clone()));
+        if let Some(bridge) = &self.bridge {
+            return self.send_bridged(bridge, config, &packet, wait);
+        }
         let until = Instant::now() + wait;
         loop {
             match send_packet(&self.socket, &packet) {
@@ -338,6 +481,181 @@ impl HelperGuard {
                 }
                 Err(error) => return Err(error),
             }
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn send_bridged(
+        &self,
+        bridge: &Arc<HelperBridge>,
+        config: &RootElevationConfig,
+        packet: &[u8],
+        wait: Duration,
+    ) -> std::io::Result<()> {
+        if !config.enabled {
+            *bridge.latest.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            let active = bridge
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take();
+            if let Some(conn) = active {
+                let res = conn.send(packet);
+                conn.shutdown();
+                return res;
+            }
+            return send_packet(&self.socket, packet);
+        }
+
+        *bridge.latest.lock().unwrap_or_else(|e| e.into_inner()) = Some(config.clone());
+        let existing = bridge
+            .active
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(conn) = existing {
+            if conn.send(packet).is_ok() {
+                return Ok(());
+            }
+            conn.shutdown();
+        }
+
+        let conn = connect_helper(&self.socket, packet, wait)?;
+        *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&conn));
+        if !bridge.running.swap(true, Ordering::AcqRel) {
+            let bridge = Arc::clone(bridge);
+            let socket_path = self.socket.clone();
+            let start_wait = self.start_wait;
+            let _ = std::thread::Builder::new()
+                .name("dsa-su-bridge".into())
+                .spawn(move || run_bridge(bridge, socket_path, start_wait));
+        }
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    fn send_bridged(
+        &self,
+        _bridge: &Arc<HelperBridge>,
+        _config: &RootElevationConfig,
+        packet: &[u8],
+        _wait: Duration,
+    ) -> std::io::Result<()> {
+        send_packet(&self.socket, packet)
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn connect_helper(
+    path: &std::path::Path,
+    packet: &[u8],
+    wait: Duration,
+) -> std::io::Result<Arc<crate::su_packet::Packet>> {
+    let path_str = path.to_str().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "the helper's socket path is not valid UTF-8",
+        )
+    })?;
+    let until = Instant::now() + wait;
+    loop {
+        match crate::su_packet::Packet::connect(path_str).and_then(|conn| {
+            conn.send(packet)?;
+            Ok(Arc::new(conn))
+        }) {
+            Ok(conn) => return Ok(conn),
+            Err(error) if Instant::now() < until && not_listening(&error) => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn run_bridge(bridge: Arc<HelperBridge>, socket_path: PathBuf, start_wait: Duration) {
+    loop {
+        let conn = bridge
+            .active
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some(conn) = conn else {
+            let latest = bridge
+                .latest
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let Some(config) = latest.filter(|c| c.enabled) else {
+                bridge.running.store(false, Ordering::Release);
+                return;
+            };
+            let packet = encode(Body::RootElevationConfig(config));
+            match connect_helper(&socket_path, &packet, start_wait) {
+                Ok(new_conn) => {
+                    *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) =
+                        Some(Arc::clone(&new_conn));
+                    new_conn
+                }
+                Err(_) => {
+                    std::thread::sleep(Duration::from_millis(200));
+                    continue;
+                }
+            }
+        };
+
+        while let Ok(bytes) = conn.recv() {
+            if let Ok(Envelope {
+                body: Some(Body::SuRequest(req)),
+            }) = dsa_protocol::decode(&bytes)
+            {
+                let (id, frame, wait) =
+                    bridge
+                        .relay
+                        .begin(&req.package, req.uid, req.command, req.interactive);
+                if bridge.to_host.send(frame).is_err() {
+                    bridge.relay.expire(id);
+                    let _ = conn.send(&encode(Body::SuDecision(SuDecision {
+                        request_id: req.request_id,
+                        approved: false,
+                        reason: "the host is disconnected".to_string(),
+                    })));
+                    continue;
+                }
+                let relay = Arc::clone(&bridge.relay);
+                let reply_conn = Arc::clone(&conn);
+                let helper_request_id = req.request_id;
+                let _ = std::thread::Builder::new()
+                    .name("dsa-su-wait".into())
+                    .spawn(move || {
+                        let (approved, reason) = match wait.recv_timeout(ANSWER_TIMEOUT) {
+                            Ok(Outcome::Approved) => (true, String::new()),
+                            Ok(Outcome::Refused(why)) => (false, why),
+                            Err(_) => {
+                                relay.expire(id);
+                                (
+                                    false,
+                                    "the root request timed out waiting for the computer's \
+                                     administrator"
+                                        .to_string(),
+                                )
+                            }
+                        };
+                        let _ = reply_conn.send(&encode(Body::SuDecision(SuDecision {
+                            request_id: helper_request_id,
+                            approved,
+                            reason,
+                        })));
+                    });
+            }
+        }
+
+        let mut active = bridge.active.lock().unwrap_or_else(|e| e.into_inner());
+        if active
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, &conn))
+        {
+            *active = None;
         }
     }
 }
@@ -502,6 +820,23 @@ impl ConfigApplier {
         )
     }
 
+    /// The applier for this guest, also bridging the helper's su requests to `to_host` through
+    /// `relay`.
+    pub fn of_system_with_host(
+        relay: Arc<SuRelay>,
+        to_host: Sender<Vec<u8>>,
+        switch: HelperSwitch,
+        say: impl Fn(&str) + Send + Sync + 'static,
+    ) -> ConfigApplier {
+        let guard = HelperGuard::with_host(switch, Arc::clone(&relay), to_host);
+        ConfigApplier::new(
+            relay,
+            Box::new(guard),
+            Box::new(|| std::fs::read_to_string(PACKAGES_LIST).ok()),
+            say,
+        )
+    }
+
     /// Applies `config` and returns the commands written to the guard.
     pub fn apply(&self, config: &RootElevationConfig) -> Vec<String> {
         let uids = if config.apps.iter().any(|app| app.uid == 0) {
@@ -554,7 +889,6 @@ fn encode(body: Body) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dsa_protocol::control::RootApp;
 
     fn config(enabled: bool, apps: Vec<(&str, u32, RootLevel)>) -> RootElevationConfig {
         RootElevationConfig {
@@ -678,6 +1012,41 @@ mod tests {
         // An app that is not installed keeps uid 0, which never sees su.
         assert_eq!(resolved.apps[1].uid, 0);
         assert!(!control_lines(&resolved).contains(&"allow 0".to_string()));
+    }
+
+    #[test]
+    fn fr35_apps_sharing_a_user_id_are_approved_as_one_group() {
+        let uids = uids_from_packages_list(
+            "com.shared.one 10150 0 /data/user/0/com.shared.one default 3003\n\
+             com.shared.two 10150 0 /data/user/0/com.shared.two default 3003\n",
+        );
+        // When one app in the shared user ID group is set to Ask, both share the uid in the
+        // resolved config so both can see su, and the request names both apps together.
+        let allowed = with_uids(
+            &config(true, vec![("com.shared.one", 0, RootLevel::Ask)]),
+            &uids,
+        );
+        assert_eq!(allowed_uids(&allowed), vec![10150]);
+        assert!(control_lines(&allowed).contains(&"allow 10150".to_string()));
+        assert_eq!(
+            package_for_uid(&allowed, 10150).as_deref(),
+            Some("com.shared.one, com.shared.two")
+        );
+
+        // When either app in the shared user ID group is set to Off, neither can see su or ask.
+        let denied = with_uids(
+            &config(
+                true,
+                vec![
+                    ("com.shared.one", 0, RootLevel::Ask),
+                    ("com.shared.two", 0, RootLevel::Off),
+                ],
+            ),
+            &uids,
+        );
+        assert!(allowed_uids(&denied).is_empty());
+        assert!(!control_lines(&denied).contains(&"allow 10150".to_string()));
+        assert_eq!(package_for_uid(&denied, 10150), None);
     }
 
     #[test]

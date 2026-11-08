@@ -3131,6 +3131,7 @@ ROOT_ELEVATION_PROPERTY_CONTEXT = f"{ROOT_ELEVATION_PROPERTY} u:object_r:dsa_roo
 # guard look for su, labelled with a type of its own so the policy lets apps run that file
 # alone (su.cil). The label goes in only with the daemon, whose policy declares the type.
 PLAT_FILE_CONTEXTS = "SYSTEM/etc/selinux/plat_file_contexts"
+SU_CLIENT_BINARY = "SYSTEM/bin/su"
 SU_CLIENT_PATH = "/system/bin/su"
 SU_CLIENT_CONTEXT = f"{SU_CLIENT_PATH} u:object_r:dsa_su_exec:s0"
 # The elevation helper: the daemon's program in a mode of its own, and the sockets init makes
@@ -3761,6 +3762,8 @@ def root_elevation_problems(names, read):
     image is built from, the property that starts the helper, and the init script that hides su
     at boot and runs the helper with its sockets."""
     problems = []
+    if SU_CLIENT_BINARY not in names:
+        problems.append(f"{SU_CLIENT_BINARY} is missing, so apps that may elevate find no su client")
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
         problems += root_elevation_policy_problems(read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
     if "META/file_contexts.bin" in names and b"dsa_su_exec" not in read("META/file_contexts.bin"):
@@ -4010,7 +4013,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None):
+           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None, su_client=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -4032,6 +4035,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
     channeld_payload = Path(channeld).read_bytes() if channeld else None
+    su_payload = Path(su_client).read_bytes() if su_client else None
+    if su_payload is not None and channeld_payload is None:
+        raise ValueError("the su client requires the control channel daemon")
     agent_payload = Path(agent).read_bytes() if agent else None
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
@@ -4208,6 +4214,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
         for info in zin.infolist():
             name = info.filename
+            if name == SU_CLIENT_BINARY and su_payload is not None:
+                continue
             if (removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
                     or name in removed_variants):
                 if name.endswith((".apk", ".apex", ".capex")):
@@ -4293,11 +4301,17 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     for overlay_name in design_payloads:
                         data += overlay_apkcerts(overlay_name).encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
+                    if su_payload is not None:
+                        lines = [line for line in data.decode().splitlines()
+                                 if line.split()[:1] != ["system/bin/su"]]
+                        data = ("\n".join(lines) + "\n").encode()
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
-                                                 + GAPPS_FS_CONFIG).encode()
+                                                 + GAPPS_FS_CONFIG
+                                                 + (["system/bin/su 0 0 755 capabilities=0x0"]
+                                                    if su_payload is not None else [])).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
                 elif name in FSTAB_DIRS.values():
@@ -4367,6 +4381,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
+        if su_payload is not None:
+            zout.writestr(SU_CLIENT_BINARY, su_payload)
         if has_codec2:
             for name, payload in codec2_payloads.items():
                 zout.writestr(name, payload)
@@ -4510,6 +4526,7 @@ ARCHES = {
 DEFAULT_ARCH = "x86_64"
 # The binaries DSA builds for the guest, where the image keeps them.
 DSA_GUEST_BINARIES = [
+    SU_CLIENT_BINARY,
     "VENDOR/bin/dsa-channeld",
     "VENDOR/bin/hw/dsa-hwcomposer",
     "VENDOR/bin/hw/dsa-codec2",
@@ -5386,6 +5403,8 @@ def main():
                         help="a vulkan.ranchu.so built for the selected guest")
     parser.add_argument("--channeld", type=Path,
                         help="the guest's control channel daemon (dsa-channeld) built for the guest")
+    parser.add_argument("--su-client", type=Path,
+                        help="the guest's unprivileged su client built for the guest")
     parser.add_argument("--hwcomposer", type=Path,
                         help="DSA's composer HAL (dsa-hwcomposer) built for the guest; it replaces "
                              "Cuttlefish's, and sends the host each task's frames")
@@ -5493,7 +5512,7 @@ def main():
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
            sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
-           framework=framework_payloads, overlays=design_overlays)
+           framework=framework_payloads, overlays=design_overlays, su_client=args.su_client)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
