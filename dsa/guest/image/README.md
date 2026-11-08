@@ -208,7 +208,15 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   does not have, and init would restart it every five seconds for as long as the guest runs.
 - `sepolicy/memory.cil` lets the audio HAL and the software codecs share memory through
   memfds. Refused, each falls back to an ashmem device the kernel does not have, and audio
-  policy never starts.
+  policy never starts. It also lets the media services' memfds reach apps and each other: an audio
+  track's control block (audioserver's), a media extractor's and the media player service's
+  buffers, and the camera service's queues. An app runs at an MLS level of its own, so those
+  types are `mlstrustedobject`, as `system_server_tmpfs` is in the platform's policy; without
+  that, binder refused every reply that carried one, and no app played a sound while SELinux
+  was enforcing. `check-image.py` checks each of those rules
+  (`make-image.py`'s `MEMFD_SHARING`), and the image workflow's boot check plays sound in an
+  ordinary app with SELinux enforcing (`dsa/guest/media-probe/`, run by
+  `dsa/host/platform/linux/tests/media.rs`).
 - `wifi.rc` no longer sets up its kernel trace instance when boot completes. The VM has no
   Wi-Fi device to trace, and on Hyper-V those tracefs writes hold up lmkd's own tracepoint
   setup past its two second watchdog, which then kills the app the user just opened.

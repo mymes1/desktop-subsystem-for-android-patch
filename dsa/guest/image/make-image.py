@@ -3574,6 +3574,72 @@ ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
 GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 
+# Shared memory is a memfd in the guest (memory.cil), labelled with the tmpfs type of the
+# domain that made it. Each pair is a domain and a type of memfd it must be able to map, read
+# and write, because the type's owner hands it such memfds over binder; a refused one fails
+# the whole binder call that carried it. Android's own policy has these rules only for its
+# memfd_file class, or none, because on a phone the memory comes from /dev/ashmem.
+MEMFD_SHARING = [
+    # An audio track's or a recording's control block, in the app and in the player service.
+    ("appdomain", "audioserver_tmpfs"),
+    ("mediaserver", "audioserver_tmpfs"),
+    ("system_server", "audioserver_tmpfs"),
+    # The shared buffer of a static track (SoundPool, the click sounds).
+    ("audioserver", "appdomain_tmpfs"),
+    ("audioserver", "system_server_tmpfs"),
+    # The buffers of a remote media extractor and of the media player service.
+    ("appdomain", "mediaextractor_tmpfs"),
+    ("appdomain", "mediaserver_tmpfs"),
+    ("mediaserver", "mediaextractor_tmpfs"),
+    # The camera service's metadata queues.
+    ("appdomain", "cameraserver_tmpfs"),
+    # The audio HAL's end of audioserver's and system_server's queues.
+    ("hal_audio_server", "audioserver_tmpfs"),
+    ("hal_audio_server", "system_server_tmpfs"),
+    # The codec services' buffer pool queues, in every codec client.
+    ("hal_codec2_client", "dsa_codec2_tmpfs"),
+    ("hal_codec2_server", "dsa_codec2_tmpfs"),
+]
+# The memfd types that reach apps. An app runs at an MLS level of its own, above the s0 the
+# services run at, and may write a file below its level only when the file's type is
+# mlstrustedobject; no allow rule lifts that constraint.
+MEMFD_TO_APPS = ["audioserver_tmpfs", "mediaextractor_tmpfs", "mediaserver_tmpfs", "cameraserver_tmpfs",
+                 "system_server_tmpfs", "dsa_codec2_tmpfs"]
+MEMFD_PERMS = {"read", "write", "getattr", "map"}
+# The sensors HAL's, when the image has DSA's (sensors.cil): the event queue and the wake lock
+# queue the framework's sensor service makes and hands it in ISensors.initialize, and an app's
+# direct channel.
+MEMFD_SHARING_SENSORS = [
+    ("hal_sensors_server", "system_server_tmpfs"),
+    ("hal_sensors_server", "appdomain_tmpfs"),
+]
+
+
+def memfd_sharing_problems(plat_sepolicy_text, sharing=None, to_apps=None):
+    """Returns what the policy refuses of the memfd sharing DSA's guest needs: a pair of
+    MEMFD_SHARING without read, write, getattr and map on files, or a type of MEMFD_TO_APPS
+    that is not mlstrustedobject."""
+    sharing = MEMFD_SHARING if sharing is None else sharing
+    to_apps = MEMFD_TO_APPS if to_apps is None else to_apps
+    granted = {}
+    for subject, target, perms in re.findall(r"\(allow\s+(\S+)\s+(\S+)\s+\(\s*file\s+\(([^)]*)\)\s*\)\s*\)",
+                                              plat_sepolicy_text):
+        granted.setdefault((subject, target), set()).update(perms.split())
+    trusted = set()
+    for members in re.findall(r"\(typeattributeset\s+mlstrustedobject\s+\(([^()]*)\)\s*\)", plat_sepolicy_text):
+        trusted.update(members.split())
+    problems = []
+    for subject, target in sharing:
+        missing = MEMFD_PERMS - granted.get((subject, target), set())
+        if missing:
+            problems.append(f"the SELinux policy does not let {subject} {' '.join(sorted(missing))} the "
+                            f"memfds labelled {target}, so the binder calls that carry them fail")
+    for target in to_apps:
+        if target not in trusted:
+            problems.append(f"{target} is not mlstrustedobject, so an app, which runs at an MLS level of its "
+                            "own, cannot write the memfds it labels and every binder call that carries one fails")
+    return problems
+
 
 def narrow_vsock_neverallows(text):
     """Narrows neverallow rules on vsock_socket so apps can connect to host graphics."""

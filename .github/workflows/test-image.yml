@@ -27,10 +27,13 @@ on:
       - "dsa/guest/agent/**"
       - "dsa/guest/aidl/**"
       - "dsa/protocol/**"
+      - "dsa/guest/media-probe/**"
       - "dsa/host/platform/linux/tests/widgets.rs"
+      - "dsa/host/platform/linux/tests/media.rs"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
       - "scripts/tests/image-audio-workflow.test.sh"
+      - "scripts/tests/image-media-workflow.test.sh"
   workflow_dispatch:
     inputs:
       keep_disk:
@@ -477,12 +480,36 @@ jobs:
           path: .scratch/agent/DsaAgent.apk
           if-no-files-found: error
 
+  # An ordinary app that plays sound and runs codecs in its own process, which the boot check
+  # below runs on the booted image with SELinux enforcing.
+  media-probe:
+    name: Build the media probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up a JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build the media probe
+        run: bash dsa/guest/media-probe/build.sh .scratch/media-probe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guest-media-probe
+          path: .scratch/media-probe/dsa-media-probe.apk
+          if-no-files-found: error
+
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, audio, sensors, camera, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, audio, sensors, camera, agent, media-probe]
     runs-on: ubuntu-latest
     # Android 17 on x86_64 also boots the image and checks a widget, below.
-    timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 120 || 60 }}
+    timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 140 || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -743,7 +770,7 @@ jobs:
       - name: Build the widget boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets --test system_screens --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
+        run: cargo test -p dsa-host-linux --test widgets --test system_screens --test media --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
 
       # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
       # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
@@ -836,4 +863,52 @@ jobs:
             /tmp/screens-test-*/*.png
             /tmp/screens-test-*/*.xml
             /tmp/screens-test-*/*.log
+          if-no-files-found: ignore
+
+      # The same image booted again with SELinux enforcing, and an ordinary app (the media
+      # probe) installed through adb: in its own process it must play sound through a
+      # streaming and a static track, which share memory with the audio server, and encode a
+      # second of H.264 and AAC and decode each with every decoder the guest lists, and the
+      # guest log must show no denial of a media service's shared memory.
+      - name: Download the media probe
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-media-probe
+          path: .scratch/media-probe
+
+      - name: Play sound and run codecs in an app on the booted image
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        timeout-minutes: 14
+        working-directory: dsa
+        run: |
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          sudo mkdir -p "$XDG_RUNTIME_DIR"
+          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
+          chmod 0700 "$XDG_RUNTIME_DIR"
+          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
+          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
+            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
+          fi
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
+            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
+            for _ in $(seq 50); do
+              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+              sleep 0.2
+            done
+          fi
+          export WAYLAND_DISPLAY=wayland-dsa
+          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
+          export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
+          cargo test -p dsa-host-linux --test media -- --nocapture --test-threads 1
+
+      - name: Keep the media check's logs
+        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-check-logs
+          path: |
+            /tmp/media-test-*/*.log
+            /tmp/media-test-*/*.txt
           if-no-files-found: ignore

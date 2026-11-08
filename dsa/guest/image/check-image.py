@@ -250,6 +250,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if not re.search(r"\(allow\s+vendor_init\s+gpu_device\s+\(\s*chr_file\s*\([^)]*getattr", plat_sepolicy):
             problems.append("the SELinux policy does not let vendor_init check the gpu_device DRM cards, so "
                             "init's wait for /dev/dri/card0 times out and holds up boot")
+        # Shared memory is a memfd, labelled with its maker's tmpfs type. Every memfd the media
+        # services hand an app or each other must be usable on the other side, or the binder
+        # call that carries it fails: with SELinux enforcing, no app played a sound.
+        problems += make_image.memfd_sharing_problems(plat_sepolicy)
+        # The sensors HAL gets its event queue as a memfd of system_server's; refused, it has
+        # nowhere to write events and no app sees a sensor.
+        if "VENDOR/bin/hw/dsa-sensors" in names:
+            problems += make_image.memfd_sharing_problems(
+                plat_sepolicy, sharing=make_image.MEMFD_SHARING_SENSORS, to_apps=[])
 
     # One declaration of each HAL instance across the vendor manifest, its fragments and the
     # active vendor APEXes, and one for every instance a DSA service registers.
