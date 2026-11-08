@@ -80,6 +80,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: installer-${{ matrix.version }}-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Check that this is the machine the package is for
         run: |
           $native = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
@@ -1842,6 +1851,15 @@ jobs:
       - name: Add the ARM64 Rust target
         run: rustup target add aarch64-pc-windows-msvc
 
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: arm64-on-x64
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Install WiX 5
         run: |
           dotnet tool install --global wix --version 5.0.2
@@ -1945,6 +1963,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: real-installer-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Install WiX 5
         run: |

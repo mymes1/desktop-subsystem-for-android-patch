@@ -1,0 +1,136 @@
+# Builds the guest kernel (dsa/kernel/build.sh) once per input. The kernel a build makes is
+# kept as an Actions cache keyed on everything that decides it: dsa/kernel/ but its
+# documents (the pinned WSL kernel tag, the configuration fragments, the patches, the build
+# script), the merged
+# configuration (which names the compiler and its version), and the versions of the
+# compiler, the linker and the other build tools. A later run with the same key takes the
+# kernel from the cache instead of building it for another 15 to 25 minutes.
+#
+# Either way the WSL kernel source is checked out at the pinned tag with the patches applied
+# and configured (build.sh --config-only), so dsa/kernel/source-bundle.sh can bundle the
+# source of exactly the kernel that comes out. The kernel and its configuration land in
+# <out>, named as build.sh names them (bzImage-<release> or Image-<release>, and
+# config-<release>).
+name: Build the guest kernel
+description: Builds the guest kernel, or takes the kernel built from the same inputs from the cache
+inputs:
+  arch:
+    description: x86_64 or arm64
+    required: true
+  out:
+    description: The folder the kernel and its configuration land in
+    required: true
+  check-config:
+    description: "true to run dsa/kernel/test_android_config.py on the fragments and on the merged configuration"
+    required: false
+    default: "false"
+  save:
+    description: "true to keep a newly built kernel in the cache and delete the one it replaces (needs actions: write)"
+    required: false
+    default: "false"
+  token:
+    description: The token that deletes the replaced cache entry
+    required: false
+    default: ""
+outputs:
+  cache-hit:
+    description: "true when the kernel came from the cache"
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Install the kernel build dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential flex bison bc dwarves libssl-dev libelf-dev cpio file
+
+    - name: Test the kernel configuration fragments
+      if: inputs.check-config == 'true'
+      shell: bash
+      run: python3 dsa/kernel/test_android_config.py
+
+    # Fetches the source at the pinned tag, applies the patches, and merges and checks the
+    # fragments: about a minute, and what the source bundle and the cache key read.
+    - name: Configure and check the fragments
+      shell: bash
+      env:
+        DSA_KERNEL_ARCH: ${{ inputs.arch }}
+        DSA_KERNEL_OUT: ${{ inputs.out }}
+      run: dsa/kernel/build.sh --config-only
+
+    - name: Test the merged configuration
+      if: inputs.check-config == 'true'
+      shell: bash
+      run: |
+        DSA_KERNEL_MERGED_CONFIG="$(ls "${{ inputs.out }}"/config-*)" \
+          python3 dsa/kernel/test_android_config.py
+
+    - name: Name the kernel's inputs
+      id: key
+      shell: bash
+      run: |
+        config="$(ls "${{ inputs.out }}"/config-*)"
+        tools="$(
+          {
+            uname -m
+            gcc --version | head -1
+            ld --version | head -1
+            pahole --version
+            flex --version
+            bison --version | head -1
+            openssl version
+            sha256sum "$config" | cut -d' ' -f1
+          } | sha256sum | cut -c1-16
+        )"
+        key="guest-kernel-${{ inputs.arch }}-${{ hashFiles('dsa/kernel/**', '!dsa/kernel/**/*.md') }}-$tools"
+        echo "the kernel's key: $key"
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+        echo "prefix=guest-kernel-${{ inputs.arch }}-" >> "$GITHUB_OUTPUT"
+        # One folder for every workflow: a cache entry is found only under the path it was
+        # saved from.
+        echo "dir=$GITHUB_WORKSPACE/.scratch/kernel-cache/${{ inputs.arch }}" >> "$GITHUB_OUTPUT"
+
+    - name: Take the kernel built from the same inputs
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.key.outputs.dir }}
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Use the kernel from the cache
+      if: steps.restore.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        ls -l "${{ steps.key.outputs.dir }}"
+        cp "${{ steps.key.outputs.dir }}"/*Image-* "${{ inputs.out }}/"
+        # The configuration build.sh just merged is the one the kernel was built with.
+        cmp "${{ steps.key.outputs.dir }}"/config-* "${{ inputs.out }}"/config-*
+
+    - name: Build
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        DSA_KERNEL_ARCH: ${{ inputs.arch }}
+        DSA_KERNEL_OUT: ${{ inputs.out }}
+      run: |
+        dsa/kernel/build.sh
+        dir="${{ steps.key.outputs.dir }}"
+        rm -rf "$dir"
+        mkdir -p "$dir"
+        cp "${{ inputs.out }}"/*Image-* "${{ inputs.out }}"/config-* "$dir/"
+
+    - name: Keep the kernel for the next run with the same inputs
+      if: steps.restore.outputs.cache-hit != 'true' && inputs.save == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.key.outputs.dir }}
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Delete the kernel it replaces from the cache
+      if: steps.restore.outputs.cache-hit != 'true' && inputs.save == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: .github/scripts/cache/prune.sh superseded "${{ steps.key.outputs.prefix }}" "${{ steps.key.outputs.key }}"

@@ -68,37 +68,97 @@ permissions:
   contents: read
   actions: read
 
+env:
+  # File and line tables only in the debug builds of the Rust code: backtraces still name
+  # the line, and the cached target folders stay a fraction of their full size.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
-  guest-graphics:
-    name: Build the guest Hyper-V graphics transport (${{ matrix.arch }})
+  # The guest's own programs for one architecture, built one after another on one runner:
+  # the graphics transport, the control daemon, the hwcomposer and the HALs. One job instead
+  # of one per program holds two runners instead of eighteen, and sets up the NDK, the
+  # fetched sources and the compiler cache once. Each program has its own steps and its own
+  # artifact, so a failed step names the program. A failure does not stop the programs after
+  # it, so one failure does not hide another, and the job still fails.
+  guest-programs:
+    name: Build the guest programs (${{ matrix.arch }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         arch: [x86_64, arm64]
+    permissions:
+      contents: read
+      # Deletes the compiler cache a new one replaces.
+      actions: write
     env:
       DSA_GUEST_ARCH: ${{ matrix.arch }}
       # What readelf calls the guest's machine.
       GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
+      # CMake (and the graphics build's Meson) compile through ccache, whose cache is kept
+      # between develop runs.
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.scratch/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
+      # The NDK is installed again on each run, so its compilers are told apart by what
+      # they say they are, not by their file times.
+      CCACHE_COMPILERCHECK: "%compiler% --version"
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Install ccache
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache
+          ccache --version | head -1
+
+      # The pinned upstream revisions, the patches and the build scripts decide what the
+      # compiler cache holds, so they name it.
+      - name: Name the compiler cache
+        run: echo "COMPILER_CACHE_KEY=ccache-guest-programs-${{ matrix.arch }}-${{ hashFiles('dsa/graphics/fetch.sh', 'dsa/graphics/build.sh', 'dsa/graphics/patches/**', 'dsa/guest/*/fetch.sh', 'dsa/guest/*/build.sh') }}" >> "$GITHUB_ENV"
+
+      - name: Restore the compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .scratch/ccache
+          key: ${{ env.COMPILER_CACHE_KEY }}
+          restore-keys: ccache-guest-programs-${{ matrix.arch }}-
+
+      # dsa-channeld is Rust: its dependencies come from the last develop run's target folder.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: guest-programs-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
+      # The graphics transport and most HALs build with r26b; the codec and camera HALs with
+      # r27c, which is set up after them.
       - name: Set up Android NDK
+        id: ndk26
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26b
 
       - name: Fetch gfxstream and guest build dependencies
+        id: graphics-fetch
         run: bash dsa/graphics/fetch.sh .scratch/gfxstream
 
-      - name: Build the guest transport
+      - name: Build the guest Hyper-V graphics transport
+        id: graphics
+        if: ${{ !cancelled() && steps.graphics-fetch.outcome == 'success' }}
         run: bash dsa/graphics/build.sh .scratch .scratch/build
 
       - name: Verify ELF architecture and exported Hyper-V symbols
+        id: graphics-verify
+        if: ${{ !cancelled() && steps.graphics.outcome == 'success' }}
         run: |
           target=".scratch/build/libOpenglSystemCommon.so"
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -112,6 +172,7 @@ jobs:
           grep -aFq 'hvsocket' "$target_vk"
 
       - name: Keep the patched guest library
+        if: ${{ !cancelled() && steps.graphics-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-gfxstream-hvsocket${{ matrix.arch == 'arm64' && '-arm64' || '' }}
@@ -120,67 +181,32 @@ jobs:
             .scratch/build/vulkan.ranchu.so
           if-no-files-found: error
 
-  channeld:
-    name: Build the guest control daemon (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       - name: Build dsa-channeld for the guest
+        id: channeld
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/channeld/build-android.sh .scratch/channeld
 
       - name: Keep the daemon
+        if: ${{ !cancelled() && steps.channeld.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-channeld${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/channeld/dsa-channeld
           if-no-files-found: error
 
-  hwcomposer:
-    name: Build the guest hwcomposer (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       # aidl comes from the runner's Android SDK build-tools.
       - name: Build dsa-hwcomposer for the guest
+        id: hwcomposer
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/hwcomposer/build.sh .scratch .scratch/build-hwcomposer
 
-      - name: Verify the binary links only the platform's C libraries
+      - name: Verify the hwcomposer links only the platform's C libraries
+        id: hwcomposer-verify
+        if: ${{ !cancelled() && steps.hwcomposer.outcome == 'success' }}
         run: |
           target=".scratch/build-hwcomposer/dsa-hwcomposer"
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -189,126 +215,24 @@ jobs:
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
 
       - name: Keep the hwcomposer
+        if: ${{ !cancelled() && steps.hwcomposer-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-hwcomposer${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-hwcomposer/dsa-hwcomposer
           if-no-files-found: error
 
-  codec2:
-    name: Build the guest codec HAL (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-
-      # aidl comes from the runner's Android SDK build-tools.
-      - name: Build dsa-codec2 for the guest
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bash dsa/guest/codec2/build.sh .scratch .scratch/build-codec2
-
-      - name: Verify the binary links only the platform's C libraries
-        run: |
-          target=".scratch/build-codec2/dsa-codec2"
-          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
-          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
-          echo "needs: $needed"
-          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
-            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
-
-      - name: Keep the codec HAL
-        uses: actions/upload-artifact@v4
-        with:
-          name: guest-codec2${{ matrix.arch == 'arm64' && '-arm64' || '' }}
-          path: .scratch/build-codec2/dsa-codec2
-          if-no-files-found: error
-
-  camera:
-    name: Build the guest camera HAL (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-
-      # aidl comes from the runner's Android SDK build-tools.
-      - name: Build dsa-camera for the guest
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: bash dsa/guest/camera/build.sh .scratch .scratch/build-camera
-
-      - name: Verify the binary links only the platform's C libraries
-        run: |
-          target=".scratch/build-camera/dsa-camera"
-          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
-          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
-          echo "needs: $needed"
-          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
-            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
-
-      - name: Keep the camera HAL
-        uses: actions/upload-artifact@v4
-        with:
-          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
-          path: .scratch/build-camera/dsa-camera
-          if-no-files-found: error
-
-  power-hal:
-    name: Build the guest power and health HALs (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       # aidl comes from the runner's Android SDK build-tools.
       - name: Build dsa-power and dsa-health for the guest
+        id: power
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/power/build.sh .scratch .scratch/build-power
 
-      - name: Verify the binaries link only the platform's C libraries
+      - name: Verify the power and health HALs link only the platform's C libraries
+        id: power-verify
+        if: ${{ !cancelled() && steps.power.outcome == 'success' }}
         run: |
           for target in .scratch/build-power/dsa-power .scratch/build-power/dsa-health; do
             readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -318,6 +242,7 @@ jobs:
           done
 
       - name: Keep the power and health HALs
+        if: ${{ !cancelled() && steps.power-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-power-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
@@ -326,33 +251,17 @@ jobs:
             .scratch/build-power/dsa-health
           if-no-files-found: error
 
-  audio:
-    name: Build the guest audio module (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       # aidl comes from the runner's Android SDK build-tools.
       - name: Build dsa-audio for the guest
+        id: audio
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/audio/build.sh .scratch .scratch/build-audio
 
-      - name: Verify the binary links only the platform's C libraries
+      - name: Verify the audio module links only the platform's C libraries
+        id: audio-verify
+        if: ${{ !cancelled() && steps.audio.outcome == 'success' }}
         run: |
           target=".scratch/build-audio/dsa-audio"
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -361,40 +270,24 @@ jobs:
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
 
       - name: Keep the audio module
+        if: ${{ !cancelled() && steps.audio-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
-  gnss-hal:
-    name: Build the guest GNSS HAL (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       # aidl comes from the runner's Android SDK build-tools.
       - name: Build dsa-gnss for the guest
+        id: gnss
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/gnss/build.sh .scratch .scratch/build-gnss
 
-      - name: Verify the binary links only the platform's C libraries
+      - name: Verify the GNSS HAL links only the platform's C libraries
+        id: gnss-verify
+        if: ${{ !cancelled() && steps.gnss.outcome == 'success' }}
         run: |
           target=.scratch/build-gnss/dsa-gnss
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -403,40 +296,24 @@ jobs:
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so"
 
       - name: Keep the GNSS HAL
+        if: ${{ !cancelled() && steps.gnss-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-gnss/dsa-gnss
           if-no-files-found: error
 
-  sensors:
-    name: Build the guest sensors HAL (${{ matrix.arch }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
-    env:
-      DSA_GUEST_ARCH: ${{ matrix.arch }}
-      # What readelf calls the guest's machine.
-      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Android NDK
-        id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-
       # aidl comes from the runner's Android SDK build-tools.
       - name: Build dsa-sensors for the guest
+        id: sensors
+        if: ${{ !cancelled() }}
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk26.outputs.ndk-path }}
         run: bash dsa/guest/sensors/build.sh .scratch .scratch/build-sensors
 
-      - name: Verify the binary links only the platform's C libraries
+      - name: Verify the sensors HAL links only the platform's C libraries
+        id: sensors-verify
+        if: ${{ !cancelled() && steps.sensors.outcome == 'success' }}
         run: |
           target=".scratch/build-sensors/dsa-sensors"
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
@@ -445,16 +322,98 @@ jobs:
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
 
       - name: Keep the sensors HAL
+        if: ${{ !cancelled() && steps.sensors-verify.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-sensors/dsa-sensors
           if-no-files-found: error
 
+      - name: Set up Android NDK r27c
+        id: ndk27
+        if: ${{ !cancelled() }}
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-codec2 for the guest
+        id: codec2
+        if: ${{ !cancelled() }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk27.outputs.ndk-path }}
+        run: bash dsa/guest/codec2/build.sh .scratch .scratch/build-codec2
+
+      - name: Verify the codec HAL links only the platform's C libraries
+        id: codec2-verify
+        if: ${{ !cancelled() && steps.codec2.outcome == 'success' }}
+        run: |
+          target=".scratch/build-codec2/dsa-codec2"
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
+
+      - name: Keep the codec HAL
+        if: ${{ !cancelled() && steps.codec2-verify.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-codec2${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-codec2/dsa-codec2
+          if-no-files-found: error
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-camera for the guest
+        id: camera
+        if: ${{ !cancelled() }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk27.outputs.ndk-path }}
+        run: bash dsa/guest/camera/build.sh .scratch .scratch/build-camera
+
+      - name: Verify the camera HAL links only the platform's C libraries
+        id: camera-verify
+        if: ${{ !cancelled() && steps.camera.outcome == 'success' }}
+        run: |
+          target=".scratch/build-camera/dsa-camera"
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
+
+      - name: Keep the camera HAL
+        if: ${{ !cancelled() && steps.camera-verify.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-camera/dsa-camera
+          if-no-files-found: error
+
+      - name: Show what the compiler cache did
+        if: ${{ !cancelled() }}
+        run: ccache --show-stats
+
+      - name: Keep the compiler cache
+        if: ${{ !cancelled() && github.ref == 'refs/heads/develop' && steps.ccache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .scratch/ccache
+          key: ${{ env.COMPILER_CACHE_KEY }}
+
+      - name: Delete the compiler cache it replaces
+        if: ${{ !cancelled() && github.ref == 'refs/heads/develop' && steps.ccache.outputs.cache-hit != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cache/prune.sh superseded "ccache-guest-programs-${{ matrix.arch }}-" "$COMPILER_CACHE_KEY"
+
+  # The agent, and an ordinary app that plays sound and runs codecs in its own process, which
+  # the boot check below runs on the booted image with SELinux enforcing. Both are Java
+  # builds on the same JDK, so they share one runner.
   agent:
-    name: Build the guest agent
+    name: Build the guest agent and the media probe
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -465,40 +424,31 @@ jobs:
           java-version: "17"
 
       - name: Build the agent
+        id: agent
         working-directory: dsa/guest/agent
         run: ./gradlew --no-daemon assembleRelease
 
       # Unsigned: make-image.py signs it with the platform key.
       - name: Keep the agent
+        if: ${{ !cancelled() && steps.agent.outcome == 'success' }}
         run: |
           mkdir -p .scratch/agent
           cp dsa/guest/agent/build/outputs/apk/release/dsa-agent-release-unsigned.apk .scratch/agent/DsaAgent.apk
 
-      - uses: actions/upload-artifact@v4
+      - if: ${{ !cancelled() && steps.agent.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
         with:
           name: guest-agent
           path: .scratch/agent/DsaAgent.apk
           if-no-files-found: error
 
-  # An ordinary app that plays sound and runs codecs in its own process, which the boot check
-  # below runs on the booted image with SELinux enforcing.
-  media-probe:
-    name: Build the media probe
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up a JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
       - name: Build the media probe
+        id: media-probe
+        if: ${{ !cancelled() }}
         run: bash dsa/guest/media-probe/build.sh .scratch/media-probe
 
-      - uses: actions/upload-artifact@v4
+      - if: ${{ !cancelled() && steps.media-probe.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
         with:
           name: guest-media-probe
           path: .scratch/media-probe/dsa-media-probe.apk
@@ -506,7 +456,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, audio, sensors, camera, agent, media-probe]
+    needs: [guest-programs, agent]
     runs-on: ubuntu-latest
     # Android 17 on x86_64 also boots the image and checks a widget, below.
     timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 140 || 60 }}
@@ -766,6 +716,14 @@ jobs:
           image="$(ls -d "$PWD"/dsa/target/image/*/ | head -1)"
           ls -l "$image"
           echo "DSA_WIDGET_TEST_IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Keep the Rust build between runs
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: image-boot-check
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Build the widget boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'

@@ -96,9 +96,13 @@ $HasClangCl = [bool](Get-Command clang-cl.exe -ErrorAction SilentlyContinue)
 
 # Optimised as before, plus a PDB beside the DLL: a crash in the renderer, or in a GPU driver
 # it calls, can then be read with the debugger. The PDB is kept apart; nothing ships it.
+# Under a compiler cache (ccache in CI, through CMAKE_CXX_COMPILER_LAUNCHER) each object
+# carries its own debug information (/Z7), as a shared compile-time PDB cannot be cached; the
+# linker still writes the same PDB from them.
+$DebugInformationFormat = if ($env:CMAKE_CXX_COMPILER_LAUNCHER) { "Embedded" } else { "ProgramDatabase" }
 $ConfigureArgs += @(
     "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW",
-    "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase",
+    "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$DebugInformationFormat",
     "-DCMAKE_SHARED_LINKER_FLAGS_RELEASE=/DEBUG /OPT:REF /OPT:ICF"
 )
 
