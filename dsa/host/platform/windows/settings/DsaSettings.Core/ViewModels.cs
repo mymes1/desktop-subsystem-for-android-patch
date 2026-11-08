@@ -342,6 +342,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         try
         {
             _settings = await change().ConfigureAwait(true);
+            NoteRootElevation(_settings);
         }
         catch (Exception e)
         {

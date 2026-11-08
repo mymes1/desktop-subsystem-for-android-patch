@@ -37,6 +37,11 @@
                 </ui:CardAction>
 
                 <TextBlock Text="{l:Text AppsInstalledHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <!-- Each app's root level is chosen below once root access is on for this PC. -->
+                <ui:InfoBar Title="{l:Text AppsRootOffBar.Title}" Message="{l:Text AppsRootOffBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding RootUnavailable, Mode=OneWay}" Margin="0,0,0,8" />
+                <TextBlock Text="{l:Text AppsRootNote.Text}" Style="{StaticResource Note}" Margin="0,0,0,8" />
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MaxWidth="360" />
@@ -135,6 +140,18 @@
                                                          ToolTipService.ShowOnDisabled="True"
                                                          ToolTip="{Binding RunAsArmTip, TargetNullValue={x:Null}}"
                                                          AutomationProperties.HelpText="{Binding Label}" />
+                                        <!-- How far the app may use root: not at all, asking an
+                                             administrator each time, or without asking. -->
+                                        <ComboBox Tag="{Binding Package}" MinWidth="200" Margin="16,4,0,0" VerticalAlignment="Center"
+                                                  ItemsSource="{Binding DataContext.RootChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedIndex="{Binding RootIndex, Mode=OneWay}"
+                                                  IsEnabled="{Binding CanChangeRoot}"
+                                                  SelectionChanged="OnRoot"
+                                                  ToolTipService.ShowOnDisabled="True"
+                                                  ToolTip="{Binding RootTip, TargetNullValue={x:Null}}"
+                                                  AutomationProperties.Name="{l:Text AppsRoot.Name}"
+                                                  AutomationProperties.HelpText="{Binding Label}" />
                                     </WrapPanel>
                                     <!-- Why the app cannot run as ARM, where the switch is. -->
                                     <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RunAsArmTip}"
