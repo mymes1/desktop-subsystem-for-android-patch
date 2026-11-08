@@ -23,7 +23,9 @@
 //! - [`network`]: NAT through passt, or the host's LAN through a macvtap;
 //! - [`image`]: what a VM boots from an image folder, and each user's disk;
 //! - [`service`]: the system service behind `/run/dsa/host.sock`, one session per user
-//!   (`dsa-linux-hostd`).
+//!   (`dsa-linux-hostd`);
+//! - [`root_approval`]: the administrator prompt an Android app's root request waits for,
+//!   through polkit in the user's desktop session.
 //!
 //! The rules are plain functions and types, tested on every host. The parts that talk to
 //! the window system, the buses, the devices and the VM build on Linux only, so the workspace
@@ -56,6 +58,7 @@ pub mod performance;
 pub mod pstore;
 #[cfg(target_os = "linux")]
 pub mod renderer;
+pub mod root_approval;
 #[cfg(target_os = "linux")]
 pub mod service;
 pub mod shell;

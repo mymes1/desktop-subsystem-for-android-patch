@@ -12,6 +12,7 @@
 <policyconfig>
   <vendor>Desktop Subsystem for Android</vendor>
   <vendor_url>https://github.com/thisisthepy/desktop-subsystem-for-android</vendor_url>
+  <icon_name>io.github.thisisthepy.DSA</icon_name>
 
   <action id="io.github.thisisthepy.DSA.root-elevation">
     <description>Run an Android app's command as root</description>
