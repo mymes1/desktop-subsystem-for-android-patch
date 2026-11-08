@@ -8,21 +8,23 @@
 //! waiting until it enters the running state.
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    ERROR_CALL_NOT_IMPLEMENTED, ERROR_SERVICE_ALREADY_RUNNING, NO_ERROR,
+    ERROR_CALL_NOT_IMPLEMENTED, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_CANNOT_ACCEPT_CTRL,
+    ERROR_SERVICE_DISABLED, ERROR_SERVICE_NOT_ACTIVE, NO_ERROR,
 };
 use windows_sys::Win32::System::Services::{
-    CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
-    RegisterServiceCtrlHandlerExW, SetServiceStatus, StartServiceCtrlDispatcherW, StartServiceW,
-    SC_HANDLE, SC_MANAGER_CONNECT, SERVICE_ACCEPT_SHUTDOWN, SERVICE_ACCEPT_STOP,
-    SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP,
-    SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_START_PENDING, SERVICE_STATUS,
-    SERVICE_STATUS_HANDLE, SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW,
-    SERVICE_WIN32_OWN_PROCESS,
+    ChangeServiceConfigW, CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW,
+    QueryServiceStatus, RegisterServiceCtrlHandlerExW, SetServiceStatus,
+    StartServiceCtrlDispatcherW, StartServiceW, SC_HANDLE, SC_MANAGER_CONNECT,
+    SERVICE_ACCEPT_SHUTDOWN, SERVICE_ACCEPT_STOP, SERVICE_AUTO_START, SERVICE_CHANGE_CONFIG,
+    SERVICE_CONTROL_INTERROGATE, SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_DISABLED,
+    SERVICE_NO_CHANGE, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_START_PENDING,
+    SERVICE_STATUS, SERVICE_STATUS_HANDLE, SERVICE_STOP, SERVICE_STOPPED, SERVICE_STOP_PENDING,
+    SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
 };
 
 /// The service's work: runs until the flag is set.
@@ -32,11 +34,31 @@ pub type ServiceBody = Box<dyn FnOnce(Arc<AtomicBool>) -> Result<(), String> + S
 /// it as the service's own failure.
 const ERROR_SERVICE_SPECIFIC_ERROR: u32 = 1066;
 
+/// How often a stopping service tells the SCM it is still stopping.
+const STOP_PENDING_EVERY: Duration = Duration::from_secs(5);
+
+/// The exit code a service reports as it stops. A stop someone asked for (setup stopping the
+/// service to replace it, the Services console, shutdown) ends with success even when
+/// stopping found something wrong, which the log keeps: an error code would read as the
+/// service failing, and a service configured to restart on failure would come back while
+/// setup is replacing its files. Only a service that ended on its own with an error says so.
+pub fn stopped_exit_code(stop_requested: bool, failed: bool) -> u32 {
+    u32::from(failed && !stop_requested)
+}
+
 struct State {
     body: Mutex<Option<ServiceBody>>,
     stop: Arc<AtomicBool>,
     handle: Mutex<SERVICE_STATUS_HANDLE>,
     result: Mutex<Option<Result<(), String>>>,
+    /// Set by a stop or shutdown request from the SCM.
+    stop_requested: AtomicBool,
+    /// Set once the service has reported itself stopped.
+    stopped: AtomicBool,
+    /// The checkpoint of the next stop-pending report.
+    checkpoint: AtomicU32,
+    /// Held around a report that must not pass the stopped one.
+    reporting: Mutex<()>,
 }
 
 // SAFETY: the status handle is an opaque value the SCM lets any thread use.
@@ -50,6 +72,10 @@ fn wide(text: &str) -> Vec<u16> {
 }
 
 fn report(state: u32, exit_code: u32, wait_hint_ms: u32) {
+    report_with_checkpoint(state, exit_code, wait_hint_ms, 0);
+}
+
+fn report_with_checkpoint(state: u32, exit_code: u32, wait_hint_ms: u32, checkpoint: u32) {
     let Some(shared) = STATE.get() else { return };
     let handle = *shared.handle.lock().unwrap_or_else(|e| e.into_inner());
     if handle.is_null() {
@@ -71,11 +97,42 @@ fn report(state: u32, exit_code: u32, wait_hint_ms: u32) {
         dwControlsAccepted: accepted,
         dwWin32ExitCode: win32,
         dwServiceSpecificExitCode: specific,
-        dwCheckPoint: 0,
+        dwCheckPoint: checkpoint,
         dwWaitHint: wait_hint_ms,
     };
     // SAFETY: a handle from RegisterServiceCtrlHandlerExW and a valid status.
     unsafe { SetServiceStatus(handle, &status) };
+}
+
+/// Tells the SCM the service is still stopping, with a new checkpoint each time, until it
+/// has stopped: stopping every VM can take longer than one wait hint, and a service that
+/// stays silent past it looks hung to the SCM and to setup waiting for it.
+fn keep_reporting_stop_pending() {
+    let spawned = std::thread::Builder::new()
+        .name("dsa-stop-pending".into())
+        .spawn(|| {
+            let Some(shared) = STATE.get() else { return };
+            loop {
+                {
+                    // Never after the stopped report: the SCM takes the last word it hears.
+                    let _order = shared.reporting.lock().unwrap_or_else(|e| e.into_inner());
+                    if shared.stopped.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    let checkpoint = shared.checkpoint.fetch_add(1, Ordering::Relaxed) + 1;
+                    report_with_checkpoint(
+                        SERVICE_STOP_PENDING,
+                        0,
+                        (STOP_PENDING_EVERY * 4).as_millis() as u32,
+                        checkpoint,
+                    );
+                }
+                std::thread::sleep(STOP_PENDING_EVERY);
+            }
+        });
+    if let Err(why) = spawned {
+        eprintln!("the service cannot report that it is stopping: {why}");
+    }
 }
 
 unsafe extern "system" fn control_handler(
@@ -86,11 +143,15 @@ unsafe extern "system" fn control_handler(
 ) -> u32 {
     match control {
         SERVICE_CONTROL_STOP | SERVICE_CONTROL_SHUTDOWN => {
-            if let Some(shared) = STATE.get() {
+            let first = STATE.get().is_some_and(|shared| {
                 shared.stop.store(true, Ordering::Relaxed);
-            }
+                !shared.stop_requested.swap(true, Ordering::Relaxed)
+            });
             // Stopping every VM may take a while; say so, so the SCM waits.
             report(SERVICE_STOP_PENDING, 0, 60_000);
+            if first {
+                keep_reporting_stop_pending();
+            }
             NO_ERROR
         }
         SERVICE_CONTROL_INTERROGATE => NO_ERROR,
@@ -138,7 +199,19 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut windows_sys::core
     if let Err(why) = &result {
         eprintln!("the service stopped with an error: {why}");
     }
-    report(SERVICE_STOPPED, u32::from(result.is_err()), 0);
+    // A service that stopped itself (to restart into new files) set the flag, not the SCM;
+    // it ends with success all the same, so the flag counts as a stop that was asked for.
+    let asked =
+        shared.stop_requested.load(Ordering::Relaxed) || shared.stop.load(Ordering::Relaxed);
+    {
+        let _order = shared.reporting.lock().unwrap_or_else(|e| e.into_inner());
+        shared.stopped.store(true, Ordering::Relaxed);
+        report(
+            SERVICE_STOPPED,
+            stopped_exit_code(asked, result.is_err()),
+            0,
+        );
+    }
     *shared.result.lock().unwrap_or_else(|e| e.into_inner()) = Some(result);
 }
 
@@ -151,6 +224,10 @@ pub fn run_as_service(body: ServiceBody) -> Result<(), String> {
         stop: Arc::new(AtomicBool::new(false)),
         handle: Mutex::new(std::ptr::null_mut()),
         result: Mutex::new(None),
+        stop_requested: AtomicBool::new(false),
+        stopped: AtomicBool::new(false),
+        checkpoint: AtomicU32::new(0),
+        reporting: Mutex::new(()),
     };
     if STATE.set(state).is_err() {
         return Err("run_as_service was called twice".into());
@@ -255,6 +332,13 @@ impl WindowsServiceStarter {
             // SAFETY: valid service handle, no arguments passed to start.
             if unsafe { StartServiceW(service.0, 0, std::ptr::null()) } == 0 {
                 let err = std::io::Error::last_os_error();
+                if err.raw_os_error() == Some(ERROR_SERVICE_DISABLED as i32) {
+                    return Err(format!(
+                        "the service {:?} is held while setup replaces DSA's files; it starts \
+                         again when setup is done",
+                        self.name
+                    ));
+                }
                 if err.raw_os_error() != Some(ERROR_SERVICE_ALREADY_RUNNING as i32) {
                     return Err(format!("starting service {:?} failed: {err}", self.name));
                 }
@@ -285,5 +369,157 @@ impl WindowsServiceStarter {
             "timed out waiting for service {:?} to start",
             self.name
         ))
+    }
+}
+
+/// Opens the service `name` with `access`.
+fn open_service(name: &str, access: u32) -> Result<OwnedScHandle, String> {
+    // SAFETY: null machine and database names connect to the local active SCM database.
+    let scm = unsafe { OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT) };
+    if scm.is_null() {
+        return Err(format!(
+            "opening the Service Control Manager failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let scm = OwnedScHandle(scm);
+    let name_w = wide(name);
+    // SAFETY: a valid SCM handle and a NUL-terminated service name.
+    let service = unsafe { OpenServiceW(scm.0, name_w.as_ptr(), access) };
+    if service.is_null() {
+        return Err(format!(
+            "opening service {name:?} failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(OwnedScHandle(service))
+}
+
+fn empty_status() -> SERVICE_STATUS {
+    SERVICE_STATUS {
+        dwServiceType: 0,
+        dwCurrentState: 0,
+        dwControlsAccepted: 0,
+        dwWin32ExitCode: 0,
+        dwServiceSpecificExitCode: 0,
+        dwCheckPoint: 0,
+        dwWaitHint: 0,
+    }
+}
+
+fn query_state(service: &OwnedScHandle, name: &str) -> Result<u32, String> {
+    let mut status = empty_status();
+    // SAFETY: a valid service handle and status pointer.
+    if unsafe { QueryServiceStatus(service.0, &mut status) } == 0 {
+        return Err(format!(
+            "querying service {name:?} status failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(status.dwCurrentState)
+}
+
+/// Whether the service starts with Windows or cannot be started at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartType {
+    Automatic,
+    Disabled,
+}
+
+/// Sets how the service `name` starts. Setup holds the service with
+/// [`StartType::Disabled`] from just before it stops it until its new files are in place:
+/// the `dsa` command (which the settings app runs every few seconds) starts a stopped
+/// service on its own, and would otherwise bring the old one back while setup replaces it.
+pub fn set_start_type(name: &str, start: StartType) -> Result<(), String> {
+    let service = open_service(name, SERVICE_CHANGE_CONFIG)?;
+    let start = match start {
+        StartType::Automatic => SERVICE_AUTO_START,
+        StartType::Disabled => SERVICE_DISABLED,
+    };
+    // SAFETY: a valid service handle; every other setting stays as it is.
+    let changed = unsafe {
+        ChangeServiceConfigW(
+            service.0,
+            SERVICE_NO_CHANGE,
+            start,
+            SERVICE_NO_CHANGE,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    if changed == 0 {
+        return Err(format!(
+            "changing how service {name:?} starts failed: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+/// Whether the service `name` is running (or starting, or stopping) now.
+pub fn is_running(name: &str) -> Result<bool, String> {
+    let service = open_service(name, SERVICE_QUERY_STATUS)?;
+    Ok(query_state(&service, name)? != SERVICE_STOPPED)
+}
+
+/// Waits up to `timeout` for the service `name` to be stopped.
+pub fn wait_until_stopped(name: &str, timeout: Duration) -> Result<(), String> {
+    let service = open_service(name, SERVICE_QUERY_STATUS)?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        if query_state(&service, name)? == SERVICE_STOPPED {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "service {name:?} did not stop within {} seconds",
+                timeout.as_secs()
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// Asks the service `name` to stop, if it runs, and waits up to `timeout` for it. Returns
+/// whether it was running.
+pub fn stop_and_wait(name: &str, timeout: Duration) -> Result<bool, String> {
+    let service = open_service(name, SERVICE_STOP | SERVICE_QUERY_STATUS)?;
+    if query_state(&service, name)? == SERVICE_STOPPED {
+        return Ok(false);
+    }
+    let mut status = empty_status();
+    // SAFETY: a valid service handle opened with the right to stop it.
+    if unsafe { ControlService(service.0, SERVICE_CONTROL_STOP, &mut status) } == 0 {
+        let err = std::io::Error::last_os_error();
+        // Already stopping, or stopped meanwhile: the wait below sees it through.
+        let stopping = [ERROR_SERVICE_NOT_ACTIVE, ERROR_SERVICE_CANNOT_ACCEPT_CTRL]
+            .iter()
+            .any(|code| err.raw_os_error() == Some(*code as i32));
+        if !stopping {
+            return Err(format!("stopping service {name:?} failed: {err}"));
+        }
+    }
+    drop(service);
+    wait_until_stopped(name, timeout)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::stopped_exit_code;
+
+    #[test]
+    fn fr15_a_requested_stop_ends_with_success_so_the_scm_does_not_restart_it() {
+        // Setup stopping the service, even when stopping an Android went wrong.
+        assert_eq!(stopped_exit_code(true, true), 0);
+        assert_eq!(stopped_exit_code(true, false), 0);
+        // A service that ended on its own with an error says so.
+        assert_eq!(stopped_exit_code(false, true), 1);
+        assert_eq!(stopped_exit_code(false, false), 0);
     }
 }
