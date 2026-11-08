@@ -87,6 +87,7 @@ pub mod gapps;
 pub mod guest_display;
 pub mod guest_log;
 pub mod guest_log_api;
+pub mod guest_refresh;
 pub mod handshake;
 pub mod host_api;
 #[cfg(feature = "conformance")]

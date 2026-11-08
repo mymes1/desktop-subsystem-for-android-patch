@@ -39,6 +39,10 @@
 //!   the guest and wakes it.
 //! - The host's power ([`Session::set_power`]) goes to the guest whenever it changes and
 //!   each time the agent connects.
+//! - The guest display's refresh rate follows the user's fastest monitor
+//!   ([`Session::set_monitor_refresh`]) and the host's battery saver, which caps it at 60 Hz
+//!   ([`crate::guest_refresh`]). It goes to the guest whenever it changes and each time the
+//!   agent connects, once the monitors are known.
 //! - Whether the host is short of memory ([`Session::host_memory_low`]) goes to the guest
 //!   whenever it changes, and when the agent connects while the host is short. The guest
 //!   then ends its cached app processes and drops its caches, so the host gets memory back.
@@ -542,6 +546,15 @@ enum SystemInput {
     Gamepad(GamepadEvent),
 }
 
+/// What the guest display's refresh rate follows.
+#[derive(Debug, Clone, Copy)]
+enum RefreshInput {
+    /// The refresh rate of the user's fastest monitor, in hertz.
+    MonitorHz(u32),
+    /// Whether the host's battery saver is on.
+    BatterySaver(bool),
+}
+
 enum Command {
     Start,
     Stop,
@@ -551,6 +564,8 @@ enum Command {
     WindowsShown(bool),
     /// The host's power changed.
     Power(PowerState),
+    /// The user's fastest monitor or the host's battery saver changed.
+    Refresh(RefreshInput),
     /// Whether the host is short of memory changed.
     HostMemoryLow(bool),
     /// The host's system settings or one of its game controllers changed.
@@ -1220,6 +1235,10 @@ impl Session {
             dozing_since: None,
             power: None,
             power_pending: false,
+            monitor_hz: None,
+            battery_saver: false,
+            refresh_sent: None,
+            refresh_pending: false,
             host_memory_low: false,
             host_memory_pending: false,
             system_settings: None,
@@ -2340,6 +2359,25 @@ impl Session {
     /// agent connects.
     pub fn set_power(&self, state: PowerState) {
         let _ = self.commands.send(Command::Power(state));
+    }
+
+    /// Records the refresh rate of the user's fastest monitor, in hertz. With the host's
+    /// battery saver it sets the guest display's refresh rate
+    /// ([`crate::guest_refresh::refresh_rate`]), which the guest is told now if it is up, on
+    /// each change, and each time its agent connects.
+    pub fn set_monitor_refresh(&self, hz: u32) {
+        let _ = self
+            .commands
+            .send(Command::Refresh(RefreshInput::MonitorHz(hz)));
+    }
+
+    /// Records whether the host's battery saver is on, for a host that reads it apart from the
+    /// rest of its power. A host that calls [`Session::set_power`] needs no more: the
+    /// `power_saver` in its state counts the same.
+    pub fn set_battery_saver(&self, on: bool) {
+        let _ = self
+            .commands
+            .send(Command::Refresh(RefreshInput::BatterySaver(on)));
     }
 
     /// Records whether the host is short of memory. The guest is told now if it is up, and
@@ -3706,6 +3744,14 @@ struct Worker {
     power: Option<PowerState>,
     /// Set when the power changed while the guest was frozen, so it is told after the thaw.
     power_pending: bool,
+    /// The user's fastest monitor's refresh rate, in hertz, once the platform knows it.
+    monitor_hz: Option<u32>,
+    /// Whether the host's battery saver is on, from its power or from the platform directly.
+    battery_saver: bool,
+    /// The display refresh rate the guest was last told.
+    refresh_sent: Option<u32>,
+    /// Set when the rate changed while the guest was frozen, so it is told after the thaw.
+    refresh_pending: bool,
     /// Whether the host is short of memory, as last recorded.
     host_memory_low: bool,
     /// Set when that changed while the guest was frozen, so it is told after the thaw.
@@ -3797,6 +3843,7 @@ impl Worker {
                         }
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
                         Ok(Command::Power(state)) => self.set_power(state),
+                        Ok(Command::Refresh(input)) => self.refresh_input(input),
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
@@ -3828,6 +3875,7 @@ impl Worker {
                         }
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
                         Ok(Command::Power(state)) => self.set_power(state),
+                        Ok(Command::Refresh(input)) => self.refresh_input(input),
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
@@ -3895,6 +3943,10 @@ impl Worker {
             }
             Command::Power(state) => {
                 self.set_power(state);
+                true
+            }
+            Command::Refresh(input) => {
+                self.refresh_input(input);
                 true
             }
             Command::HostMemoryLow(low) => {
@@ -4744,6 +4796,9 @@ impl Worker {
                 self.send_body(Body::PowerState(power.to_control()));
             }
         }
+        if std::mem::take(&mut self.refresh_pending) {
+            self.update_refresh();
+        }
         if std::mem::take(&mut self.host_memory_pending) {
             let low = self.host_memory_low;
             self.send_body(Body::HostMemory(control::HostMemory { low }));
@@ -4784,6 +4839,45 @@ impl Worker {
             | SessionState::Active
             | SessionState::Dozing => self.send_body(Body::PowerState(state.to_control())),
             SessionState::Frozen => self.power_pending = true,
+            _ => {}
+        }
+        self.refresh_input(RefreshInput::BatterySaver(state.power_saver));
+    }
+
+    /// Records a change to the user's fastest monitor or the host's battery saver, and tells a
+    /// guest that can hear it the display refresh rate that follows.
+    fn refresh_input(&mut self, input: RefreshInput) {
+        match input {
+            RefreshInput::MonitorHz(hz) => self.monitor_hz = Some(hz),
+            RefreshInput::BatterySaver(on) => self.battery_saver = on,
+        }
+        self.update_refresh();
+    }
+
+    /// Tells the guest its display refresh rate, if it changed since it was last told and the
+    /// monitors are known. Until they are, the guest keeps the rate it booted with.
+    fn update_refresh(&mut self) {
+        let Some(monitor_hz) = self.monitor_hz else {
+            return;
+        };
+        let hz = crate::guest_refresh::refresh_rate(monitor_hz, self.battery_saver);
+        if self.refresh_sent == Some(hz) {
+            return;
+        }
+        match self.state() {
+            SessionState::Starting
+            | SessionState::Stalled
+            | SessionState::Active
+            | SessionState::Dozing => {
+                eprintln!(
+                    "lifecycle: the guest's display refreshes at {hz} Hz (fastest monitor \
+                     {monitor_hz} Hz, battery saver {})",
+                    if self.battery_saver { "on" } else { "off" }
+                );
+                self.refresh_sent = Some(hz);
+                self.send_body(Body::DisplayRefresh(control::DisplayRefresh { hz }));
+            }
+            SessionState::Frozen => self.refresh_pending = true,
             _ => {}
         }
     }
@@ -4975,6 +5069,9 @@ impl Worker {
             if let Some(power) = self.power {
                 self.send_body(Body::PowerState(power.to_control()));
             }
+            // A new agent holds the display at the rate it is told, from the start.
+            self.refresh_sent = None;
+            self.update_refresh();
             if self.host_memory_low {
                 self.send_body(Body::HostMemory(control::HostMemory { low: true }));
             }
@@ -5368,6 +5465,10 @@ impl Worker {
             }
             Command::Power(state) => {
                 self.set_power(state);
+                true
+            }
+            Command::Refresh(input) => {
+                self.refresh_input(input);
                 true
             }
             Command::HostMemoryLow(low) => {
@@ -5799,6 +5900,7 @@ impl Worker {
             }
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
+            | Some(Body::DisplayRefresh(_))
             | Some(Body::HostMemory(_))
             | Some(Body::HostSleep(_))
             | Some(Body::CloseTask(_))
