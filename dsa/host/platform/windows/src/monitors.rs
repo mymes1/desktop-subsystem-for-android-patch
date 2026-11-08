@@ -6,11 +6,17 @@
 //! monitors change, and the service reads it when it starts the VM. The record outlives them
 //! all, so an Android started with no window process running still gets the last known size.
 //! Without a record the size the image names stays.
+//!
+//! Beside it they record the refresh rate of the fastest monitor, which the service reads
+//! every few seconds while Android runs ([`recorded_refresh`]): the guest's display refreshes
+//! at that rate, or at 60 Hz while energy saver is on. Without that record the guest keeps the
+//! rate it boots with.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use dsa_host_core::guest_display::{display_for, parse_record, record_text};
+use dsa_host_core::guest_refresh;
 
 /// More than any real record.
 const MAX_RECORD_BYTES: u64 = 4096;
@@ -40,8 +46,44 @@ pub fn write_record(local_app_data: &Path, monitors: &[(u32, u32)]) -> std::io::
     std::fs::rename(&partial, &path)
 }
 
+/// Where the fastest monitor's refresh rate is recorded, below a user's local application
+/// data.
+pub fn refresh_record_path(local_app_data: &Path) -> PathBuf {
+    crate::paths::UserRoot::in_local_app_data(local_app_data).monitor_refresh()
+}
+
+/// The refresh rate of the fastest monitor recorded below `local_app_data`, in hertz, when
+/// there is a record with a rate in it.
+pub fn recorded_refresh(local_app_data: &Path) -> Option<u32> {
+    let file = std::fs::File::open(refresh_record_path(local_app_data)).ok()?;
+    let mut text = String::new();
+    file.take(MAX_RECORD_BYTES).read_to_string(&mut text).ok()?;
+    guest_refresh::parse_record(&text)
+}
+
+/// Writes the refresh record whole, so the service never reads half of one.
+pub fn write_refresh_record(local_app_data: &Path, hz: u32) -> std::io::Result<()> {
+    let path = refresh_record_path(local_app_data);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let partial = path.with_extension("txt.new");
+    std::fs::write(&partial, guest_refresh::record_text(hz))?;
+    std::fs::rename(&partial, &path)
+}
+
+/// A monitor's rate from `DEVMODEW.dmDisplayFrequency`, in hertz: 0 and 1 mean the hardware's
+/// default rate, which Windows does not name, so they are 0 (unknown).
+pub fn frequency_hz(display_frequency: u32) -> u32 {
+    if display_frequency <= 1 {
+        0
+    } else {
+        display_frequency
+    }
+}
+
 #[cfg(windows)]
-pub use session::{current, record_current, system_density, MonitorWatch};
+pub use session::{current, current_refresh, record_current, system_density, MonitorWatch};
 
 #[cfg(windows)]
 mod session {
@@ -49,13 +91,14 @@ mod session {
 
     use windows_sys::Win32::Foundation::{LPARAM, RECT, TRUE};
     use windows_sys::Win32::Graphics::Gdi::{
-        EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO,
+        EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, DEVMODEW,
+        ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW,
     };
     use windows_sys::Win32::UI::HiDpi::{
         GetDpiForSystem, SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
     };
 
-    use super::write_record;
+    use super::{frequency_hz, write_record, write_refresh_record};
 
     /// The density apps draw at on this session's main monitor, as a task's window gives it:
     /// 160 at a scale of 100%, 240 at 150%. A split-APK bundle's density split is chosen for
@@ -109,39 +152,93 @@ mod session {
         monitors
     }
 
+    unsafe extern "system" fn add_refresh(
+        monitor: HMONITOR,
+        _: HDC,
+        _: *mut RECT,
+        list: LPARAM,
+    ) -> i32 {
+        let list = &mut *(list as *mut Vec<u32>);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(
+            monitor,
+            &mut info as *mut MONITORINFOEXW as *mut MONITORINFO,
+        ) != 0
+        {
+            let mut mode: DEVMODEW = std::mem::zeroed();
+            mode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+            let hz =
+                if EnumDisplaySettingsW(info.szDevice.as_ptr(), ENUM_CURRENT_SETTINGS, &mut mode)
+                    != 0
+                {
+                    frequency_hz(mode.dmDisplayFrequency)
+                } else {
+                    0
+                };
+            list.push(hz);
+        }
+        TRUE
+    }
+
+    /// The refresh rate of this session's fastest monitor, in hertz, or `None` when Windows
+    /// names no monitor's rate.
+    pub fn current_refresh() -> Option<u32> {
+        let mut rates: Vec<u32> = Vec::new();
+        // SAFETY: the callback only runs during the call, while `rates` lives.
+        unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                Some(add_refresh),
+                &mut rates as *mut Vec<u32> as LPARAM,
+            );
+        }
+        dsa_host_core::guest_refresh::fastest(rates)
+    }
+
     fn local_app_data() -> Option<PathBuf> {
         crate::paths::UserRoot::current().and_then(|root| root.dir().parent().map(PathBuf::from))
     }
 
     /// Records this session's monitors for the service.
     pub fn record_current() -> Result<(), String> {
-        record(&current())
+        record(&current(), current_refresh())
     }
 
-    /// A session that reports no monitors (no desktop, as over SSH) leaves the last record.
-    fn record(monitors: &[(u32, u32)]) -> Result<(), String> {
+    /// A session that reports no monitors (no desktop, as over SSH) leaves the last record,
+    /// and one that names no monitor's rate leaves the last rate.
+    fn record(monitors: &[(u32, u32)], refresh: Option<u32>) -> Result<(), String> {
         if monitors.is_empty() {
             return Ok(());
         }
         let dir = local_app_data().ok_or("this user's local application data folder is unknown")?;
-        write_record(&dir, monitors).map_err(|e| format!("recording the monitors: {e}"))
+        write_record(&dir, monitors).map_err(|e| format!("recording the monitors: {e}"))?;
+        match refresh {
+            Some(hz) => write_refresh_record(&dir, hz)
+                .map_err(|e| format!("recording the monitors' refresh rate: {e}")),
+            None => Ok(()),
+        }
     }
+
+    /// The monitors' sizes and the fastest one's refresh rate, as last recorded.
+    type Recorded = (Vec<(u32, u32)>, Option<u32>);
 
     /// Keeps the record up to date from a loop that runs anyway.
     #[derive(Default)]
     pub struct MonitorWatch {
-        last: Option<Vec<(u32, u32)>>,
+        last: Option<Recorded>,
     }
 
     impl MonitorWatch {
-        /// Records the monitors if they changed since the last call. A failure is returned
-        /// once, not on every call.
+        /// Records the monitors if they or the fastest one's refresh rate changed since the
+        /// last call. A failure is returned once, not on every call.
         pub fn check(&mut self) -> Result<(), String> {
-            let now = current();
+            let now = (current(), current_refresh());
             if self.last.as_ref() == Some(&now) {
                 return Ok(());
             }
-            let result = record(&now);
+            let result = record(&now.0, now.1);
             self.last = Some(now);
             result
         }

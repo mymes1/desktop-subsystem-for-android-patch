@@ -27,12 +27,13 @@ namespace dsa::hwc {
 
 namespace composer3 = aidl::android::hardware::graphics::composer3;
 
-// The display's one configuration, from the kernel command line (see README.md).
+// The display's size, density and starting refresh rate, from the kernel command line (see
+// README.md). Its refresh rates are those of refresh_rates.h, one configuration each.
 struct DisplayConfig {
     int32_t width = 1920;
     int32_t height = 1080;
     int32_t dpi = 160;
-    int32_t vsyncPeriodNanos = 16666666;
+    int32_t refreshRateHz = 60;
 
     static DisplayConfig fromProperties();
 };

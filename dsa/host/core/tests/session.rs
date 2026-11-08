@@ -1843,6 +1843,71 @@ fn fr10_the_hosts_power_reaches_the_guest_when_it_connects_and_when_it_changes()
     assert!(on_battery(15).to_control().power_saver);
 }
 
+fn display_refresh(hz: u32) -> Body {
+    Body::DisplayRefresh(dsa_protocol::control::DisplayRefresh { hz })
+}
+
+#[test]
+fn fr10_battery_saver_caps_the_guest_refresh_rate_at_once_and_lifts_it_when_off() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_power(PowerState::MAINS_ONLY);
+    session.set_monitor_refresh(120);
+    session.windows_shown(true).unwrap();
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::PowerState(PowerState::MAINS_ONLY.to_control())
+    );
+    // A 120 Hz monitor: the guest refreshes at 120 Hz from the moment the agent is there.
+    assert_eq!(next_body(&mut agent), display_refresh(120));
+    // The saver on: 60 Hz, with no restart and nothing else in between.
+    let saver = PowerState {
+        power_saver: true,
+        ..PowerState::MAINS_ONLY
+    };
+    let changed = std::time::Instant::now();
+    session.set_power(saver);
+    assert_eq!(next_body(&mut agent), Body::PowerState(saver.to_control()));
+    assert_eq!(next_body(&mut agent), display_refresh(60));
+    assert!(changed.elapsed() < Duration::from_secs(1));
+    // The saver off: back to the monitor's 120 Hz.
+    session.set_power(PowerState::MAINS_ONLY);
+    assert_eq!(
+        next_body(&mut agent),
+        Body::PowerState(PowerState::MAINS_ONLY.to_control())
+    );
+    assert_eq!(next_body(&mut agent), display_refresh(120));
+    // A host that reads its saver apart from its power gives it on its own.
+    session.set_battery_saver(true);
+    assert_eq!(next_body(&mut agent), display_refresh(60));
+    session.set_battery_saver(false);
+    assert_eq!(next_body(&mut agent), display_refresh(120));
+}
+
+#[test]
+fn fr10_battery_saver_leaves_a_60_hz_monitor_alone() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_monitor_refresh(60);
+    session.windows_shown(true).unwrap();
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert_eq!(next_body(&mut agent), display_refresh(60));
+    // The saver on and off again: the rate is the same, so the guest hears nothing of it,
+    // and the next thing it hears is the battery state that follows.
+    session.set_battery_saver(true);
+    session.set_battery_saver(false);
+    session.set_power(on_battery(80));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::PowerState(on_battery(80).to_control())
+    );
+}
+
 #[test]
 fn fr10_a_host_without_a_battery_is_a_full_battery_on_ac_power() {
     let power = PowerState::MAINS_ONLY.to_control();

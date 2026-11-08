@@ -301,6 +301,18 @@ mod windows_host {
         // The guest's battery follows the computer's power.
         let power = Arc::new(PowerHub::new());
         power.attach(&session);
+        // The guest's display refreshes as fast as the fastest monitor, which this process sees
+        // itself; energy saver, which comes with the power, caps it at 60 Hz.
+        {
+            let watched = Arc::downgrade(&session);
+            thread::spawn(move || {
+                dsa_host_core::guest_refresh::follow_monitors(
+                    watched,
+                    dsa_host_windows::monitors::current_refresh,
+                    dsa_host_core::guest_refresh::MONITOR_POLL,
+                )
+            });
+        }
         let power_stop = Arc::new(AtomicBool::new(false));
         {
             let (power, stop) = (Arc::clone(&power), Arc::clone(&power_stop));

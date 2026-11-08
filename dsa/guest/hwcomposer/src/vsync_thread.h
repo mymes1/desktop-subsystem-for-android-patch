@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -34,10 +35,14 @@ class VsyncThread {
 
     void setEnabled(bool enabled);
 
+    // Ticks at `periodNanos` from the next tick on, when the display's refresh rate changes.
+    void setPeriod(int32_t periodNanos);
+    int32_t period() const { return mPeriodNanos.load(); }
+
    private:
     void run();
 
-    const int32_t mPeriodNanos;
+    std::atomic<int32_t> mPeriodNanos;
     const std::function<void(int64_t)> mOnVsync;
     const std::function<void()> mOnStart;
     std::mutex mMutex;
