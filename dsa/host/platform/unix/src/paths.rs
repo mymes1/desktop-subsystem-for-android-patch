@@ -90,6 +90,23 @@ impl UnixHostPaths {
     }
 }
 
+/// The `tmp` folder of the user this process runs as, from `$HOME` (and `$XDG_DATA_HOME` on
+/// Linux), for the files a user's process cannot avoid making.
+pub fn current_user_tmp(layout: Layout) -> Result<PathBuf, String> {
+    /// The name the paths know this process's user by; only this user is looked up.
+    const ME: &str = "self";
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let find_home: FindHome = Box::new(move |_: &str| {
+        home.clone()
+            .ok_or_else(|| "HOME is not set, so DSA has no folder of yours".to_string())
+    });
+    let mut paths = UnixHostPaths::standard(layout, find_home);
+    if let Some(data) = std::env::var_os("XDG_DATA_HOME") {
+        paths = paths.with_xdg_data_home(ME, data);
+    }
+    paths.user_tmp(ME)
+}
+
 fn below(root: &Path, name: &str) -> PathBuf {
     root.join(name)
 }

@@ -33,6 +33,7 @@
 
 pub mod cmdline;
 pub mod compositor;
+pub mod computer_identity;
 pub mod devices;
 pub mod host_config;
 pub mod input;
@@ -56,9 +57,13 @@ pub(crate) mod gpt;
 pub(crate) mod pstore_disk;
 
 #[cfg(target_os = "macos")]
+pub mod adb_discovery;
+#[cfg(target_os = "macos")]
 pub mod android_vm;
 #[cfg(target_os = "macos")]
 pub mod fetch;
+#[cfg(target_os = "macos")]
+pub mod gfx;
 #[cfg(target_os = "macos")]
 pub mod host_memory;
 #[cfg(target_os = "macos")]

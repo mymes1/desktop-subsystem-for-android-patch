@@ -66,6 +66,50 @@ public  final class LaunchApp extends
     
   }
 
+  public static final int NEW_WINDOW_FIELD_NUMBER = 2;
+  private boolean newWindow_;
+  /**
+   * <pre>
+   * Start another task of the app even when it has one, in a window of its own, as the
+   * system menu's New window does. Only for an app that supports several windows
+   * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+   * </pre>
+   *
+   * <code>bool new_window = 2;</code>
+   * @return The newWindow.
+   */
+  @java.lang.Override
+  public boolean getNewWindow() {
+    return newWindow_;
+  }
+  /**
+   * <pre>
+   * Start another task of the app even when it has one, in a window of its own, as the
+   * system menu's New window does. Only for an app that supports several windows
+   * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+   * </pre>
+   *
+   * <code>bool new_window = 2;</code>
+   * @param value The newWindow to set.
+   */
+  private void setNewWindow(boolean value) {
+    
+    newWindow_ = value;
+  }
+  /**
+   * <pre>
+   * Start another task of the app even when it has one, in a window of its own, as the
+   * system menu's New window does. Only for an app that supports several windows
+   * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+   * </pre>
+   *
+   * <code>bool new_window = 2;</code>
+   */
+  private void clearNewWindow() {
+    
+    newWindow_ = false;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.LaunchApp parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -215,6 +259,52 @@ public  final class LaunchApp extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Start another task of the app even when it has one, in a window of its own, as the
+     * system menu's New window does. Only for an app that supports several windows
+     * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+     * </pre>
+     *
+     * <code>bool new_window = 2;</code>
+     * @return The newWindow.
+     */
+    @java.lang.Override
+    public boolean getNewWindow() {
+      return instance.getNewWindow();
+    }
+    /**
+     * <pre>
+     * Start another task of the app even when it has one, in a window of its own, as the
+     * system menu's New window does. Only for an app that supports several windows
+     * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+     * </pre>
+     *
+     * <code>bool new_window = 2;</code>
+     * @param value The newWindow to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNewWindow(boolean value) {
+      copyOnWrite();
+      instance.setNewWindow(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Start another task of the app even when it has one, in a window of its own, as the
+     * system menu's New window does. Only for an app that supports several windows
+     * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+     * </pre>
+     *
+     * <code>bool new_window = 2;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNewWindow() {
+      copyOnWrite();
+      instance.clearNewWindow();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.LaunchApp)
   }
   @java.lang.Override
@@ -232,9 +322,11 @@ public  final class LaunchApp extends
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
             "packageName_",
+            "newWindow_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

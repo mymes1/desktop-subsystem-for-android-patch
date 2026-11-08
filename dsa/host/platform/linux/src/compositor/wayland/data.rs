@@ -48,6 +48,22 @@ pub struct DataState {
     pub(crate) press_serial: u32,
 }
 
+impl DataState {
+    /// `source` is the desktop's clipboard now; the one before it is destroyed.
+    pub(crate) fn replace_source(&mut self, source: WlDataSource) {
+        if let Some(old) = self.source.replace(source) {
+            old.destroy();
+        }
+    }
+
+    /// The desktop took the clipboard from `source`.
+    pub(crate) fn source_cancelled(&mut self, source: &WlDataSource) {
+        if self.source.as_ref() == Some(source) {
+            self.source = None;
+        }
+    }
+}
+
 /// How long the files of a dropped drag stay, for the target to copy them.
 const DROPPED_FILES_KEPT: Duration = Duration::from_secs(120);
 
@@ -161,7 +177,10 @@ impl State {
         client: HostApiClient,
         serial: u32,
     ) {
-        let surface = self.windows.get(&task_id).map(|window| window.surface.clone());
+        let surface = self
+            .windows
+            .get(&task_id)
+            .map(|window| window.surface.clone());
         let source_data = Arc::new(DragOutSource {
             offer,
             client: Mutex::new(client),

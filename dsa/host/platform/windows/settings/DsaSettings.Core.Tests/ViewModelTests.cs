@@ -92,7 +92,8 @@ public class ViewModelTests
         Assert.Equal(SessionState.Stopped, vm.State);
         Assert.Equal("State_Stopped", vm.StateText);
         Assert.True(vm.HasLastReason);
-        Assert.Equal("the VM exited", vm.LastReason);
+        Assert.Equal("LastReason_General", vm.LastReason);
+        Assert.Equal("the VM exited", vm.LastReasonDetail);
         Assert.True(vm.CanStart);
         Assert.False(vm.CanStop);
 
@@ -433,6 +434,21 @@ public class ViewModelTests
     }
 
     [Fact]
+    public async Task Nfr5_memory_page_shows_the_graphics_renderer_as_a_process_of_its_own()
+    {
+        const string report =
+            "{\"host\":[{\"role\":\"vm\",\"pid\":10,\"working_set_kb\":921600,\"private_kb\":900000}," +
+            "{\"role\":\"window manager\",\"pid\":20,\"working_set_kb\":40960,\"private_kb\":30000}," +
+            "{\"role\":\"graphics renderer\",\"pid\":21,\"working_set_kb\":307200,\"private_kb\":290000}]," +
+            "\"host_total_kb\":1269760}";
+        var cli = new FakeCli().Answer("memory --json", report);
+        var vm = new MemoryViewModel(new DsaService(cli), new KeyText());
+        await vm.RefreshAsync();
+        Assert.Equal(new[] { "Role_Vm", "Role_WindowManager", "Role_Renderer" }, vm.HostRows.Select(r => r.Label));
+        Assert.Equal("300.0 MB", vm.HostRows[2].Size);
+    }
+
+    [Fact]
     public async Task Fr17_memory_page_shows_the_host_processes_and_the_guest_breakdown()
     {
         const string report =
@@ -526,6 +542,11 @@ public class ViewModelTests
         Assert.False(vm.Accepts(new[] { @"C:\notes.txt" }));
         Assert.False(vm.Accepts(null));
         Assert.True(vm.Accepts(new[] { @"C:\notes.txt", @"C:\app.APK" }));
+        // Split-APK bundles go to the install as APKs do, and App Bundles to be told why not.
+        foreach (var bundle in new[] { @"C:\app.xapk", @"C:\app.apks", @"C:\app.APKM", @"C:\app.aab" })
+        {
+            Assert.True(vm.Accepts(new[] { bundle }), bundle);
+        }
         await vm.DropAsync(new[] { @"C:\notes.txt" });
         Assert.Empty(cli.Calls);
         Assert.Equal(InstallSeverity.Error, vm.Severity);

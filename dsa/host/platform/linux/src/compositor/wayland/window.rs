@@ -4,7 +4,7 @@
 use std::time::Instant;
 
 use dsa_host_core::compositor::caption::{
-    paint_buttons, CaptionButton, CaptionPalette, CaptionState, CaptionTone,
+    scaled, CaptionButton, CaptionLayout, CaptionState, CaptionTone, TITLE_TEXT_AT_100,
 };
 use dsa_host_core::compositor::task_windows::WindowChange;
 use dsa_host_core::compositor::window_hosts::FromHost;
@@ -12,6 +12,7 @@ use dsa_host_core::compositor::window_mode::{picture_in_picture_place, WindowMod
 use dsa_host_core::ime::ImeCursor;
 use dsa_host_core::input::PointerMapper;
 use dsa_host_core::keys::KeyMapper;
+use dsa_host_core::tasks::AppInfo;
 use wayland_client::protocol::wl_surface::{self, WlSurface};
 use wayland_client::{Connection, Dispatch, QueueHandle};
 use wayland_protocols::xdg::decoration::zv1::client::zxdg_toplevel_decoration_v1::{
@@ -23,6 +24,10 @@ use wayland_protocols::xdg::shell::client::xdg_toplevel::{self, XdgToplevel};
 use super::shm::ShmBuffer;
 use super::State;
 use crate::compositor::frames::Frame;
+use crate::compositor::text::Text;
+use crate::compositor::title_bar::{
+    caption_icon_png, frame_band_fill, place_text, BandArt, CaptionIcon, TitleBar,
+};
 use crate::compositor::toplevel::{Reported, States, Toplevel};
 use crate::input::text_input::TextInputV3;
 use crate::shell::desktop_entry::app_id;
@@ -47,7 +52,7 @@ pub struct Window {
     /// Whether the first configure has been acknowledged; nothing is drawn before.
     configured: bool,
     /// The frame shown last (without the title bar), drawn again when the title bar changes.
-    last: Option<Frame>,
+    pub(crate) last: Option<Frame>,
     /// A frame that waits for a free buffer.
     waiting: Option<Frame>,
     pub caption: CaptionState,
@@ -66,8 +71,54 @@ pub struct Window {
     pub(crate) caption_layer: Option<super::gpu::CaptionLayer>,
     /// The GPU frame shown last, drawn again when the title bar changes.
     pub(crate) last_gpu: Option<(u32, crate::compositor::frames::GpuFrame)>,
+    /// The band's fill over GPU frames, as sampled last, and when it was sampled.
+    pub(crate) gpu_fill: Option<u32>,
+    pub(crate) band_probed: Option<Instant>,
+    /// Move or Size, chosen in the window menu: the next press in the window starts it.
+    pub(crate) armed: Option<crate::compositor::window_menu::MoveSize>,
     /// Where the task is shown while in picture-in-picture, instead of its toplevel.
     pub(crate) pip: Option<super::pip::Pip>,
+    /// Whether the app draws its own title bar, and whether the icon's cell shows the back
+    /// arrow.
+    pub title_bar: TitleBar,
+    /// The app's title bar icon: its adaptive icon's foreground, else its whole icon.
+    pub(crate) icon: CaptionIcon,
+    /// Whether the app supports several windows, so the window menu offers New window.
+    pub multiple_windows: bool,
+    /// The app's name as drawn last: the name, the size it was drawn for, and its coverage.
+    title_text: Option<(String, (u32, u32), Vec<u8>)>,
+    /// The band drawn last, and what it was drawn from, so an unchanged band is not drawn
+    /// again for every frame.
+    band: Option<(BandKey, Vec<u8>)>,
+}
+
+/// What a title bar band is drawn from.
+#[derive(Debug, Clone, PartialEq)]
+struct BandKey {
+    layout: CaptionLayout,
+    dpi: u32,
+    tone: CaptionTone,
+    state: CaptionState,
+    title_bar: TitleBar,
+    title: String,
+    fill: Option<u32>,
+}
+
+/// What a window shows of its app besides its frames.
+#[derive(Debug, Clone, Default)]
+pub struct AppLook {
+    /// The PNG the title bar draws.
+    pub caption_icon_png: Vec<u8>,
+    pub multiple_windows: bool,
+}
+
+impl AppLook {
+    pub fn of(app: &AppInfo) -> AppLook {
+        AppLook {
+            caption_icon_png: caption_icon_png(app).to_vec(),
+            multiple_windows: app.multiple_windows,
+        }
+    }
 }
 
 impl State {
@@ -92,6 +143,7 @@ impl State {
             decoration.set_mode(zxdg_toplevel_decoration_v1::Mode::ClientSide);
             decoration
         });
+        let look = self.app_looks.get(package).cloned().unwrap_or_default();
         let model = Toplevel::new(task_id, package, title, size);
         let (width, height) = model.to_logical(size);
         xdg_surface.set_window_geometry(0, 0, width, height);
@@ -120,9 +172,44 @@ impl State {
                 viewport: None,
                 caption_layer: None,
                 last_gpu: None,
+                gpu_fill: None,
+                band_probed: None,
+                armed: None,
                 pip: None,
+                title_bar: TitleBar::default(),
+                icon: CaptionIcon::new(&look.caption_icon_png),
+                multiple_windows: look.multiple_windows,
+                title_text: None,
+                band: None,
             },
         );
+    }
+
+    /// The guest told of `app`: its windows draw its title bar icon and offer New window as it
+    /// says, and so do the windows it opens later.
+    pub fn set_app(&mut self, app: &AppInfo) {
+        let look = AppLook::of(app);
+        if self.app_looks.get(&app.package_name).is_some_and(|known| {
+            known.caption_icon_png == look.caption_icon_png
+                && known.multiple_windows == look.multiple_windows
+        }) {
+            return;
+        }
+        let shown: Vec<i32> = self
+            .windows
+            .iter_mut()
+            .filter(|(_, window)| window.model.package == app.package_name)
+            .map(|(task_id, window)| {
+                window.icon = CaptionIcon::new(&look.caption_icon_png);
+                window.multiple_windows = look.multiple_windows;
+                window.band = None;
+                *task_id
+            })
+            .collect();
+        self.app_looks.insert(app.package_name.clone(), look);
+        for task_id in shown {
+            self.redraw(task_id);
+        }
     }
 
     /// Applies one of the window rules' changes.
@@ -141,6 +228,7 @@ impl State {
                     window.model.title = title.clone();
                     window.toplevel.set_title(title.clone());
                 }
+                self.redraw(*task_id);
             }
             WindowChange::Resize {
                 task_id,
@@ -200,6 +288,22 @@ impl State {
                 self.after_mode(*task_id);
                 self.picture_in_picture(*task_id, small);
             }
+            WindowChange::CaptionMode {
+                task_id,
+                app_drawn,
+                interactive,
+            } => {
+                if let Some(window) = self.windows.get_mut(task_id) {
+                    window.title_bar.set_mode(*app_drawn, interactive.clone());
+                }
+                self.redraw(*task_id);
+            }
+            WindowChange::CaptionBack { task_id, back } => {
+                if let Some(window) = self.windows.get_mut(task_id) {
+                    window.title_bar.set_back(*back);
+                }
+                self.redraw(*task_id);
+            }
         }
     }
 
@@ -234,19 +338,27 @@ impl State {
         }
     }
 
-    /// Tells the window rules the title bar's height after the mode changed, and draws.
+    /// Tells the window rules the title bar's band after the mode or the scale changed, and
+    /// draws.
     fn after_mode(&mut self, task_id: i32) {
         let caption = self
             .windows
             .get_mut(&task_id)
             .and_then(|window| window.model.caption_change());
-        if let Some(height) = caption {
-            self.report(FromHost::Caption { task_id, height });
+        if let Some(band) = caption {
+            self.report(FromHost::Caption { task_id, band });
         }
         self.redraw(task_id);
     }
 
     pub(crate) fn close_window(&mut self, task_id: i32) {
+        if self
+            .menu
+            .as_ref()
+            .is_some_and(|menu| menu.task_id == task_id)
+        {
+            self.close_menu();
+        }
         self.leave_pip(task_id);
         if let Some(window) = self.windows.remove(&task_id) {
             if let Some(viewport) = &window.viewport {
@@ -289,7 +401,7 @@ impl State {
         let qh = self.qh.clone();
         if let Some(window) = self.windows.get_mut(&task_id) {
             window.waiting = Some(frame);
-            window.draw(&shm, &qh);
+            window.draw(&shm, &qh, self.text.as_ref());
         }
     }
 
@@ -313,7 +425,7 @@ impl State {
             if window.waiting.is_none() {
                 window.waiting = window.last.clone();
             }
-            window.draw(&shm, &qh);
+            window.draw(&shm, &qh, self.text.as_ref());
         }
     }
 
@@ -323,7 +435,7 @@ impl State {
         let qh = self.qh.clone();
         for window in self.windows.values_mut() {
             if window.waiting.is_some() {
-                window.draw(&shm, &qh);
+                window.draw(&shm, &qh, self.text.as_ref());
             }
         }
     }
@@ -408,7 +520,84 @@ impl Window {
         &self.xdg_surface
     }
 
-    fn draw(&mut self, shm: &wayland_client::protocol::wl_shm::WlShm, qh: &QueueHandle<State>) {
+    /// The title bar's band as it is now, over a frame of the window's size: premultiplied
+    /// BGRA rows of the layout's width and height, with the layout. `fill` fills a band the
+    /// app left empty. The band is drawn again only when something it shows changed.
+    pub(crate) fn band_pixels(
+        &mut self,
+        text: Option<&Text>,
+        fill: Option<u32>,
+    ) -> (CaptionLayout, &[u8]) {
+        let layout = self.model.caption_layout();
+        let dpi = self.model.dpi();
+        let key = BandKey {
+            layout,
+            dpi,
+            tone: self.tone,
+            state: CaptionState {
+                maximized: self.model.states.maximized,
+                active: self.model.states.activated,
+                ..self.caption
+            },
+            title_bar: self.title_bar.clone(),
+            title: self.model.title.clone(),
+            fill,
+        };
+        if self.band.as_ref().map(|(drawn, _)| drawn) != Some(&key) {
+            self.update_title_text(&layout, dpi, text);
+            let title = self
+                .title_text
+                .as_ref()
+                .map(|(_, _, coverage)| coverage.as_slice());
+            let icon = self.icon.at(layout.icon);
+            let pixels = self.title_bar.paint(
+                &layout,
+                dpi,
+                self.tone,
+                &key.state,
+                BandArt { icon, title, fill },
+            );
+            self.band = Some((key, pixels));
+        }
+        let pixels = self
+            .band
+            .as_ref()
+            .map_or(&[][..], |(_, pixels)| pixels.as_slice());
+        (layout, pixels)
+    }
+
+    /// Lays the app's name out again when it or the room for it changed. An app that draws
+    /// its own title bar shows no name, and a desktop without Pango has none to show.
+    fn update_title_text(&mut self, layout: &CaptionLayout, dpi: u32, text: Option<&Text>) {
+        let Some((_, _, width, height)) = layout.title_rect() else {
+            self.title_text = None;
+            return;
+        };
+        let (Some(text), false) = (text, self.title_bar.app_drawn) else {
+            self.title_text = None;
+            return;
+        };
+        let size = (width, height);
+        let title = &self.model.title;
+        if self
+            .title_text
+            .as_ref()
+            .is_some_and(|(drawn, at, _)| drawn == title && *at == size)
+        {
+            return;
+        }
+        let px = f64::from(scaled(TITLE_TEXT_AT_100, dpi));
+        self.title_text = text
+            .line(title, px, Some(width))
+            .map(|line| (title.clone(), size, place_text(&line, width, height)));
+    }
+
+    fn draw(
+        &mut self,
+        shm: &wayland_client::protocol::wl_shm::WlShm,
+        qh: &QueueHandle<State>,
+        text: Option<&Text>,
+    ) {
         if !self.is_configured() {
             return;
         }
@@ -456,22 +645,11 @@ impl Window {
         self.model.frame_shown(size);
         let mut shown = frame.clone();
         if self.model.has_caption() {
-            let layout = self.model.caption_layout();
-            let buttons = paint_buttons(
-                &layout,
-                self.model.dpi(),
-                &CaptionPalette::of(self.tone),
-                &CaptionState {
-                    maximized: self.model.states.maximized,
-                    active: self.model.states.activated,
-                    ..self.caption
-                },
-            );
-            shown.blend(
-                &buttons,
-                (3 * layout.button_width, layout.height),
-                (layout.buttons_left(), 0),
-            );
+            // The band takes the app's top color when the app leaves it empty.
+            let band = self.model.caption_height();
+            let fill = frame_band_fill(&frame.pixels, frame.width, frame.height, band);
+            let (layout, pixels) = self.band_pixels(text, fill);
+            shown.blend(pixels, (layout.width, layout.height), (0, 0));
         }
         let buffer = &mut self.buffers[at];
         buffer.write(&shown.pixels);
@@ -564,8 +742,8 @@ impl Dispatch<XdgSurface, i32> for State {
                 None => return,
             };
             state.report(FromHost::Dpi { task_id, dpi });
-            if let Some(height) = caption {
-                state.report(FromHost::Caption { task_id, height });
+            if let Some(band) = caption {
+                state.report(FromHost::Caption { task_id, band });
             }
         }
         state.redraw(task_id);
@@ -609,8 +787,10 @@ impl Dispatch<XdgToplevel, i32> for State {
                     return;
                 };
                 let maximized = window.model.states.maximized;
+                let activated = window.model.states.activated;
                 let reported = window.model.configure((width, height), states(&raw));
                 let maximized_changed = window.model.states.maximized != maximized;
+                let activated_changed = window.model.states.activated != activated;
                 for report in reported {
                     let report = match report {
                         Reported::Resized { width, height } => FromHost::Resized {
@@ -624,7 +804,7 @@ impl Dispatch<XdgToplevel, i32> for State {
                     };
                     state.report(report);
                 }
-                if maximized_changed {
+                if maximized_changed || activated_changed {
                     state.redraw(task_id);
                 }
             }

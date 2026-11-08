@@ -7,12 +7,18 @@ import io.github.thisisthepy.dsa.agent.channel.ChannelClient
 import io.github.thisisthepy.dsa.agent.channel.ChannelLocator
 import io.github.thisisthepy.dsa.agent.clipboard.ClipboardSync
 import io.github.thisisthepy.dsa.agent.clipboard.GuestClipboard
+import io.github.thisisthepy.dsa.agent.diagnostics.CrashRecordSource
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
+import io.github.thisisthepy.dsa.agent.diagnostics.NativeLibraryCrashes
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
+import io.github.thisisthepy.dsa.agent.install.AppReinstaller
 import io.github.thisisthepy.dsa.agent.install.AppUninstaller
+import io.github.thisisthepy.dsa.agent.install.PackageReinstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageUninstallerPort
+import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIdPort
+import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIds
 import io.github.thisisthepy.dsa.agent.install.PackageInfoPort
 import io.github.thisisthepy.dsa.agent.install.PackageInstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageQueries
@@ -24,6 +30,7 @@ import io.github.thisisthepy.dsa.agent.input.PointerQueue
 import io.github.thisisthepy.dsa.agent.input.TextInput
 import io.github.thisisthepy.dsa.agent.input.TextKeys
 import io.github.thisisthepy.dsa.agent.input.TouchSounds
+import io.github.thisisthepy.dsa.agent.input.UnhandledKeys
 import io.github.thisisthepy.dsa.agent.files.DragCatcher
 import io.github.thisisthepy.dsa.agent.files.DragOut
 import io.github.thisisthepy.dsa.agent.files.FileOpener
@@ -52,6 +59,8 @@ import io.github.thisisthepy.dsa.agent.print.QueuedPrintJob
 import io.github.thisisthepy.dsa.agent.requests.HostRequests
 import io.github.thisisthepy.dsa.agent.requests.RequestResult
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
+import io.github.thisisthepy.dsa.agent.settings.DeviceNamePort
+import io.github.thisisthepy.dsa.agent.settings.DeviceNameSync
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsPort
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsSync
 import io.github.thisisthepy.dsa.agent.tasks.AppInfoSource
@@ -67,6 +76,7 @@ import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
 import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
 import io.github.thisisthepy.dsa.agent.windowing.FreeformSetup
+import io.github.thisisthepy.dsa.agent.windowing.GestureExclusion
 import io.github.thisisthepy.dsa.agent.windowing.CaptionInsets
 import io.github.thisisthepy.dsa.agent.windowing.TaskArranger
 import io.github.thisisthepy.dsa.agent.windowing.WindowingControl
@@ -110,7 +120,7 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * the dropbox ([DiagnosticsCollector]). Documents apps print to the agent's print service go
  * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
- * ([SystemSettingsSync]).
+ * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
  */
 class Agent(
     private val ownPackage: String,
@@ -144,8 +154,14 @@ class Agent(
     media: MediaSource = MediaSource.NONE,
     stopper: AppStopper = AppStopper.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
+    expansionFiles: io.github.thisisthepy.dsa.agent.install.ExpansionFiles =
+        io.github.thisisthepy.dsa.agent.install.ExpansionFiles.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
+    googleDeviceId: GoogleDeviceIdPort = GoogleDeviceIdPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
+    packageReinstaller: PackageReinstallerPort = PackageReinstallerPort.NONE,
+    private val crashRecords: CrashRecordSource = CrashRecordSource.NONE,
+    arm64Supported: () -> Boolean = { false },
     widgets: WidgetPlatform = WidgetPlatform.NONE,
     appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
@@ -154,9 +170,13 @@ class Agent(
     diagnostics: DiagnosticsSource = DiagnosticsSource.NONE,
     diagnosticsRunner: (Runnable) -> Unit = { Thread(it, "dsa-diagnostics").start() },
     systemSettings: SystemSettingsPort = SystemSettingsPort.NONE,
+    deviceName: DeviceNamePort = DeviceNamePort.NONE,
     wifi: WifiPort = WifiPort.NONE,
     dragCatcher: DragCatcher = DragCatcher.NONE,
     dragRunner: ((Runnable) -> Unit)? = null,
+    private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
+    private val unhandledKeys: UnhandledKeys = UnhandledKeys.NONE,
+    private val editorFocused: () -> Boolean = { false },
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -173,7 +193,16 @@ class Agent(
     /** Where the host was last told each task is, for the input thread to read. */
     @Volatile
     private var taskBounds: Map<Int, TaskBounds> = emptyMap()
-    private val pointer = PointerInput(injector, { taskId -> taskBounds[taskId] }, log)
+    private val pointer = PointerInput(injector, { taskId -> taskBounds[taskId] }, log) { taskId, keyCode, down ->
+        // Keys belong to the scheduler's thread.
+        scheduler.post {
+            try {
+                keys.navigationButton(taskId, keyCode, down)
+            } catch (e: Exception) {
+                log.warn("injecting a mouse's back or forward button failed", e)
+            }
+        }
+    }
     private val pointerQueue = PointerQueue(inputScheduler) { event, queuedNanos ->
         val started = System.nanoTime()
         try {
@@ -188,7 +217,17 @@ class Agent(
             scheduler.post { frames.released(reporter.reportedPackage(event.taskId)) }
         }
     }
-    private val keys = KeyInput(injector, reporter::isReported, reporter::reportedFocused, actions::focusTask, log)
+    private val keys = KeyInput(
+        injector,
+        reporter::isReported,
+        reporter::reportedFocused,
+        actions::focusTask,
+        log,
+        // A task the agent has not read yet counts as on its first screen, so a key never
+        // takes it back past where it began.
+        onFirstScreen = { taskId -> taskId !in pastFirstScreen },
+        editorFocused = { editorFocused() },
+    )
     private val text = TextInput(
         editor = editor,
         injector = injector,
@@ -207,6 +246,7 @@ class Agent(
     }
     private val clipboardSync = ClipboardSync(clipboard, { frame -> channel.send(frame) }, log, isConnected = { channel.connected })
     private val settingsSync = SystemSettingsSync(systemSettings, log)
+    private val deviceNameSync = DeviceNameSync(deviceName, log)
     private val diagnosticsCollector = DiagnosticsCollector(diagnostics, { frame -> channel.send(frame) }, log, diagnosticsRunner)
     private val backgroundApps = BackgroundApps(
         ownPackage,
@@ -231,6 +271,7 @@ class Agent(
         log,
         post = { work -> scheduler.post(work) },
         onInstalled = { requestAppsRefresh() },
+        expansionFiles = expansionFiles,
     )
     private val printer = HostPrinter(
         { frame -> channel.send(frame) },
@@ -239,6 +280,7 @@ class Agent(
         post = { work -> scheduler.post(work) },
     )
     private val packageQueries = PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val googleDeviceIds = GoogleDeviceIds(googleDeviceId, { frame -> channel.send(frame) }, log)
     private val appUninstaller = AppUninstaller(
         ownPackage,
         packageUninstaller,
@@ -246,6 +288,21 @@ class Agent(
         log,
         post = { work -> scheduler.post(work) },
         onUninstalled = { requestAppsRefresh() },
+    )
+    private val appReinstaller = AppReinstaller(
+        ownPackage,
+        packageReinstaller,
+        { frame -> channel.send(frame) },
+        log,
+        post = { work -> scheduler.post(work) },
+        onReinstalled = { requestAppsRefresh() },
+    )
+    private val nativeCrashes = NativeLibraryCrashes(
+        ownPackage,
+        { frame -> channel.send(frame) },
+        log,
+        arm64Supported,
+        clock,
     )
     private val widgetManager = WidgetManager(
         widgets,
@@ -303,6 +360,11 @@ class Agent(
         reporter::reportedBounds,
         clock,
     )
+    /** Where the apps on the display keep system gestures out, as last heard. */
+    private var exclusion: List<TaskBounds> = emptyList()
+
+    /** The tasks past their first screen, as last read: Back has somewhere to go in them. */
+    private var pastFirstScreen: Set<Int> = emptySet()
     private var refreshPending = false
     private var appsPending = false
     private var appsForced = false
@@ -337,6 +399,9 @@ class Agent(
                 scheduler.post(work)
             }
             listenToApps()
+            listenToCrashes()
+            listenToExclusion()
+            listenToUnhandledKeys()
             channel.start()
             requestRefresh()
         }
@@ -348,6 +413,42 @@ class Agent(
         } catch (e: Exception) {
             log.warn("listening to installed apps failed; trying again", e)
             scheduler.postDelayed(RETRY_MILLIS, ::listenToApps)
+        }
+    }
+
+    /** Hears where apps keep system gestures out, which marks an app's controls in its title bar. */
+    private fun listenToExclusion() {
+        try {
+            gestureExclusion.listen { rects ->
+                scheduler.post {
+                    if (rects != exclusion) {
+                        exclusion = rects
+                        requestRefresh()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn("listening to the display's gesture exclusion failed; apps that draw their own title bar get no controls there", e)
+        }
+    }
+
+    /** Hears the Esc presses no app took, which become Back past a task's first screen. */
+    private fun listenToUnhandledKeys() {
+        try {
+            unhandledKeys.listen { scheduler.post { keys.escapeUnhandled() } }
+        } catch (e: Exception) {
+            log.warn("listening to the keys no app takes failed; Esc never goes back", e)
+        }
+    }
+
+    /** Reports the apps that end because a native library did not load, while the host listens. */
+    private fun listenToCrashes() {
+        try {
+            crashRecords.listen { tag, text ->
+                scheduler.post { if (channel.connected) nativeCrashes.record(tag, text) }
+            }
+        } catch (e: Exception) {
+            log.warn("listening to the system's crash records failed; crashes of apps are not reported", e)
         }
     }
 
@@ -402,6 +503,7 @@ class Agent(
         channel.send(Envelope.newBuilder().setAgentConnected(AgentConnected.getDefaultInstance()).build().toByteArray())
         reporter.resend()
         settingsSync.connected()
+        deviceNameSync.connected()
         lifecycle.connected()
         clipboardSync.connected()
         notificationForwarder.connected()
@@ -424,6 +526,7 @@ class Agent(
         if (stopRequest(frame)) return
         if (diagnosticsCollector.handle(frame)) return
         if (settingsSync.handle(frame)) return
+        if (deviceNameSync.handle(frame)) return
         if (linksOrFiles(frame)) return
         val result = try {
             requests.handle(frame)
@@ -432,9 +535,11 @@ class Agent(
             return
         }
         when (result) {
-            is RequestResult.Launched -> log.info("launched ${result.packageName}")
+            is RequestResult.Launched ->
+                log.info(if (result.newWindow) "opened a new window of ${result.packageName}" else "launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
-            is RequestResult.SettingsOpened -> log.info("opened the settings of ${result.packageName ?: "every app"}")
+            is RequestResult.SettingsOpened ->
+                log.info("opened the ${result.page.name.lowercase()} settings of ${result.packageName ?: "every app"}")
             is RequestResult.SettingsFailed ->
                 log.warn("could not open the settings of ${result.packageName ?: "every app"}: ${result.reason}")
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")
@@ -449,7 +554,13 @@ class Agent(
             }
             is RequestResult.Caption -> {
                 log.info("task ${result.taskId} is under a title bar ${result.height} pixels high")
-                captions.setHeight(result.taskId, result.height, reporter.reportedBounds(result.taskId))
+                captions.setHeight(
+                    result.taskId,
+                    result.height,
+                    reporter.reportedBounds(result.taskId),
+                    result.startWidth,
+                    result.endWidth,
+                )
             }
             is RequestResult.SizeRefused -> log.warn("did not resize task ${result.taskId}: ${result.reason}")
             is RequestResult.Malformed -> log.warn("dropped a frame: ${result.reason}")
@@ -492,9 +603,11 @@ class Agent(
         if (backgroundApps.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
+        if (googleDeviceIds.handle(envelope)) return true
         if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true
+        if (appReinstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
@@ -628,16 +741,17 @@ class Agent(
         trace.applied((System.nanoTime() - arranging) / 1_000_000.0)
         if (arranger.waiting) checkMoves()
         if (!channel.connected) return
-        reporter.update(
-            running.map { task ->
-                val placed = bounds[task.taskId]
-                if (placed == null || placed == task.bounds) task else task.copy(bounds = placed)
-            },
-            arranger.display,
-        )
+        val placedTasks = running.map { task ->
+            val placed = bounds[task.taskId]
+            val moved = if (placed == null || placed == task.bounds) task else task.copy(bounds = placed)
+            val controls = captions.controls(moved.taskId, moved.bounds, moved.transparentCaption, exclusion)
+            if (controls.isEmpty()) moved else moved.copy(captionInteractive = controls)
+        }
+        reporter.update(placedTasks, arranger.display)
+        pastFirstScreen = placedTasks.filter { it.canGoBack }.map { it.taskId }.toSet()
         val reported = reporter.reported
         val told = reported.mapNotNull { taskId -> reporter.reportedBounds(taskId)?.let { taskId to it } }.toMap()
-        captions.update(told)
+        captions.update(told, placedTasks.filter { it.transparentCaption }.map { it.taskId }.toSet())
         if (told != taskBounds) {
             taskBounds = told
             inputScheduler.post { pointer.retainTasks(reported) }

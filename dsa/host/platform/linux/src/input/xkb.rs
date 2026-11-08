@@ -242,7 +242,17 @@ impl Keyboard {
 
     /// Whether Ctrl or Alt is held, which makes a key a shortcut rather than text.
     pub fn ctrl_or_alt(&self) -> bool {
-        self.active(c"Control") || self.active(c"Mod1")
+        self.ctrl() || self.alt()
+    }
+
+    /// Whether Alt is held.
+    pub fn alt(&self) -> bool {
+        self.active(c"Mod1")
+    }
+
+    /// Whether Ctrl is held.
+    pub fn ctrl(&self) -> bool {
+        self.active(c"Control")
     }
 
     /// What pressing the key with evdev code `code` types.

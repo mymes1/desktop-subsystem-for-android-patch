@@ -1,7 +1,10 @@
 //! The DSA Window Manager (`dsa-wm`): the user-session compositor for Windows.
 //!
-//! Runs in the user session, listens on Hyper-V sockets for guest graphics streams
-//! (ports 5566 and 5567), and delegates accepted streams to a [`GraphicsRenderer`].
+//! Runs in the user session. The graphics renderer runs in a process of its own
+//! (`dsa-gfx.exe`, see `crate::renderer`), which the window manager starts and starts again
+//! when it ends: it takes the guest's graphics streams (ports 5566 and 5567) on the VM's Hyper-V
+//! sockets, which the window manager tells it of. A compositor can also serve the streams
+//! itself through a [`GraphicsRenderer`], as the tests do.
 //!
 //! It owns no window. Each guest app task is shown in a native window of the app's own window
 //! host, a small program named and drawn as the app (see `crate::app_window`). The window
@@ -25,7 +28,10 @@ pub mod adapter;
 pub mod audio;
 pub mod background;
 pub mod clipboard;
+pub mod committed;
 pub mod display_gpu;
+pub mod fluent;
+pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
 pub mod hosts;
@@ -41,6 +47,7 @@ pub mod single_instance;
 pub mod system_settings;
 pub mod tasks;
 pub mod trim;
+pub mod widget_automation;
 pub mod widget_menu;
 pub mod widgets;
 pub mod window_marks;
@@ -295,6 +302,16 @@ impl Compositor {
         }
     }
 
+    /// Leaves the guest's graphics streams to the renderer process (`dsa-gfx.exe`), which
+    /// binds the VM's graphics ports itself: this process then never listens on them. The
+    /// compositor still follows the VM's ID ([`Compositor::vm_id_slot`]), which the renderer is
+    /// told of.
+    pub fn without_graphics_streams(mut self) -> Compositor {
+        self.bind_command = None;
+        self.bind_process_pipe = None;
+        self
+    }
+
     /// Keeps a Start menu shortcut for each app installed in the user's Android, as `setup`
     /// says where. [`Compositor::new`] keeps the user's own Start menu.
     pub fn with_start_menu(mut self, setup: StartMenuSetup) -> Compositor {
@@ -377,14 +394,16 @@ impl Compositor {
             logger.log("dsa-wm starting");
         }
 
-        let bind_cmd = self.bind_command.take().expect("bind_command present");
-        let bind_proc = self
+        // The guest's graphics streams, when this process serves them itself. The window
+        // manager leaves them to its renderer process (`without_graphics_streams`).
+        let cmd_listener = self
+            .bind_command
+            .take()
+            .map(|bind| VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind));
+        let proc_listener = self
             .bind_process_pipe
             .take()
-            .expect("bind_process_pipe present");
-
-        let mut cmd_listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind_cmd);
-        let mut proc_listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind_proc);
+            .map(|bind| VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind));
 
         // 0. The app window hosts, the watch of the guest's tasks, and the requests to end
         // them.
@@ -498,6 +517,9 @@ impl Compositor {
         let cmd_thread = thread::Builder::new()
             .name("dsa-wm-cmd".into())
             .spawn(move || {
+                let Some(mut cmd_listener) = cmd_listener else {
+                    return;
+                };
                 while !cmd_stop.load(Ordering::Relaxed) {
                     match cmd_listener.accept(Duration::from_millis(100)) {
                         Ok(conn) => {
@@ -540,6 +562,9 @@ impl Compositor {
         let proc_thread = thread::Builder::new()
             .name("dsa-wm-pipe".into())
             .spawn(move || {
+                let Some(mut proc_listener) = proc_listener else {
+                    return;
+                };
                 while !proc_stop.load(Ordering::Relaxed) {
                     match proc_listener.accept(Duration::from_millis(100)) {
                         Ok(conn) => {
@@ -1013,6 +1038,10 @@ impl Compositor {
         let logger = self.logger.clone();
         let log = |message: &str| note(logger.as_deref(), message);
         let router = Arc::new(FrameRouter::new());
+        if let Some(presenter) = &self.presenter {
+            let presenter = Arc::clone(presenter);
+            router.on_forget(Box::new(move |display| presenter.forget_display(display)));
+        }
         let mut luid = None;
         let gpu = match &self.presenter {
             None => None,
@@ -1074,6 +1103,7 @@ impl Compositor {
         let manager_stop = Arc::new(AtomicBool::new(false));
         let idle = Arc::new(Mutex::new(IdleTrim::new(IDLE_TRIM_DELAY, Instant::now())));
         let trim_gpu = gpu.clone();
+        let trim_renderer = self.presenter.clone();
         let quiet_router = Arc::clone(&router);
         let setup = ManagerSetup {
             events: events_rx,
@@ -1124,7 +1154,14 @@ impl Compositor {
             .name("dsa-wm-trim".into())
             .spawn(move || {
                 let quiet_for = Box::new(move || quiet_router.quiet_for());
-                trim::run(trim_idle, trim_gpu, quiet_for, trim_stop, trim_logger)
+                trim::run(
+                    trim_idle,
+                    trim_gpu,
+                    trim_renderer,
+                    quiet_for,
+                    trim_stop,
+                    trim_logger,
+                )
             })
             .map_err(|e| log(&format!("could not start the idle memory trim: {e}")))
             .ok();

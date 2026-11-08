@@ -5,11 +5,20 @@
 //! close button, focus and display changes to the code that runs the task, which passes them
 //! to the guest. Closing a window asks the guest to finish its task; the window goes when the
 //! task does, as on every other host.
+//!
+//! macOS draws the title bar. While the task can go back, a back button stands after the
+//! window buttons, as a title bar accessory; an app that draws its own title bar gets a
+//! transparent, full-size content title bar, with its frames under the band
+//! ([`super::title_bar`]). Whenever the band changes (the mode, the back button, the scale,
+//! full screen), the window reports it, so the guest gives the app its inset and the areas
+//! the window's buttons take.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use dsa_host_core::compositor::caption::CaptionBand;
+use dsa_host_core::tasks::Bounds;
 use objc2::msg_send;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
@@ -17,6 +26,7 @@ use objc2::sel;
 
 use super::metal::{FrameRef, Presenter};
 use super::sizing::{picture_in_picture, task_pixels, window_points, Rect, MIN_CONTENT_POINTS};
+use super::title_bar::{back_label, caption_band};
 use crate::input::view::{self, InputSink};
 use crate::objc::{class, ns_string, CGPoint, CGRect, CGSize};
 
@@ -34,12 +44,38 @@ pub trait WindowEvents {
     fn shown(&mut self, _shown: bool) {}
     /// The user started resizing the window by its edge, or let go.
     fn dragging(&mut self, _dragging: bool) {}
+    /// The title bar band over the window's content is `band` now (empty with a standard
+    /// title bar, which sits above the content).
+    fn caption(&mut self, _band: CaptionBand) {}
+    /// The user clicked the title bar's back button: the task should go back.
+    fn back_pressed(&mut self) {}
 }
 
 const STYLE_TITLED: usize = 1 << 0;
 const STYLE_CLOSABLE: usize = 1 << 1;
 const STYLE_MINIATURIZABLE: usize = 1 << 2;
 const STYLE_RESIZABLE: usize = 1 << 3;
+/// `NSWindowStyleMaskFullSizeContentView`: the content runs under the title bar.
+const STYLE_FULL_SIZE_CONTENT: usize = 1 << 15;
+/// `NSWindowTitleVisible` and `NSWindowTitleHidden`.
+const TITLE_VISIBLE: isize = 0;
+const TITLE_HIDDEN: isize = 1;
+/// `NSLayoutAttributeLeading`: a title bar accessory after the window buttons.
+const LAYOUT_LEADING: isize = 5;
+/// `NSBezelStyleToolbar` (formerly `NSBezelStyleTexturedRounded`), the look of a button in a
+/// title bar.
+const BEZEL_TOOLBAR: usize = 11;
+/// `NSViewMinYMargin | NSViewMaxYMargin`: the button stays centred in its accessory.
+const CENTRE_VERTICALLY: usize = 8 | 32;
+/// The back button's accessory and the button in it, in points.
+const BACK_ACCESSORY: CGSize = CGSize {
+    width: 36.0,
+    height: 28.0,
+};
+const BACK_BUTTON: CGSize = CGSize {
+    width: 28.0,
+    height: 22.0,
+};
 const BACKING_BUFFERED: usize = 2;
 const BEHAVIOR_CAN_JOIN_ALL_SPACES: usize = 1 << 0;
 const BEHAVIOR_FULL_SCREEN_PRIMARY: usize = 1 << 7;
@@ -50,6 +86,163 @@ thread_local! {
     /// Each open window's events, by the window's address. Only the main thread touches
     /// windows, so only it has entries.
     static EVENTS: RefCell<HashMap<usize, Box<dyn WindowEvents>>> = RefCell::new(HashMap::new());
+    /// The band each open window last reported, by the window's address.
+    static BANDS: RefCell<HashMap<usize, CaptionBand>> = RefCell::new(HashMap::new());
+}
+
+/// The left and right edges of `view`, in points from its window's left.
+unsafe fn x_range(view: *mut AnyObject) -> (f64, f64) {
+    let bounds: CGRect = msg_send![view, bounds];
+    let in_window: CGRect =
+        msg_send![view, convertRect: bounds, toView: std::ptr::null::<AnyObject>()];
+    (
+        in_window.origin.x,
+        in_window.origin.x + in_window.size.width,
+    )
+}
+
+/// The band `window`'s title bar takes over its content: none with a standard title bar,
+/// else its height and what the window buttons and a shown back button take at its ends.
+unsafe fn band_of(window: *mut AnyObject) -> CaptionBand {
+    let mask: usize = msg_send![window, styleMask];
+    if mask & STYLE_FULL_SIZE_CONTENT == 0 {
+        return CaptionBand::default();
+    }
+    let _: () = msg_send![window, layoutIfNeeded];
+    let content: *mut AnyObject = msg_send![window, contentView];
+    if content.is_null() {
+        return CaptionBand::default();
+    }
+    let bounds: CGRect = msg_send![content, bounds];
+    // The part of the content no title bar covers, in window coordinates (from the bottom).
+    let layout: CGRect = msg_send![window, contentLayoutRect];
+    let height = bounds.size.height - (layout.origin.y + layout.size.height);
+    let mut items = Vec::new();
+    // NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton.
+    for kind in 0usize..3 {
+        let button: *mut AnyObject = msg_send![window, standardWindowButton: kind];
+        if button.is_null() {
+            continue;
+        }
+        let hidden: bool = msg_send![button, isHidden];
+        if !hidden {
+            items.push(x_range(button));
+        }
+    }
+    let accessories: *mut AnyObject = msg_send![window, titlebarAccessoryViewControllers];
+    if !accessories.is_null() {
+        let count: usize = msg_send![accessories, count];
+        for i in 0..count {
+            let accessory: *mut AnyObject = msg_send![accessories, objectAtIndex: i];
+            let hidden: bool = msg_send![accessory, isHidden];
+            let view: *mut AnyObject = msg_send![accessory, view];
+            if !hidden && !view.is_null() {
+                items.push(x_range(view));
+            }
+        }
+    }
+    let scale: f64 = msg_send![window, backingScaleFactor];
+    caption_band(bounds.size.width, height, &items, scale)
+}
+
+/// Tells the window's events and its view the band, when it changed since it was last told.
+unsafe fn report_band(window: *mut AnyObject) {
+    let band = band_of(window);
+    let key = window as usize;
+    let changed = BANDS.with(|bands| bands.borrow_mut().insert(key, band) != Some(band));
+    if !changed {
+        return;
+    }
+    let content: *mut AnyObject = msg_send![window, contentView];
+    if let Some(content) = content.as_ref() {
+        view::set_band_height(content, band.height);
+    }
+    with_events(window, |events| events.caption(band));
+}
+
+/// The back button's action: the button's window's task goes back.
+unsafe extern "C-unwind" fn go_back(_this: &AnyObject, _: Sel, sender: *mut AnyObject) {
+    if sender.is_null() {
+        return;
+    }
+    let window: *mut AnyObject = msg_send![sender, window];
+    if !window.is_null() {
+        with_events(window, |events| events.back_pressed());
+    }
+}
+
+fn back_target_class() -> Result<&'static AnyClass, String> {
+    static CLASS: OnceLock<Result<&'static AnyClass, String>> = OnceLock::new();
+    CLASS
+        .get_or_init(|| unsafe {
+            let superclass = class(c"NSObject")?;
+            let mut builder = ClassBuilder::new(c"DSABackButtonTarget", superclass)
+                .ok_or("the back button's target class is already defined")?;
+            builder.add_method(
+                sel!(goBack:),
+                go_back as unsafe extern "C-unwind" fn(_, _, _),
+            );
+            Ok(builder.register())
+        })
+        .clone()
+}
+
+/// The back button: a `chevron.backward` in the title bar after the window buttons, named
+/// "Back" in the user's language, in a leading title bar accessory that starts hidden.
+/// Returns the accessory and the button's target, which the button holds only weakly.
+unsafe fn add_back_button(
+    window: &AnyObject,
+) -> Result<(Retained<AnyObject>, Retained<AnyObject>), String> {
+    let target: Option<Retained<AnyObject>> = msg_send![back_target_class()?, new];
+    let target = target.ok_or("no target for the back button could be made")?;
+    let label = ns_string(back_label(super::menu_bar::korean()));
+    let image: *mut AnyObject = msg_send![
+        class(c"NSImage")?,
+        imageWithSystemSymbolName: &*ns_string("chevron.backward"),
+        accessibilityDescription: &*label
+    ];
+    let button: *mut AnyObject = msg_send![
+        class(c"NSButton")?,
+        buttonWithImage: image,
+        target: &*target,
+        action: sel!(goBack:)
+    ];
+    if button.is_null() {
+        return Err("AppKit could not make the back button".into());
+    }
+    let _: () = msg_send![button, setBezelStyle: BEZEL_TOOLBAR];
+    let _: () = msg_send![button, setShowsBorderOnlyWhileMouseInside: true];
+    let _: () = msg_send![button, setToolTip: &*label];
+    let _: () = msg_send![button, setAccessibilityLabel: &*label];
+    let _: () = msg_send![
+        button,
+        setFrame: CGRect {
+            origin: CGPoint {
+                x: (BACK_ACCESSORY.width - BACK_BUTTON.width) / 2.0,
+                y: (BACK_ACCESSORY.height - BACK_BUTTON.height) / 2.0,
+            },
+            size: BACK_BUTTON,
+        }
+    ];
+    let _: () = msg_send![button, setAutoresizingMask: CENTRE_VERTICALLY];
+    let allocated: Allocated<AnyObject> = msg_send![class(c"NSView")?, alloc];
+    let holder: Option<Retained<AnyObject>> = msg_send![
+        allocated,
+        initWithFrame: CGRect {
+            origin: CGPoint::default(),
+            size: BACK_ACCESSORY,
+        }
+    ];
+    let holder = holder.ok_or("AppKit could not make the back button's place")?;
+    let _: () = msg_send![&*holder, addSubview: button];
+    let accessory: Option<Retained<AnyObject>> =
+        msg_send![class(c"NSTitlebarAccessoryViewController")?, new];
+    let accessory = accessory.ok_or("AppKit could not make a title bar accessory")?;
+    let _: () = msg_send![&*accessory, setView: &*holder];
+    let _: () = msg_send![&*accessory, setLayoutAttribute: LAYOUT_LEADING];
+    let _: () = msg_send![&*accessory, setHidden: true];
+    let _: () = msg_send![window, addTitlebarAccessoryViewController: &*accessory];
+    Ok((accessory, target))
 }
 
 fn with_events(window: *mut AnyObject, f: impl FnOnce(&mut dyn WindowEvents)) {
@@ -77,6 +270,14 @@ unsafe extern "C-unwind" fn did_resize(_this: &AnyObject, _: Sel, note: *mut Any
     let window: *mut AnyObject = msg_send![note, object];
     let (pixels, _) = content_pixels(window);
     with_events(window, |events| events.resized(pixels));
+    report_band(window);
+}
+
+unsafe extern "C-unwind" fn full_screen_changed(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
+    // Full screen hides the title bar until the pointer reaches the top of the screen, so an
+    // app drawing its own title bar has no band to keep clear there.
+    let window: *mut AnyObject = msg_send![note, object];
+    report_band(window);
 }
 
 unsafe extern "C-unwind" fn should_close(
@@ -106,6 +307,7 @@ unsafe extern "C-unwind" fn did_change_backing(_this: &AnyObject, _: Sel, note: 
         events.scale_changed(scale);
         events.resized(pixels);
     });
+    report_band(window);
 }
 
 unsafe extern "C-unwind" fn did_miniaturize(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
@@ -171,6 +373,15 @@ fn delegate_class() -> Result<&'static AnyClass, String> {
                 sel!(windowDidEndLiveResize:),
                 did_end_live_resize as unsafe extern "C-unwind" fn(_, _, _),
             );
+            for selector in [
+                sel!(windowDidEnterFullScreen:),
+                sel!(windowDidExitFullScreen:),
+            ] {
+                builder.add_method(
+                    selector,
+                    full_screen_changed as unsafe extern "C-unwind" fn(_, _, _),
+                );
+            }
             Ok(builder.register())
         })
         .clone()
@@ -187,6 +398,11 @@ pub struct TaskWindow {
     before_pip: Option<CGRect>,
     /// The task's size, for picture in picture to keep its shape.
     task: (u32, u32),
+    /// The back button's title bar accessory, and the button's target, which the button
+    /// holds only weakly. `None` when AppKit could not make them.
+    back: Option<(Retained<AnyObject>, Retained<AnyObject>)>,
+    /// The frame the window shows now: its texture and the task's part of it.
+    shown: Option<(u64, (u32, u32))>,
 }
 
 impl TaskWindow {
@@ -252,8 +468,19 @@ impl TaskWindow {
                     .insert(Retained::as_ptr(&window) as usize, events)
             });
 
+            let back = match add_back_button(&window) {
+                Ok(back) => Some(back),
+                Err(why) => {
+                    eprintln!("dsa-app-window: task {task_id}'s window has no back button: {why}");
+                    None
+                }
+            };
+
             let _: () = msg_send![&*window, center];
             let _: () = msg_send![&*window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()];
+            // A standard title bar takes no band; saying so at the start also clears what a
+            // window of the task said before this window host started.
+            report_band(Retained::as_ptr(&window) as *mut AnyObject);
             Ok(TaskWindow {
                 window,
                 view,
@@ -261,6 +488,8 @@ impl TaskWindow {
                 presenter,
                 before_pip: None,
                 task: pixels,
+                back,
+                shown: None,
             })
         }
     }
@@ -296,7 +525,73 @@ impl TaskWindow {
         if content != (0, 0) {
             self.task = content;
         }
-        self.presenter.present_surface(texture_id, surface, content)
+        self.presenter
+            .present_surface(texture_id, surface, content)?;
+        self.shown = Some((texture_id, content));
+        Ok(())
+    }
+
+    /// The frame the window shows now: its texture and the task's part of it, from the top
+    /// left. `None` before the first frame.
+    pub fn shown_frame(&self) -> Option<(u64, (u32, u32))> {
+        self.shown
+    }
+
+    /// How many client pixels the title bar band covers at the content's top: 0 with a
+    /// standard title bar.
+    pub fn band_height(&self) -> u32 {
+        unsafe { band_of(self.ptr()) }.height
+    }
+
+    fn ptr(&self) -> *mut AnyObject {
+        Retained::as_ptr(&self.window) as *mut AnyObject
+    }
+
+    /// Whether the app draws its own title bar: the window then has a transparent, full-size
+    /// content title bar with the app under it, keeping only the window buttons (and the back
+    /// button), and the app's `controls` in the band (client pixels) take the pointer while
+    /// the rest of it drags the window. Withdrawn, the window has its standard title bar
+    /// again. The content's new size and the band are reported.
+    pub fn set_app_drawn(&mut self, app_drawn: bool, controls: Vec<Bounds>) {
+        unsafe {
+            let mask: usize = msg_send![&*self.window, styleMask];
+            let was = mask & STYLE_FULL_SIZE_CONTENT != 0;
+            view::set_controls(&self.view, if app_drawn { controls } else { Vec::new() });
+            if was != app_drawn {
+                let mask = if app_drawn {
+                    mask | STYLE_FULL_SIZE_CONTENT
+                } else {
+                    mask & !STYLE_FULL_SIZE_CONTENT
+                };
+                // The window keeps its frame; its content grows under the title bar or
+                // shrinks out from under it.
+                let frame: CGRect = msg_send![&*self.window, frame];
+                let _: () = msg_send![&*self.window, setStyleMask: mask];
+                let _: () = msg_send![&*self.window, setTitlebarAppearsTransparent: app_drawn];
+                let visibility = if app_drawn {
+                    TITLE_HIDDEN
+                } else {
+                    TITLE_VISIBLE
+                };
+                let _: () = msg_send![&*self.window, setTitleVisibility: visibility];
+                let _: () = msg_send![&*self.window, setFrame: frame, display: true];
+                let window = self.ptr();
+                let (pixels, _) = content_pixels(window);
+                with_events(window, |events| events.resized(pixels));
+            }
+            report_band(self.ptr());
+        }
+    }
+
+    /// Shows the back button while the task can go back, and hides it on its first screen.
+    pub fn set_back(&self, back: bool) {
+        let Some((accessory, _)) = &self.back else {
+            return;
+        };
+        unsafe {
+            let _: () = msg_send![&**accessory, setHidden: !back];
+            report_band(self.ptr());
+        }
     }
 
     /// Whether the window is minimized into the Dock.
@@ -468,6 +763,7 @@ impl Drop for TaskWindow {
     fn drop(&mut self) {
         let window = Retained::as_ptr(&self.window) as usize;
         EVENTS.with(|map| map.borrow_mut().remove(&window));
+        BANDS.with(|map| map.borrow_mut().remove(&window));
         view::forget(&self.view);
         unsafe {
             let _: () = msg_send![&*self.window, setDelegate: std::ptr::null::<AnyObject>()];

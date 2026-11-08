@@ -18,48 +18,96 @@ import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
  * its overlap with the task's windows counts, so a task that only changes width needs nothing
  * new.
  *
+ * An app that draws its own title bar (it asked for a transparent caption bar background, as
+ * on Android's desktop windows) is told where the host draws over the band: the caption bar
+ * inset then carries two bounding rectangles (WindowInsets.getBoundingRects), the icon's cell
+ * at the left end and the caption buttons at the right end, as wide as the host said. Those
+ * rectangles are relative to the inset's frame, so that frame is then the task's own width,
+ * given again when the task's left or right edge moves. The app's controls in the rest of the
+ * band ([controls]) take the pointer on the host.
+ *
  * Not thread safe: the agent calls it from one thread.
  */
 class CaptionInsets(
     private val actions: TaskActions,
     private val log: Log,
 ) {
-    private val heights = HashMap<Int, Int>()
+    /** What the host said of a task's band: its height and how far its icon and buttons reach. */
+    private data class Band(val height: Int, val startWidth: Int, val endWidth: Int)
 
-    /** The frame each task was last given; null once its inset was removed. */
-    private val applied = HashMap<Int, TaskBounds?>()
+    /** What a task was last given: the inset's frame and its bounding rectangles. */
+    private data class Given(val frame: TaskBounds, val boundingRects: List<TaskBounds>)
+
+    private val bands = HashMap<Int, Band>()
+
+    /** The tasks whose apps draw their own title bar. */
+    private val drawing = HashSet<Int>()
+
+    /** What each task was last given; null once its inset was removed. */
+    private val applied = HashMap<Int, Given?>()
     private var warned = false
 
-    /** The host's window draws its title bar over the task's top [height] pixels. */
-    fun setHeight(taskId: Int, height: Int, bounds: TaskBounds?) {
-        heights[taskId] = height
+    /**
+     * The host's window draws its title bar over the task's top [height] pixels, its icon's
+     * cell [startWidth] pixels in from the left end and its caption buttons [endWidth] pixels
+     * in from the right end.
+     */
+    fun setHeight(taskId: Int, height: Int, bounds: TaskBounds?, startWidth: Int = 0, endWidth: Int = 0) {
+        bands[taskId] = Band(height, startWidth.coerceAtLeast(0), endWidth.coerceAtLeast(0))
         apply(taskId, bounds)
     }
 
-    /** The tasks the host was told about, where they are now. Forgets the tasks that ended. */
-    fun update(bounds: Map<Int, TaskBounds>) {
-        heights.keys.retainAll(bounds.keys)
+    /**
+     * The tasks the host was told about, where they are now, and those of them whose apps draw
+     * their own title bar. Forgets the tasks that ended.
+     */
+    fun update(bounds: Map<Int, TaskBounds>, appDrawn: Set<Int> = emptySet()) {
+        bands.keys.retainAll(bounds.keys)
         applied.keys.retainAll(bounds.keys)
+        drawing.clear()
+        drawing.addAll(appDrawn intersect bounds.keys)
         for ((taskId, at) in bounds) {
-            if (taskId in heights) apply(taskId, at)
+            if (taskId in bands) apply(taskId, at)
         }
     }
 
+    /**
+     * Where in the title bar band of task [taskId] at [bounds] its app has controls, relative
+     * to the task's top left corner: the parts of [exclusion] (what the apps on the display
+     * keep clear of system gestures, in display pixels) inside the band, between the icon's
+     * cell and the caption buttons. This is how Android's own desktop windows tell an app's
+     * controls in its title bar from the space that drags the window. Empty unless the app
+     * draws its own title bar ([appDrawn]).
+     */
+    fun controls(taskId: Int, bounds: TaskBounds, appDrawn: Boolean, exclusion: List<TaskBounds>): List<TaskBounds> {
+        if (!appDrawn) return emptyList()
+        val band = bands[taskId] ?: return emptyList()
+        return controlsIn(bounds, band.height, band.startWidth, band.endWidth, exclusion)
+    }
+
     private fun apply(taskId: Int, bounds: TaskBounds?) {
-        val height = heights[taskId] ?: return
+        val band = bands[taskId] ?: return
         if (bounds == null || bounds.isEmpty()) return
-        val frame = if (height > 0) frameOf(bounds, height) else null
-        if (taskId in applied && applied[taskId] == frame) return
-        if (frame == null && taskId !in applied) {
+        val given = if (band.height > 0) given(bounds, band, taskId in drawing) else null
+        if (taskId in applied && applied[taskId] == given) return
+        if (given == null && taskId !in applied) {
             applied[taskId] = null
             return
         }
-        if (actions.setCaptionInset(taskId, frame)) {
-            applied[taskId] = frame
+        if (actions.setCaptionInset(taskId, given?.frame, given?.boundingRects.orEmpty())) {
+            applied[taskId] = given
         } else if (!warned) {
             warned = true
             log.warn("could not give task $taskId a top inset for its window's title bar; its app draws under the caption buttons")
         }
+    }
+
+    private fun given(bounds: TaskBounds, band: Band, appDrawn: Boolean): Given {
+        if (!appDrawn) return Given(frameOf(bounds, band.height), emptyList())
+        return Given(
+            TaskBounds(bounds.left, bounds.top, bounds.right, bounds.top + band.height),
+            boundingRectsOf(bounds.right - bounds.left, band.height, band.startWidth, band.endWidth),
+        )
     }
 
     companion object {
@@ -68,5 +116,56 @@ class CaptionInsets(
 
         /** The inset's frame for a task at [bounds] under a title bar [height] pixels high. */
         fun frameOf(bounds: TaskBounds, height: Int) = TaskBounds(-REACH, bounds.top, REACH, bounds.top + height)
+
+        /**
+         * The bounding rectangles of the caption bar of a task [width] pixels wide under a band
+         * [height] pixels high, relative to the band: the icon's cell [startWidth] pixels wide
+         * at the left, the caption buttons [endWidth] pixels wide at the right. Either is left
+         * out when it is 0 wide.
+         */
+        fun boundingRectsOf(width: Int, height: Int, startWidth: Int, endWidth: Int): List<TaskBounds> {
+            val rects = mutableListOf<TaskBounds>()
+            if (startWidth > 0) rects += TaskBounds(0, 0, minOf(startWidth, width), height)
+            if (endWidth > 0) rects += TaskBounds(maxOf(0, width - endWidth), 0, width, height)
+            return rects
+        }
+
+        /**
+         * The parts of [exclusion] (display pixels) in the band of a task at [bounds], between
+         * [startWidth] from its left end and [endWidth] from its right end, [height] pixels
+         * high, relative to the task's top left corner.
+         */
+        fun controlsIn(
+            bounds: TaskBounds,
+            height: Int,
+            startWidth: Int,
+            endWidth: Int,
+            exclusion: List<TaskBounds>,
+        ): List<TaskBounds> {
+            if (height <= 0) return emptyList()
+            val left = bounds.left + startWidth
+            val right = bounds.right - endWidth
+            val top = bounds.top
+            val bottom = bounds.top + height
+            if (right <= left) return emptyList()
+            return exclusion.mapNotNull { area ->
+                val clipped = TaskBounds(
+                    maxOf(area.left, left),
+                    maxOf(area.top, top),
+                    minOf(area.right, right),
+                    minOf(area.bottom, bottom),
+                )
+                if (clipped.isEmpty()) {
+                    null
+                } else {
+                    TaskBounds(
+                        clipped.left - bounds.left,
+                        clipped.top - bounds.top,
+                        clipped.right - bounds.left,
+                        clipped.bottom - bounds.top,
+                    )
+                }
+            }
+        }
     }
 }

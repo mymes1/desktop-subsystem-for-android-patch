@@ -11,15 +11,20 @@ on:
       - "dsa/host/platform/windows/**"
       - "dsa/host/platform/linux/**"
       - "dsa/host/platform/macos/**"
+      - "dsa/host/platform/unix/**"
+      - "dsa/host/core/src/renderer.rs"
+      - "dsa/protocol/renderer.proto"
       - ".github/workflows/test-graphics.yml"
       - "scripts/tests/graphics-workflow.test.sh"
   workflow_dispatch:
 
 concurrency:
-  # A newer push to develop holds every older one, so only the newest is checked. Runs
-  # that never finish are avoided by checking compile and lint before each push.
+  # On develop a run in progress finishes and only the newest waiting run stays: GitHub
+  # keeps one pending run per group, so a newer merge replaces the one still waiting.
+  # The newest run tests everything the dropped ones held. Anywhere else, such as a pull
+  # request, a newer run still replaces the older one.
   group: test-graphics-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
 permissions:
   contents: read
@@ -144,9 +149,23 @@ jobs:
 
       - name: Run host renderer smoke test on software Vulkan
         env:
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host/dist/bin/libgfxstream_backend.so
-        run: uv run dsa/graphics/host/test_host_renderer.py
+        run: |
+          # Mesa names the manifest lvp_icd.json since 25, and lvp_icd.x86_64.json before it.
+          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+          test -f "$icd"
+          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+          uv run dsa/graphics/host/test_host_renderer.py
+
+      - name: Check killing the renderer process keeps the windows and frames resume
+        working-directory: dsa
+        env:
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host/dist/bin/libgfxstream_backend.so
+        run: |
+          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+          cargo test -p dsa-host-unix --test fd_frames
+          cargo test -p dsa-host-linux --test renderer_process -- --nocapture
 
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
@@ -270,6 +289,36 @@ jobs:
         run: |
           cargo test -p dsa-host-windows --test window_manager -- nfr5_unknown_vulkan_image_is_rejected_without_reaching_the_driver --nocapture
 
+      - name: Check a guest command the renderer cannot carry out ends only that guest's stream
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test window_manager -- nfr5_a_guest_command_the_renderer_cannot_carry_out_ends_only_its_stream --nocapture
+
+      - name: Check the renderer survives a lost GPU device and makes it again
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test window_manager -- nfr5_a_lost_device_is_reported_to_the_guest_and_made_again --nocapture
+
+      - name: Check killing the renderer process keeps the windows and frames resume
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test renderer_process -- --nocapture
+
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
         with:
@@ -323,10 +372,22 @@ jobs:
         run: |
           export VK_ICD_FILENAMES="$(brew --prefix molten-vk)/etc/vulkan/icd.d/MoltenVK_icd.json"
           export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix vulkan-loader)/lib:$(brew --prefix molten-vk)/lib"
-          # gfxstream turns on Vulkan portability, which the loader needs to show MoltenVK,
-          # only when it is told the driver is MoltenVK.
+          # gfxstream itself turns on the Vulkan portability the loader needs to show
+          # MoltenVK; this names the driver for the parts of gfxstream that ask.
           export ANDROID_EMU_VK_ICD=moltenvk
+          # The GPU the selection tests look for: MoltenVK's device on the runner, not Lavapipe.
+          export DSA_TEST_GPU_NAME=apple
           uv run dsa/graphics/host/test_host_renderer.py
+
+      - name: Check killing the renderer process keeps the windows and frames resume
+        working-directory: dsa
+        env:
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host-macos/dist/bin/libgfxstream_backend.dylib
+        run: |
+          export VK_ICD_FILENAMES="$(brew --prefix molten-vk)/etc/vulkan/icd.d/MoltenVK_icd.json"
+          export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix vulkan-loader)/lib:$(brew --prefix molten-vk)/lib"
+          export ANDROID_EMU_VK_ICD=moltenvk
+          cargo test -p dsa-host-macos --test renderer_process -- --nocapture
 
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
@@ -364,7 +425,7 @@ jobs:
           dsa/host/platform/windows/installer/build.ps1 -Version 0.1.0 -PlaceholderKernel `
             -GfxstreamBackend $dll
 
-      - name: Verify gfxstream_backend.dll is packaged beside dsa-wm.exe
+      - name: Verify gfxstream_backend.dll and dsa-gfx.exe are packaged beside dsa-wm.exe
         shell: pwsh
         run: |
           $msi = (Resolve-Path "dsa/target/installer/dsa-test-0.1.0.msi").Path
@@ -372,6 +433,13 @@ jobs:
           $dll = Get-ChildItem -Recurse msi-extracted -Filter "gfxstream_backend.dll"
           if (-not $dll) {
             throw "gfxstream_backend.dll was not found beside dsa-wm.exe in the MSI"
+          }
+          $renderer = Get-ChildItem -Recurse msi-extracted -Filter "dsa-gfx.exe" | Select-Object -First 1
+          if (-not $renderer -or $renderer.DirectoryName -ne $dll.DirectoryName) {
+            throw "dsa-gfx.exe is not packaged beside gfxstream_backend.dll and dsa-wm.exe"
+          }
+          if ($renderer.VersionInfo.FileDescription -cne 'Graphics renderer for Android') {
+            throw "dsa-gfx.exe calls itself '$($renderer.VersionInfo.FileDescription)'"
           }
           $lic = Get-ChildItem -Recurse msi-extracted -Filter "gfxstream.txt"
           if (-not $lic) {

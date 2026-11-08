@@ -72,6 +72,9 @@ pub struct ListApps {
 pub struct OpenAppSettings {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Which of Android's pages for the app. Ignored without a package.
+    #[prost(enumeration = "AppSettingsPage", tag = "2")]
+    pub page: i32,
 }
 /// Uninstalls an app the user installed in the caller's Android. Android must be running. The
 /// answer is UninstallResult.
@@ -104,6 +107,10 @@ pub struct CloseTask {
 pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Start another task of the app even when it has one, in a window of its own. Only for an
+    /// app that supports several windows (AppInfo.multiple_windows).
+    #[prost(bool, tag = "2")]
+    pub new_window: bool,
 }
 /// The user's Stop: asks the caller's Android to end every process of an app and give its
 /// memory back, even one a placed widget or a foreground service keeps running.
@@ -138,12 +145,20 @@ pub struct SetTaskDensity {
 }
 /// A task's window draws its title bar over the top `height` pixels of the task: asks the
 /// caller's Android to give the task a top system bar inset of that height. 0 removes it.
+///
+/// `start_width` and `end_width` are how far the window's icon and its caption buttons reach
+/// into the band from its left and right ends, in Android display pixels, which an app that
+/// draws its own title bar keeps its controls out of.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskCaption {
     #[prost(int32, tag = "1")]
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub start_width: u32,
+    #[prost(uint32, tag = "4")]
+    pub end_width: u32,
 }
 /// Turns the connection into a stream of input for the caller's Android: after the answer
 /// (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
@@ -767,19 +782,58 @@ pub struct WidgetPointer {
     #[prost(float, tag = "5")]
     pub y: f32,
 }
-/// Installs an APK in the caller's Android. The service answers at once: Done when it takes an
-/// APK of this name and size, or an error. After Done the client sends the APK's `size` bytes
-/// in ApkChunk frames, which are not answered, and the service answers the same request id once
-/// more: InstallResult once Android has installed the app or refused it, or an error when the
-/// APK did not reach Android. The connection then ends. A second install waits for the first.
+/// One file of an install made of several: an APK of an app that comes as a base APK and
+/// split APKs, or an expansion (OBB) file of that app.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct InstallApk {
-    /// The file's name, without any folder. It ends in ".apk".
+pub struct InstallPart {
+    /// The file's name, without any folder. An APK's ends in ".apk", an expansion file's in ".obb".
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-    /// The APK's length in bytes.
+    /// The file's length in bytes.
     #[prost(uint64, tag = "2")]
     pub size: u64,
+    /// True for an expansion file, which Android gets in the app's folder under Android/obb/ once
+    /// the app is installed.
+    #[prost(bool, tag = "3")]
+    pub obb: bool,
+}
+/// Installs an APK, or an app made of several APKs, in the caller's Android. The service answers
+/// at once: Done when it takes an install of this name, size and parts, or an error. After Done
+/// the client sends the `size` bytes in ApkChunk frames, which are not answered, and the service
+/// answers the same request id once more: InstallResult once Android has installed the app or
+/// refused it, or an error when the files did not reach Android. The connection then ends. A
+/// second install waits for the first.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InstallApk {
+    /// The file's name, without any folder. With no parts it ends in ".apk"; with parts it is the
+    /// name of the bundle the parts come from, such as "notes.xapk".
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// The APK's length in bytes, or with parts the sum of their sizes.
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// The native libraries the APK holds, by ABI, as the client read them from the file's
+    /// `lib/` folder. The service chooses the ABI the app is installed for from them: arm64-v8a
+    /// when translation is on and the x86_64 libraries leave out some of the arm64 ones,
+    /// otherwise what Android chooses. Empty for an APK without native code.
+    #[prost(message, repeated, tag = "3")]
+    pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+    /// Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+    /// another in the ApkChunk frames: the APKs first, then any expansion files. The native
+    /// libraries are then those of the APKs among them, together.
+    #[prost(message, repeated, tag = "4")]
+    pub parts: ::prost::alloc::vec::Vec<InstallPart>,
+}
+/// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
+/// and its splits together.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NativeLibraries {
+    /// Such as "x86_64" or "arm64-v8a".
+    #[prost(string, tag = "1")]
+    pub abi: ::prost::alloc::string::String,
+    /// The library file names, such as "libmain.so", in name order, each once.
+    #[prost(string, repeated, tag = "2")]
+    pub names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Part of an APK's content, on a connection that installs one (InstallApk).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -851,6 +905,13 @@ pub struct PointerEvent {
     pub scroll_x: f32,
     #[prost(float, tag = "10")]
     pub scroll_y: f32,
+    /// A pen's tilt, in degrees from upright, from -90 to 90: positive `tilt_x` leans its top
+    /// toward the right of the screen, positive `tilt_y` toward the bottom (toward the user).
+    /// 0 for a pointer that does not measure it.
+    #[prost(float, tag = "11")]
+    pub tilt_x: f32,
+    #[prost(float, tag = "12")]
+    pub tilt_y: f32,
 }
 /// A key pressed or released in a task's window, sent on a connection that streams input.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -935,7 +996,7 @@ pub struct Rect {
 }
 /// One app task of the caller's Android. Every field is sent each time, so the latest one
 /// replaces what came before.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Task {
     /// Android's task ID, unique while the task lives.
     #[prost(int32, tag = "1")]
@@ -983,6 +1044,19 @@ pub struct Task {
     /// Whether the task's app went into picture-in-picture.
     #[prost(bool, tag = "22")]
     pub picture_in_picture: bool,
+    /// Whether the task's app draws its own title bar (it asked for a transparent caption bar
+    /// background): the window then draws only its caption buttons and the app's icon.
+    #[prost(bool, tag = "23")]
+    pub transparent_caption: bool,
+    /// While `transparent_caption` is set: where in the title bar band the app has controls,
+    /// relative to the task's top left corner in Android display pixels. The rest of the band
+    /// drags the window.
+    #[prost(message, repeated, tag = "24")]
+    pub caption_interactive: ::prost::alloc::vec::Vec<Rect>,
+    /// Whether the task has somewhere to go back to (it is past its first activity), so the
+    /// window shows a back button in the place of the app's icon.
+    #[prost(bool, tag = "25")]
+    pub can_go_back: bool,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1002,7 +1076,7 @@ pub struct TaskFrames {
 /// app's first task, and again before the next one once the app has had no task. In the list
 /// of installed apps it also carries the app's version, dates and sizes; for a task they are
 /// left empty.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AppInfo {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
@@ -1034,6 +1108,50 @@ pub struct AppInfo {
     pub data_bytes: u64,
     #[prost(uint64, tag = "11")]
     pub cache_bytes: u64,
+    /// The ABI the app's native code runs as, such as "x86_64" or "arm64-v8a". Empty for an app
+    /// without native code.
+    #[prost(string, tag = "12")]
+    pub primary_abi: ::prost::alloc::string::String,
+    /// The native libraries the app's APKs on the device hold, base and splits together, by
+    /// ABI. Empty for an app without native code.
+    #[prost(message, repeated, tag = "13")]
+    pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+    /// The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+    /// square PNG image. Empty for an app whose icon is not adaptive, which shows `icon_png`.
+    #[prost(bytes = "vec", tag = "14")]
+    pub caption_icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// Whether the app supports several windows at once, so its windows offer New window.
+    #[prost(bool, tag = "15")]
+    pub multiple_windows: bool,
+}
+/// Installs an app of the caller's Android again from the APKs it has there, with its native
+/// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
+/// running, with translation on to turn it on. The app keeps its data; when Android cannot
+/// keep it, the answer is RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED and nothing changes, unless
+/// `erase_data` is set, which reinstalls the app and erases its data. The answer is
+/// RunAsArmResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetRunAsArm {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub on: bool,
+    #[prost(bool, tag = "3")]
+    pub erase_data: bool,
+}
+/// The answer to SetRunAsArm.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RunAsArmResult {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "RunAsArmStatus", tag = "2")]
+    pub status: i32,
+    /// Android's own words, for the log and a bug report.
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// Whether the app's native code runs as arm64-v8a now.
+    #[prost(bool, tag = "4")]
+    pub on: bool,
 }
 /// The apps installed in the caller's Android that a launcher lists. The list is kept while
 /// the Android is stopped, because its apps stay installed.
@@ -1392,6 +1510,19 @@ pub struct Settings {
     /// chooses another; 0 in a request means the default.
     #[prost(uint32, tag = "15")]
     pub adb_port: u32,
+    /// Whether, while developer mode is on, the service attaches 127.0.0.1:adb_port to the
+    /// caller's adb server by itself (as `adb connect` would), so adb and Android Studio list it
+    /// with nothing typed. On unless the user turned it off; a client sends back the value it
+    /// read. Off, the service sends the adb server nothing.
+    #[prost(bool, tag = "21")]
+    pub adb_auto_connect: bool,
+    /// Where auto-connect stands: "off" (developer mode or auto-connect is off),
+    /// "waiting-for-server" (no adb server runs), "waiting-for-android" (Android is not running
+    /// or adb in Android has not answered yet), "attached" (the adb server lists it) or
+    /// "detached" (the user ran adb disconnect; it is attached again when the adb server
+    /// restarts). Empty from a service that does not report it. A client cannot change it.
+    #[prost(string, tag = "22")]
+    pub adb_auto_connect_state: ::prost::alloc::string::String,
     /// Whether the caller's Android uses an installed ARM translation package. On unless the
     /// user turned it off; a client sends back the value it read. It applies from the next start
     /// of Android, because the ABIs Android installs apps for are fixed at boot.
@@ -1449,6 +1580,56 @@ pub struct NetworkStatus {
 /// they are. The answer is Done once the new disk is in place; the next start boots it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResetData {}
+/// Asks which Android version runs and which can be chosen. The service answers
+/// AndroidVersions.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetAndroidVersions {}
+/// Chooses the Android version this computer follows. Where every user boots the same image,
+/// only an administrator may choose (ERROR_CODE_NOT_ALLOWED otherwise). A major that is not
+/// supported is ERROR_CODE_INVALID_SETTING. A major older than the running one erases every
+/// user's Android data, since Android cannot read data a newer version wrote, so it needs
+/// erase_data (ERROR_CODE_DATA_WOULD_BE_LOST otherwise). The service answers AndroidVersions
+/// and downloads the image at once; it is used from the next start.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UseAndroidVersion {
+    /// The major version to follow; 0 follows the newest supported one.
+    #[prost(uint32, tag = "1")]
+    pub major: u32,
+    #[prost(bool, tag = "2")]
+    pub erase_data: bool,
+}
+/// The Android version: what runs, what is chosen, and what can be.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AndroidVersions {
+    /// The image Android starts from.
+    #[prost(string, tag = "1")]
+    pub version: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub android_major: u32,
+    #[prost(uint64, tag = "3")]
+    pub build: u64,
+    /// The AOSP build ID and the security patch level (YYYY-MM-DD); empty when unknown.
+    #[prost(string, tag = "4")]
+    pub build_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub security_patch: ::prost::alloc::string::String,
+    /// The chosen major version; 0 follows the newest supported one.
+    #[prost(uint32, tag = "6")]
+    pub chosen_major: u32,
+    /// The supported major versions, oldest first.
+    #[prost(uint32, repeated, tag = "7")]
+    pub supported_majors: ::prost::alloc::vec::Vec<u32>,
+    /// The major the choice leads to; it differs from android_major while a switch waits for
+    /// its image.
+    #[prost(uint32, tag = "8")]
+    pub target_major: u32,
+    /// Whether the current image has not finished its first boot yet.
+    #[prost(bool, tag = "9")]
+    pub on_trial: bool,
+    /// The latest news about the image; empty when there is none.
+    #[prost(string, tag = "10")]
+    pub notice: ::prost::alloc::string::String,
+}
 /// What an ARM translation package says of itself, from its arm-translation.json.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationPackage {
@@ -1492,7 +1673,8 @@ pub struct RemoveArmTranslation {}
 /// Where ARM translation stands for the caller.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslation {
-    /// The installed package; absent when there is none.
+    /// The package the caller installed (their own, or Google's translator); absent when there
+    /// is none. It is used in place of the default package.
     #[prost(message, optional, tag = "1")]
     pub package: ::core::option::Option<ArmTranslationPackage>,
     /// The arm_translation setting.
@@ -1515,6 +1697,103 @@ pub struct ArmTranslation {
     /// it applies once Android starts again.
     #[prost(bool, tag = "7")]
     pub restart_needed: bool,
+    /// The default package of the image the caller's Android starts from, which it uses while
+    /// the caller has installed none. Only an x86_64 image has one; absent otherwise.
+    #[prost(message, optional, tag = "8")]
+    pub default_package: ::core::option::Option<ArmTranslationPackage>,
+    /// The translator the caller's Android uses with these settings, from its next start: "default"
+    /// (default_package), "user" (package, the caller's own), "google" (package, Google's
+    /// translator), or empty for none.
+    #[prost(string, tag = "9")]
+    pub translator: ::prost::alloc::string::String,
+}
+/// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
+/// service downloaded from LiteGapps' file host.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsPackage {
+    /// LiteGapps' name for the build: "core".
+    #[prost(string, tag = "1")]
+    pub variant: ::prost::alloc::string::String,
+    /// The build's date, yyyymmdd, from its file name.
+    #[prost(string, tag = "2")]
+    pub version: ::prost::alloc::string::String,
+    /// The Android version the build is for, as LiteGapps names it ("16.0").
+    #[prost(string, tag = "3")]
+    pub android_version: ::prost::alloc::string::String,
+    /// The Android API level the build is for.
+    #[prost(uint32, tag = "4")]
+    pub sdk: u32,
+    /// The processor architecture the build is for, as LiteGapps names it ("x86_64", "arm64").
+    #[prost(string, tag = "5")]
+    pub arch: ::prost::alloc::string::String,
+    /// The file the service downloaded.
+    #[prost(string, tag = "6")]
+    pub file: ::prost::alloc::string::String,
+    /// Where it downloaded it from.
+    #[prost(string, tag = "7")]
+    pub source: ::prost::alloc::string::String,
+    /// The MD5 digest the file host published for it, which the download matched.
+    #[prost(string, tag = "8")]
+    pub md5: ::prost::alloc::string::String,
+}
+/// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
+/// build for the Android version and architecture the running Android reports, downloads it,
+/// checks it, makes a system image of its apps and permission files, and sends the image to
+/// the caller's Android, which lays it over its system from its next start. While it works it
+/// answers the request id with GappsProgress, as often as there is news; it then answers once
+/// more with Gapps, or an error. The connection then ends. Android must be running.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InstallGapps {}
+/// Asks where Google Play stands for the caller. Answered with Gapps.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetGapps {}
+/// Removes the caller's Google apps. Answered with Gapps. Android goes on using an image it
+/// has mounted until it restarts.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoveGapps {}
+/// News of an InstallGapps under way.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsProgress {
+    #[prost(enumeration = "GappsStage", tag = "1")]
+    pub stage: i32,
+    #[prost(uint64, tag = "2")]
+    pub done: u64,
+    /// 0 when not known.
+    #[prost(uint64, tag = "3")]
+    pub total: u64,
+}
+/// Where Google Play stands for the caller.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Gapps {
+    /// The installed package; absent when there is none.
+    #[prost(message, optional, tag = "1")]
+    pub package: ::core::option::Option<GappsPackage>,
+    /// Whether the running Android was asked, and answered: the fields below up to device_id
+    /// hold only then.
+    #[prost(bool, tag = "2")]
+    pub guest_known: bool,
+    /// The Google apps image is on the user's Android disk.
+    #[prost(bool, tag = "3")]
+    pub guest_installed: bool,
+    /// The running Android has the Google apps laid over its system.
+    #[prost(bool, tag = "4")]
+    pub guest_active: bool,
+    /// The running Android's API level and primary ABI.
+    #[prost(uint32, tag = "5")]
+    pub sdk: u32,
+    #[prost(string, tag = "6")]
+    pub abi: ::prost::alloc::string::String,
+    /// The ABIs the running Android installs apps for, in the order it prefers them.
+    #[prost(string, tag = "7")]
+    pub abilist: ::prost::alloc::string::String,
+    /// The running Android's Google Services Framework Android ID, in decimal, which Google's
+    /// page for uncertified devices asks for; empty until Google's apps have one.
+    #[prost(string, tag = "8")]
+    pub device_id: ::prost::alloc::string::String,
+    /// What is installed differs from what the running Android booted with, so it applies once
+    /// Android starts again.
+    #[prost(bool, tag = "9")]
+    pub restart_needed: bool,
 }
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1527,7 +1806,8 @@ pub struct SetDeviceIdentity {
     #[prost(message, optional, tag = "1")]
     pub identity: ::core::option::Option<DeviceIdentity>,
 }
-/// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+/// The names and build fingerprint Android reports to apps. An empty value is the default: the
+/// computer's manufacturer, brand and model, and DSA's own for the rest.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceIdentity {
     #[prost(string, tag = "1")]
@@ -1558,6 +1838,20 @@ pub struct DeviceIdentity {
     pub fingerprint_type: ::prost::alloc::string::String,
     #[prost(string, tag = "12")]
     pub fingerprint_tags: ::prost::alloc::string::String,
+    /// The values below follow the computer and are not chosen: a report carries them, and
+    /// SetDeviceIdentity ignores them. The name the product is sold under, such as
+    /// "Galaxy Book4 Ultra".
+    #[prost(string, tag = "13")]
+    pub model_name: ::prost::alloc::string::String,
+    /// Android's device name: the computer's name.
+    #[prost(string, tag = "14")]
+    pub device_name: ::prost::alloc::string::String,
+    /// The chip's maker and model, such as "Intel" and "Core Ultra 7 155H"; empty when the
+    /// computer does not say.
+    #[prost(string, tag = "15")]
+    pub soc_manufacturer: ::prost::alloc::string::String,
+    #[prost(string, tag = "16")]
+    pub soc_model: ::prost::alloc::string::String,
 }
 /// The answer to GetDeviceIdentity and SetDeviceIdentity.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1569,6 +1863,14 @@ pub struct DeviceIdentityReport {
     /// and incremental version are empty when the image does not say them.
     #[prost(message, optional, tag = "2")]
     pub effective: ::core::option::Option<DeviceIdentity>,
+    /// Every value as Android reports it when the user chooses nothing.
+    #[prost(message, optional, tag = "3")]
+    pub defaults: ::core::option::Option<DeviceIdentity>,
+    /// The fields whose default is the computer's, named as `dsa settings set device.<name>`
+    /// names them (and model_name, device_name, soc_manufacturer, soc_model). Every other
+    /// default is DSA's own.
+    #[prost(string, repeated, tag = "4")]
+    pub from_computer: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
 /// host accessibility client (a screen reader, an inspection tool) that reads that window.
@@ -1858,7 +2160,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1986,6 +2288,18 @@ pub mod request {
         ReadDrag(super::ReadDrag),
         #[prost(message, tag = "322")]
         EndDrag(super::EndDrag),
+        #[prost(message, tag = "330")]
+        GetAndroidVersions(super::GetAndroidVersions),
+        #[prost(message, tag = "331")]
+        UseAndroidVersion(super::UseAndroidVersion),
+        #[prost(message, tag = "400")]
+        InstallGapps(super::InstallGapps),
+        #[prost(message, tag = "401")]
+        GetGapps(super::GetGapps),
+        #[prost(message, tag = "402")]
+        RemoveGapps(super::RemoveGapps),
+        #[prost(message, tag = "340")]
+        SetRunAsArm(super::SetRunAsArm),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1994,7 +2308,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2046,6 +2360,14 @@ pub mod response {
         DragOffer(super::DragOffer),
         #[prost(message, tag = "321")]
         DragData(super::DragData),
+        #[prost(message, tag = "330")]
+        AndroidVersions(super::AndroidVersions),
+        #[prost(message, tag = "400")]
+        Gapps(super::Gapps),
+        #[prost(message, tag = "401")]
+        GappsProgress(super::GappsProgress),
+        #[prost(message, tag = "340")]
+        RunAsArmResult(super::RunAsArmResult),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2265,6 +2587,39 @@ impl SessionState {
             "SESSION_STATE_FROZEN" => Some(Self::Frozen),
             "SESSION_STATE_STOPPING" => Some(Self::Stopping),
             "SESSION_STATE_STALLED" => Some(Self::Stalled),
+            _ => None,
+        }
+    }
+}
+/// One of Android's settings pages for an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AppSettingsPage {
+    /// The app's info: its permissions, storage and notifications.
+    Details = 0,
+    /// The app's aspect ratio, which the user may override.
+    AspectRatio = 1,
+    /// Whether the links the app supports open in the app or in the browser.
+    OpenByDefault = 2,
+}
+impl AppSettingsPage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Details => "APP_SETTINGS_PAGE_DETAILS",
+            Self::AspectRatio => "APP_SETTINGS_PAGE_ASPECT_RATIO",
+            Self::OpenByDefault => "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "APP_SETTINGS_PAGE_DETAILS" => Some(Self::Details),
+            "APP_SETTINGS_PAGE_ASPECT_RATIO" => Some(Self::AspectRatio),
+            "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT" => Some(Self::OpenByDefault),
             _ => None,
         }
     }
@@ -2791,6 +3146,99 @@ impl StatusBarAppearance {
         }
     }
 }
+/// How a SetRunAsArm went.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RunAsArmStatus {
+    Unspecified = 0,
+    /// The app is installed again with the ABI asked for.
+    Success = 1,
+    /// Android cannot change the app's ABI and keep its data; nothing changed. Asking again
+    /// with `erase_data` does it and erases the data.
+    DataWouldBeErased = 2,
+    /// No app of that package is installed.
+    NotInstalled = 3,
+    /// The app is part of the Android image.
+    SystemApp = 4,
+    /// The app's APKs on the device hold no native libraries for that ABI.
+    NoLibraries = 5,
+    /// ARM translation is not on in the running Android, so the app cannot run as ARM.
+    TranslationOff = 6,
+    /// Anything else. The message says what.
+    Other = 7,
+}
+impl RunAsArmStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "RUN_AS_ARM_STATUS_UNSPECIFIED",
+            Self::Success => "RUN_AS_ARM_STATUS_SUCCESS",
+            Self::DataWouldBeErased => "RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED",
+            Self::NotInstalled => "RUN_AS_ARM_STATUS_NOT_INSTALLED",
+            Self::SystemApp => "RUN_AS_ARM_STATUS_SYSTEM_APP",
+            Self::NoLibraries => "RUN_AS_ARM_STATUS_NO_LIBRARIES",
+            Self::TranslationOff => "RUN_AS_ARM_STATUS_TRANSLATION_OFF",
+            Self::Other => "RUN_AS_ARM_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RUN_AS_ARM_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "RUN_AS_ARM_STATUS_SUCCESS" => Some(Self::Success),
+            "RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED" => Some(Self::DataWouldBeErased),
+            "RUN_AS_ARM_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
+            "RUN_AS_ARM_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
+            "RUN_AS_ARM_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
+            "RUN_AS_ARM_STATUS_TRANSLATION_OFF" => Some(Self::TranslationOff),
+            "RUN_AS_ARM_STATUS_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// What an InstallGapps is doing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GappsStage {
+    Unspecified = 0,
+    /// Reading the file host's list of builds.
+    Listing = 1,
+    /// Downloading the build: `done` of `total` bytes.
+    Downloading = 2,
+    /// Checking the build and making the system image.
+    Building = 3,
+    /// Sending the image to Android: `done` of `total` bytes.
+    Sending = 4,
+}
+impl GappsStage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GAPPS_STAGE_UNSPECIFIED",
+            Self::Listing => "GAPPS_STAGE_LISTING",
+            Self::Downloading => "GAPPS_STAGE_DOWNLOADING",
+            Self::Building => "GAPPS_STAGE_BUILDING",
+            Self::Sending => "GAPPS_STAGE_SENDING",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GAPPS_STAGE_UNSPECIFIED" => Some(Self::Unspecified),
+            "GAPPS_STAGE_LISTING" => Some(Self::Listing),
+            "GAPPS_STAGE_DOWNLOADING" => Some(Self::Downloading),
+            "GAPPS_STAGE_BUILDING" => Some(Self::Building),
+            "GAPPS_STAGE_SENDING" => Some(Self::Sending),
+            _ => None,
+        }
+    }
+}
 /// What can be done to an accessibility node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -2867,6 +3315,9 @@ pub enum ErrorCode {
     /// A widget was not placed: its app offers no such widget, Android did not allow it, or the
     /// user canceled its setup. The detail says which.
     WidgetRefused = 9,
+    /// Choosing an older Android major version erases user data, and the request did not agree
+    /// to that. The detail says what would be lost.
+    DataWouldBeLost = 10,
 }
 impl ErrorCode {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -2885,6 +3336,7 @@ impl ErrorCode {
             Self::FileRefused => "ERROR_CODE_FILE_REFUSED",
             Self::InstallRefused => "ERROR_CODE_INSTALL_REFUSED",
             Self::WidgetRefused => "ERROR_CODE_WIDGET_REFUSED",
+            Self::DataWouldBeLost => "ERROR_CODE_DATA_WOULD_BE_LOST",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -2900,6 +3352,7 @@ impl ErrorCode {
             "ERROR_CODE_FILE_REFUSED" => Some(Self::FileRefused),
             "ERROR_CODE_INSTALL_REFUSED" => Some(Self::InstallRefused),
             "ERROR_CODE_WIDGET_REFUSED" => Some(Self::WidgetRefused),
+            "ERROR_CODE_DATA_WOULD_BE_LOST" => Some(Self::DataWouldBeLost),
             _ => None,
         }
     }

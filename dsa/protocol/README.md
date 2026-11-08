@@ -1,8 +1,9 @@
 # protocol
 
 The control channel between the DSA host and the guest, the local API between the DSA
-service and the apps in a user's session, and the connection between the window manager and
-the app window hosts: their definitions, the code generated from them,
+service and the apps in a user's session, the connection between the window manager and the
+app window hosts, and the connection between the window manager and the graphics renderer
+process: their definitions, the code generated from them,
 the checked-in vectors that keep the languages in step, and the transport that carries
 the frames.
 
@@ -14,6 +15,8 @@ the frames.
 | `host_api.sha256` | The schema hash of `host_api.proto`, written by the generator |
 | `window_host.proto` | The only definition of the messages between the window manager and the app window hosts (proto3) |
 | `window_host.sha256` | The schema hash of `window_host.proto`, written by the generator |
+| `renderer.proto` | The only definition of the messages between the window manager and the graphics renderer process (proto3) |
+| `renderer.sha256` | The schema hash of `renderer.proto`, written by the generator |
 | `schema/` | Rust: computes the schema hash (SHA-256 of the definition's tokens) |
 | `codegen/` | Rust: the generator for every language |
 | `rust/` | Rust: the generated types, the frame codecs and the handshakes of every protocol (`dsa-protocol`) |
@@ -44,6 +47,9 @@ the frames.
 - The app window hosts follow the same handshake with the window manager (the window host
   sends the `Hello`), then say which app they show (`Attach`). Only Rust code is generated
   from `window_host.proto`, because both ends are Rust.
+- The graphics renderer process follows the same handshake with the window manager that
+  started it (the renderer sends the `Hello`), then waits for `Start`. Only Rust code is
+  generated from `renderer.proto`, because both ends are Rust.
 - The schema hash ignores comments and layout. Any change to a name, number, type or
   option changes it.
 

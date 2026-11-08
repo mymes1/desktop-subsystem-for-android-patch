@@ -208,4 +208,69 @@ public interface TaskUpdatedOrBuilder extends
    * @return The pictureInPicture.
    */
   boolean getPictureInPicture();
+
+  /**
+   * <pre>
+   * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+   * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+   * an app does on Android's own desktop windows to put its controls, such as a browser's
+   * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+   * over the app, not the app's name, and leaves the rest of the band to the app.
+   * </pre>
+   *
+   * <code>bool transparent_caption = 23;</code>
+   * @return The transparentCaption.
+   */
+  boolean getTransparentCaption();
+
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  java.util.List<io.github.thisisthepy.dsa.control.v1.Rect> 
+      getCaptionInteractiveList();
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  io.github.thisisthepy.dsa.control.v1.Rect getCaptionInteractive(int index);
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  int getCaptionInteractiveCount();
+
+  /**
+   * <pre>
+   * Whether the task has somewhere to go back to: its top activity is not the first one of
+   * the task (it holds more than one activity). The host's window then shows a back button
+   * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+   * task's first screen they never do, so a key never closes the window.
+   * </pre>
+   *
+   * <code>bool can_go_back = 25;</code>
+   * @return The canGoBack.
+   */
+  boolean getCanGoBack();
 }

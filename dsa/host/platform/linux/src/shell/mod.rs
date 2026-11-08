@@ -7,6 +7,8 @@
 //! - [`file_drop`]: files dropped on a task window (`text/uri-list`).
 //! - [`file_drag`]: files an app drags out of its window, as the desktop takes them.
 //! - [`clipboard`]: which clipboard formats carry text.
+//! - [`png`]: PNG images in and out, for the title bar icons and screenshots.
+//! - [`screenshot`]: where a window's screenshot is saved, and what of the frame it keeps.
 //! - [`dbus`]: the session bus side of the notifications (Linux only).
 
 pub mod clipboard;
@@ -14,6 +16,8 @@ pub mod desktop_entry;
 pub mod file_drag;
 pub mod file_drop;
 pub mod notifications;
+pub mod png;
+pub mod screenshot;
 
 #[cfg(target_os = "linux")]
 pub mod dbus;

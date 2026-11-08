@@ -19,6 +19,7 @@ public partial class MainWindow : FluentWindow
         ["background"] = typeof(BackgroundPage),
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
+        ["network"] = typeof(NetworkPage),
         ["advanced"] = typeof(AdvancedPage),
         ["device"] = typeof(DeviceIdentityPage),
         ["about"] = typeof(AboutPage),
@@ -49,6 +50,11 @@ public partial class MainWindow : FluentWindow
             // it does not read itself.
             ApplicationThemeManager.Apply(AppsUseDarkTheme() ? ApplicationTheme.Dark : ApplicationTheme.Light,
                 WindowBackdropType.Mica, true);
+            // A task window's App info names its app: the Apps page opens at that app's row.
+            if (Dsa.Settings.Core.StartArguments.AppOf(Environment.GetCommandLineArgs()) is { } app)
+            {
+                App.Apps.Highlight(app);
+            }
             Navigation.Navigate(StartPage());
             MakePaneScroll();
             _ = App.Settings.LoadAsync();
@@ -83,11 +89,14 @@ public partial class MainWindow : FluentWindow
         if (DroppedFiles(e) is { } files)
         {
             e.Handled = true;
-            // Each APK opens in the APK install window, as it does from Explorer; the bar names
-            // any other file, which is not installed.
+            // Each APK opens in the APK Installer, as it does from Explorer; the bar names any
+            // other file, which is not installed.
             foreach (var apk in files.Where(Dsa.Settings.Core.InstallViewModel.IsApk))
             {
-                ApkInstallWindow.Open(apk);
+                if (Shell.OpenApkInstaller(apk) is { } why)
+                {
+                    await Shell.Tell(App.Text.Get("ApkWindow_Caption"), why);
+                }
             }
             var others = files.Where(f => !Dsa.Settings.Core.InstallViewModel.IsApk(f)).ToList();
             if (others.Count > 0)
@@ -202,8 +211,9 @@ public partial class MainWindow : FluentWindow
         return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }
 
-    /// <summary>The page to open with: <c>--page memory</c> (general, memory, background,
-    /// display, updates, advanced, device, about, widgets or logs) opens another than General.</summary>
+    /// <summary>The page to open with: <c>--page memory</c> (general, memory, apps, background,
+    /// display, updates, network, advanced, device, about, widgets or logs) opens another than
+    /// General, and <c>--app com.example.notes</c> alone opens Apps, where that app's row is.</summary>
     private static Type StartPage()
     {
         var args = Environment.GetCommandLineArgs();
@@ -214,6 +224,6 @@ public partial class MainWindow : FluentWindow
                 return page;
             }
         }
-        return typeof(GeneralPage);
+        return Dsa.Settings.Core.StartArguments.AppOf(args) is null ? typeof(GeneralPage) : typeof(AppsPage);
     }
 }

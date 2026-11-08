@@ -21,7 +21,11 @@
 //! with a frame of that size: a size the user drags to goes to the guest, the window keeps the
 //! size of the frame it shows until the app has drawn a new one, and then takes that frame's
 //! size and shows it in the same commit. It follows the mouse as fast as the app draws, and a
-//! frame is never stretched, cropped or shown with a margin.
+//! frame is never stretched, and never cropped or shown with a margin while the user resizes.
+//! The one size it takes before a frame of it is the one Windows suggests when the window
+//! moves to a monitor of another scale: kept at the old size, the window would be moved back
+//! to the monitor it came from, and its scale and size would flap. Until the app draws the new
+//! size, it shows its last frame 1:1.
 //!
 //! A window also follows how its app asks to be shown ([`ModeState`]): an app that fills the
 //! screen gets a window that covers its monitor with no title bar, and one in
@@ -30,6 +34,10 @@
 //! other, so the window takes it together with a frame of that size. A window the user's
 //! settings for the app make fixed in size cannot be resized or maximized by the user; it
 //! still takes the sizes Android gives it.
+//!
+//! Each window's system menu carries the Android window menu after Windows' own items
+//! ([`super::system_menu`]). Its Screenshot is taken here ([`super::screenshot`]); every other
+//! item is reported to the window manager, which carries it out.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -37,10 +45,13 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
+use dsa_host_core::compositor::caption::CaptionBand;
 use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
-use dsa_host_core::compositor::window_sizing::{maximized_position, min_client_size};
+use dsa_host_core::compositor::window_sizing::{
+    maximized_position, min_client_size, rescaled_rect,
+};
 use dsa_host_core::input::InputEvent;
 use windows_sys::Win32::Foundation::{
     GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
@@ -87,6 +98,7 @@ use super::drop_target::{self, DropHandler};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
 use super::pointer::PointerWindow;
+use super::system_menu::{self, SystemMenuItem};
 
 /// A task window that is open, as tests and logs see it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,6 +121,9 @@ const WM_APP_COMMANDS: u32 = WM_APP + 1;
 const WM_APP_QUIT: u32 = WM_APP + 2;
 /// Sent to a task window when a frame of another size than the window's is kept for it.
 const WM_APP_FRAME_READY: u32 = WM_APP + 4;
+/// Sent to a task window when the color its title bar's band is filled with changes: the
+/// color in `wparam`, and `lparam` 0 when the band is left as the app draws it.
+const WM_APP_BAND_COLOUR: u32 = WM_APP + 5;
 
 /// The message window's timer, which reports windows left showing a frame of an older size.
 const TICK_TIMER: usize = 1;
@@ -256,6 +271,11 @@ struct WindowData {
     /// Whether the window is sizing itself (for Android, or for a change of mode) rather than
     /// being sized by the user.
     self_sizing: Cell<bool>,
+    /// Whether the window is taking the size the desktop suggests for its monitor's new scale,
+    /// which it takes at once rather than wait for a frame of it.
+    rescaling: Cell<bool>,
+    /// Where a screenshot that failed says why.
+    logger: Option<Arc<CompositorLogger>>,
 }
 
 /// The UI thread's state, reached from the message window's procedure.
@@ -263,6 +283,8 @@ struct Ui {
     open: HashMap<i32, HWND>,
     commands: Receiver<ToHost>,
     setup: UiSetup,
+    /// Whether the windows' system menu offers New window, as the window manager last said.
+    new_window: bool,
 }
 
 thread_local! {
@@ -342,6 +364,7 @@ fn run(setup: UiSetup, commands: Receiver<ToHost>, ready: Sender<Result<isize, S
                 open: HashMap::new(),
                 commands,
                 setup,
+                new_window: false,
             });
         });
         let _ = ready.send(Ok(message_window as isize));
@@ -463,6 +486,13 @@ unsafe extern "system" fn task_window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     if let Some(data) = window_data(hwnd) {
+        // The Android items of the system menu; Windows' own commands go on below.
+        if message == WM_SYSCOMMAND {
+            if let Some(item) = system_menu::chosen(wparam) {
+                menu_chosen(hwnd, data, item);
+                return 0;
+            }
+        }
         if let Some(result) = mode_message(hwnd, data, message, wparam, lparam) {
             return result;
         }
@@ -539,6 +569,8 @@ unsafe extern "system" fn task_window_proc(
                     if titled(data) {
                         data.caption.paint(hwnd, data.presenter.borrow().as_deref());
                     }
+                    // A narrow window has no room for the icon's cell, and so no back arrow.
+                    sync_back_button(hwnd, data);
                 }
             }
             0
@@ -569,6 +601,15 @@ unsafe extern "system" fn task_window_proc(
         WM_APP_FRAME_READY => {
             if let Some(data) = window_data(hwnd) {
                 take_kept_frame(hwnd, data);
+            }
+            0
+        }
+        WM_APP_BAND_COLOUR => {
+            // The app's frames show whether it leaves the title bar's band empty.
+            if let Some(data) = window_data(hwnd) {
+                let fill = (lparam != 0).then_some(wparam as u32);
+                let presenter = data.presenter.borrow().clone();
+                data.caption.set_fill(hwnd, fill, presenter.as_deref());
             }
             0
         }
@@ -666,37 +707,62 @@ unsafe extern "system" fn task_window_proc(
                 if titled(data) {
                     data.caption.report_height(hwnd, &*data.report);
                 }
+                // A splash still up keeps its icon sharp and its size on the new monitor.
+                if let Some(presenter) = data.presenter.borrow().as_deref() {
+                    presenter.splash_dpi_changed(dpi.max(96));
+                }
             }
             // A per-monitor aware window is handed the rectangle that keeps its size in
-            // points on the new monitor, and applies it itself, within what Android can
-            // draw.
+            // points on the new monitor, and takes it at once (keep_to_frame), within what
+            // Android can draw and the new monitor's work area. The guest's display can be
+            // larger than any monitor, and a window larger than its monitor reaches onto the
+            // next one, which can change its scale again.
             let suggested = &*(lparam as *const RECT);
-            let (mut width, mut height) = (
-                suggested.right - suggested.left,
-                suggested.bottom - suggested.top,
-            );
+            let zoomed = IsZoomed(hwnd) != 0;
+            let mut limit = (i32::MAX, i32::MAX);
             if let Some(max) = data.and_then(|data| data.max_client.get()) {
-                let (max_width, max_height) = outer_size(max, dpi.max(96), IsZoomed(hwnd) != 0);
-                width = width.min(max_width);
-                height = height.min(max_height);
+                limit = outer_size(max, dpi.max(96), zoomed);
             }
+            // A maximized window is kept to its monitor by Windows, and one that fills its
+            // monitor covers more than the work area.
+            if !zoomed && data.is_some_and(titled) {
+                if let Some(work) = work_area(suggested) {
+                    limit = (
+                        limit.0.min(work.right - work.left),
+                        limit.1.min(work.bottom - work.top),
+                    );
+                }
+            }
+            let (x, y, width, height) = rescaled_rect(
+                (
+                    suggested.left,
+                    suggested.top,
+                    suggested.right - suggested.left,
+                    suggested.bottom - suggested.top,
+                ),
+                limit,
+            );
             if let Some(data) = data {
                 data.self_sizing.set(true);
+                data.rescaling.set(true);
             }
             SetWindowPos(
                 hwnd,
                 std::ptr::null_mut(),
-                suggested.left,
-                suggested.top,
+                x,
+                y,
                 width,
                 height,
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
             if let Some(data) = data {
+                data.rescaling.set(false);
                 data.self_sizing.set(false);
                 if titled(data) {
                     data.caption.paint(hwnd, data.presenter.borrow().as_deref());
                 }
+                // The icon's cell follows the scale.
+                sync_back_button(hwnd, data);
             }
             0
         }
@@ -706,6 +772,7 @@ unsafe extern "system" fn task_window_proc(
                 data.caption.report_height(hwnd, &*data.report);
                 data.caption
                     .repaint(hwnd, data.presenter.borrow().as_deref());
+                sync_back_button(hwnd, data);
             }
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
@@ -779,6 +846,37 @@ unsafe extern "system" fn task_window_proc(
     }
 }
 
+/// The user chose `item` in `hwnd`'s system menu. The screenshot is taken here; the window
+/// manager carries out the rest.
+unsafe fn menu_chosen(hwnd: HWND, data: &WindowData, item: SystemMenuItem) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY};
+    if item == SystemMenuItem::Screenshot {
+        match data.presenter.borrow().clone() {
+            Some(presenter) => super::screenshot::take(
+                presenter,
+                hwnd as isize,
+                system_menu::display_text().screenshot_file,
+                data.logger.clone(),
+            ),
+            None => note(
+                data.logger.as_deref(),
+                "the screenshot was not taken: the window shows no frames",
+            ),
+        }
+        return;
+    }
+    if let Some(action) = system_menu::action(item) {
+        // Each of these opens a window in another program (the app's new task, Android's
+        // settings, DSA's settings). The user asked for it here, so that window may come to
+        // the front rather than only flash on the taskbar.
+        AllowSetForegroundWindow(ASFW_ANY);
+        (data.report)(FromHost::MenuChosen {
+            task_id: data.task_id,
+            action,
+        });
+    }
+}
+
 /// A size is proposed for `hwnd` (`pos`, a step of a drag, a maximise, a move to another
 /// monitor): the guest is asked for it, and the window takes the size of a frame instead, so
 /// it is never shown at a size other than the frame in it. The edges the size change did not
@@ -813,6 +911,15 @@ unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     let Some(presenter) = data.presenter.borrow().clone() else {
         return;
     };
+    // The size the desktop suggests for a new monitor scale is taken at once. Kept at the old
+    // frame's size, the window would be too large or too small for the new monitor by the
+    // ratio of the scales, the desktop would find it on the monitor it came from, change its
+    // scale back and suggest the size scaled the other way, and the window and its task would
+    // flap between the two sizes.
+    if data.rescaling.get() {
+        presenter.scale_changed(proposed);
+        return;
+    }
     let Some(size) = presenter.size_for(proposed) else {
         return;
     };
@@ -926,6 +1033,19 @@ fn titled(data: &WindowData) -> bool {
     data.shown_mode.get() != WindowMode::Fullscreen
 }
 
+/// Tells the window's UI Automation tree whether the title bar shows the back arrow now, and
+/// the icon's cell it is in, so its button comes, goes and moves with the arrow.
+unsafe fn sync_back_button(hwnd: HWND, data: &WindowData) {
+    let cell = if titled(data) && data.caption.shows_back() {
+        data.caption.layout(hwnd).icon_cell()
+    } else {
+        None
+    };
+    if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
+        tree.set_back(hwnd as isize, cell);
+    }
+}
+
 /// The whole of the monitor `hwnd` is on, when the monitor says.
 unsafe fn monitor_rect(hwnd: HWND) -> Option<RECT> {
     let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -972,6 +1092,7 @@ unsafe fn mode_message(
                 let shown = mode.toggle_fullscreen();
                 data.mode.set(mode);
                 apply_mode(hwnd, data, shown);
+                sync_back_button(hwnd, data);
             }
             Some(0)
         }
@@ -1055,7 +1176,7 @@ unsafe fn apply_mode(hwnd: HWND, data: &WindowData, mode: WindowMode) {
             // No title bar, so no top inset: the app draws to the monitor's top edge.
             (data.report)(FromHost::Caption {
                 task_id: data.task_id,
-                height: 0,
+                band: CaptionBand::default(),
             });
             if let Some(presenter) = data.presenter.borrow().as_deref() {
                 presenter.hide_caption();
@@ -1180,6 +1301,11 @@ impl Ui {
                     ToHost::Retitle { task_id, title } => {
                         if let Some(hwnd) = self.open.get(&task_id) {
                             SetWindowTextW(*hwnd, wide(&title).as_ptr());
+                            // The title bar shows the name too.
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_title(*hwnd, &title, presenter.as_deref());
+                            }
                         }
                     }
                     ToHost::Resize {
@@ -1235,6 +1361,7 @@ impl Ui {
                                 let shown = state.app_asks(mode);
                                 data.mode.set(state);
                                 apply_mode(*hwnd, data, shown);
+                                sync_back_button(*hwnd, data);
                             }
                         }
                     }
@@ -1244,6 +1371,39 @@ impl Ui {
                                 let presenter = data.presenter.borrow().clone();
                                 data.caption.set_tone(*hwnd, tone, presenter.as_deref());
                             }
+                        }
+                    }
+                    ToHost::CaptionMode {
+                        task_id,
+                        app_drawn,
+                        interactive,
+                    } => {
+                        if let Some(hwnd) = self.open.get(&task_id) {
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_mode(
+                                    *hwnd,
+                                    app_drawn,
+                                    interactive,
+                                    presenter.as_deref(),
+                                );
+                            }
+                        }
+                    }
+                    ToHost::CaptionBack { task_id, back } => {
+                        if let Some(hwnd) = self.open.get(&task_id) {
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_back(*hwnd, back, presenter.as_deref());
+                                sync_back_button(*hwnd, data);
+                            }
+                        }
+                    }
+                    ToHost::AppMenu { new_window } => {
+                        // Every window of the app has the same menu, and the next ones too.
+                        self.new_window = new_window;
+                        for hwnd in self.open.values() {
+                            system_menu::apply(*hwnd, new_window);
                         }
                     }
                 }
@@ -1327,6 +1487,7 @@ impl Ui {
             accessibility: RefCell::new(AccessibilityWindow::new(
                 task_id,
                 size,
+                self.setup.input.clone(),
                 self.setup.accessibility.clone(),
                 self.setup.logger.clone(),
             )),
@@ -1334,7 +1495,13 @@ impl Ui {
             min_client: Cell::new(None),
             reporting: Cell::new(false),
             minimized: Cell::new(false),
-            caption: CaptionWindow::new(task_id, TASK_STYLE, TASK_EX_STYLE),
+            caption: CaptionWindow::new(
+                task_id,
+                TASK_STYLE,
+                TASK_EX_STYLE,
+                ICON_ID,
+                self.setup.input.clone(),
+            ),
             drag_edges: Cell::new((false, false)),
             following: Cell::new(false),
             mode: Cell::new(ModeState::new()),
@@ -1342,6 +1509,8 @@ impl Ui {
             resizable: Cell::new(true),
             restore: Cell::new(None),
             self_sizing: Cell::new(false),
+            rescaling: Cell::new(false),
+            logger: self.setup.logger.clone(),
         }));
         let class = wide(TASK_CLASS);
         let hwnd = CreateWindowExW(
@@ -1369,6 +1538,8 @@ impl Ui {
         }
         super::pointer::deliver_contacts_at_once(hwnd);
         window_marks::mark_task(hwnd as isize, task_id);
+        // The Android window menu, under Windows' own items.
+        system_menu::apply(hwnd, self.new_window);
         // Files dropped from Explorer go to the task's app.
         if let Some(handler) = &self.setup.drops {
             if let Err(why) = drop_target::register(hwnd as isize, task_id, Arc::clone(handler)) {
@@ -1404,6 +1575,17 @@ impl Ui {
                 // drops the message.
                 unsafe { PostMessageW(window as HWND, WM_APP_FRAME_READY, 0, 0) };
             }));
+            presenter.on_band_colour(Box::new(move |fill| {
+                // SAFETY: as above.
+                unsafe {
+                    PostMessageW(
+                        window as HWND,
+                        WM_APP_BAND_COLOUR,
+                        fill.unwrap_or(0) as WPARAM,
+                        LPARAM::from(fill.is_some()),
+                    )
+                };
+            }));
             self.setup
                 .presenters
                 .lock()
@@ -1424,7 +1606,8 @@ impl Ui {
         if let Some(data) = window_data(hwnd) {
             data.caption.extend_frame(hwnd);
             data.caption.report_height(hwnd, &*self.setup.report);
-            data.caption.paint(hwnd, data.presenter.borrow().as_deref());
+            data.caption
+                .set_title(hwnd, title, data.presenter.borrow().as_deref());
             // Until the app's first frame the window shows the app's icon on a splash
             // background, never the desktop through an empty window. It is on the screen
             // before the window is shown.

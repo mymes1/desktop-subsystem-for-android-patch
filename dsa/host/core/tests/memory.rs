@@ -50,7 +50,7 @@ fn nfr2_the_vm_grows_when_the_guest_runs_short_up_to_its_maximum() {
 }
 
 #[test]
-fn nfr2_the_vm_gives_memory_back_once_the_guest_is_calm_but_not_below_its_base() {
+fn nfr2_the_vm_gives_memory_back_on_the_next_calm_report_but_not_below_its_base() {
     use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
     let start = Instant::now();
     let mut growth = MemoryGrowth::new(3072, 16384);
@@ -58,15 +58,17 @@ fn nfr2_the_vm_gives_memory_back_once_the_guest_is_calm_but_not_below_its_base()
         growth.on_pressure(&pressure(2900, 100, 0.0), start),
         Some(GrowthAction::Resize(4608))
     );
-    let t = start + Duration::from_secs(5);
+    // Still settling right after the growth.
+    let t = start + Duration::from_secs(2);
     assert_eq!(growth.on_pressure(&pressure(4400, 3000, 0.0), t), None);
-    // Calm for 30 seconds: back to what it uses plus headroom, here the base.
-    let t = t + Duration::from_secs(31);
+    // The apps closed: the first calm report after the growth settled takes the memory
+    // back, to what the guest uses plus headroom, here the base. No calm stretch to wait out.
+    let t = start + Duration::from_secs(5);
     assert_eq!(
         growth.on_pressure(&pressure(4400, 3600, 0.0), t),
         Some(GrowthAction::Resize(3072))
     );
-    let t = t + Duration::from_secs(60);
+    let t = t + Duration::from_secs(5);
     assert_eq!(growth.on_pressure(&pressure(2900, 2000, 0.0), t), None);
 }
 
@@ -370,6 +372,7 @@ fn snapshot() -> MemorySnapshot {
         host: vec![
             host(HostRole::Vm, 4, 600),
             host(HostRole::WindowManager, 10, 120),
+            host(HostRole::Renderer, 13, 80),
             host(HostRole::AppWindow, 11, 50),
             host(HostRole::AppWindow, 12, 50),
         ],
@@ -380,8 +383,9 @@ fn snapshot() -> MemorySnapshot {
 fn nfr1_the_log_line_sums_the_host_and_says_where_the_guests_memory_goes() {
     assert_eq!(
         snapshot().summary_line(),
-        "memory: host 820 MiB (vm 600, window manager 120, 2 app windows 100); \
-         guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), pss 650 MiB, 42 s ago"
+        "memory: host 900 MiB (vm 600, window manager 120, graphics renderer 80, 2 app windows \
+         100); guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), pss 650 MiB, \
+         42 s ago"
     );
     let no_guest = MemorySnapshot {
         guest: None,
@@ -389,7 +393,8 @@ fn nfr1_the_log_line_sums_the_host_and_says_where_the_guests_memory_goes() {
     };
     assert_eq!(
         no_guest.summary_line(),
-        "memory: host 600 MiB (vm 600, window manager 0, 0 app windows 0); guest has not reported"
+        "memory: host 600 MiB (vm 600, window manager 0, graphics renderer 0, 0 app windows 0); \
+         guest has not reported"
     );
 }
 
@@ -403,9 +408,10 @@ fn nfr1_the_snapshot_crosses_the_local_api_unchanged() {
 fn nfr1_the_report_dsa_memory_prints_names_every_part() {
     let text = snapshot().to_string();
     for part in [
-        "Host: 820 MiB in all",
+        "Host: 900 MiB in all",
         "vm",
         "window manager",
+        "graphics renderer pid 13",
         "app window",
         "Android (42 s ago): 2048 of 4096 MiB in use",
         "page cache 900 MiB",
@@ -530,4 +536,110 @@ fn nfr2_the_window_manager_gives_memory_back_once_no_window_has_been_open_a_whil
     trim.task_event(Some(&opened(3)), at(410));
     trim.task_event(None, at(420));
     assert!(trim.due(at(450)));
+}
+
+#[test]
+fn nfr2_memory_the_kernel_reserved_at_boot_is_not_counted_as_free_memory_held() {
+    // The guest uses 2048 MiB of its 4096 MiB total, and reserved 104 MiB of the 4200 MiB it
+    // was given at boot: 2152 MiB the host cannot take back while the VM runs.
+    let mut snapshot = snapshot();
+    snapshot.host[0].working_set_kb = 2160 * MIB;
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(8 * MIB));
+    // A VM that has returned every free page holds nothing beyond.
+    snapshot.host[0].working_set_kb = 2152 * MIB;
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(0));
+    // A guest that could not count what it was given still reports what it uses.
+    let mut uncounted = report();
+    uncounted.mem_online_kb = 0;
+    snapshot.guest = Some(GuestMemoryReport {
+        memory: GuestMemory::from_control(uncounted),
+        age: Duration::ZERO,
+    });
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(104 * MIB));
+}
+
+#[test]
+fn nfr2_the_window_manager_gives_memory_back_as_soon_as_no_window_is_open() {
+    use dsa_host_core::memory::IDLE_TRIM_DELAY;
+    let start = Instant::now();
+    let mut trim = IdleTrim::new(IDLE_TRIM_DELAY, start);
+    trim.sync(&[opened(1)], start);
+    assert!(!trim.due(start));
+    trim.task_event(Some(&TaskEvent::Removed { task_id: 1 }), start);
+    // The trim's next check, a second later at most, gives it back.
+    assert!(trim.due(start));
+}
+
+#[test]
+fn nfr2_a_still_screen_gets_the_gpu_driver_trim_within_seconds() {
+    use dsa_host_core::memory::QUIET_TRIM_DELAY;
+    assert!(QUIET_TRIM_DELAY <= Duration::from_secs(5));
+}
+
+#[test]
+fn nfr2_the_window_managers_committed_memory_is_broken_down_by_owner() {
+    use dsa_host_core::memory::{committed_line, CommittedMemory};
+    let committed = CommittedMemory {
+        private_kb: Some(453 * MIB),
+        walked_private_kb: 450 * MIB,
+        process_heap_kb: 20 * MIB,
+        other_heaps_kb: 30 * MIB,
+        other_heaps: 4,
+        gpu_mapped_kb: 100 * MIB,
+        direct_kb: 300 * MIB,
+        largest_private_kb: vec![64 * MIB, 3 * MIB / 2],
+        own_live_kb: Some(12 * MIB),
+        gpu_local_kb: Some(220 * MIB),
+        gpu_non_local_kb: None,
+    };
+    assert_eq!(
+        committed_line(&committed),
+        "committed memory by owner: private 453 MiB (450 found); default heap 20 (the window \
+         manager's own allocations 12); 4 other heaps 30; GPU-mapped 100; allocated directly 300 \
+         (largest allocations 64.0, 1.5 MiB); GPU memory 220 MiB, GPU-mapped system memory ? MiB"
+    );
+    let unknown = CommittedMemory::default();
+    assert!(committed_line(&unknown).contains("(largest allocations none MiB)"));
+}
+
+#[test]
+fn nfr5_the_renderers_memory_is_logged_under_its_own_process() {
+    use dsa_host_core::memory::{HeldMemory, RendererMemory};
+    use dsa_host_core::renderer::{renderer_line, RendererProcessMemory};
+    let memory = RendererProcessMemory {
+        process_id: 4242,
+        held: HeldMemory {
+            working_set_kb: Some(310 * MIB),
+            private_kb: Some(290 * MIB),
+            gpu_local_kb: None,
+            gpu_non_local_kb: None,
+        },
+        counted: Some(RendererMemory {
+            device_local_kb: 200 * MIB,
+            device_local_count: 40,
+            host_visible_kb: 96 * MIB,
+            host_visible_count: 6,
+            imported_kb: 0,
+            imported_count: 0,
+            largest_kb: 32 * MIB,
+            guest_processes: 7,
+        }),
+    };
+    assert_eq!(
+        renderer_line(Some(&memory)),
+        "graphics renderer (dsa-gfx, pid 4242): working set 310 MiB, private 290 MiB; GPU-only \
+         200 MiB in 40, CPU-mapped 96 MiB in 6, imported 0 MiB in 0, largest 32 MiB, 7 guest \
+         processes connected"
+    );
+    // The report the renderer sends carries all of it to the window manager.
+    let carried = RendererProcessMemory::from_report(&memory.to_report(9));
+    assert_eq!(carried, memory);
+    // A renderer that cannot count says so rather than showing zeros, and one that does not
+    // answer says that.
+    let uncounted = RendererProcessMemory {
+        counted: None,
+        ..memory
+    };
+    assert!(renderer_line(Some(&uncounted)).contains("its GPU allocations: no count"));
+    assert!(renderer_line(None).contains("not running or not answering"));
 }

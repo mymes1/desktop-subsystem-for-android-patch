@@ -6,19 +6,25 @@
 //! GPU go in without a copy through the CPU: each dmabuf becomes a pixmap (DRI3), and Render
 //! composites it onto the window, which also puts its R, G, B order into the window's. The
 //! window's pointer input goes to the task as from its Wayland window.
+//!
+//! Alt+Space in the window opens DSA's window menu as an override-redirect window that takes
+//! the pointer and the keyboard while it is open. Its Move and Size ask the window manager for
+//! its keyboard move and size (`_NET_WM_MOVERESIZE`), and More window options for its own
+//! window menu (`_GTK_SHOW_WINDOW_MENU`), each only when the window manager lists it in
+//! `_NET_SUPPORTED`; one that does not is logged and nothing else happens.
 
 use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
 
 use dsa_host_core::compositor::window_hosts::FromHost;
-use dsa_host_core::input::{MouseButton, WindowInput};
+use dsa_host_core::input::WindowInput;
 use x11rb::connection::Connection;
 use x11rb::protocol::dri3::ConnectionExt as _;
 use x11rb::protocol::render::{ConnectionExt as _, PictOp};
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, CreateGCAux,
-    CreateWindowAux, EventMask, ImageFormat, PropMode, WindowClass,
+    CreateWindowAux, EventMask, GrabMode, ImageFormat, KeyButMask, PropMode, WindowClass,
 };
 use x11rb::protocol::Event as XEvent;
 use x11rb::rust_connection::RustConnection;
@@ -54,7 +60,49 @@ pub struct X11Pip {
     /// The Render format of the windows' visual.
     window_format: Option<u32>,
     dri3: bool,
+    /// The window menu's window while it is open, which the event thread reads.
+    menu_window: Arc<Mutex<Option<u32>>>,
+    /// The window menu's window and its graphics context.
+    menu: Option<(u32, u32)>,
+    wm: WmAtoms,
 }
+
+/// What the window manager is asked through, and what it says it supports.
+struct WmAtoms {
+    moveresize: Option<u32>,
+    show_menu: Option<u32>,
+    change_state: Option<u32>,
+    maximized: Option<(u32, u32)>,
+    /// `_NET_SUPPORTED` on the root window.
+    supported: Vec<u32>,
+}
+
+impl WmAtoms {
+    /// `atom`, when the window manager lists it as supported.
+    fn supported(&self, atom: Option<u32>) -> Option<u32> {
+        atom.filter(|atom| self.supported.contains(atom))
+    }
+}
+
+/// Input on the window menu of a picture-in-picture window, or the key that opens it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MenuInput {
+    /// Alt+Space in a task's picture-in-picture window.
+    Open { task_id: i32 },
+    /// The pointer moved to `position` on the menu (its pixels, maybe outside it).
+    Moved((f64, f64)),
+    /// A button went down or up at `position` on the menu.
+    Button { down: bool, position: (f64, f64) },
+    /// A key went down, by its evdev code.
+    Key(u32),
+    /// The pointer left the menu.
+    Left,
+    /// The menu's window must be drawn again.
+    Exposed,
+}
+
+/// X11's key codes are evdev's plus 8.
+const X11_KEYCODE_OFFSET: u8 = 8;
 
 fn atom(connection: &RustConnection, name: &[u8]) -> Option<u32> {
     Some(connection.intern_atom(false, name).ok()?.reply().ok()?.atom)
@@ -106,13 +154,38 @@ impl X11Pip {
             })
             .unwrap_or((None, None));
         let by_window = Arc::new(Mutex::new(HashMap::new()));
+        let menu_window = Arc::new(Mutex::new(None));
         {
             let connection = connection.clone();
             let by_window = by_window.clone();
+            let menu_window = menu_window.clone();
             std::thread::spawn(move || {
-                read_events(&connection, &by_window, delete_window, &events)
+                read_events(
+                    &connection,
+                    &by_window,
+                    &menu_window,
+                    delete_window,
+                    &events,
+                )
             });
         }
+        let wm = WmAtoms {
+            moveresize: atom(&connection, b"_NET_WM_MOVERESIZE"),
+            show_menu: atom(&connection, b"_GTK_SHOW_WINDOW_MENU"),
+            change_state: atom(&connection, b"WM_CHANGE_STATE"),
+            maximized: atom(&connection, b"_NET_WM_STATE_MAXIMIZED_VERT")
+                .zip(atom(&connection, b"_NET_WM_STATE_MAXIMIZED_HORZ")),
+            supported: atom(&connection, b"_NET_SUPPORTED")
+                .and_then(|supported| {
+                    connection
+                        .get_property(false, root, supported, AtomEnum::ATOM, 0, 4096)
+                        .ok()?
+                        .reply()
+                        .ok()
+                })
+                .and_then(|reply| reply.value32().map(|atoms| atoms.collect()))
+                .unwrap_or_default(),
+        };
         Some(X11Pip {
             connection,
             root,
@@ -127,6 +200,9 @@ impl X11Pip {
             abgr_format,
             window_format,
             dri3,
+            menu_window,
+            menu: None,
+            wm,
         })
     }
 
@@ -149,7 +225,9 @@ impl X11Pip {
             | EventMask::BUTTON_RELEASE
             | EventMask::POINTER_MOTION
             | EventMask::LEAVE_WINDOW
-            | EventMask::STRUCTURE_NOTIFY;
+            | EventMask::STRUCTURE_NOTIFY
+            // Alt+Space, for the window menu.
+            | EventMask::KEY_PRESS;
         let created = c.create_window(
             self.root_depth,
             window,
@@ -327,11 +405,231 @@ impl X11Pip {
         );
         let _ = self.connection.flush();
     }
+
+    /// Where the task's window's top left corner is on the screen.
+    pub fn window_origin(&self, task_id: i32) -> Option<(i32, i32)> {
+        let pip = self.windows.get(&task_id)?;
+        let reply = self
+            .connection
+            .translate_coordinates(pip.window, self.root, 0, 0)
+            .ok()?
+            .reply()
+            .ok()?;
+        Some((i32::from(reply.dst_x), i32::from(reply.dst_y)))
+    }
+
+    /// Opens the window menu: `pixels` (BGRA rows, opaque) of `size`, with its top left corner
+    /// at `at` on the screen, moved in where it would leave the screen. It takes the pointer
+    /// and the keyboard while it is open, so a click elsewhere or Escape closes it. Returns
+    /// whether it opened.
+    pub fn open_menu(&mut self, pixels: &[u8], size: (u32, u32), at: (i32, i32)) -> bool {
+        self.close_menu();
+        let c = &*self.connection;
+        let (Ok(window), Ok(gc)) = (c.generate_id(), c.generate_id()) else {
+            return false;
+        };
+        let width = size.0.clamp(1, u32::from(u16::MAX)) as u16;
+        let height = size.1.clamp(1, u32::from(u16::MAX)) as u16;
+        let x =
+            at.0.min(i32::from(self.screen_size.0) - i32::from(width))
+                .max(0);
+        let y =
+            at.1.min(i32::from(self.screen_size.1) - i32::from(height))
+                .max(0);
+        let mask = EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
+            | EventMask::POINTER_MOTION
+            | EventMask::LEAVE_WINDOW
+            | EventMask::KEY_PRESS
+            | EventMask::EXPOSURE;
+        let created = c.create_window(
+            self.root_depth,
+            window,
+            self.root,
+            x as i16,
+            y as i16,
+            width,
+            height,
+            0,
+            WindowClass::INPUT_OUTPUT,
+            self.root_visual,
+            &CreateWindowAux::new()
+                .override_redirect(1)
+                .event_mask(mask)
+                .background_pixel(0x00f9_f9f9),
+        );
+        if created.is_err() {
+            return false;
+        }
+        let _ = c.create_gc(gc, window, &CreateGCAux::new());
+        let _ = c.map_window(window);
+        if let Ok(mut menu) = self.menu_window.lock() {
+            *menu = Some(window);
+        }
+        self.menu = Some((window, gc));
+        self.paint_menu(pixels, size);
+        let pointer = EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
+            | EventMask::POINTER_MOTION
+            | EventMask::LEAVE_WINDOW;
+        let _ = c.grab_pointer(
+            false,
+            window,
+            pointer,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+            x11rb::NONE,
+            x11rb::NONE,
+            x11rb::CURRENT_TIME,
+        );
+        let _ = c.grab_keyboard(
+            false,
+            window,
+            x11rb::CURRENT_TIME,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+        );
+        let _ = c.flush();
+        true
+    }
+
+    /// Draws the open window menu again, as `pixels` (BGRA rows) of `size`.
+    pub fn paint_menu(&self, pixels: &[u8], size: (u32, u32)) {
+        let Some((window, gc)) = self.menu else {
+            return;
+        };
+        if pixels.len() < size.0 as usize * size.1 as usize * 4 {
+            return;
+        }
+        let _ = self.connection.put_image(
+            ImageFormat::Z_PIXMAP,
+            window,
+            gc,
+            size.0 as u16,
+            size.1 as u16,
+            0,
+            0,
+            0,
+            24,
+            pixels,
+        );
+        let _ = self.connection.flush();
+    }
+
+    /// Closes the window menu, if it is open, and gives the pointer and keyboard back.
+    pub fn close_menu(&mut self) {
+        let Some((window, gc)) = self.menu.take() else {
+            return;
+        };
+        if let Ok(mut menu) = self.menu_window.lock() {
+            *menu = None;
+        }
+        let c = &*self.connection;
+        let _ = c.ungrab_pointer(x11rb::CURRENT_TIME);
+        let _ = c.ungrab_keyboard(x11rb::CURRENT_TIME);
+        let _ = c.free_gc(gc);
+        let _ = c.destroy_window(window);
+        let _ = c.flush();
+    }
+
+    /// Asks the window manager about the task's window with a client message to the root
+    /// window, as the Extended Window Manager Hints say. False when there is no window.
+    fn ask_wm(&self, task_id: i32, kind: u32, data: [u32; 5]) -> bool {
+        let Some(pip) = self.windows.get(&task_id) else {
+            return false;
+        };
+        let _ = self.connection.send_event(
+            false,
+            self.root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            ClientMessageEvent::new(32, pip.window, kind, data),
+        );
+        let _ = self.connection.flush();
+        true
+    }
+
+    /// Has the window manager move or size the task's window (`_NET_WM_MOVERESIZE`), in
+    /// `direction`, from where the pointer is. Returns why it cannot, when it cannot.
+    pub fn move_resize(&self, task_id: i32, direction: u32) -> Result<(), String> {
+        let kind = self
+            .wm
+            .supported(self.wm.moveresize)
+            .ok_or("the window manager does not move windows for them (_NET_WM_MOVERESIZE)")?;
+        let at = self
+            .connection
+            .query_pointer(self.root)
+            .ok()
+            .and_then(|cookie| cookie.reply().ok())
+            .map_or((0, 0), |reply| {
+                (i32::from(reply.root_x), i32::from(reply.root_y))
+            });
+        let data = crate::compositor::window_menu::moveresize_message(at, direction, 0);
+        self.ask_wm(task_id, kind, data)
+            .then_some(())
+            .ok_or_else(|| "the window is gone".into())
+    }
+
+    /// Asks the window manager for its own window menu of the task's window at `at` on the
+    /// screen (`_GTK_SHOW_WINDOW_MENU`). Returns why it cannot, when it cannot.
+    pub fn show_window_menu(&self, task_id: i32, at: (i32, i32)) -> Result<(), String> {
+        let kind = self
+            .wm
+            .supported(self.wm.show_menu)
+            .ok_or("the window manager has no window menu to open (_GTK_SHOW_WINDOW_MENU)")?;
+        let data = crate::compositor::window_menu::show_window_menu_message(at);
+        self.ask_wm(task_id, kind, data)
+            .then_some(())
+            .ok_or_else(|| "the window is gone".into())
+    }
+
+    /// Asks the window manager to minimize the task's window (`WM_CHANGE_STATE`, iconic).
+    pub fn minimize(&self, task_id: i32) {
+        const ICONIC_STATE: u32 = 3;
+        if let Some(kind) = self.wm.change_state {
+            self.ask_wm(task_id, kind, [ICONIC_STATE, 0, 0, 0, 0]);
+        }
+    }
+
+    /// Asks the window manager to maximize the task's window, or to restore it.
+    pub fn maximize(&self, task_id: i32, maximized: bool) {
+        if let Some((vertical, horizontal)) = self.wm.maximized {
+            let data = [u32::from(maximized), vertical, horizontal, 1, 0];
+            self.ask_wm(task_id, self.above[0], data);
+        }
+    }
+}
+
+/// What an event on the window menu's window means for the menu; `None` for one it ignores.
+fn menu_input(event: &XEvent) -> Option<MenuInput> {
+    Some(match event {
+        XEvent::MotionNotify(e) => MenuInput::Moved((f64::from(e.event_x), f64::from(e.event_y))),
+        XEvent::ButtonPress(e) | XEvent::ButtonRelease(e) => MenuInput::Button {
+            down: matches!(event, XEvent::ButtonPress(_)),
+            position: (f64::from(e.event_x), f64::from(e.event_y)),
+        },
+        XEvent::KeyPress(e) => MenuInput::Key(u32::from(e.detail.checked_sub(X11_KEYCODE_OFFSET)?)),
+        XEvent::LeaveNotify(_) => MenuInput::Left,
+        XEvent::Expose(_) => MenuInput::Exposed,
+        _ => return None,
+    })
+}
+
+/// The window an event happened on, for the events the menu takes.
+fn event_window(event: &XEvent) -> Option<u32> {
+    Some(match event {
+        XEvent::MotionNotify(e) => e.event,
+        XEvent::ButtonPress(e) | XEvent::ButtonRelease(e) => e.event,
+        XEvent::KeyPress(e) => e.event,
+        XEvent::LeaveNotify(e) => e.event,
+        XEvent::Expose(e) => e.window,
+        _ => return None,
+    })
 }
 
 fn read_events(
     connection: &RustConnection,
     by_window: &Mutex<HashMap<u32, i32>>,
+    menu_window: &Mutex<Option<u32>>,
     delete_window: u32,
     events: &Events,
 ) {
@@ -341,16 +639,31 @@ fn read_events(
             .ok()
             .and_then(|map| map.get(&window).copied())
     };
-    let button = |detail: u8| match detail {
-        1 => Some(MouseButton::Left),
-        2 => Some(MouseButton::Middle),
-        3 => Some(MouseButton::Right),
-        8 => Some(MouseButton::Back),
-        9 => Some(MouseButton::Forward),
-        _ => None,
-    };
+    let button = crate::input::pointer::x11_button;
     while let Ok(event) = connection.wait_for_event() {
+        // The window menu, while it is open, takes every event on its window (and, grabbed,
+        // every press and key).
+        let menu = menu_window.lock().ok().and_then(|menu| *menu);
+        if menu.is_some() && event_window(&event) == menu {
+            if let Some(input) = menu_input(&event) {
+                events.send(Event::X11Menu(input));
+            }
+            continue;
+        }
         let (task_id, input) = match event {
+            XEvent::KeyPress(e) => {
+                let Some(task_id) = task_of(e.event) else {
+                    continue;
+                };
+                let state = u16::from(e.state);
+                let alt = state & u16::from(KeyButMask::MOD1) != 0;
+                let ctrl = state & u16::from(KeyButMask::CONTROL) != 0;
+                let code = u32::from(e.detail.saturating_sub(X11_KEYCODE_OFFSET));
+                if crate::compositor::window_menu::opens_window_menu(code, alt, ctrl) {
+                    events.send(Event::X11Menu(MenuInput::Open { task_id }));
+                }
+                continue;
+            }
             XEvent::ButtonPress(e) | XEvent::ButtonRelease(e) => {
                 let Some(task_id) = task_of(e.event) else {
                     continue;

@@ -47,6 +47,15 @@ object Messages {
         )
         update.setFullscreen(task.fullscreen)
         update.setPictureInPicture(task.pictureInPicture)
+        update.setTransparentCaption(task.transparentCaption)
+        if (task.transparentCaption) {
+            for (area in task.captionInteractive) {
+                update.addCaptionInteractive(
+                    Rect.newBuilder().setLeft(area.left).setTop(area.top).setRight(area.right).setBottom(area.bottom),
+                )
+            }
+        }
+        update.setCanGoBack(task.canGoBack)
         return Envelope.newBuilder().setTaskUpdated(update).build().toByteArray()
     }
 
@@ -55,6 +64,8 @@ object Messages {
             .setPackageName(packageName)
             .setLabel(details.label)
             .setIconPng(ByteString.copyFrom(details.iconPng))
+            .setCaptionIconPng(ByteString.copyFrom(details.captionIconPng))
+            .setMultipleWindows(details.multipleWindows)
         return Envelope.newBuilder().setAppInfo(info).build().toByteArray()
     }
 
@@ -71,6 +82,8 @@ object Messages {
             .setAppBytes(maxOf(0L, app.appBytes))
             .setDataBytes(maxOf(0L, app.dataBytes))
             .setCacheBytes(maxOf(0L, app.cacheBytes))
+            .setPrimaryAbi(app.primaryAbi)
+            .addAllNativeLibraries(io.github.thisisthepy.dsa.agent.install.NativeLibraries.messages(app.nativeLibraries))
         return Envelope.newBuilder().setInstalledApp(info).build().toByteArray()
     }
 

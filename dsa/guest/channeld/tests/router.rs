@@ -87,6 +87,7 @@ fn fr3_frames_from_the_host_reach_every_listener() {
     let close = frame(Body::CloseTask(CloseTask { task_id: 7 }));
     let launch = frame(Body::LaunchApp(LaunchApp {
         package_name: "org.example.notes".into(),
+        new_window: false,
     }));
     router.from_host(&close);
     router.from_host(&launch);
@@ -351,6 +352,8 @@ fn app_info(package: &str, label: &str) -> Vec<u8> {
         package_name: package.into(),
         label: label.into(),
         icon_png: vec![0x89, b'P', b'N', b'G'],
+        caption_icon_png: Vec::new(),
+        multiple_windows: false,
     }))
 }
 
@@ -462,6 +465,13 @@ fn fr2_the_agent_is_told_by_its_domain_and_its_process() {
         Ok(())
     );
     assert_eq!(agent_caller(Some("u:r:system_app:s0"), agent), Ok(()));
+    // Android 17's domain for a platform app that targets SDK 36.
+    assert_eq!(
+        agent_caller(Some("u:r:platform_app_36:s0:c512,c768"), agent),
+        Ok(())
+    );
+    assert!(agent_caller(Some("u:r:platform_app_x:s0"), agent).is_err());
+    assert!(agent_caller(Some("u:r:platform_app_:s0"), agent).is_err());
 
     // The hwcomposer, and an agent whose certificates the package manager no longer trusts.
     assert!(agent_caller(Some("u:r:hal_graphics_composer_default:s0"), agent).is_err());

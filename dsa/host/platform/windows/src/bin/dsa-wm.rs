@@ -1,9 +1,17 @@
 //! The DSA Window Manager (`dsa-wm`), the user-session compositor of Desktop Subsystem for Android.
 //!
-//! Runs in the user session without a console window, accepts guest graphics streams
-//! on Hyper-V sockets (ports 5566 and 5567), shows one window per Android task with that
-//! task's frames, reconnects when the VM restarts, and exits cleanly on sign-out.
+//! Runs in the user session without a console window, starts the graphics renderer
+//! (`dsa-gfx.exe`, which takes the guest's graphics streams on the VM's Hyper-V sockets) and
+//! starts it again when it ends, shows one window per Android task with that task's frames,
+//! follows the VM across restarts, and exits cleanly on sign-out.
 #![windows_subsystem = "windows"]
+
+/// Counts what the window manager's own code allocates, so its memory breakdown can tell that
+/// apart from what drivers and the renderer hold in the same heap.
+#[cfg(windows)]
+#[global_allocator]
+static ALLOCATOR: dsa_host_windows::compositor::committed::CountingAllocator =
+    dsa_host_windows::compositor::committed::CountingAllocator;
 
 #[cfg(not(windows))]
 fn main() -> std::process::ExitCode {
@@ -17,7 +25,7 @@ fn main() {
     use std::sync::Arc;
 
     use dsa_host_core::host_api::HostApiClient;
-    use dsa_host_windows::compositor::adapter::GfxstreamAdapter;
+    use dsa_host_core::renderer::spawn_supervisor;
     use dsa_host_windows::compositor::display_gpu::{adapter_names, display_sources};
     use dsa_host_windows::compositor::log::{default_log_file, CompositorLogger};
     use dsa_host_windows::compositor::shutdown::SignOutListener;
@@ -25,7 +33,10 @@ fn main() {
     use dsa_host_windows::compositor::{Compositor, CompositorConfig};
     use dsa_host_windows::pipe::NamedPipeConnector;
     use dsa_host_windows::render_gpu::{
-        choose, describe_outcome, describe_request, render_gpu_setting, CompositorSettings,
+        choose, describe_request, render_gpu_setting, CompositorSettings,
+    };
+    use dsa_host_windows::renderer::client::{
+        ProgramLauncher, RendererClient, RendererProcess, ServedByRenderer,
     };
 
     // The window manager runs itself with this argument to find which video formats the GPU
@@ -76,6 +87,10 @@ fn main() {
     }
 
     dsa_host_windows::compositor::log::input_trace_to(logger.clone());
+    // A panic, and a fatal error in the graphics renderer, say why in the log before the
+    // process ends: it has no console.
+    dsa_host_windows::compositor::log::log_panics_to(logger.clone());
+    dsa_host_windows::compositor::log::renderer_log_to(logger.clone());
 
     let config = CompositorConfig::default();
 
@@ -159,21 +174,43 @@ fn main() {
         &adapter_names(),
     ));
 
-    let renderer = Arc::new(GfxstreamAdapter::on_gpu(None, &request));
-    for note in renderer.notes() {
-        log(note);
-    }
-    match renderer.renderer_gpu() {
-        Some(gpu) => log(&describe_outcome(&request, &gpu)),
-        None if renderer.is_available() => {
-            log("the graphics backend does not say which GPU it renders on")
-        }
-        None => {}
-    }
-    let mut compositor = Compositor::new(config, renderer.clone()).with_display_presenter(renderer);
-    if let Some(log) = logger {
+    // The renderer runs in a process of its own, dsa-gfx.exe, which this process starts, and
+    // starts again whenever it ends: a crash in the renderer or the GPU driver then ends only
+    // that process, and the app windows stay with their last frame.
+    let ports = (config.command_port, config.process_pipe_port);
+    let process: RendererProcess = Arc::default();
+    let client = RendererClient::new(request, ports, Arc::clone(&process), logger.clone());
+    let mut compositor = Compositor::new(config, Arc::new(ServedByRenderer))
+        .without_graphics_streams()
+        .with_display_presenter(client.clone());
+    if let Some(log) = logger.clone() {
         compositor = compositor.with_logger(log);
     }
+    let supervisor = spawn_supervisor(
+        Box::new(ProgramLauncher::installed(process)),
+        client.clone(),
+        format!("dsa-wm {}", dsa_host_windows::VERSION),
+        Arc::clone(&stop),
+    );
+    if let Err(why) = &supervisor {
+        log(&format!("the graphics renderer cannot be started: {why}"));
+    }
+    let vm_thread = client.follow_vm(compositor.vm_id_slot(), Arc::clone(&stop));
+    // The windows' textures are made on the GPU the renderer runs on, which it names once it
+    // has started.
+    if !client.wait_started(std::time::Duration::from_secs(30)) {
+        log(
+            "the graphics renderer has not started yet; the task windows' textures are made \
+             on the default GPU",
+        );
+    }
 
-    compositor.run(stop);
+    compositor.run(Arc::clone(&stop));
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    if let Ok(supervisor) = supervisor {
+        let _ = supervisor.join();
+    }
+    if let Ok(vm_thread) = vm_thread {
+        let _ = vm_thread.join();
+    }
 }

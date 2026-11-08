@@ -1,14 +1,17 @@
 //! The Wayland client: one `xdg_toplevel` per Android task, and the seat's input.
 //!
 //! Each task window is a toplevel with the app's `app_id` (its launcher entry) and title. It
-//! shows the task's frames one to one in shared memory buffers, with the title bar's buttons
-//! drawn over the app's top inset as on Windows, and asks the desktop for client-side
-//! decorations so no second title bar stacks above it. What the user does goes out as
-//! [`Event`]s: reports for the window rules, input for the guest, the desktop's clipboard
-//! and dropped files.
+//! shows the task's frames one to one in shared memory buffers, with the title bar drawn over
+//! the app's top inset as on Windows (the app's icon or a back arrow, its name and the caption
+//! buttons), and asks the desktop for client-side decorations so no second title bar stacks
+//! above it. The icon's cell and a right click on the title bar open the window's menu, a
+//! popup with the window's and Android's items. What the user does goes out as [`Event`]s:
+//! reports for the window rules, input for the guest, the desktop's clipboard and dropped
+//! files.
 
 mod data;
 mod gpu;
+mod menu;
 pub mod pip;
 mod seat;
 mod shm;
@@ -60,7 +63,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLay
 
 use crate::input::xkb::Keyboard;
 
-pub use window::Window;
+pub use window::{AppLook, Window};
 
 /// What the windows report, for the session to act on.
 #[derive(Debug, Clone)]
@@ -76,6 +79,9 @@ pub enum Event {
         task_id: i32,
         input: dsa_host_core::input::WindowInput,
     },
+    /// The window menu of a picture-in-picture window outside Wayland (X11): Alt+Space, or
+    /// input on the open menu.
+    X11Menu(crate::compositor::x11_pip::MenuInput),
     /// Files were dropped on a task's window.
     Dropped {
         task_id: i32,
@@ -131,6 +137,9 @@ pub struct State {
     pub(crate) subcompositor: Option<WlSubcompositor>,
     /// Each display's GPU images, as the desktop's buffers, by display and slot.
     pub(crate) gpu_buffers: HashMap<(u32, u32), gpu::GpuBuffer>,
+    /// What reads GPU frames back in a layout the CPU cannot read, made the first time one
+    /// is needed.
+    pub(crate) dmabuf_reader: gpu::Reader,
     pub(crate) layer_shell: Option<ZwlrLayerShellV1>,
     /// Picture-in-picture windows through XWayland, where the desktop has no layer shell.
     pub(crate) x11: Option<crate::compositor::x11_pip::X11Pip>,
@@ -151,6 +160,14 @@ pub struct State {
     /// The serial of the user's last input, which moving a window or setting the clipboard
     /// needs.
     pub(crate) serial: u32,
+    /// What each app's windows show of it, by package, for the windows that open later.
+    pub(crate) app_looks: HashMap<String, AppLook>,
+    /// Text for the title bars' names and the window menu; `None` without Pango.
+    pub(crate) text: Option<crate::compositor::text::Text>,
+    /// The window menu while it is open.
+    pub(crate) menu: Option<menu::Menu>,
+    /// Whether the session reads Korean, for the window menu's words.
+    pub(crate) korean: bool,
 }
 
 /// The connection to the desktop and everything shown on it.
@@ -203,6 +220,15 @@ impl Desktop {
             }
         }
         let xkb = Keyboard::new().ok();
+        let text = match crate::compositor::text::Text::load() {
+            Ok(text) => Some(text),
+            Err(why) => {
+                crate::compositor::session::log(&format!(
+                    "title bars show no names, and windows use the desktop's window menu: {why}"
+                ));
+                None
+            }
+        };
         let mut state = State {
             qh: qh.clone(),
             connection: connection.clone(),
@@ -218,6 +244,7 @@ impl Desktop {
             viewporter,
             subcompositor,
             gpu_buffers: HashMap::new(),
+            dmabuf_reader: gpu::Reader::default(),
             layer_shell,
             x11,
             seat: None,
@@ -234,6 +261,12 @@ impl Desktop {
             xkb,
             events,
             serial: 0,
+            app_looks: HashMap::new(),
+            text,
+            menu: None,
+            korean: crate::compositor::window_menu::reads_korean_in(|name| {
+                std::env::var(name).ok()
+            }),
         };
         if let Some(seat) = seat {
             state.seat_ready(seat);

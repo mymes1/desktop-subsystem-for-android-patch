@@ -79,6 +79,8 @@ pub enum HostRole {
     /// The VM's memory: on Windows, its vmmem process.
     Vm,
     WindowManager,
+    /// The graphics renderer process (`dsa-gfx`), which holds the guest's GPU resources.
+    Renderer,
     AppWindow,
 }
 
@@ -87,14 +89,31 @@ impl HostRole {
         match self {
             HostRole::Vm => "vm",
             HostRole::WindowManager => "window manager",
+            HostRole::Renderer => "graphics renderer",
             HostRole::AppWindow => "app window",
         }
     }
 
     fn from_name(name: &str) -> Option<HostRole> {
-        [HostRole::Vm, HostRole::WindowManager, HostRole::AppWindow]
-            .into_iter()
-            .find(|role| role.name() == name)
+        [
+            HostRole::Vm,
+            HostRole::WindowManager,
+            HostRole::Renderer,
+            HostRole::AppWindow,
+        ]
+        .into_iter()
+        .find(|role| role.name() == name)
+    }
+
+    /// Where the role's processes go in a list: the VM, the window manager, the renderer,
+    /// then the app windows.
+    pub fn rank(self) -> u8 {
+        match self {
+            HostRole::Vm => 0,
+            HostRole::WindowManager => 1,
+            HostRole::Renderer => 2,
+            HostRole::AppWindow => 3,
+        }
     }
 }
 
@@ -113,7 +132,7 @@ pub struct HostProcessMemory {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MemorySnapshot {
     pub guest: Option<GuestMemoryReport>,
-    /// In the order: the VM, the window manager, the app windows.
+    /// In the order: the VM, the window manager, the graphics renderer, the app windows.
     pub host: Vec<HostProcessMemory>,
 }
 
@@ -218,10 +237,16 @@ impl MemorySnapshot {
 
     /// How much more the VM holds on the host than the guest says it uses, in KiB: free guest
     /// memory the host has not got back. `None` until the guest has reported or without a VM.
+    ///
+    /// What the kernel reserved at boot (its code, the page structures, swiotlb) is outside
+    /// MemTotal, so it is not in the guest's use either, but it is in use for as long as the
+    /// VM runs and the host can never take it back. It counts as used here; counting it as
+    /// free memory not returned would show a gap that no reclaim can close.
     pub fn vm_beyond_guest_kb(&self) -> Option<u64> {
-        let guest = self.guest.as_ref()?;
+        let guest = &self.guest.as_ref()?.memory;
         let (vm, count) = self.role_total_kb(HostRole::Vm);
-        (count > 0).then(|| vm.saturating_sub(guest.memory.used_kb()))
+        let held = guest.used_kb() + guest.reserved_at_boot_kb().unwrap_or(0);
+        (count > 0).then(|| vm.saturating_sub(held))
     }
 
     /// One line for the service's log: the host's total and its parts, then what the guest
@@ -229,12 +254,15 @@ impl MemorySnapshot {
     pub fn summary_line(&self) -> String {
         let (vm, _) = self.role_total_kb(HostRole::Vm);
         let (wm, _) = self.role_total_kb(HostRole::WindowManager);
+        let (renderer, _) = self.role_total_kb(HostRole::Renderer);
         let (apps, app_count) = self.role_total_kb(HostRole::AppWindow);
         let mut line = format!(
-            "memory: host {} MiB (vm {}, window manager {}, {app_count} app windows {})",
+            "memory: host {} MiB (vm {}, window manager {}, graphics renderer {}, {app_count} \
+             app windows {})",
             mib(self.host_total_kb()),
             mib(vm),
             mib(wm),
+            mib(renderer),
             mib(apps)
         );
         match &self.guest {
@@ -260,7 +288,7 @@ impl MemorySnapshot {
 }
 
 /// KiB to whole MiB, rounded to nearest.
-fn mib(kb: u64) -> u64 {
+pub(crate) fn mib(kb: u64) -> u64 {
     (kb + 512) / 1024
 }
 
@@ -275,7 +303,7 @@ impl fmt::Display for MemorySnapshot {
         for p in &self.host {
             writeln!(
                 f,
-                "  {:<15} pid {:<6} {:>6} MiB resident, {:>6} MiB private",
+                "  {:<17} pid {:<6} {:>6} MiB resident, {:>6} MiB private",
                 p.role.name(),
                 p.pid,
                 mib(p.working_set_kb),
@@ -569,8 +597,10 @@ pub enum GrowthAction {
 /// - Grow when the guest's available memory falls under a fifth of its total (at least
 ///   512 MiB), or when its tasks stall on memory for 10% of the time: by half the current size,
 ///   at least 1 GiB, up to the maximum, at most every 5 seconds.
-/// - Shrink when the guest has not been short for 30 seconds: to what it uses plus half again
-///   (at least 1 GiB of headroom), never below the base, at most every 30 seconds.
+/// - Shrink on the first report that finds the guest not short, once 5 seconds have passed
+///   since the last change: to what it uses plus half again (at least 1 GiB of headroom),
+///   never below the base. Memory the guest no longer needs goes back at once; the headroom,
+///   not a wait, keeps the size from swinging.
 /// - If memory added does not show in the guest's total within 30 seconds, give up growing:
 ///   the platform or the guest cannot hot-add.
 #[derive(Debug, Clone)]
@@ -579,7 +609,6 @@ pub struct MemoryGrowth {
     max_mb: u64,
     current_mb: u64,
     last_change: Option<Instant>,
-    calm_since: Option<Instant>,
     /// The guest total before the last growth, and when it was asked for.
     awaiting: Option<(u64, Instant)>,
     stopped: bool,
@@ -588,8 +617,7 @@ pub struct MemoryGrowth {
 /// Memory is added and removed in steps of this, in MiB, the guest's memory block size.
 const GROWTH_GRANULE_MB: u64 = 128;
 const GROW_COOLDOWN: Duration = Duration::from_secs(5);
-const SHRINK_COOLDOWN: Duration = Duration::from_secs(30);
-const SHRINK_AFTER_CALM: Duration = Duration::from_secs(30);
+const SHRINK_COOLDOWN: Duration = Duration::from_secs(5);
 const HOT_ADD_DEADLINE: Duration = Duration::from_secs(30);
 
 fn round_up_mb(mb: u64) -> u64 {
@@ -604,7 +632,6 @@ impl MemoryGrowth {
             max_mb: max_mb.max(base_mb),
             current_mb: base_mb,
             last_change: None,
-            calm_since: None,
             awaiting: None,
             stopped: false,
         }
@@ -647,7 +674,6 @@ impl MemoryGrowth {
                 .is_none_or(|at| now.saturating_duration_since(at) >= cooldown)
         };
         if short {
-            self.calm_since = None;
             if self.current_mb >= self.max_mb || !since_change(GROW_COOLDOWN) {
                 return None;
             }
@@ -656,10 +682,8 @@ impl MemoryGrowth {
             self.awaiting = Some((total_mb, now));
             return Some(self.resize(target, now));
         }
-        let calm_since = *self.calm_since.get_or_insert(now);
         if self.current_mb <= self.base_mb
             || p.stall_percent >= 1.0
-            || now.saturating_duration_since(calm_since) < SHRINK_AFTER_CALM
             || !since_change(SHRINK_COOLDOWN)
         {
             return None;
@@ -715,9 +739,90 @@ pub fn held_line(before: &HeldMemory, after: &HeldMemory) -> String {
     )
 }
 
+/// What the graphics renderer holds, as it counts it: its live GPU allocations by kind, in
+/// KiB, and how many guest processes are connected to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RendererMemory {
+    /// Memory only the GPU sees: the guest's images and buffers, and the color buffers
+    /// behind every gralloc buffer.
+    pub device_local_kb: u64,
+    pub device_local_count: u32,
+    /// Memory the host's CPU maps: what the guest's host-visible memory is copied into.
+    pub host_visible_kb: u64,
+    pub host_visible_count: u32,
+    /// Memory imported from another graphics API: the task windows' textures.
+    pub imported_kb: u64,
+    pub imported_count: u32,
+    pub largest_kb: u64,
+    /// Guest processes with an open connection to the renderer. Each keeps its own
+    /// allocations until it exits.
+    pub guest_processes: i32,
+}
+
+/// Where a host process's committed (private) memory goes, by owner, in KiB, as far as the
+/// platform can tell; `None` where it cannot.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CommittedMemory {
+    /// All committed private memory, from the platform's counters.
+    pub private_kb: Option<u64>,
+    /// Committed private pages found by walking the address space.
+    pub walked_private_kb: u64,
+    /// Of those: the process's default heap, which the process's own allocations use.
+    pub process_heap_kb: u64,
+    /// Of those: every other heap (drivers' and libraries' own), and how many there are.
+    pub other_heaps_kb: u64,
+    pub other_heaps: u32,
+    /// Of those: write-combined or uncached pages, which only GPU drivers map.
+    pub gpu_mapped_kb: u64,
+    /// Of those: the rest, allocated straight from the system (drivers, thread stacks).
+    pub direct_kb: u64,
+    /// The largest private allocations of any owner (heap segments included), largest first:
+    /// a driver's pool shows up here by its size.
+    pub largest_private_kb: Vec<u64>,
+    /// What the process's own allocator has handed out and not freed.
+    pub own_live_kb: Option<u64>,
+    pub gpu_local_kb: Option<u64>,
+    pub gpu_non_local_kb: Option<u64>,
+}
+
+/// The log line that breaks a host process's committed memory down by owner, in MiB.
+pub fn committed_line(c: &CommittedMemory) -> String {
+    let show = |kb: Option<u64>| kb.map_or("?".to_string(), |kb| mib(kb).to_string());
+    let largest: Vec<String> = c
+        .largest_private_kb
+        .iter()
+        .map(|kb| format!("{:.1}", *kb as f64 / 1024.0))
+        .collect();
+    let mut line = format!(
+        "committed memory by owner: private {} MiB ({} found); default heap {} (the window \
+         manager's own allocations {}); {} other heaps {}; GPU-mapped {}; allocated directly {} \
+         (largest allocations {} MiB)",
+        show(c.private_kb),
+        mib(c.walked_private_kb),
+        mib(c.process_heap_kb),
+        show(c.own_live_kb),
+        c.other_heaps,
+        mib(c.other_heaps_kb),
+        mib(c.gpu_mapped_kb),
+        mib(c.direct_kb),
+        if largest.is_empty() {
+            "none".to_string()
+        } else {
+            largest.join(", ")
+        },
+    );
+    line.push_str(&format!(
+        "; GPU memory {} MiB, GPU-mapped system memory {} MiB",
+        show(c.gpu_local_kb),
+        show(c.gpu_non_local_kb)
+    ));
+    line
+}
+
 /// How long the window manager waits after the last task window closed before it gives back
-/// the memory it is not using.
-pub const IDLE_TRIM_DELAY: Duration = Duration::from_secs(30);
+/// the memory it is not using: not at all. Memory no window uses goes back on the trim's next
+/// check, within a second; pages touched again come back from the standby list on their own.
+pub const IDLE_TRIM_DELAY: Duration = Duration::ZERO;
 
 /// Decides when a host process that serves task windows (the window manager) should give
 /// back the memory it is not using: once each time no task window has been open for a while.
@@ -741,7 +846,7 @@ pub struct IdleTrim {
 /// How long shown windows must go without a new frame before the window manager gives back the
 /// GPU driver's spare memory. An app that shows a still screen draws nothing; one that is
 /// animating never reaches it, so nothing it renders waits for memory the driver let go.
-pub const QUIET_TRIM_DELAY: Duration = Duration::from_secs(60);
+pub const QUIET_TRIM_DELAY: Duration = Duration::from_secs(5);
 
 impl IdleTrim {
     /// Starts idle, as at start-up, when no window is open yet.

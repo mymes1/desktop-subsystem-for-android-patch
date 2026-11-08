@@ -1,17 +1,22 @@
 //! Frames that stay on the GPU: the renderer's dmabufs as the desktop's buffers
-//! (linux-dmabuf), cropped to the frame in them (viewporter), with the title bar's buttons on a
+//! (linux-dmabuf), cropped to the frame in them (viewporter), with the title bar's band on a
 //! subsurface above them.
 //!
 //! The renderer keeps each task's images at the largest size the task can have, and a frame
 //! fills their top-left region, so a window crops the image to the frame and shows it one to
-//! one. Nothing of the frame passes through the CPU. Where the desktop lacks one of the three
-//! protocols, every frame is read back instead.
+//! one. Nothing of the frame passes through the CPU to be shown. Where the desktop lacks one
+//! of the three protocols, every frame is read back instead.
+//!
+//! Two things read a GPU frame back, in whatever layout the GPU keeps it
+//! ([`crate::compositor::dmabuf_read`]): the title bar's band, which samples two rows at most
+//! every [`BAND_PROBE_EVERY`] to take the app's top color when the app leaves the band empty,
+//! and a screenshot, which reads every row under the band once.
 
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-use dsa_host_core::compositor::caption::{paint_buttons, CaptionPalette, CaptionState};
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_shm::Format;
 use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
@@ -28,12 +33,28 @@ use wayland_protocols::wp::viewporter::client::{
 
 use super::shm::ShmBuffer;
 use super::State;
-use crate::compositor::frames::{GpuFrame, GpuImage};
+use crate::compositor::dmabuf_read::{read_linear, DmabufReader, Imported, Rows};
+use crate::compositor::frames::{
+    app_rows, band_probe_rows, Frame, GpuFrame, GpuImage, DRM_FORMAT_MOD_LINEAR,
+};
+use crate::compositor::session::log;
+use crate::compositor::title_bar::rows_band_fill;
+
+/// How often a GPU frame's band is sampled, at most: the app's top color changes with its
+/// screens, not with every frame, and each sample waits for the GPU.
+pub const BAND_PROBE_EVERY: Duration = Duration::from_millis(200);
 
 /// One of a display's GPU images, as a buffer of the desktop.
 pub struct GpuBuffer {
     buffer: WlBuffer,
     size: (u32, u32),
+    image: GpuImage,
+    /// The image's dmabuf, kept to read the frame back.
+    fd: OwnedFd,
+    /// The image in the compositor's own GPU context, once a read needed it there.
+    imported: Option<Imported>,
+    /// Whether the band could not be read from this image, which is logged once.
+    band_unread: bool,
 }
 
 impl Drop for GpuBuffer {
@@ -42,11 +63,137 @@ impl Drop for GpuBuffer {
     }
 }
 
-/// The title bar's buttons over a GPU frame: a subsurface with a buffer of its own.
+/// The compositor's own GPU context for reading frames back, made the first time a frame in a
+/// layout the CPU cannot read is read.
+// One per compositor, so the reader stays inline rather than boxed.
+#[allow(clippy::large_enum_variant)]
+#[derive(Default)]
+pub enum Reader {
+    #[default]
+    NotYet,
+    Ready(DmabufReader),
+    /// It could not be made; the reason was logged once.
+    Failed(String),
+}
+
+impl Reader {
+    fn get(&mut self) -> Result<&DmabufReader, String> {
+        if matches!(self, Reader::NotYet) {
+            *self = match DmabufReader::new() {
+                Ok(reader) => Reader::Ready(reader),
+                Err(why) => {
+                    log(&format!(
+                        "GPU frames in a tiled layout cannot be read back: {why}"
+                    ));
+                    Reader::Failed(why)
+                }
+            };
+        }
+        match self {
+            Reader::Ready(reader) => Ok(reader),
+            Reader::Failed(why) => Err(why.clone()),
+            Reader::NotYet => Err("the GPU context is not made".into()),
+        }
+    }
+}
+
+/// Whether a GPU frame's band is due a new sample, last sampled at `last`.
+pub fn band_probe_due(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|at| now.saturating_duration_since(at) >= BAND_PROBE_EVERY)
+}
+
+impl State {
+    /// Reads `rows` (from the top, inside the frame) of GPU image `slot` of `display_id`,
+    /// `width` pixels from the left: by mapping it when it is in the linear layout, else on
+    /// the GPU.
+    pub(crate) fn read_gpu_rows(
+        &mut self,
+        display_id: u32,
+        slot: u32,
+        width: u32,
+        rows: &[u32],
+    ) -> Result<Rows, String> {
+        let gpu = self
+            .gpu_buffers
+            .get_mut(&(display_id, slot))
+            .ok_or_else(|| "the frame's GPU image is gone".to_string())?;
+        let width = width.min(gpu.image.width);
+        if rows.iter().any(|row| *row >= gpu.image.height) {
+            return Err("the rows asked for are not in the frame".into());
+        }
+        let mut linear_failed = None;
+        if gpu.image.modifier == DRM_FORMAT_MOD_LINEAR {
+            match read_linear(&gpu.image, gpu.fd.as_fd(), width, rows) {
+                Ok(read) => return Ok(read),
+                Err(why) => linear_failed = Some(why),
+            }
+        }
+        let reader = self
+            .dmabuf_reader
+            .get()
+            .map_err(|why| match &linear_failed {
+                Some(linear) => format!("{linear}; {why}"),
+                None => why,
+            })?;
+        if gpu.imported.is_none() {
+            gpu.imported = Some(reader.import(&gpu.image, gpu.fd.as_fd())?);
+        }
+        let imported = gpu.imported.as_ref().ok_or("the frame was not imported")?;
+        reader.read(imported, width, rows)
+    }
+
+    /// The pixels of a GPU frame of `display_id` under the title bar's `band`, for a
+    /// screenshot: a frame of the rows under the band.
+    pub(crate) fn read_gpu_frame(
+        &mut self,
+        display_id: u32,
+        frame: GpuFrame,
+        band: u32,
+    ) -> Result<Frame, String> {
+        let rows: Vec<u32> = app_rows(band, frame.height).collect();
+        if rows.is_empty() {
+            return Err("the window shows nothing under its title bar".into());
+        }
+        let read = self.read_gpu_rows(display_id, frame.slot, frame.width, &rows)?;
+        Ok(Frame {
+            width: read.width,
+            height: read.count,
+            pixels: read.pixels,
+        })
+    }
+
+    /// The color the band of a GPU frame takes when the app leaves it empty, from the two
+    /// rows the band fill samples. `None` when the app draws the band, or the rows cannot be
+    /// read (which is logged once for each image).
+    fn gpu_band_fill(&mut self, display_id: u32, frame: GpuFrame, band: u32) -> Option<u32> {
+        let [inside, below] = band_probe_rows(band, frame.height)?;
+        match self.read_gpu_rows(display_id, frame.slot, frame.width, &[inside, below]) {
+            Ok(read) => {
+                let row = read.width as usize * 4;
+                let (inside, below) = read.pixels.split_at(row.min(read.pixels.len()));
+                rows_band_fill(inside, below, read.width)
+            }
+            Err(why) => {
+                if let Some(gpu) = self.gpu_buffers.get_mut(&(display_id, frame.slot)) {
+                    if !std::mem::replace(&mut gpu.band_unread, true) {
+                        log(&format!(
+                            "display {display_id}: the title bar cannot take the app's color: {why}"
+                        ));
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+/// The title bar's band over a GPU frame: a subsurface with a buffer of its own.
 pub struct CaptionLayer {
     surface: WlSurface,
     subsurface: WlSubsurface,
     buffer: Option<ShmBuffer>,
+    /// Where the layer stands in its window, in logical units.
+    position: (i32, i32),
 }
 
 impl CaptionLayer {
@@ -57,7 +204,7 @@ impl CaptionLayer {
         task_id: i32,
         qh: &QueueHandle<State>,
     ) -> CaptionLayer {
-        // The buttons' surface carries the task's ID, so a press on them reaches the window.
+        // The band's surface carries the task's ID, so a press on it reaches the window.
         let surface = compositor.create_surface(qh, task_id);
         let subsurface = subcompositor.get_subsurface(&surface, parent, qh, ());
         subsurface.set_sync();
@@ -65,10 +212,11 @@ impl CaptionLayer {
             surface,
             subsurface,
             buffer: None,
+            position: (0, 0),
         }
     }
 
-    /// Takes the buttons away, as for a full screen window.
+    /// Takes the band away, as for a full screen window.
     pub fn hide(&mut self) {
         self.surface.attach(None, 0, 0);
         self.surface.commit();
@@ -83,16 +231,14 @@ impl CaptionLayer {
 
 impl State {
     /// Where `surface` sits in its task's window, in logical units: the title bar's layer
-    /// stands over the buttons, the window's own surface at the origin.
+    /// where it was placed, the window's own surface at the origin.
     pub(crate) fn surface_offset(&self, task_id: i32, surface: &WlSurface) -> (f64, f64) {
         let Some(window) = self.windows.get(&task_id) else {
             return (0.0, 0.0);
         };
         match &window.caption_layer {
             Some(layer) if &layer.surface == surface => {
-                let scale = window.model.scale.max(1) as i32;
-                let left = window.model.caption_layout().buttons_left() / scale;
-                (f64::from(left), 0.0)
+                (f64::from(layer.position.0), f64::from(layer.position.1))
             }
             _ => (0.0, 0.0),
         }
@@ -129,14 +275,24 @@ impl State {
             Arc::new(AtomicBool::new(false)),
         );
         params.destroy();
-        drop(fd);
-        self.gpu_buffers.insert(
+        let replaced = self.gpu_buffers.insert(
             (image.display_id, image.slot),
             GpuBuffer {
                 buffer,
                 size: (image.width, image.height),
+                image,
+                fd,
+                imported: None,
+                band_unread: false,
             },
         );
+        // The image it replaces leaves the compositor's GPU context too.
+        if let (Some(imported), Reader::Ready(reader)) = (
+            replaced.and_then(|mut old| old.imported.take()),
+            &self.dmabuf_reader,
+        ) {
+            reader.release(imported);
+        }
     }
 
     /// Shows a frame that is in one of the display's GPU images.
@@ -154,6 +310,21 @@ impl State {
                 window.model.frame_shown((frame.width, frame.height));
             }
             return;
+        }
+        // The band's fill, from two rows of the frame read back, now and then.
+        let now = Instant::now();
+        let probe = self.windows.get(&task_id).and_then(|window| {
+            (window.model.has_caption()
+                && window.pip.is_none()
+                && band_probe_due(window.band_probed, now))
+            .then(|| window.model.caption_height())
+        });
+        if let Some(band) = probe {
+            let fill = self.gpu_band_fill(display_id, frame, band);
+            if let Some(window) = self.windows.get_mut(&task_id) {
+                window.gpu_fill = fill;
+                window.band_probed = Some(now);
+            }
         }
         let Some(gpu) = self.gpu_buffers.get(&(display_id, frame.slot)) else {
             return;
@@ -184,28 +355,17 @@ impl State {
         viewport.set_source(0.0, 0.0, f64::from(width), f64::from(height));
         viewport.set_destination(logical_width, logical_height);
 
-        // The title bar's buttons, on their own surface over the frame.
+        // The title bar's band, on its own surface over the frame, filled with the app's top
+        // color as sampled last when the app leaves the band empty.
         if window.model.has_caption() && !in_pip {
-            let layout = window.model.caption_layout();
-            let pixels = paint_buttons(
-                &layout,
-                window.model.dpi(),
-                &CaptionPalette::of(window.tone),
-                &CaptionState {
-                    maximized: window.model.states.maximized,
-                    active: window.model.states.activated,
-                    ..window.caption
-                },
-            );
-            let size = (3 * layout.button_width, layout.height.max(1));
+            let scale = window.model.scale.max(1) as i32;
+            let parent = window.surface.clone();
+            let fill = window.gpu_fill;
+            let (layout, pixels) = window.band_pixels(self.text.as_ref(), fill);
+            let pixels = pixels.to_vec();
+            let size = (layout.width.max(1), layout.height.max(1));
             let layer = window.caption_layer.get_or_insert_with(|| {
-                CaptionLayer::new(
-                    &self.compositor,
-                    subcompositor,
-                    &window.surface,
-                    task_id,
-                    &self.qh,
-                )
+                CaptionLayer::new(&self.compositor, subcompositor, &parent, task_id, &self.qh)
             });
             let reuse = layer
                 .buffer
@@ -218,10 +378,8 @@ impl State {
             if let Some(buffer) = &mut layer.buffer {
                 buffer.write(&pixels);
                 buffer.set_busy();
-                let scale = window.model.scale.max(1) as i32;
-                layer
-                    .subsurface
-                    .set_position(layout.buttons_left() / scale, 0);
+                layer.position = (0, 0);
+                layer.subsurface.set_position(0, 0);
                 layer.surface.set_buffer_scale(scale);
                 layer.surface.attach(Some(&buffer.buffer), 0, 0);
                 layer

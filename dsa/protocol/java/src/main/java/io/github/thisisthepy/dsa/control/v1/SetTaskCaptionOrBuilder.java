@@ -18,4 +18,16 @@ public interface SetTaskCaptionOrBuilder extends
    * @return The height.
    */
   int getHeight();
+
+  /**
+   * <code>uint32 start_width = 3;</code>
+   * @return The startWidth.
+   */
+  int getStartWidth();
+
+  /**
+   * <code>uint32 end_width = 4;</code>
+   * @return The endWidth.
+   */
+  int getEndWidth();
 }

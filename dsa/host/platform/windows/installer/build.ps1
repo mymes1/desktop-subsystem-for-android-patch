@@ -83,11 +83,11 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 $env:DSA_VERSION = $Version
 Push-Location $dsa
 try {
-    cargo build --release --target $rustTarget -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-app-window -p dsa-cli --bin dsa
+    cargo build --release --target $rustTarget -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-gfx --bin dsa-app-window -p dsa-cli --bin dsa
     if ($LASTEXITCODE -ne 0) { throw "cargo build for $rustTarget failed (rustup target add $rustTarget adds the target)" }
 } finally { Pop-Location }
 $built = Join-Path $dsa "target\$rustTarget\release"
-foreach ($program in @("dsa-hostd.exe", "dsa-wm.exe", "dsa-app-window.exe", "dsa.exe")) {
+foreach ($program in @("dsa-hostd.exe", "dsa-wm.exe", "dsa-gfx.exe", "dsa-app-window.exe", "dsa.exe")) {
     Copy-Item (Join-Path $built $program) $stage
 }
 
@@ -193,6 +193,12 @@ dotnet publish (Join-Path $installer "..\settings\DsaSettings\DsaSettings.csproj
     -p:Version=$Version -o $settingsApp
 if ($LASTEXITCODE -ne 0) { throw "building the settings app failed" }
 if (-not (Test-Path (Join-Path $settingsApp "DsaSettings.exe"))) { throw "the settings app has no DsaSettings.exe" }
+# The APK Installer, the program .apk files open in: published into the same folder, where it
+# shares the settings app's copy of the .NET runtime and WPF UI.
+dotnet publish (Join-Path $installer "..\settings\DsaApkInstaller\DsaApkInstaller.csproj") -c Release -r win-$Arch `
+    -p:Version=$Version -o $settingsApp
+if ($LASTEXITCODE -ne 0) { throw "building the APK Installer failed" }
+if (-not (Test-Path (Join-Path $settingsApp "DsaApkInstaller.exe"))) { throw "the settings folder has no DsaApkInstaller.exe" }
 
 $balVersion = "5.0.2"
 $balDir = Join-Path $out "ext\bal-$balVersion"
@@ -236,7 +242,11 @@ if ($imageManifest) {
 Push-Location $installer
 try {
     $msiExt = if (Test-Path $utilDll) { @("-ext", $utilDll) } else { @("-ext", "WixToolset.Util.wixext") }
-    wix build -arch $Arch @msiExt @defines dsa.wxs -o $msi
+    # The package's own tables are English (the machine's package, one language); every word
+    # Windows shows each user afterwards is an indirect string into dsa-app-window.exe, in
+    # that user's display language. dsa.ko-kr.wxl holds the same strings for -culture ko-KR.
+    $loc = @("-culture", "en-US", "-loc", "dsa.en-us.wxl", "-loc", "dsa.ko-kr.wxl")
+    wix build -arch $Arch @msiExt @defines @loc dsa.wxs -o $msi
     if ($LASTEXITCODE -ne 0) { throw "building the package failed" }
     $bundleDefines = @("-d", "Arch=$Arch", "-d", "Version=$Version", "-d", "ProductName=$productName", "-d", "MsiPath=$msi", "-d", "SetupUiDir=$setupUi")
     if ($AndroidMajor -gt 0) { $bundleDefines += @("-d", "AndroidMajor=$AndroidMajor") }

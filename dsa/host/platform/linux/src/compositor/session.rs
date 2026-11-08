@@ -4,8 +4,10 @@
 //! The windows and the window rules (`TaskWindows`) live on the main thread with the Wayland
 //! connection. Each connection to the service runs on a thread of its own and reconnects
 //! when the service restarts; what a thread has for the windows goes through a channel, and
-//! a pipe wakes the main thread. A broken stream, a dead guest or a missing renderer is
-//! reported and waited out; nothing of it ends the compositor.
+//! a pipe wakes the main thread. The graphics renderer runs in a process of its own (`dsa-gfx`),
+//! which the compositor starts and starts again whenever it ends. A broken stream, a dead
+//! guest, a crashed or missing renderer is reported and waited out; nothing of it ends the
+//! compositor, and the windows keep their last frame meanwhile.
 
 use std::collections::BTreeMap;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -17,23 +19,28 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
-use dsa_host_core::compositor::window_hosts::FromHost;
+use dsa_host_core::compositor::window_hosts::{FromHost, MenuWork};
 use dsa_host_core::drag::{DragOffer, DragOut};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::input::InputEvent;
+use dsa_host_core::native_abi::in_user_language;
 use dsa_host_core::notifications::{NotificationAction, NotificationEvent};
 use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_transport::Connector;
 
 use super::frames::{LatestFrames, Shown};
-use super::gfxstream::{self, FrameSink, Listen, Renderer};
+use super::gfxstream::{self, FrameSink};
 use super::wayland::{Desktop, Event, Events, Wake};
+use super::window_menu::{app_page_arguments, menu_work, reads_korean_in};
 use crate::input::evdev::EvdevGamepads;
+use crate::renderer::client::RendererClient;
 use crate::shell::dbus::{Notifier, Signal};
 use crate::shell::desktop_entry::{self, Folders};
 use crate::shell::notifications::Shown as ShownNotifications;
+use dsa_host_core::renderer::{spawn_supervisor, RendererHandler};
+use dsa_host_unix::renderer_launch::{CurrentFds, UnixLauncher};
 
 /// The build this program reports to the service.
 pub const BUILD: &str = env!("CARGO_PKG_VERSION");
@@ -94,6 +101,26 @@ fn drain(read: &OwnedFd) {
     let mut buffer = [0u8; 64];
     // SAFETY: reads into a valid buffer from a non-blocking pipe.
     while unsafe { libc::read(read.as_raw_fd(), buffer.as_mut_ptr().cast(), buffer.len()) } > 0 {}
+}
+
+/// Whether the session reads Korean: the language gettext would choose its messages in, from
+/// `LC_ALL`, `LC_MESSAGES` or `LANG`, the first that is set.
+fn reads_korean() -> bool {
+    reads_korean_in(|name| std::env::var(name).ok())
+}
+
+/// Opens DSA Settings (the settings app installed beside this program) on the Apps page at
+/// `package`, as the window menu's App info does. The settings app runs on its own; nothing
+/// waits for it.
+fn open_app_page(package: &str) -> Result<(), String> {
+    let program = std::env::current_exe()
+        .map_err(|e| format!("this program's place is not known: {e}"))?
+        .with_file_name("dsa-settings");
+    std::process::Command::new(&program)
+        .args(app_page_arguments(package))
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not start {}: {e}", program.display()))
 }
 
 fn connector() -> UnixLocalConnector {
@@ -274,7 +301,10 @@ fn ask_drag_out(to_main: ToMain, out: DragOut, serial: u32) {
                 }
             }
             Ok(None) => {}
-            Err(why) => log(&format!("a drag out of task {} did not start: {why}", out.task_id)),
+            Err(why) => log(&format!(
+                "a drag out of task {} did not start: {why}",
+                out.task_id
+            )),
         }
     });
 }
@@ -372,6 +402,7 @@ fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
         loop {
             match stream.next(Duration::from_secs(1)) {
                 Ok(Some(NotificationEvent::Posted(notification))) => {
+                    let notification = in_user_language(notification, reads_korean());
                     let notify = match shown.lock() {
                         Ok(shown) => shown.notify(&notification),
                         Err(_) => continue,
@@ -422,30 +453,38 @@ fn follow_gamepads(active: Arc<AtomicBool>) {
     });
 }
 
-fn start_graphics(
+/// Starts the graphics renderer process (`dsa-gfx`), and starts it again whenever it ends;
+/// its frames go to `frames` and `images`. The renderer runs on the GPU the user's render GPU
+/// setting names, read once now.
+fn start_renderer(
     frames: Arc<Mutex<LatestFrames>>,
     images: Option<gfxstream::GpuImages>,
     waker: Arc<PipeWaker>,
-) {
-    let path = gfxstream::backend_path();
+) -> Arc<RendererClient> {
+    let render_gpu = connect()
+        .and_then(|mut client| client.settings().map_err(|error| error.to_string()))
+        .map(|report| report.settings.render_gpu)
+        .unwrap_or_default();
     let sink = FrameSink {
         frames,
         waker,
         images,
     };
-    match Renderer::load(&path, sink) {
-        Ok(renderer) => {
-            let renderer = Arc::new(renderer);
-            let listen = Listen::from_env();
-            let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log);
-            for port in [gfxstream::COMMAND_PORT, gfxstream::PROCESS_PIPE_PORT] {
-                gfxstream::serve_port(renderer.clone(), listen.clone(), port, log.clone());
-            }
-        }
-        Err(why) => log(&format!(
-            "graphics: {why}; task windows open but show no frames until the renderer is installed"
-        )),
+    let fds: CurrentFds = Arc::default();
+    let client = RendererClient::new(sink, Arc::clone(&fds), render_gpu, Box::new(log));
+    let stop = Arc::new(AtomicBool::new(false));
+    if let Err(why) = spawn_supervisor(
+        Box::new(UnixLauncher::installed(fds)),
+        Arc::clone(&client) as Arc<dyn RendererHandler>,
+        format!("dsa-compositor {BUILD}"),
+        stop,
+    ) {
+        log(&format!(
+            "graphics: the renderer cannot be started ({why}); task windows open but show no \
+             frames"
+        ));
     }
+    client
 }
 
 /// The main thread's state.
@@ -567,6 +606,7 @@ impl Main {
                 self.apps.retain(|package, _| known.contains(package));
                 for app in apps {
                     self.apps.insert(app.package_name.clone(), app.clone());
+                    self.desktop.state.set_app(app);
                 }
                 self.sync_entries();
             }
@@ -574,6 +614,7 @@ impl Main {
                 let changed = self.apps.get(&app.package_name) != Some(app);
                 if changed {
                     self.apps.insert(app.package_name.clone(), app.clone());
+                    self.desktop.state.set_app(app);
                     self.sync_entries();
                 }
             }
@@ -590,6 +631,7 @@ impl Main {
             Event::PipInput { task_id, input } => {
                 self.desktop.state.pointer_input(task_id, input);
             }
+            Event::X11Menu(input) => self.desktop.state.x11_menu_input(input),
             Event::HostClipboard(text) => {
                 if self.guest_clipboard.as_deref() != Some(text.as_str()) {
                     let _ = self.clipboard.send(text);
@@ -641,11 +683,42 @@ impl Main {
                     self.shown.reported(task_id, shown);
                     self.after_changes();
                 }
-                FromHost::Caption { task_id, height } => {
-                    let requests = self.windows.window_caption(task_id, height);
+                FromHost::Caption { task_id, band } => {
+                    let requests = self.windows.window_caption(task_id, band);
                     self.requests(requests);
                 }
+                FromHost::MenuChosen { task_id, action } => self.menu_chosen(task_id, action),
             },
+        }
+    }
+
+    /// The user chose `action` in the window menu of `task_id`'s window.
+    fn menu_chosen(
+        &mut self,
+        task_id: i32,
+        action: dsa_host_core::compositor::window_hosts::MenuAction,
+    ) {
+        let Some(package) = self
+            .desktop
+            .state
+            .windows
+            .get(&task_id)
+            .map(|window| window.model.package.clone())
+        else {
+            return;
+        };
+        let multiple_windows = self
+            .apps
+            .get(&package)
+            .is_some_and(|app| app.multiple_windows);
+        match menu_work(action, &package, multiple_windows) {
+            Some(MenuWork::Request(request)) => self.request(request),
+            Some(MenuWork::AppPage { package }) => {
+                if let Err(why) = open_app_page(&package) {
+                    log(&format!("App info of {package} did not open: {why}"));
+                }
+            }
+            None => {}
         }
     }
 
@@ -721,7 +794,7 @@ pub fn run() -> Result<(), String> {
         .state
         .takes_gpu_frames()
         .then(|| Arc::new(Mutex::new(Vec::new())));
-    start_graphics(frames.clone(), images.clone(), waker);
+    let _renderer = start_renderer(frames.clone(), images.clone(), waker);
 
     let mut main = Main {
         desktop,
@@ -780,5 +853,25 @@ pub fn one_shot(action: &str, package: &str) -> Result<(), String> {
             .map(|_| ())
             .map_err(|error| error.to_string()),
         other => Err(format!("unknown action {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fr25_the_run_as_arm_notices_follow_the_sessions_language() {
+        let korean = |name: &str| (name == "LANG").then(|| "ko_KR.UTF-8".to_string());
+        let english = |name: &str| (name == "LANG").then(|| "en_US.UTF-8".to_string());
+        // LC_ALL comes first, as gettext reads it.
+        let both = |name: &str| match name {
+            "LC_ALL" => Some("en_GB.UTF-8".to_string()),
+            "LANG" => Some("ko_KR.UTF-8".to_string()),
+            _ => None,
+        };
+        assert!(reads_korean_in(korean));
+        assert!(!reads_korean_in(english));
+        assert!(!reads_korean_in(both));
     }
 }

@@ -14,6 +14,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use dsa_host_core::compositor::caption::CaptionBand;
 use dsa_host_core::compositor::window_hosts::{
     connect_window_host, report_to_wire, to_host_from_wire, FromHost, ToHost,
 };
@@ -32,7 +33,10 @@ use objc2::runtime::AnyObject;
 
 use super::surface::Surface;
 use super::surface_port::receive_surfaces;
+use super::title_bar::back_keys;
 use super::window::{TaskWindow, WindowEvents};
+use super::window_menu::{self, WindowMenuItem};
+use super::{menu_bar, screenshot};
 use crate::input::view::InputSink;
 use crate::objc::{class, on_main, string_of};
 use crate::shell::app_stubs::PACKAGE_KEY;
@@ -122,6 +126,21 @@ fn serve_input(mut connector: UnixLocalConnector, events: Receiver<InputEvent>) 
 struct Events {
     task_id: i32,
     reports: Reports,
+    /// The windows' input, for the back button's keys.
+    input: Sender<InputEvent>,
+}
+
+/// The host's clock, in milliseconds of the system's uptime, which wraps: the clock of the
+/// events AppKit gives.
+fn uptime_ms() -> u32 {
+    unsafe {
+        let Ok(info) = class(c"NSProcessInfo") else {
+            return 0;
+        };
+        let info: *mut AnyObject = msg_send![info, processInfo];
+        let uptime: f64 = msg_send![info, systemUptime];
+        ((uptime * 1000.0) as u64 & u64::from(u32::MAX)) as u32
+    }
 }
 
 impl WindowEvents for Events {
@@ -204,6 +223,23 @@ impl WindowEvents for Events {
                 dragging,
             },
         );
+    }
+
+    fn caption(&mut self, band: CaptionBand) {
+        report(
+            &self.reports,
+            FromHost::Caption {
+                task_id: self.task_id,
+                band,
+            },
+        );
+    }
+
+    fn back_pressed(&mut self) {
+        // Through the same path as the keyboard's keys, so Back reaches the task as a key.
+        for key in back_keys(self.task_id, uptime_ms()) {
+            let _ = self.input.send(InputEvent::Key(key));
+        }
     }
 }
 
@@ -305,7 +341,11 @@ fn show(task_id: i32, title: &str, size: (u32, u32), focused: bool) {
         ) else {
             return;
         };
-        let events = Box::new(Events { task_id, reports });
+        let events = Box::new(Events {
+            task_id,
+            reports,
+            input: input.clone(),
+        });
         let sink = Box::new(Input {
             task_id,
             events: input,
@@ -385,7 +425,89 @@ fn handle(message: ToHost) {
                 window.set_full_screen(mode == WindowMode::Fullscreen);
             }
         }),
+        ToHost::CaptionMode {
+            task_id,
+            app_drawn,
+            interactive,
+        } => STATE.with(|state| {
+            if let Some(window) = state.borrow_mut().windows.get_mut(&task_id) {
+                window.set_app_drawn(app_drawn, interactive);
+            }
+        }),
+        ToHost::CaptionBack { task_id, back } => STATE.with(|state| {
+            if let Some(window) = state.borrow().windows.get(&task_id) {
+                window.set_back(back);
+            }
+        }),
+        ToHost::AppMenu { new_window } => menu_bar::set_new_window(new_window),
     }
+}
+
+/// The task of the app's front window, which the Window menu's entries act on.
+fn front_task(state: &State) -> Option<i32> {
+    unsafe {
+        let app: *mut AnyObject = msg_send![class(c"NSApplication").ok()?, sharedApplication];
+        let front: *mut AnyObject = msg_send![app, mainWindow];
+        if front.is_null() {
+            return None;
+        }
+        state
+            .windows
+            .iter()
+            .find(|(_, window)| std::ptr::eq(window.ns_window(), front as *const AnyObject))
+            .map(|(task_id, _)| *task_id)
+    }
+}
+
+/// Whether a task window is in front, for the Window menu's Android entries.
+fn has_front_task() -> bool {
+    STATE.with(|state| {
+        state
+            .try_borrow()
+            .is_ok_and(|state| front_task(&state).is_some())
+    })
+}
+
+/// The user chose an Android entry of the Window menu (or of the band's context menu): the
+/// window host takes a screenshot itself, and the window manager carries out the rest.
+fn menu_chosen(item: WindowMenuItem) {
+    STATE.with(|state| {
+        let Ok(state) = state.try_borrow() else {
+            return;
+        };
+        let Some(task_id) = front_task(&state) else {
+            return;
+        };
+        if item == WindowMenuItem::Screenshot {
+            if let Err(why) = screenshot(&state, task_id) {
+                eprintln!("dsa-app-window: the screenshot was not taken: {why}");
+            }
+            return;
+        }
+        if let (Some(action), Some(reports)) = (window_menu::action(item), &state.reports) {
+            report(reports, FromHost::MenuChosen { task_id, action });
+        }
+    });
+}
+
+/// Takes a screenshot of task `task_id`'s window: the frame it shows, without the band of an
+/// app's own title bar. The frame is read here, while its surface holds it; it is encoded and
+/// saved on a thread of its own.
+fn screenshot(state: &State, task_id: i32) -> Result<(), String> {
+    let window = state.windows.get(&task_id).ok_or("the window has closed")?;
+    let (texture_id, content) = window
+        .shown_frame()
+        .ok_or("the app has not drawn its window yet")?;
+    let (_, surface) = state
+        .textures
+        .get(&texture_id)
+        .ok_or("the window's frame is gone")?;
+    let band = window.band_height();
+    let shot = surface
+        .read(|pixels, stride| screenshot::app_content(pixels, stride, content, band))?
+        .ok_or("the window shows nothing under its title bar")?;
+    screenshot::take(shot);
+    Ok(())
 }
 
 /// How many surfaces a task's frames use at once; older ones are let go.
@@ -632,6 +754,12 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
             }
         })
         .map_err(|e| format!("the window manager's messages could not be read: {e}"))?;
+
+    // The menu bar, with the Android window menu's entries in its Window menu. New Window
+    // shows once the window manager says the app supports several windows.
+    if let Err(why) = menu_bar::install(false, menu_chosen, has_front_task) {
+        eprintln!("dsa-app-window: the menu bar is incomplete: {why}");
+    }
 
     unsafe {
         let app_class = class(c"NSApplication")?;

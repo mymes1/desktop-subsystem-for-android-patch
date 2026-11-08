@@ -20,19 +20,20 @@ use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::tasks::{AppInfo, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 
-use super::graphics;
 use super::hosts::{self, Links, BUILD};
 use super::launch::{installed_window_host, AppLauncher};
 use super::log;
 use super::manager::{Manager, ManagerEvent, Platform, Route};
 use super::present::Presenter;
-use crate::compositor::renderer::{FramePath, FrameSink, Renderer};
 use crate::compositor::surface_port::SurfacePorts;
 use crate::compositor::window_host::{support_folder, window_manager_socket};
+use crate::gfx::client::RendererClient;
 use crate::host_config::{user_root_in, MacHostConfig, UserFolders};
 use crate::launchd::WM_LABEL;
 use crate::service::relay_socket;
 use crate::shell::app_stubs;
+use dsa_host_core::renderer::{spawn_supervisor, RendererHandler};
+use dsa_host_unix::renderer_launch::{CurrentFds, UnixLauncher};
 
 /// How long to wait for the service before trying again.
 const RETRY: Duration = Duration::from_secs(2);
@@ -178,6 +179,24 @@ impl Platform for MacPlatform {
             });
     }
 
+    fn open_app_page(&mut self, package: &str) -> Result<(), String> {
+        // Through the settings app's URL scheme, which reaches it whether it runs already
+        // (in the menu bar) or has to start; arguments would reach only a new copy.
+        let url = super::manager::app_page_url(package)
+            .ok_or_else(|| format!("{package} is not a package name"))?;
+        let mut child = std::process::Command::new("/usr/bin/open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("could not open {url}: {e}"))?;
+        // Waited for apart from the manager, so it leaves no zombie and holds nothing up.
+        let _ = thread::Builder::new()
+            .name("dsa-wm-app-page".into())
+            .spawn(move || {
+                let _ = child.wait();
+            });
+        Ok(())
+    }
+
     fn log(&mut self, line: &str) {
         log(line);
     }
@@ -289,33 +308,6 @@ fn serve_requests(
         });
 }
 
-/// Loads the renderer and points its frames at `presenter`. `None` when it cannot run; the
-/// windows then open without frames.
-fn load_renderer(path: &Path, presenter: &Arc<Presenter>) -> Option<Arc<Renderer>> {
-    let sink: Arc<dyn FrameSink> = Arc::clone(presenter) as Arc<dyn FrameSink>;
-    match Renderer::load(path, display_or_smallest(None), sink) {
-        Ok(renderer) => {
-            let renderer = Arc::new(renderer);
-            presenter.set_renderer(&renderer);
-            match renderer.frame_path() {
-                FramePath::Gpu => log("graphics: frames go to the windows on the GPU"),
-                FramePath::ReadBack => log(
-                    "graphics: this renderer reads frames back to memory; they still reach \
-                     the windows, at a higher cost",
-                ),
-            }
-            Some(renderer)
-        }
-        Err(why) => {
-            log(&format!(
-                "graphics: {why}; task windows open but show no frames until the renderer is \
-                 installed"
-            ));
-            None
-        }
-    }
-}
-
 /// Runs the window manager until `stop` is set.
 pub fn run(places: Places, stop: Arc<AtomicBool>) -> Result<(), String> {
     // One window manager per user: a second one leaves the first in charge.
@@ -341,10 +333,32 @@ pub fn run(places: Places, stop: Arc<AtomicBool>) -> Result<(), String> {
     };
     let links: Links = Arc::default();
     let presenter = Arc::new(Presenter::new(Arc::clone(&links), ports));
-    let renderer = load_renderer(&places.renderer, &presenter);
-    for kind in [GraphicsStreamKind::Command, GraphicsStreamKind::ProcessPipe] {
-        let socket = relay_socket(&places.user, kind.port());
-        graphics::serve(socket, kind, renderer.clone(), Arc::clone(&stop))?;
+    // The renderer runs in a process of its own, dsa-gfx, which this process starts and
+    // starts again whenever it ends: a crash in the renderer or MoltenVK then ends only that
+    // process, and the app windows keep their last frame. It serves the guest's streams on the
+    // relay sockets.
+    let sockets = (
+        relay_socket(&places.user, GraphicsStreamKind::Command.port()),
+        relay_socket(&places.user, GraphicsStreamKind::ProcessPipe.port()),
+    );
+    let client = RendererClient::new(Arc::clone(&presenter), sockets, display_or_smallest(None));
+    let fds: CurrentFds = Arc::default();
+    let mut launcher = UnixLauncher::installed(fds);
+    if std::env::var_os("DSA_RENDERER").is_none() {
+        launcher
+            .env
+            .push(("DSA_RENDERER".into(), places.renderer.display().to_string()));
+    }
+    if let Err(why) = spawn_supervisor(
+        Box::new(launcher),
+        Arc::clone(&client) as Arc<dyn RendererHandler>,
+        BUILD.to_string(),
+        Arc::clone(&stop),
+    ) {
+        log(&format!(
+            "graphics: the renderer cannot be started ({why}); task windows open but show no \
+             frames"
+        ));
     }
 
     let (events, received) = channel();

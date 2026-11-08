@@ -239,12 +239,74 @@ pub struct WindowShown {
 /// opens and whenever the height changes (a move to a monitor of another scale, a change of
 /// the system's caption size). The window manager asks Android to give the task a top inset
 /// of that height.
+///
+/// `start_width` and `end_width` are how far the app's icon (with the space around it) and
+/// the caption buttons reach into the band from its left and right ends, in client pixels. An
+/// app that draws its own title bar is told them, so it keeps its controls out of them.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WindowCaption {
     #[prost(int32, tag = "1")]
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub start_width: u32,
+    #[prost(uint32, tag = "4")]
+    pub end_width: u32,
+}
+/// A rectangle in client pixels: left and top inclusive, right and bottom exclusive.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientRect {
+    #[prost(int32, tag = "1")]
+    pub left: i32,
+    #[prost(int32, tag = "2")]
+    pub top: i32,
+    #[prost(int32, tag = "3")]
+    pub right: i32,
+    #[prost(int32, tag = "4")]
+    pub bottom: i32,
+}
+/// Window manager to window host: whether the task's app draws its own title bar (it asked
+/// Android for a transparent caption bar background). While it does, the window draws only its
+/// caption buttons and the app's icon over the app, not the app's name, and the points of the
+/// band inside `interactive` (the app's controls there, in client pixels) go to the app; the
+/// rest of the band still drags the window. Sent when it changes; a window opens with the
+/// window's own title bar.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetCaptionMode {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(bool, tag = "2")]
+    pub app_drawn: bool,
+    #[prost(message, repeated, tag = "3")]
+    pub interactive: ::prost::alloc::vec::Vec<ClientRect>,
+}
+/// Window manager to window host: whether the task has somewhere to go back to (it is past
+/// its first screen). While it has, the title bar shows a back arrow in the place of the app's
+/// icon, in the same cell, and a click on it sends the task Back; otherwise the cell shows the
+/// icon and opens the system menu. Sent when it changes; a window opens with the icon.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetCaptionBack {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(bool, tag = "2")]
+    pub back: bool,
+}
+/// Window manager to window host: what the app's windows offer in their system menu. Sent
+/// after Attached, and again when the app changes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppMenu {
+    /// Whether the app supports several windows, so the menu offers New window.
+    #[prost(bool, tag = "1")]
+    pub new_window: bool,
+}
+/// Window host to window manager: the user chose an item of the task window's system menu.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MenuChosen {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(enumeration = "MenuAction", tag = "2")]
+    pub action: i32,
 }
 /// Window manager to window host: the caption buttons of the task's window take this tone.
 /// Sent when the window opens and whenever the app's status bar changes tone.
@@ -270,17 +332,17 @@ pub struct SetWindowMode {
     pub resizable: bool,
 }
 /// The one message type on the wire. Each frame carries exactly one.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32, 60"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32, 33, 34, 35, 36, 60"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
 /// Nested message and enum types in `Envelope`.
 pub mod envelope {
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Body {
         #[prost(message, tag = "1")]
         Hello(super::Hello),
@@ -326,6 +388,14 @@ pub mod envelope {
         WindowCaption(super::WindowCaption),
         #[prost(message, tag = "32")]
         SetCaptionTone(super::SetCaptionTone),
+        #[prost(message, tag = "33")]
+        SetCaptionMode(super::SetCaptionMode),
+        #[prost(message, tag = "34")]
+        AppMenu(super::AppMenu),
+        #[prost(message, tag = "35")]
+        MenuChosen(super::MenuChosen),
+        #[prost(message, tag = "36")]
+        SetCaptionBack(super::SetCaptionBack),
         #[prost(message, tag = "60")]
         SetWindowMode(super::SetWindowMode),
     }
@@ -421,6 +491,46 @@ impl RejectReason {
             "REJECT_REASON_SCHEMA_HASH_MISMATCH" => Some(Self::SchemaHashMismatch),
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
+            _ => None,
+        }
+    }
+}
+/// An item of a task window's system menu that the window manager carries out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MenuAction {
+    Unspecified = 0,
+    /// Start another task of the app in a window of its own.
+    NewWindow = 1,
+    /// Android's setting of the app's aspect ratio.
+    AspectRatio = 2,
+    /// Android's setting of whether the app opens the links it supports.
+    OpenByDefault = 3,
+    /// The app's page in DSA's settings.
+    AppInfo = 4,
+}
+impl MenuAction {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MENU_ACTION_UNSPECIFIED",
+            Self::NewWindow => "MENU_ACTION_NEW_WINDOW",
+            Self::AspectRatio => "MENU_ACTION_ASPECT_RATIO",
+            Self::OpenByDefault => "MENU_ACTION_OPEN_BY_DEFAULT",
+            Self::AppInfo => "MENU_ACTION_APP_INFO",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MENU_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
+            "MENU_ACTION_NEW_WINDOW" => Some(Self::NewWindow),
+            "MENU_ACTION_ASPECT_RATIO" => Some(Self::AspectRatio),
+            "MENU_ACTION_OPEN_BY_DEFAULT" => Some(Self::OpenByDefault),
+            "MENU_ACTION_APP_INFO" => Some(Self::AppInfo),
             _ => None,
         }
     }

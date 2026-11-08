@@ -7,7 +7,7 @@
 //! Windows. Sizes on the wire are in the desktop's logical units, which the output's scale
 //! turns into pixels.
 
-use dsa_host_core::compositor::caption::{scaled, CaptionLayout};
+use dsa_host_core::compositor::caption::{scaled, CaptionBand, CaptionLayout};
 use dsa_host_core::compositor::window_mode::{ModeState, WindowMode};
 use dsa_host_core::compositor::window_sizing::BASE_DPI;
 use dsa_host_core::input::WindowGeometry;
@@ -63,7 +63,7 @@ pub struct Toplevel {
     /// The last size the desktop proposed, in pixels.
     proposed: Option<(u32, u32)>,
     /// The title bar height last told to the guest.
-    caption_told: Option<u32>,
+    caption_told: Option<CaptionBand>,
 }
 
 impl Toplevel {
@@ -142,14 +142,25 @@ impl Toplevel {
         CaptionLayout::new(self.shown.0, self.caption_height(), self.dpi(), border)
     }
 
-    /// The title bar's height when the guest has not been told it yet: the app's top inset.
-    pub fn caption_change(&mut self) -> Option<u32> {
+    /// The title bar's band when the guest has not been told it yet: its height, which is the
+    /// app's top inset, and how far the icon's cell and the caption buttons reach in from its
+    /// ends, which an app drawing its own title bar keeps clear. A window with no title bar
+    /// has an empty band.
+    pub fn caption_change(&mut self) -> Option<CaptionBand> {
         let height = self.caption_height();
-        if self.caption_told == Some(height) {
+        let band = if height == 0 {
+            CaptionBand::default()
+        } else {
+            CaptionBand {
+                height,
+                ..CaptionLayout::new(0, height, self.dpi(), 0).band()
+            }
+        };
+        if self.caption_told == Some(band) {
             return None;
         }
-        self.caption_told = Some(height);
-        Some(height)
+        self.caption_told = Some(band);
+        Some(band)
     }
 
     /// `xdg_toplevel.configure`: the desktop proposes `logical` (0 on an axis leaves it to
@@ -307,13 +318,13 @@ mod tests {
     fn fr22_the_title_bar_scales_and_goes_away_in_full_screen() {
         let mut window = window();
         assert_eq!(window.caption_height(), 32);
-        assert_eq!(window.caption_change(), Some(32));
+        assert_eq!(window.caption_change().map(|band| band.height), Some(32));
         assert_eq!(window.caption_change(), None);
         window.rescale(2);
-        assert_eq!(window.caption_change(), Some(64));
+        assert_eq!(window.caption_change().map(|band| band.height), Some(64));
         window.mode.toggle_fullscreen();
         assert_eq!(window.caption_height(), 0);
-        assert_eq!(window.caption_change(), Some(0));
+        assert_eq!(window.caption_change(), Some(CaptionBand::default()));
     }
 
     #[test]
@@ -328,5 +339,32 @@ mod tests {
             },
         );
         assert_eq!(window.caption_layout().resize_border, 0);
+    }
+
+    #[test]
+    fn fr22_the_guest_hears_how_far_the_icon_cell_and_buttons_reach_into_the_band() {
+        let mut window = window();
+        // At 100%: the icon's cell ends 40 px in from the left (16 px padding, a 16 px icon
+        // and half the padding after it), and the three 46 px buttons take 138 px at the right.
+        assert_eq!(
+            window.caption_change(),
+            Some(CaptionBand {
+                height: 32,
+                start_width: 40,
+                end_width: 138,
+            })
+        );
+        // They scale with the window, and a resize changes nothing the guest is told.
+        window.frame_shown((900, 700));
+        assert_eq!(window.caption_change(), None);
+        window.rescale(2);
+        assert_eq!(
+            window.caption_change(),
+            Some(CaptionBand {
+                height: 64,
+                start_width: 80,
+                end_width: 276,
+            })
+        );
     }
 }
