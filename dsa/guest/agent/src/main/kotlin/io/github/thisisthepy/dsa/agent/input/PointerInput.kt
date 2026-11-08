@@ -27,7 +27,7 @@ data class InjectedPointer(
  * as the framework reads a tablet's two tilt axes: the angle from upright and the way the
  * tip points (the input reader's own conversion of a tilt X and a tilt Y).
  */
-fn penTilt(tiltXDegrees: Float, tiltYDegrees: Float): Pair<Float, Float> {
+fun penTilt(tiltXDegrees: Float, tiltYDegrees: Float): Pair<Float, Float> {
     if (!tiltXDegrees.isFinite() || !tiltYDegrees.isFinite()) return 0f to 0f
     val x = Math.toRadians(tiltXDegrees.coerceIn(-90f, 90f).toDouble())
     val y = Math.toRadians(tiltYDegrees.coerceIn(-90f, 90f).toDouble())
