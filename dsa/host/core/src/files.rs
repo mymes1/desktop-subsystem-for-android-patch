@@ -195,7 +195,10 @@ mod tests {
         for name in ["game.xapk", "game.apks", "game.APKM", "game.aab"] {
             let bundle = dir.join(name);
             std::fs::write(&bundle, b"PK").unwrap();
-            assert_eq!(dropped(&[bundle.clone()]), [Dropped::Install(bundle)]);
+            assert_eq!(
+                dropped(std::slice::from_ref(&bundle)),
+                [Dropped::Install(bundle)]
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

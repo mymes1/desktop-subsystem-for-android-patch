@@ -4576,17 +4576,6 @@ fn fr20_developer_mode_starts_adbd_and_opens_a_loopback_port_that_reaches_it() {
     );
 }
 
-fn wait_until(mut done: impl FnMut() -> bool) -> bool {
-    let deadline = std::time::Instant::now() + WAIT;
-    while std::time::Instant::now() < deadline {
-        if done() {
-            return true;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    false
-}
-
 #[test]
 fn fr20_developer_mode_attaches_its_port_to_the_adb_server_and_detaches_it_when_off() {
     use dsa_host_core::adb_discovery::{fake::FakeAdbServer, AutoConnectState};
@@ -4600,25 +4589,25 @@ fn fr20_developer_mode_attaches_its_port_to_the_adb_server_and_detaches_it_when_
     session.developer_mode(true, 0).unwrap();
     assert_eq!(next_body(&mut agent), developer_mode(true));
     let serial = session.adb_address().unwrap().to_string();
-    assert!(wait_until(
-        || session.adb_auto_connect_state() == AutoConnectState::Attached
-    ));
+    wait_until("the port is attached to the adb server", || {
+        session.adb_auto_connect_state() == AutoConnectState::Attached
+    });
     assert_eq!(
         server.requests_starting("host:connect:"),
         vec![format!("host:connect:{serial}")]
     );
 
     session.developer_mode(false, 0).unwrap();
-    assert!(wait_until(|| !server
-        .requests_starting("host:disconnect:")
-        .is_empty()));
+    wait_until("the adb server is asked to disconnect", || {
+        !server.requests_starting("host:disconnect:").is_empty()
+    });
     assert_eq!(
         server.requests_starting("host:disconnect:"),
         vec![format!("host:disconnect:{serial}")]
     );
-    assert!(wait_until(
-        || session.adb_auto_connect_state() == AutoConnectState::Off
-    ));
+    wait_until("auto connect is off", || {
+        session.adb_auto_connect_state() == AutoConnectState::Off
+    });
 }
 
 #[test]
