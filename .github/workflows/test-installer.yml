@@ -169,6 +169,35 @@ jobs:
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
 
+      # The Android VM's network made through this machine's Host Compute Network, as the
+      # service makes it: the NAT network and its endpoint are removed when the VM stops,
+      # when its start fails and when the service lets go of it; a network left by a service
+      # that ended uncleanly is used again, and one left from moving the VM is removed. No
+      # guest boots here, so the routes are checked from the host's side: the guest's default
+      # route is an address of this computer on its adapter for the network (so the guest's
+      # traffic follows this computer's routes, a VPN's included), and this computer sends to
+      # the guest's address through that adapter. HCN needs the Host Network Service; a runner
+      # image without it says so in a warning.
+      - name: fr28_the_vms_network_is_removed_when_it_stops_and_the_host_reaches_the_guest
+        working-directory: dsa
+        run: |
+          $hns = Get-Service hns -ErrorAction SilentlyContinue
+          if (-not $hns) {
+            Write-Host "::warning::this runner has no Host Network Service, so the VM's network is not checked here"
+            exit 0
+          }
+          Write-Host "Host Network Service: $($hns.Status)"
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test hcn_network -- --ignored --test-threads 1 --nocapture
+          if ($LASTEXITCODE -ne 0) { throw "the VM's network was not made, removed or routed as it must be" }
+          # Windows takes the host's adapter of a removed network away shortly after.
+          $deadline = (Get-Date).AddSeconds(20)
+          do {
+            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr28*'
+            if (-not $left) { break }
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+          if ($left) { throw "host adapters of the test networks are left: $($left.Name -join ', ')" }
+
       # Nothing is installed yet, so setup.exe opens on its first screen. Pictures of it in
       # the light and the dark theme, of Change, and of the command line help.
       - name: Take pictures of setup.exe's first screens
