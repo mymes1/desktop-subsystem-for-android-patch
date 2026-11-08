@@ -1649,9 +1649,10 @@ mod real_input {
         POINTER_FLAG_UPDATE, POINTER_PEN_INFO, POINTER_TOUCH_INFO,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        IsIconic, WindowFromPoint, HTMINBUTTON, HWND_TOPMOST, PEN_FLAG_BARREL, PEN_FLAG_ERASER,
-        PEN_MASK_PRESSURE, PEN_MASK_TILT_X, PEN_MASK_TILT_Y, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH,
-        SWP_NOSIZE, TOUCH_MASK_CONTACTAREA, TOUCH_MASK_PRESSURE, WM_NCHITTEST,
+        GetAncestor, GetClassNameW, IsIconic, WindowFromPoint, GA_ROOT, HTMINBUTTON, HWND_TOPMOST,
+        PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, PEN_MASK_TILT_X,
+        PEN_MASK_TILT_Y, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH, SWP_NOSIZE, TOUCH_MASK_CONTACTAREA,
+        TOUCH_MASK_PRESSURE, WM_NCHITTEST,
     };
 
     /// One contact of a synthetic pointer device's frame (`POINTER_TYPE_INFO`).
@@ -1734,6 +1735,9 @@ mod real_input {
     /// A finger that lifts is gone; a pen that lifts stays in range, hovering.
     const LIFTED: u32 = POINTER_FLAG_UP;
     const PEN_LIFTED: u32 = POINTER_FLAG_UP | POINTER_FLAG_INRANGE;
+    /// A pen that leaves the digitizer's range: an update that is neither in range nor in
+    /// contact.
+    const OUT_OF_RANGE: u32 = POINTER_FLAG_UPDATE;
 
     fn finger(id: u32, flags: u32, at: POINT) -> PointerTypeInfo {
         // SAFETY: plain data, for which all zero is a valid value.
@@ -1777,31 +1781,75 @@ mod real_input {
         }
     }
 
-    /// A task window on top of every other window, and where its client area begins on the
-    /// screen, once the window is the one under `points` (client points).
+    /// A task window on top of every other window, at the top left of its monitor's work
+    /// area so the whole window is on the screen, and where its client area begins on the
+    /// screen, once the window is the one under `points` (client points). A point counts as
+    /// on the window when the window under it, or the top-level window that holds it, is the
+    /// task window.
     fn window_on_top(running: &Running, points: &[(i32, i32)]) -> (HWND, POINT) {
         let open = windows_of(running, 1);
         let hwnd = open[0].hwnd as HWND;
-        unsafe { SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE) };
-        let mut origin = POINT { x: 0, y: 0 };
-        unsafe { ClientToScreen(hwnd, &mut origin) };
-        wait_for(
-            "the task window to be the window under the contacts",
-            || {
-                points
+        let (_, work) = window_and_work_area(open[0].hwnd);
+        unsafe { SetWindowPos(hwnd, HWND_TOPMOST, work.left, work.top, 0, 0, SWP_NOSIZE) };
+        let under = |origin: POINT, point: (i32, i32)| -> HWND {
+            unsafe { WindowFromPoint(on_screen(origin, point)) }
+        };
+        let deadline = Instant::now() + WAIT;
+        loop {
+            let mut origin = POINT { x: 0, y: 0 };
+            unsafe { ClientToScreen(hwnd, &mut origin) };
+            let all_on_it = points.iter().all(|&point| {
+                let found = under(origin, point);
+                found == hwnd || unsafe { GetAncestor(found, GA_ROOT) } == hwnd
+            });
+            if all_on_it {
+                return (hwnd, origin);
+            }
+            if Instant::now() >= deadline {
+                let (window, work) = window_and_work_area(open[0].hwnd);
+                let misses: Vec<String> = points
                     .iter()
-                    .all(|&(x, y)| {
-                        let at = POINT {
-                            x: origin.x + x,
-                            y: origin.y + y,
-                        };
-                        let under = unsafe { WindowFromPoint(at) };
-                        under == hwnd
+                    .map(|&point| {
+                        let at = on_screen(origin, point);
+                        format!(
+                            "{point:?} at ({}, {}) on the screen: {}",
+                            at.x,
+                            at.y,
+                            describe_window(under(origin, point))
+                        )
                     })
-                    .then_some(())
-            },
-        );
-        (hwnd, origin)
+                    .collect();
+                panic!(
+                    "timed out waiting for the task window to be the window under the \
+                     contacts: the task window {} is at ({}, {}) to ({}, {}), its client area \
+                     begins at ({}, {}), the work area is ({}, {}) to ({}, {}); under the \
+                     contacts: {misses:?}",
+                    describe_window(hwnd),
+                    window.left,
+                    window.top,
+                    window.right,
+                    window.bottom,
+                    origin.x,
+                    origin.y,
+                    work.left,
+                    work.top,
+                    work.right,
+                    work.bottom,
+                );
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// A window's handle and class, for a failure's message.
+    fn describe_window(hwnd: HWND) -> String {
+        if hwnd.is_null() {
+            return "no window".to_string();
+        }
+        let mut class = [0u16; 128];
+        let length = unsafe { GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32) };
+        let class = String::from_utf16_lossy(&class[..length.max(0) as usize]);
+        format!("{hwnd:?} of class {class:?}")
     }
 
     fn on_screen(origin: POINT, (x, y): (i32, i32)) -> POINT {
@@ -1818,18 +1866,24 @@ mod real_input {
         what: &str,
         done: impl Fn(&[PointerEvent]) -> bool,
     ) -> Vec<PointerEvent> {
-        wait_for(what, || {
-            let events: Vec<PointerEvent> = running
-                .android
-                .pointers
-                .lock()
-                .unwrap()
+        let deadline = Instant::now() + WAIT;
+        loop {
+            let all: Vec<PointerEvent> = running.android.pointers.lock().unwrap().clone();
+            let events: Vec<PointerEvent> = all
                 .iter()
                 .filter(|event| event.tool == tool)
                 .copied()
                 .collect();
-            done(&events).then_some(events)
-        })
+            if done(&events) {
+                return events;
+            }
+            // What did arrive says which part of the input went missing.
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {what}; the task was given: {all:?}"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     fn count(events: &[PointerEvent], action: PointerAction) -> usize {
@@ -1930,7 +1984,19 @@ mod real_input {
         let (_, origin) = window_on_top(&running, &[point]);
         let at = on_screen(origin, point);
 
+        // As a real pen's digitizer reports it: the pen comes into range and hovers for a few
+        // frames before it touches, and its other end is the eraser, which the digitizer
+        // reports as inverted while it hovers and as the eraser while it touches. Turning
+        // the pen over takes it out of range in between.
         let stylus = Device::new(PT_PEN, 1);
+        for step in (1..=3).rev() {
+            stylus.inject(&[pen(
+                HOVERING,
+                PEN_FLAG_BARREL,
+                0,
+                on_screen(origin, (point.0 - 4 * step, point.1)),
+            )]);
+        }
         stylus.inject(&[pen(HOVERING, PEN_FLAG_BARREL, 0, at)]);
         stylus.inject(&[pen(DOWN, PEN_FLAG_BARREL, 512, at)]);
         stylus.inject(&[pen(
@@ -1945,9 +2011,24 @@ mod real_input {
             0,
             on_screen(origin, (point.0 + 20, point.1)),
         )]);
-        stylus.inject(&[pen(HOVERING, PEN_FLAG_ERASER, 0, at)]);
-        stylus.inject(&[pen(DOWN, PEN_FLAG_ERASER, 512, at)]);
-        stylus.inject(&[pen(PEN_LIFTED, PEN_FLAG_ERASER, 0, at)]);
+        stylus.inject(&[pen(
+            OUT_OF_RANGE,
+            0,
+            0,
+            on_screen(origin, (point.0 + 20, point.1)),
+        )]);
+        for step in (1..=3).rev() {
+            stylus.inject(&[pen(
+                HOVERING,
+                PEN_FLAG_INVERTED,
+                0,
+                on_screen(origin, (point.0 - 4 * step, point.1)),
+            )]);
+        }
+        stylus.inject(&[pen(HOVERING, PEN_FLAG_INVERTED, 0, at)]);
+        stylus.inject(&[pen(DOWN, PEN_FLAG_INVERTED | PEN_FLAG_ERASER, 512, at)]);
+        stylus.inject(&[pen(PEN_LIFTED, PEN_FLAG_INVERTED, 0, at)]);
+        stylus.inject(&[pen(OUT_OF_RANGE, 0, 0, at)]);
 
         let tip = given(&running, PointerTool::Pen, "the pen to lift", |events| {
             count(events, PointerAction::Up) >= 1

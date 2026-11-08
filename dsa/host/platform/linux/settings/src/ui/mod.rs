@@ -87,7 +87,7 @@ pub fn run() -> glib::ExitCode {
     if start.page.is_some() && app.register(gio::Cancellable::NONE).is_ok() && app.is_remote() {
         let page = start.page.map(Page::id).unwrap_or_default().to_string();
         let package = start.app.clone().unwrap_or_default();
-        app.activate_action("open", Some(&glib::ToVariant::to_variant(&(page, package))));
+        app.activate_action("open", Some(&(page, package).to_variant()));
     }
     app.connect_activate(move |app| {
         if let Some(window) = app.active_window() {

@@ -87,6 +87,7 @@ fn fr3_frames_from_the_host_reach_every_listener() {
     let close = frame(Body::CloseTask(CloseTask { task_id: 7 }));
     let launch = frame(Body::LaunchApp(LaunchApp {
         package_name: "org.example.notes".into(),
+        new_window: false,
     }));
     router.from_host(&close);
     router.from_host(&launch);
@@ -351,6 +352,8 @@ fn app_info(package: &str, label: &str) -> Vec<u8> {
         package_name: package.into(),
         label: label.into(),
         icon_png: vec![0x89, b'P', b'N', b'G'],
+        caption_icon_png: Vec::new(),
+        multiple_windows: false,
     }))
 }
 

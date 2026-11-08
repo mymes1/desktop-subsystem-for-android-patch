@@ -1,6 +1,6 @@
 // Stands in for frameworks/base/libs/hwui/Android.bp, which the lock leaves out and build.sh
 // puts in its place. It is upstream's file without the Java library framework-graphics (a
-// java_sdk_library) and the two filegroups only it and Ravenwood use. Nothing native uses
+// Java SDK library) and the two filegroups only it and Ravenwood use. Nothing native uses
 // them, and that module makes API stubs from the prebuilt SDK and the framework sources,
 // neither of which the tree has. Every other block, libhwui's included, is upstream's,
 // unchanged.

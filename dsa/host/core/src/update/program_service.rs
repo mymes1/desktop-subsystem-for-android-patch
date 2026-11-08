@@ -45,7 +45,7 @@ use crate::memory::GuestMemoryReport;
 use crate::print::{PrintEvent, PrintOutcome};
 use crate::session::BackgroundRequest;
 use crate::session::SessionState;
-use crate::tasks::{TaskRequest, TaskRequestError, TaskWatch};
+use crate::tasks::{AppSettingsPage, TaskRequest, TaskRequestError, TaskWatch};
 use crate::widgets::{WidgetError, WidgetProvider, WidgetSize};
 use std::sync::mpsc::Receiver;
 
@@ -980,6 +980,13 @@ impl UserAndroid for WithProgramStatus {
     }
     fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
         UserAndroid::open_app_settings(&*self.android, package)
+    }
+    fn open_app_settings_page(
+        &self,
+        package: Option<&str>,
+        page: AppSettingsPage,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::open_app_settings_page(&*self.android, package, page)
     }
     fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
         UserAndroid::uninstall_app(&*self.android, package)

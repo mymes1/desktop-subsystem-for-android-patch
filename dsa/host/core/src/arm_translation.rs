@@ -523,6 +523,8 @@ mod tests {
     fn fr25_the_bootconfig_turns_translation_on_only_with_a_package_and_the_setting() {
         let installed = package();
         let default = default_package_of_image();
+        // Bound before the closure, which takes one lifetime for every package it is given.
+        let google = google_package();
         let config =
             |installed, default, enabled| bootconfig(choose(installed, default, enabled).as_ref());
         assert_eq!(config(None, None, true), "");
@@ -542,10 +544,7 @@ mod tests {
             config(Some(&installed), Some(&default), true),
             BOOTCONFIG_ON
         );
-        assert_eq!(
-            config(Some(&google_package()), Some(&default), true),
-            BOOTCONFIG_ON
-        );
+        assert_eq!(config(Some(&google), Some(&default), true), BOOTCONFIG_ON);
         assert_eq!(config(Some(&installed), Some(&default), false), "");
     }
 

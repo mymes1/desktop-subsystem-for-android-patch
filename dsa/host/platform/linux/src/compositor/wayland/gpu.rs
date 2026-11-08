@@ -65,6 +65,8 @@ impl Drop for GpuBuffer {
 
 /// The compositor's own GPU context for reading frames back, made the first time a frame in a
 /// layout the CPU cannot read is read.
+// One per compositor, so the reader stays inline rather than boxed.
+#[allow(clippy::large_enum_variant)]
 #[derive(Default)]
 pub enum Reader {
     #[default]

@@ -2368,8 +2368,10 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertIn(app, make_image.REMOVED_APPS)
         extra = {f"PRODUCT/app/{app}/{app}.apk": b"apk" for app in removed}
         extra.update({name: b"apk" for name in kept})
-        # Settings.apk is opened to edit its sound screen, so it has to be an APK.
+        # Settings.apk is opened to edit its sound screen, and DocumentsUI.apk to edit its
+        # list's room, so each has to be an APK.
         extra["SYSTEM/priv-app/Settings/Settings.apk"] = SettingsWithoutBluetoothTests.apk({})
+        extra["SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk"] = SettingsWithoutBluetoothTests.apk({})
         extra["META/apkcerts.txt"] = "".join(
             f'name="{Path(name).name}" certificate="c.x509.pem" private_key="c.pk8"\n'
             for name in list(extra) if name.endswith(".apk")
@@ -4131,7 +4133,10 @@ class ListBottomMarginTests(unittest.TestCase):
         self.assertIn("TopLevelSettings;->onCreateRecyclerView", outputs[0])
         self.assertIn("manage_applications_apps.xml", outputs[0])
         self.assertIn("getSaveLayoutHeight", outputs[0])
-        self.assertNotIn("sits on the window's bottom edge", outputs[1])
+        # The list room check's own problem; the missing Settings overlay is reported in
+        # words of its own, which also name the window's bottom edge.
+        self.assertIn("so the last row of its list sits on the window's bottom edge", outputs[0])
+        self.assertNotIn("so the last row of its list sits on the window's bottom edge", outputs[1])
 
 
 PUBLISHED_KEYCHAIN = "SYSTEM/app/KeyChain/KeyChain.apk"
