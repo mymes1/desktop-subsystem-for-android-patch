@@ -32,8 +32,10 @@ if bash "$channel" v1.0 stable >/dev/null 2>&1; then
 fi
 
 # fr15_the_workflow_publishes_a_prerelease_as_a_github_prerelease_with_its_channel_lists
-grep -Fq '.github/scripts/release/release-channel.sh "$VERSION" "$REQUESTED"' "$workflow" \
-    || fail "the workflow does not decide the channel with release-channel.sh"
+grep -Fq '.github/scripts/release/release-branch-channel.sh "$REF" "$VERSION" "$REQUESTED"' "$workflow" \
+    || fail "the workflow does not decide the channel with release-branch-channel.sh"
+grep -Fq 'release-channel.sh" "$version" "$requested"' "$root/.github/scripts/release/release-branch-channel.sh" \
+    || fail "the branch's channel does not follow release-channel.sh"
 grep -Fq "if (\$env:CHANNEL -eq 'prerelease') { \$channelFlags += '--prerelease' }" "$workflow" \
     || fail "the workflow does not publish a pre-release as a GitHub pre-release"
 grep -Fq -- '--generate-notes @channelFlags' "$workflow" \
