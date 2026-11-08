@@ -1263,9 +1263,14 @@ jobs:
           Add-Content -NoNewline -Encoding ascii (Join-Path $out SHA256SUMS.txt) "$hash  $asset`n"
           gh release upload "v$version" (Join-Path $out $asset) (Join-Path $out SHA256SUMS.txt) --repo ${{ github.repository }} --clobber
           if ($LASTEXITCODE -ne 0) { throw "adding the ARM64 installer to v$version failed" }
-          $notes = gh release view "v$version" --repo ${{ github.repository }} --json body --jq .body
+          # gh prints the notes as lines, which PowerShell keeps as an array: passed as is, each
+          # line becomes its own argument and a line that starts with "- " reads as a flag. So
+          # the lines are joined and handed over as a file.
+          $notes = (gh release view "v$version" --repo ${{ github.repository }} --json body --jq .body) -join "`n"
           $notes = $notes -replace '(?m)^- Needs 64-bit Windows', "- On an ARM64 PC (such as Snapdragon), download **$asset** instead (SHA-256 ``$hash``). Its Android runs arm64-v8a apps only.`n- Needs 64-bit Windows"
-          gh release edit "v$version" --repo ${{ github.repository }} --notes $notes
+          $notesFile = Join-Path $out notes.md
+          Set-Content -Encoding utf8NoBOM -NoNewline $notesFile $notes
+          gh release edit "v$version" --repo ${{ github.repository }} --notes-file $notesFile
           if ($LASTEXITCODE -ne 0) { throw "updating the release notes failed" }
 
       # The ARM64 services update from this list, which names the ARM64 setup file.
