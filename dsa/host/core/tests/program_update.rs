@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -20,8 +19,8 @@ use dsa_host_core::update::program::{
     FORMAT,
 };
 use dsa_host_core::update::program_service::{
-    CheckOutcome, ProgramInstaller, ProgramSettings, ProgramStatus, ProgramUpdates, RunningSetup,
-    Timing, WithProgramStatus,
+    after_setup, restart_into_files, AfterSetup, CheckOutcome, ProgramInstaller, ProgramSettings,
+    ProgramStatus, ProgramUpdates, RunningSetup, SetupOutcome, Timing, WithProgramStatus,
 };
 use dsa_host_core::update::store::Fetch;
 use ed25519_dalek::{Signer, SigningKey};
@@ -140,15 +139,49 @@ type Run = (PathBuf, PathBuf, Vec<u8>);
 #[derive(Default, Clone)]
 struct FakeInstaller {
     runs: Arc<Mutex<Vec<Run>>>,
-    ends: Arc<Mutex<Vec<Sender<u32>>>>,
+    /// How each setup ends: its exit code once the test ends it.
+    setups: Arc<Mutex<Vec<Arc<Ending>>>>,
     refuse: Option<String>,
+    /// Setups carry an id a later service can find them by, as on Windows.
+    named: bool,
+    /// The version of the program files, as setup leaves them.
+    on_disk: Arc<Mutex<Option<String>>>,
+    /// Some other installation is running.
+    elsewhere: Arc<AtomicBool>,
+    /// How often the service asked to be restarted into the program files.
+    restarts: Arc<AtomicU32>,
+    /// The handles services wait on setups with, until setup stops those services.
+    waiters: Arc<Mutex<Vec<Arc<AtomicBool>>>>,
 }
 
-struct FakeSetup(Receiver<u32>);
+#[derive(Default)]
+struct Ending {
+    code: Mutex<Option<u32>>,
+    ended: Condvar,
+}
+
+struct FakeSetup {
+    ending: Arc<Ending>,
+    id: Option<String>,
+    /// Set when the service that waits on this handle has stopped, as setup stops it.
+    gone: Arc<AtomicBool>,
+}
 
 impl RunningSetup for FakeSetup {
     fn wait(self: Box<Self>) -> Result<u32, String> {
-        self.0.recv().map_err(|_| "setup vanished".to_string())
+        let mut code = self.ending.code.lock().unwrap();
+        loop {
+            if self.gone.load(Ordering::SeqCst) {
+                return Err("the service waiting for setup stopped".into());
+            }
+            if let Some(code) = *code {
+                return Ok(code);
+            }
+            code = self.ending.ended.wait(code).unwrap();
+        }
+    }
+    fn id(&self) -> Option<String> {
+        self.id.clone()
     }
 }
 
@@ -162,9 +195,45 @@ impl ProgramInstaller for FakeInstaller {
             .lock()
             .unwrap()
             .push((setup.to_path_buf(), log.to_path_buf(), contents));
-        let (end, ended) = channel();
-        self.ends.lock().unwrap().push(end);
-        Ok(Box::new(FakeSetup(ended)))
+        let ending = Arc::new(Ending::default());
+        let mut setups = self.setups.lock().unwrap();
+        let id = self.named.then(|| format!("setup-{}", setups.len()));
+        setups.push(Arc::clone(&ending));
+        Ok(Box::new(FakeSetup {
+            ending,
+            id,
+            gone: self.waiter(),
+        }))
+    }
+    /// As Windows Installer's codes read: 3010 installed, with a restart to finish.
+    fn outcome(&self, code: u32) -> SetupOutcome {
+        match code {
+            0 => SetupOutcome::Installed,
+            3010 => SetupOutcome::InstalledRestartPending,
+            _ => SetupOutcome::Failed,
+        }
+    }
+    fn reattach(&self, id: &str) -> Option<Box<dyn RunningSetup>> {
+        let index: usize = id.strip_prefix("setup-")?.parse().ok()?;
+        let ending = Arc::clone(self.setups.lock().unwrap().get(index)?);
+        if ending.code.lock().unwrap().is_some() {
+            return None;
+        }
+        Some(Box::new(FakeSetup {
+            ending,
+            id: Some(id.to_string()),
+            gone: self.waiter(),
+        }))
+    }
+    fn installed_version(&self) -> Option<String> {
+        self.on_disk.lock().unwrap().clone()
+    }
+    fn installation_running(&self) -> bool {
+        self.elsewhere.load(Ordering::SeqCst)
+    }
+    fn restart_into_installed(&self) -> Result<(), String> {
+        self.restarts.fetch_add(1, Ordering::SeqCst);
+        Ok(())
     }
 }
 
@@ -172,6 +241,45 @@ impl FakeInstaller {
     fn runs(&self) -> usize {
         self.runs.lock().unwrap().len()
     }
+    /// Ends setup number `index` with `code`.
+    fn end(&self, index: usize, code: u32) {
+        let ending = Arc::clone(&self.setups.lock().unwrap()[index]);
+        *ending.code.lock().unwrap() = Some(code);
+        ending.ended.notify_all();
+    }
+    fn waiter(&self) -> Arc<AtomicBool> {
+        let gone = Arc::new(AtomicBool::new(false));
+        self.waiters.lock().unwrap().push(Arc::clone(&gone));
+        gone
+    }
+    /// Setup stopped the service: whatever that service was waiting on ends with it.
+    fn service_stopped(&self) {
+        for gone in self.waiters.lock().unwrap().drain(..) {
+            gone.store(true, Ordering::SeqCst);
+        }
+        for ending in self.setups.lock().unwrap().iter() {
+            let _held = ending.code.lock().unwrap();
+            ending.ended.notify_all();
+        }
+    }
+    fn files_are(&self, version: &str) {
+        *self.on_disk.lock().unwrap() = Some(version.to_string());
+    }
+    fn restarts(&self) -> u32 {
+        self.restarts.load(Ordering::SeqCst)
+    }
+}
+
+/// Waits up to ten seconds for `done`.
+fn eventually(mut done: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    true
 }
 
 fn fresh_dir() -> PathBuf {
@@ -688,13 +796,189 @@ fn fr15_when_setup_fails_the_old_version_reports_why_and_does_not_retry_on_its_o
 }
 
 #[test]
+fn fr15_setup_that_installed_and_asks_for_a_restart_is_no_failure() {
+    // Setup said it installed, and asked for a restart because a file was in use.
+    assert_eq!(
+        after_setup(SetupOutcome::InstalledRestartPending, 3010, "0.1.10", None),
+        AfterSetup::RestartIntoInstalled
+    );
+    assert_eq!(
+        after_setup(SetupOutcome::Installed, 0, "0.1.10", Some("0.1.10.0")),
+        AfterSetup::RestartIntoInstalled
+    );
+    // The files say otherwise: setup did not put the new version in place.
+    match after_setup(SetupOutcome::Installed, 0, "0.1.10", Some("0.1.9.0")) {
+        AfterSetup::Failed(why) => assert!(why.contains("still DSA 0.1.9.0"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    match after_setup(SetupOutcome::Failed, 1603, "0.1.10", Some("0.1.10.0")) {
+        AfterSetup::Failed(why) => assert!(why.contains("exit code 1603"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn fr15_a_service_still_running_after_setup_installed_restarts_into_the_new_version() {
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, status) = h.service("0.1.0");
+    old.install_now().unwrap();
+    // Setup replaced the files but not the running service, and ended with 3010.
+    h.installer.files_are("0.1.1.0");
+    h.installer.end(0, 3010);
+    assert!(
+        eventually(|| h.installer.restarts() == 1),
+        "the service restarts"
+    );
+    let told = status.notices.get().unwrap_or_default();
+    assert!(!told.contains("failed"), "no failure is reported: {told}");
+    assert_eq!(
+        status.installing().as_deref(),
+        Some("0.1.1"),
+        "no Android starts before the restart"
+    );
+    // The service that starts from the new files reports the update.
+    drop(old);
+    let (_new, status) = h.service("0.1.1");
+    assert_eq!(
+        status.notices.get().as_deref(),
+        Some("DSA was updated to 0.1.1")
+    );
+}
+
+#[test]
+fn fr15_a_service_started_while_setup_runs_waits_for_setup_instead_of_reporting_failure() {
+    let mut h = Harness::new();
+    h.installer.named = true;
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, _) = h.service("0.1.0");
+    old.install_now().unwrap();
+    // Setup stopped the service, and something started the old one again before setup had
+    // replaced its files.
+    drop(old);
+    h.installer.service_stopped();
+    let (again, status) = h.service("0.1.0");
+    assert_eq!(
+        status.notices.get(),
+        None,
+        "nothing has failed while setup runs"
+    );
+    assert_eq!(status.installing().as_deref(), Some("0.1.1"));
+    let alice = h.android_of("alice");
+    WithProgramStatus {
+        android: Arc::clone(&alice),
+        status: Arc::clone(&status),
+    }
+    .start();
+    assert_eq!(
+        alice.state(),
+        SessionState::Stopped,
+        "no Android starts while setup runs"
+    );
+    // Setup ends having installed: the old service restarts into the new files.
+    h.installer.files_are("0.1.1.0");
+    h.installer.end(0, 0);
+    assert!(eventually(|| h.installer.restarts() == 1));
+    assert_eq!(status.notices.get(), None);
+    drop(again);
+}
+
+#[test]
+fn fr15_a_service_started_while_setup_runs_reports_why_once_setup_fails() {
+    let mut h = Harness::new();
+    h.installer.named = true;
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, _) = h.service("0.1.0");
+    old.install_now().unwrap();
+    drop(old);
+    h.installer.service_stopped();
+    let (_again, status) = h.service("0.1.0");
+    h.installer.end(0, 1603);
+    assert!(eventually(|| status.installing().is_none()));
+    let told = status.notices.get().unwrap();
+    assert!(told.starts_with("updating DSA to 0.1.1 failed"), "{told}");
+    assert!(told.contains("exit code 1603"), "{told}");
+    assert_eq!(h.installer.restarts(), 0);
+}
+
+#[test]
+fn fr15_an_update_taken_for_failed_is_reported_applied_once_the_new_version_runs() {
+    // As DSA 0.1.9 did: the old service came back while setup ran, found its own version
+    // and reported the update as failed, though setup went on to install it.
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, _) = h.service("0.1.0");
+    old.install_now().unwrap();
+    drop(old);
+    h.installer.service_stopped();
+    let (stale, status) = h.service("0.1.0");
+    assert!(status.notices.get().unwrap().contains("failed"));
+    drop(stale);
+    // The service from the new files starts.
+    let (new, status) = h.service("0.1.1");
+    assert_eq!(
+        status.notices.get().as_deref(),
+        Some("DSA was updated to 0.1.1")
+    );
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    assert!(
+        matches!(new.check().unwrap(), CheckOutcome::NotNewer(_)),
+        "nothing is left to install"
+    );
+}
+
+#[test]
+fn fr15_program_files_newer_than_the_service_restart_it_into_them_once() {
+    assert!(restart_into_files("0.1.9", Some("0.1.10.0"), false));
+    assert!(!restart_into_files("0.1.10", Some("0.1.10.0"), false));
+    assert!(!restart_into_files("0.1.10", Some("0.1.9.0"), false));
+    assert!(
+        !restart_into_files("0.1.9", Some("0.1.10.0"), true),
+        "not while an installation may still be replacing them"
+    );
+    assert!(!restart_into_files("0.1.9", None, false));
+
+    // Through the service: the files were replaced under it while it ran.
+    let h = Harness::new();
+    let (updates, _) = h.service("0.1.0");
+    h.installer.elsewhere.store(true, Ordering::SeqCst);
+    h.installer.files_are("0.1.1.0");
+    assert!(!updates.restart_if_replaced(), "setup still runs");
+    h.installer.elsewhere.store(false, Ordering::SeqCst);
+    let stop = Arc::new(AtomicBool::new(false));
+    let runner = {
+        let (updates, stop) = (Arc::clone(&updates), Arc::clone(&stop));
+        thread::spawn(move || {
+            updates.run(
+                &stop,
+                Timing {
+                    first_check: Duration::from_secs(3600),
+                    check_interval: Duration::from_secs(3600),
+                    retry: Duration::from_millis(20),
+                },
+            )
+        })
+    };
+    assert!(eventually(|| h.installer.restarts() == 1));
+    thread::sleep(Duration::from_millis(200));
+    stop.store(true, Ordering::Relaxed);
+    runner.join().unwrap();
+    assert_eq!(h.installer.restarts(), 1, "asked once");
+}
+
+#[test]
 fn fr15_a_setup_that_ends_without_replacing_the_service_is_reported_as_failed() {
     let h = Harness::new();
     h.fetch
         .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
     let (updates, status) = h.service("0.1.0");
     updates.install_now().unwrap();
-    h.installer.ends.lock().unwrap()[0].send(1603).unwrap();
+    h.installer.end(0, 1603);
     let deadline = Instant::now() + Duration::from_secs(10);
     while status.installing().is_some() && Instant::now() < deadline {
         thread::sleep(Duration::from_millis(20));
