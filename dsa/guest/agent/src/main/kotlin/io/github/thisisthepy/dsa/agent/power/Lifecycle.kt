@@ -12,7 +12,8 @@ import io.github.thisisthepy.dsa.control.v1.PowerState
  * Doze never starts by itself: the host says when no task window is shown, and the agent
  * turns the display off and forces the device into deep idle. When the host says a window is
  * shown again, the agent lets the device out of idle and turns the display on. The host's
- * battery and battery saver become the guest's.
+ * battery and battery saver become the guest's, and the display refreshes at the rate the
+ * host says, which its battery saver caps at 60 Hz.
  *
  * The agent tells the host whether the device is in deep idle whenever it changes, so the
  * host knows when the guest is dozing. The host takes it not to be when the agent connects.
@@ -61,6 +62,7 @@ class Lifecycle(
         when (envelope.bodyCase) {
             Envelope.BodyCase.SCREEN_STATE -> screen(envelope.screenState.on)
             Envelope.BodyCase.POWER_STATE -> follow(envelope.powerState)
+            Envelope.BodyCase.DISPLAY_REFRESH -> refresh(envelope.displayRefresh.hz)
             Envelope.BodyCase.HOST_MEMORY -> hostMemory(envelope.hostMemory)
             Envelope.BodyCase.HOST_SLEEP -> hostSleep(envelope.hostSleep)
             else -> return false
@@ -108,6 +110,16 @@ class Lifecycle(
         if (sleep.hostUnixTimeMs <= 0L) return
         log.info("the host woke: setting the clock to the host's")
         attempt("setting the clock") { power.setTime(sleep.hostUnixTimeMs) }
+    }
+
+    /**
+     * The host's display refresh rate: its fastest monitor's, at most 60 Hz while its battery
+     * saver is on. A rate of 0 says nothing and changes nothing.
+     */
+    private fun refresh(hz: Int) {
+        if (hz <= 0) return
+        log.info("the display refreshes at $hz Hz")
+        attempt("setting the display's refresh rate") { power.setRefreshRate(hz) }
     }
 
     private fun follow(state: PowerState) {
