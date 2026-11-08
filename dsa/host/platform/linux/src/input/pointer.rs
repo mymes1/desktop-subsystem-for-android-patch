@@ -30,6 +30,19 @@ pub fn mouse_button(code: u32) -> Option<MouseButton> {
     })
 }
 
+/// The mouse button an X11 `ButtonPress` names by its `detail`: 1 to 3 are the left, middle
+/// and right buttons, 8 and 9 the back and forward buttons (4 to 7 are the wheel's steps).
+pub fn x11_button(detail: u8) -> Option<MouseButton> {
+    Some(match detail {
+        1 => MouseButton::Left,
+        2 => MouseButton::Middle,
+        3 => MouseButton::Right,
+        8 => MouseButton::Back,
+        9 => MouseButton::Forward,
+        _ => return None,
+    })
+}
+
 /// How far a continuous scroll (a touchpad's two fingers) moves for one wheel notch, in
 /// `wl_pointer.axis` units. A wheel reports its notches exactly, through `axis_value120`.
 pub const AXIS_PER_NOTCH: f64 = 10.0;
@@ -233,5 +246,33 @@ mod tests {
             window_hit(&layout, (400, 300), 0, 1, 150),
             WindowHit::Caption(CaptionHit::Client)
         );
+    }
+
+    #[test]
+    fn fr5_the_mouse_back_and_forward_buttons_reach_the_guest_as_back_and_forward() {
+        use dsa_host_core::input::buttons;
+        // Wayland names them BTN_SIDE and BTN_EXTRA on most mice, BTN_BACK and BTN_FORWARD on
+        // some; X11 numbers them 8 and 9. Each reaches the guest's pointer as bit 8 (back) or
+        // bit 16 (forward), which the guest turns into KEYCODE_BACK and KEYCODE_FORWARD.
+        for code in [evdev_button::SIDE, evdev_button::BACK] {
+            assert_eq!(
+                mouse_button(code).map(MouseButton::bit),
+                Some(buttons::BACK)
+            );
+        }
+        for code in [evdev_button::EXTRA, evdev_button::FORWARD] {
+            assert_eq!(
+                mouse_button(code).map(MouseButton::bit),
+                Some(buttons::FORWARD)
+            );
+        }
+        assert_eq!(buttons::BACK, 8);
+        assert_eq!(buttons::FORWARD, 16);
+        assert_eq!(x11_button(8).map(MouseButton::bit), Some(buttons::BACK));
+        assert_eq!(x11_button(9).map(MouseButton::bit), Some(buttons::FORWARD));
+        assert_eq!(x11_button(1), Some(MouseButton::Left));
+        assert_eq!(x11_button(3), Some(MouseButton::Right));
+        // The wheel's steps are no buttons.
+        assert_eq!(x11_button(4), None);
     }
 }
