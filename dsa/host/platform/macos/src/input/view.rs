@@ -18,6 +18,7 @@ use dsa_host_core::input::{
     ContactPhase, InputEvent, MouseButton, PointerMapper, PointerTool, WindowGeometry, WindowInput,
 };
 use dsa_host_core::keys::{keycode, KeyInput, KeyMapper};
+use dsa_host_core::tasks::Bounds;
 use objc2::msg_send;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject, AnyProtocol, Bool, ClassBuilder, Sel};
@@ -28,6 +29,7 @@ use super::pointer::{
     button, client_pixel, pen_pressure, pen_tilt, scroll_notches, SUBTYPE_TABLET_POINT,
 };
 use super::text_input::TextInputClient;
+use crate::compositor::title_bar::{band_hit, double_click_action, BandHit, DoubleClick};
 use crate::objc::{class, ns_string, string_of, CGPoint, CGRect, CGSize, NSRange, NOT_FOUND};
 
 /// Where a task window's input goes.
@@ -61,6 +63,16 @@ struct ViewState {
     text: TextInputClient,
     /// When a press of the left button leaves the view.
     leave: LeaveWatch,
+    /// How many client pixels at the top the title bar band covers: only while the app
+    /// draws its own title bar under it.
+    band_height: u32,
+    /// The app's controls in the band, in client pixels, which take the pointer there.
+    controls: Vec<Bounds>,
+    /// The last press went to the band (to drag the window, or for its menu), so its release
+    /// is not the app's either.
+    band_press: bool,
+    /// The pointer hovers over the band's drag area, which the app was told it left.
+    over_band: bool,
 }
 
 thread_local! {
@@ -180,6 +192,26 @@ unsafe fn mouse_button(view: &AnyObject, event: *mut AnyObject, down: bool) {
     }
     let number: isize = msg_send![event, buttonNumber];
     let control = modifier_flags(event) & FLAG_CONTROL != 0;
+    // The primary and secondary buttons in the band of an app's own title bar, outside its
+    // controls, are the window's, as on a title bar.
+    if number == 0 || number == 1 {
+        if !down {
+            let taken = with_state(view, |state| std::mem::take(&mut state.band_press));
+            if taken == Some(true) {
+                return;
+            }
+        } else {
+            let hit = with_state(view, |state| {
+                let hit = band_hit(position, state.band_height, &state.controls);
+                state.band_press = hit == BandHit::Drag;
+                hit
+            });
+            if hit == Some(BandHit::Drag) {
+                band_pressed(view, event, number == 1 || control);
+                return;
+            }
+        }
+    }
     if let Some(button) = button(number, control) {
         if button == MouseButton::Left {
             with_state(view, |state| state.leave.pressed(down));
@@ -192,6 +224,47 @@ unsafe fn mouse_button(view: &AnyObject, event: *mut AnyObject, down: bool) {
                 position,
             },
         );
+    }
+}
+
+/// A press on the band's drag area: a secondary click opens the window's menu, a double
+/// click does what the user set for a title bar, and any other press drags the window.
+unsafe fn band_pressed(view: &AnyObject, event: *mut AnyObject, secondary: bool) {
+    let window: *mut AnyObject = msg_send![view, window];
+    if window.is_null() {
+        return;
+    }
+    if secondary {
+        crate::compositor::menu_bar::pop_up(view, event);
+        return;
+    }
+    let clicks: isize = msg_send![event, clickCount];
+    if clicks < 2 {
+        let _: () = msg_send![window, performWindowDragWithEvent: event];
+        return;
+    }
+    let defaults: *mut AnyObject = match class(c"NSUserDefaults") {
+        Ok(defaults) => msg_send![defaults, standardUserDefaults],
+        Err(_) => std::ptr::null_mut(),
+    };
+    let (action, minimize) = if defaults.is_null() {
+        (String::new(), false)
+    } else {
+        let action: *mut AnyObject =
+            msg_send![defaults, stringForKey: &*ns_string("AppleActionOnDoubleClick")];
+        let minimize: bool =
+            msg_send![defaults, boolForKey: &*ns_string("AppleMiniaturizeOnDoubleClick")];
+        (string_of(action), minimize)
+    };
+    let action = (!action.is_empty()).then_some(action.as_str());
+    match double_click_action(action, minimize) {
+        DoubleClick::Zoom => {
+            let _: () = msg_send![window, performZoom: std::ptr::null::<AnyObject>()];
+        }
+        DoubleClick::Minimize => {
+            let _: () = msg_send![window, performMiniaturize: std::ptr::null::<AnyObject>()];
+        }
+        DoubleClick::Nothing => {}
     }
 }
 
@@ -228,6 +301,29 @@ unsafe extern "C-unwind" fn mouse_moved(this: &AnyObject, _: Sel, event: *mut An
             },
         );
         return;
+    }
+    // Hovering over the band's drag area is the title bar's, not the app's: the app is told
+    // the pointer left, once, and hears of it again when it comes back. A drag that started
+    // in the app stays the app's.
+    let pressed: usize = match class(c"NSEvent") {
+        Ok(events) => msg_send![events, pressedMouseButtons],
+        Err(_) => 0,
+    };
+    if pressed == 0 {
+        let over = with_state(this, |state| {
+            let over = band_hit(position, state.band_height, &state.controls) == BandHit::Drag;
+            let entered = over && !state.over_band;
+            state.over_band = over;
+            (over, entered)
+        });
+        match over {
+            Some((true, true)) => {
+                pointer(this, WindowInput::MouseLeave);
+                return;
+            }
+            Some((true, false)) => return,
+            _ => {}
+        }
     }
     pointer(this, WindowInput::MouseMove { position });
     let geometry = geometry(this);
@@ -339,6 +435,10 @@ unsafe extern "C-unwind" fn resign_first_responder(this: &AnyObject, _: Sel) -> 
 
 unsafe extern "C-unwind" fn yes(_this: &AnyObject, _: Sel) -> Bool {
     Bool::YES
+}
+
+unsafe extern "C-unwind" fn no(_this: &AnyObject, _: Sel) -> Bool {
+    Bool::NO
 }
 
 unsafe extern "C-unwind" fn accepts_first_mouse(
@@ -563,6 +663,12 @@ fn view_class() -> Result<&'static AnyClass, String> {
                 sel!(acceptsFirstResponder),
                 yes as unsafe extern "C-unwind" fn(_, _) -> _,
             );
+            // The view decides itself which presses drag the window (the band outside an
+            // app's controls), so AppKit never moves the window on a press of its own.
+            b.add_method(
+                sel!(mouseDownCanMoveWindow),
+                no as unsafe extern "C-unwind" fn(_, _) -> _,
+            );
             b.add_method(
                 sel!(acceptsFirstMouse:),
                 accepts_first_mouse as unsafe extern "C-unwind" fn(_, _, _) -> _,
@@ -690,6 +796,10 @@ pub fn make(
             keys: KeyMapper::new(task_id),
             text: TextInputClient::new(task_id),
             leave: LeaveWatch::default(),
+            band_height: 0,
+            controls: Vec::new(),
+            band_press: false,
+            over_band: false,
         };
         VIEWS.with(|views| {
             views.borrow_mut().insert(
@@ -709,6 +819,22 @@ pub fn set_task(view: &AnyObject, task_id: i32) {
         state.keys = KeyMapper::new(task_id);
         state.text = TextInputClient::new(task_id);
     });
+}
+
+/// The title bar band covers the top `height` client pixels of the view: presses there
+/// outside the app's controls are the window's. 0 with a standard title bar.
+pub fn set_band_height(view: &AnyObject, height: u32) {
+    with_state(view, |state| {
+        state.band_height = height;
+        if height == 0 {
+            state.over_band = false;
+        }
+    });
+}
+
+/// Where the app's controls are in the band, in client pixels; they take the pointer there.
+pub fn set_controls(view: &AnyObject, controls: Vec<Bounds>) {
+    with_state(view, |state| state.controls = controls);
 }
 
 /// Drops the view's state, when its window goes.

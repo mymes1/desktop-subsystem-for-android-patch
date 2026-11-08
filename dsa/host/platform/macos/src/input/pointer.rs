@@ -99,6 +99,21 @@ mod tests {
     }
 
     #[test]
+    fn fr5_the_mouses_back_and_forward_buttons_reach_the_guest_as_bits_8_and_16() {
+        use dsa_host_core::input::buttons;
+        // NSEvent numbers a mouse's fourth and fifth buttons 3 and 4.
+        assert_eq!(button(3, false).map(MouseButton::bit), Some(buttons::BACK));
+        assert_eq!(
+            button(4, false).map(MouseButton::bit),
+            Some(buttons::FORWARD)
+        );
+        assert_eq!(buttons::BACK, 8);
+        assert_eq!(buttons::FORWARD, 16);
+        // Control changes only the primary button.
+        assert_eq!(button(3, true), Some(MouseButton::Back));
+    }
+
+    #[test]
     fn fr5_a_trackpad_scrolls_smoothly_and_a_wheel_by_notches() {
         assert_eq!(scroll_notches((0.0, 1.0), false), (0.0, 1.0));
         assert_eq!(scroll_notches((0.0, 20.0), true), (0.0, 0.5));
