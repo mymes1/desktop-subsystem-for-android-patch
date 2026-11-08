@@ -11,6 +11,9 @@ publish.workspace = true
 # Runs the VM's vsock suite over vsock loopback (CID 1), standing in for a guest. Needs the
 # vsock_loopback kernel module, so it is opt-in; CI loads the module and turns this on.
 vsock-loopback-tests = []
+# Runs the AT-SPI provider's suite over a real D-Bus. Needs a session bus, so it is opt-in;
+# CI turns it on under dbus-run-session.
+atspi-bus-tests = []
 
 [[bin]]
 name = "dsa-devices"
