@@ -553,6 +553,19 @@ struct PowerStateDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PowerStateDefaultTypeInternal _PowerState_default_instance_;
+PROTOBUF_CONSTEXPR DisplayRefresh::DisplayRefresh(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.hz_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DisplayRefreshDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DisplayRefreshDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DisplayRefreshDefaultTypeInternal() {}
+  union {
+    DisplayRefresh _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DisplayRefreshDefaultTypeInternal _DisplayRefresh_default_instance_;
 PROTOBUF_CONSTEXPR GuestMemoryPressure::GuestMemoryPressure(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.mem_total_kb_)*/uint64_t{0u}
@@ -13773,6 +13786,186 @@ void PowerState::InternalSwap(PowerState* other) {
 
 std::string PowerState::GetTypeName() const {
   return "dsa.control.v1.PowerState";
+}
+
+
+// ===================================================================
+
+class DisplayRefresh::_Internal {
+ public:
+};
+
+DisplayRefresh::DisplayRefresh(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DisplayRefresh)
+}
+DisplayRefresh::DisplayRefresh(const DisplayRefresh& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DisplayRefresh* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.hz_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _this->_impl_.hz_ = from._impl_.hz_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DisplayRefresh)
+}
+
+inline void DisplayRefresh::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.hz_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+DisplayRefresh::~DisplayRefresh() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DisplayRefresh)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DisplayRefresh::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void DisplayRefresh::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DisplayRefresh::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DisplayRefresh)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.hz_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DisplayRefresh::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 hz = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.hz_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DisplayRefresh::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DisplayRefresh)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 hz = 1;
+  if (this->_internal_hz() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_hz(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DisplayRefresh)
+  return target;
+}
+
+size_t DisplayRefresh::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DisplayRefresh)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 hz = 1;
+  if (this->_internal_hz() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_hz());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DisplayRefresh::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DisplayRefresh*>(
+      &from));
+}
+
+void DisplayRefresh::MergeFrom(const DisplayRefresh& from) {
+  DisplayRefresh* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DisplayRefresh)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_hz() != 0) {
+    _this->_internal_set_hz(from._internal_hz());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DisplayRefresh::CopyFrom(const DisplayRefresh& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DisplayRefresh)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DisplayRefresh::IsInitialized() const {
+  return true;
+}
+
+void DisplayRefresh::InternalSwap(DisplayRefresh* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_.hz_, other->_impl_.hz_);
+}
+
+std::string DisplayRefresh::GetTypeName() const {
+  return "dsa.control.v1.DisplayRefresh";
 }
 
 
@@ -47992,6 +48185,7 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::ClockAnswer& clock_answer(const Envelope* msg);
   static const ::dsa::control::v1::ScreenState& screen_state(const Envelope* msg);
   static const ::dsa::control::v1::PowerState& power_state(const Envelope* msg);
+  static const ::dsa::control::v1::DisplayRefresh& display_refresh(const Envelope* msg);
   static const ::dsa::control::v1::PowerHint& power_hint(const Envelope* msg);
   static const ::dsa::control::v1::DeveloperMode& developer_mode(const Envelope* msg);
   static const ::dsa::control::v1::ArmTranslationInstall& arm_translation_install(const Envelope* msg);
@@ -48232,6 +48426,10 @@ Envelope::_Internal::screen_state(const Envelope* msg) {
 const ::dsa::control::v1::PowerState&
 Envelope::_Internal::power_state(const Envelope* msg) {
   return *msg->_impl_.body_.power_state_;
+}
+const ::dsa::control::v1::DisplayRefresh&
+Envelope::_Internal::display_refresh(const Envelope* msg) {
+  return *msg->_impl_.body_.display_refresh_;
 }
 const ::dsa::control::v1::PowerHint&
 Envelope::_Internal::power_hint(const Envelope* msg) {
@@ -49157,6 +49355,21 @@ void Envelope::set_allocated_power_state(::dsa::control::v1::PowerState* power_s
     _impl_.body_.power_state_ = power_state;
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.power_state)
+}
+void Envelope::set_allocated_display_refresh(::dsa::control::v1::DisplayRefresh* display_refresh) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (display_refresh) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(display_refresh);
+    if (message_arena != submessage_arena) {
+      display_refresh = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, display_refresh, submessage_arena);
+    }
+    set_has_display_refresh();
+    _impl_.body_.display_refresh_ = display_refresh;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.display_refresh)
 }
 void Envelope::set_allocated_power_hint(::dsa::control::v1::PowerHint* power_hint) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -51055,6 +51268,11 @@ Envelope::Envelope(const Envelope& from)
           from._internal_power_state());
       break;
     }
+    case kDisplayRefresh: {
+      _this->_internal_mutable_display_refresh()->::dsa::control::v1::DisplayRefresh::MergeFrom(
+          from._internal_display_refresh());
+      break;
+    }
     case kPowerHint: {
       _this->_internal_mutable_power_hint()->::dsa::control::v1::PowerHint::MergeFrom(
           from._internal_power_hint());
@@ -51855,6 +52073,12 @@ void Envelope::clear_body() {
     case kPowerState: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.power_state_;
+      }
+      break;
+    }
+    case kDisplayRefresh: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.display_refresh_;
       }
       break;
     }
@@ -53740,6 +53964,14 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.DisplayRefresh display_refresh = 407;
+      case 407:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
+          ptr = ctx->ParseMessage(_internal_mutable_display_refresh(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -54791,6 +55023,13 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::google_device_id(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.DisplayRefresh display_refresh = 407;
+  if (_internal_has_display_refresh()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(407, _Internal::display_refresh(this),
+        _Internal::display_refresh(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -55023,6 +55262,13 @@ size_t Envelope::ByteSizeLong() const {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *_impl_.body_.power_state_);
+      break;
+    }
+    // .dsa.control.v1.DisplayRefresh display_refresh = 407;
+    case kDisplayRefresh: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.display_refresh_);
       break;
     }
     // .dsa.control.v1.PowerHint power_hint = 110;
@@ -56011,6 +56257,11 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_power_state());
       break;
     }
+    case kDisplayRefresh: {
+      _this->_internal_mutable_display_refresh()->::dsa::control::v1::DisplayRefresh::MergeFrom(
+          from._internal_display_refresh());
+      break;
+    }
     case kPowerHint: {
       _this->_internal_mutable_power_hint()->::dsa::control::v1::PowerHint::MergeFrom(
           from._internal_power_hint());
@@ -56756,6 +57007,10 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::ScreenState >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::PowerState*
 Arena::CreateMaybeMessage< ::dsa::control::v1::PowerState >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::PowerState >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DisplayRefresh*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DisplayRefresh >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DisplayRefresh >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::GuestMemoryPressure*
 Arena::CreateMaybeMessage< ::dsa::control::v1::GuestMemoryPressure >(Arena* arena) {
