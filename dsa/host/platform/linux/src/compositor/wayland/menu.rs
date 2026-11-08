@@ -62,6 +62,8 @@ mod key {
 }
 
 /// What shows the menu.
+// At most one menu is open, so the popup stays inline rather than boxed.
+#[allow(clippy::large_enum_variant)]
 enum Shell {
     /// A popup of the task's Wayland window.
     Popup {
