@@ -722,6 +722,7 @@ fn pr3_the_cts_subset_and_a_gles_and_a_vulkan_app_render_in_task_windows_on_the_
     let adb = Adb {
         program: adb_program,
         serial: format!("127.0.0.1:{port}"),
+        blank_screencaps: Default::default(),
     };
     if let Err(why) = adb.connect(Duration::from_secs(120)) {
         fail(

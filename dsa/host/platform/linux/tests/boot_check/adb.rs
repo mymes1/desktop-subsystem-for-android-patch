@@ -2,6 +2,7 @@
 //! read through it: `screencap`, and a `screenrecord` frame when the capture comes back
 //! empty. The boot checks that read what Android drew share it.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -22,6 +23,23 @@ pub const SCREENRECORD_FRAMES: usize = 4;
 /// a drawn screen is opaque.
 pub fn empty_picture(pixels: &[u8]) -> bool {
     pixels.iter().all(|&byte| byte == 0)
+}
+
+/// Whether an RGBA picture is one colour from edge to edge: all zeros when the GPU's drawing
+/// never reached the capture's memory, and never a screen with something drawn on it.
+pub fn blank_picture(pixels: &[u8]) -> bool {
+    match pixels.get(..4) {
+        Some(first) => pixels.chunks_exact(4).all(|pixel| pixel == first),
+        None => true,
+    }
+}
+
+/// Why the captures in `names` fail the check.
+pub fn blank_screencaps_failure(names: &[String]) -> String {
+    format!(
+        "screencap gave a blank picture of {}: the GPU's drawing did not come back to the memory screencap reads",
+        names.join(", ")
+    )
 }
 
 /// The newest whole frame of `screenrecord --output-format=raw-frames`, which writes each
@@ -142,6 +160,8 @@ pub fn decode_png(png: &[u8]) -> Result<(usize, usize, usize, Vec<u8>), String> 
 pub struct Adb {
     pub program: PathBuf,
     pub serial: String,
+    /// The captures screencap gave blank, by name.
+    pub blank_screencaps: RefCell<Vec<String>>,
 }
 
 impl Adb {
@@ -204,16 +224,21 @@ impl Adb {
 
     /// The screen, kept in `dir` as `name.png`, as `(width, RGBA pixels)`.
     ///
-    /// `screencap` maps SurfaceFlinger's capture for the CPU, and in the guest a buffer the
-    /// GPU drew can map as nothing but zeros. Then the screen is read again from a
-    /// `screenrecord` frame, which the GPU reads back itself (`glReadPixels`), and that
-    /// picture is kept as `name-record.png`. screenrecord runs for [SCREENRECORD_LIMIT] at
-    /// most, and stops once it has sent [SCREENRECORD_FRAMES] frames: a screenrecord that sends
-    /// nothing held the whole check until the job's timeout.
+    /// `screencap` maps SurfaceFlinger's capture for the CPU, and the guest driver copies
+    /// the GPU's drawing into it from the host. A capture that comes back blank is noted in
+    /// [Adb::blank_screencaps], for the check to fail on. Only then, and only so the other
+    /// checks still run, the screen is read again from a `screenrecord` frame, which the GPU
+    /// reads back itself (`glReadPixels`), and that picture is kept as `name-record.png`.
+    /// screenrecord runs for [SCREENRECORD_LIMIT] at most, and stops once it has sent
+    /// [SCREENRECORD_FRAMES] frames: a screenrecord that sends nothing held the whole check
+    /// until the job's timeout.
     pub fn screen(&self, dir: &Path, name: &str) -> Result<(usize, Vec<u8>), String> {
         let png = self.run(&["exec-out", "screencap", "-p"])?;
         let _ = std::fs::write(dir.join(format!("{name}.png")), &png);
         let (width, height, _, pixels) = decode_png(&png)?;
+        if blank_picture(&pixels) {
+            self.blank_screencaps.borrow_mut().push(name.to_string());
+        }
         if !empty_picture(&pixels) {
             return Ok((width, pixels));
         }
