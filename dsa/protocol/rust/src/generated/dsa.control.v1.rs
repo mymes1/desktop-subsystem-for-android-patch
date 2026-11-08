@@ -571,6 +571,16 @@ pub struct PowerState {
     #[prost(bool, tag = "5")]
     pub power_saver: bool,
 }
+/// Host to guest: the refresh rate the guest's display runs at, in hertz. It is the user's
+/// fastest monitor, lowered to one of the rates the guest's display offers, and at most 60
+/// while the host's battery saver is on (a monitor at 60 Hz or slower is never changed). The
+/// agent holds the display at this rate, which takes effect at once, without restarting
+/// Android. Sent when the agent connects, once the host knows the monitors, and on each change.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DisplayRefresh {
+    #[prost(uint32, tag = "1")]
+    pub hz: u32,
+}
 /// Guest to host, from the control daemon: how much memory the guest has and how hard it
 /// works to find more. The host grows the VM's memory by hot-adding it when the guest runs
 /// short, and gives it back when the guest no longer needs it. Sent every few seconds while
@@ -2385,7 +2395,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2455,6 +2465,8 @@ pub mod envelope {
         ScreenState(super::ScreenState),
         #[prost(message, tag = "41")]
         PowerState(super::PowerState),
+        #[prost(message, tag = "407")]
+        DisplayRefresh(super::DisplayRefresh),
         #[prost(message, tag = "110")]
         PowerHint(super::PowerHint),
         #[prost(message, tag = "140")]
