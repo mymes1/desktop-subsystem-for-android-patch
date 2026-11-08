@@ -369,6 +369,20 @@ namespace Dsa.Setup
 
         // ---- Plan and apply ----
 
+        protected override void OnPlanMsiPackage(PlanMsiPackageEventArgs args)
+        {
+            base.OnPlanMsiPackage(args);
+            if (args.PackageId == PackageId)
+            {
+                // Every file of the package replaces the installed one, whatever its version
+                // ("a" of REINSTALLMODE), as the package itself asks. Burn otherwise passes
+                // REINSTALLMODE="muso" on the command line, which wins over the package's
+                // property: a release installed over a development build of the same version
+                // then kept that build's programs, since their versions are equal.
+                args.FileVersioning = BOOTSTRAPPER_MSI_FILE_VERSIONING.All;
+            }
+        }
+
         protected override void OnPlanComplete(PlanCompleteEventArgs args)
         {
             base.OnPlanComplete(args);
