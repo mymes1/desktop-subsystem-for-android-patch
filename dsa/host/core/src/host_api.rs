@@ -1172,6 +1172,7 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         primary_abi: app.primary_abi,
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
+        root: app.root,
     }
 }
 
@@ -1192,6 +1193,7 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         native_libraries: NativeLibraries::from_wire(&app.native_libraries),
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
+        root: app.root,
     }
 }
 
