@@ -30,11 +30,11 @@ use windows_sys::Win32::System::LibraryLoader::{
 use crate::guid::Guid;
 use crate::network::{
     advanced_adapter, advanced_problem, all_query, choose_nat_subnet, endpoint_document,
-    endpoint_facts, endpoint_name, guid_from, host_has_ipv6, ids_from_enumeration, mac_bytes,
-    moved_leftover, name_query, nat_ipv6_subnet, nat_network_document, nat_path_problem,
-    network_facts, network_name, object_name, properties_query, reusable, subnets_in_use,
-    transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
-    NetworkStatusFacts,
+    endpoint_facts, endpoint_name, guest_behind_nat, guest_ipv4, guid_from, host_has_ipv6,
+    ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
+    nat_network_document, nat_path_problem, network_facts, network_name, object_name,
+    properties_query, reusable, subnets_in_use, transparent_network_document, EndpointFacts,
+    HostAdapter, Ipv4Subnet, NatPath, NetworkMode, NetworkStatusFacts,
 };
 use crate::vm::NetworkAdapter;
 
@@ -317,9 +317,14 @@ fn create_endpoint(
     let facts = endpoint_facts(&properties).ok_or_else(|| {
         format!("HCN described the new endpoint in a way DSA cannot read: {properties}")
     })?;
-    if facts.addresses.is_empty() {
-        // Expected on the LAN, which gives the addresses; behind NAT HCN gives them, and the
-        // description shows where they are when they cannot be read.
+    if facts.addresses.is_empty() && facts.dhcp {
+        eprintln!(
+            "network: the new endpoint {} takes its address by DHCP once the VM runs",
+            facts.mac_address
+        );
+    } else if facts.addresses.is_empty() {
+        // An endpoint that neither asks for DHCP nor names an address: the description shows
+        // where its address is.
         eprintln!(
             "network: HCN gave the new endpoint no address DSA can read: {}",
             properties.trim()
@@ -339,8 +344,9 @@ pub struct VmNetwork {
     /// The host adapter an advanced network is bound to.
     host_adapter: Option<String>,
     endpoint: EndpointFacts,
-    /// The gateway of a NAT network: the host's address on it, the guest's default route.
-    nat_gateway: Option<Ipv4Addr>,
+    /// The subnet of a NAT network. Its gateway is the host's address on it and the guest's
+    /// default route; the guest takes its address in it by DHCP.
+    nat_subnet: Option<Ipv4Subnet>,
     problem: Option<String>,
 }
 
@@ -381,7 +387,7 @@ impl VmNetwork {
             }
         }
         let mut network_id = None;
-        let mut nat_gateway = None;
+        let mut nat_subnet = None;
         for existing in enumerate(api.enumerate_networks, "HcnEnumerateNetworks", &name)? {
             let properties = network_properties(api, &existing);
             let facts = properties
@@ -413,10 +419,7 @@ impl VmNetwork {
                 eprintln!("network: using the network {name} left from before");
                 network_id = Some(existing);
                 if mode == NetworkMode::Nat {
-                    nat_gateway = facts
-                        .as_ref()
-                        .and_then(|f| f.subnets.first())
-                        .map(Ipv4Subnet::gateway);
+                    nat_subnet = facts.as_ref().and_then(|f| f.subnets.first()).copied();
                 }
             } else if let Err(why) = delete(api.delete_network, "HcnDeleteNetwork", &existing) {
                 eprintln!(
@@ -454,7 +457,7 @@ impl VmNetwork {
                         }
                         let (handle, subnet, ipv6_problem) =
                             create_nat(api, &id, vm_name, &name, &adapters)?;
-                        nat_gateway = Some(subnet.gateway());
+                        nat_subnet = Some(subnet);
                         // SAFETY: closed once.
                         unsafe { (api.close_network)(handle) };
                         if problem.is_none() {
@@ -500,7 +503,7 @@ impl VmNetwork {
             mode,
             host_adapter,
             endpoint,
-            nat_gateway,
+            nat_subnet,
             problem,
         })
     }
@@ -525,36 +528,57 @@ impl VmNetwork {
     /// The way between the host and a guest behind NAT, as it stands now: whether the host
     /// still holds the gateway and which adapter it reaches the guest through. `None` on the
     /// LAN, where the host's NAT is not on the way.
+    ///
+    /// The guest's address is the one it took by DHCP, which the host reads from its neighbour
+    /// entries once the guest has used it; before that, the route checked is the one to the
+    /// guest's side of the network.
     pub fn nat_path(&self) -> Option<NatPath> {
-        let gateway = self.nat_gateway?;
-        let guest = self.endpoint.addresses.iter().find_map(|a| match a {
-            IpAddr::V4(v4) => Some(*v4),
-            IpAddr::V6(_) => None,
-        });
+        self.nat_path_for(&self.guest(&self.seen()))
+    }
+
+    fn nat_path_for(&self, guest: &EndpointFacts) -> Option<NatPath> {
+        let subnet = self.nat_subnet?;
+        let gateway = subnet.gateway();
         Some(NatPath {
             gateway,
             host_has_gateway: host_holds(gateway),
-            host_route: guest.and_then(host_route_to),
+            host_route: host_route_to(guest_ipv4(guest).unwrap_or(subnet.guest_side())),
         })
+    }
+
+    /// The addresses the host has seen the VM's adapter use.
+    fn seen(&self) -> Vec<IpAddr> {
+        mac_bytes(&self.endpoint.mac_address)
+            .map(|mac| neighbour_addresses(&mac))
+            .unwrap_or_default()
+    }
+
+    /// The endpoint as the guest has it now: behind NAT, with the address it took by DHCP
+    /// once the host has seen it, and the network's gateway as its default route.
+    fn guest(&self, seen: &[IpAddr]) -> EndpointFacts {
+        match self.nat_subnet {
+            Some(subnet) => guest_behind_nat(&self.endpoint, subnet, seen),
+            None => self.endpoint.clone(),
+        }
     }
 
     /// The network as it stands, with the addresses the guest has been seen using. Behind
     /// NAT, a way between the host and the guest that no longer goes through the host's
     /// network for Android (a VPN that took its subnet, the gateway gone) is its problem.
     pub fn status(&self) -> NetworkStatusFacts {
+        let seen = self.seen();
+        let endpoint = self.guest(&seen);
         let path = self
-            .nat_path()
-            .and_then(|path| nat_path_problem(&self.name, &self.endpoint, &path));
+            .nat_path_for(&endpoint)
+            .and_then(|path| nat_path_problem(&self.name, &endpoint, &path));
         let problem = match (self.problem.clone(), path) {
             (Some(first), Some(second)) => Some(format!("{first}; {second}")),
             (first, second) => first.or(second),
         };
         NetworkStatusFacts {
             mode: self.mode,
-            endpoint: self.endpoint.clone(),
-            seen: mac_bytes(&self.endpoint.mac_address)
-                .map(|mac| neighbour_addresses(&mac))
-                .unwrap_or_default(),
+            endpoint,
+            seen,
             problem,
         }
     }
