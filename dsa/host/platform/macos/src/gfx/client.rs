@@ -139,11 +139,15 @@ impl RendererClient {
                 target.drop = false;
                 target.texture_id = texture_id;
                 // By Mach port where the window manager has its service, else by global ID.
-                let sent = self.presenter.ports().is_some_and(|ports| {
+                // SAFETY: `raw` is the non-null IOSurfaceRef the presenter just gave for this
+                // display, which stays valid until the display gets another surface or is no
+                // longer shown, neither of which happens during this call.
+                let sent = self.presenter.ports().is_some_and(|ports| unsafe {
                     ports.send_raw(link.process_id(), texture_id, raw, PORT_WAIT)
                 });
                 if !sent {
-                    target.handle = u64::from(Surface::id_of(raw));
+                    // SAFETY: as above.
+                    target.handle = u64::from(unsafe { Surface::id_of(raw) });
                 }
             }
         }
