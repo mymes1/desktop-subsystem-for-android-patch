@@ -39,7 +39,7 @@ uv run dsa/guest/image/check-image.py dsa/target/image/17.0.0-16373615 .scratch/
 ```
 
 It needs `gdisk` and `qemu-utils` (Debian and Ubuntu package names), Java and OpenSSL, and
-aapt2 from the Android SDK's build-tools for the framework overlay.
+aapt2 from the Android SDK's build-tools for the system screen overlays.
 
 ## What changes
 
@@ -124,6 +124,36 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   list, so rows still scroll to the edge. The overlay names what it replaces in a resource
   map (`android:resourcesMap`), which makes the framework rewrite the layout's id and style
   attribute to Settings' own.
+- The screens Android draws itself have one design: Settings, Files (DocumentsUI), the
+  permission screens and dialogs (PermissionController), the install dialogs
+  (PackageInstaller), the share sheet (IntentResolver), and the framework's dialogs and
+  toasts. A large title at the top of a Settings screen folds into the toolbar as the list
+  scrolls, and starts folded in a window under 600 dp tall, where it would take a third of
+  the height. List rows are grouped in rounded cards (26 dp outer corners, square where two
+  rows of a group meet), titles are bold, the accent is blue, light and dark themes follow
+  the same rules, and dialogs have 26 dp corners with their buttons side by side along the
+  bottom. The text is the image's own Roboto at its bold weight; every drawing is DSA's own.
+  - Static overlays in `/vendor/overlay` carry it, enabled at every boot: the framework
+    overlay above (colours, dialog and sheet corners, the dialog button bar, the toast, and
+    bold dialog, window and toolbar titles), the Settings overlay above (the cards, the large
+    titles and the home page's title and search bar), and one each for Files (its Material 3
+    look, which it offers devices through an overlayable switch), PermissionController (the
+    dialog's bold title), PackageInstaller (bold titles) and the share sheet (its headline).
+  - Each overlay is built with aapt2 against the image's own framework-res, and checked
+    against the app it overlays before it is built: an overlay that would replace a resource
+    the app does not have stops the image. It records the SHA-256 of the two resource tables
+    in `assets/dsa-overlay.json`; `check-image.py` fails an image with an overlay missing, or
+    one built against another framework-res or another build of its app.
+  - What no overlay can reach is edited in the app. SettingsLib's toolbar layouts start the
+    large title folded in every window (`app:expanded="false"` in the layout itself), so
+    their compiled layouts in `Settings.apk` take the value from the app bar's theme
+    (`?attr/expanded`), and the Settings overlay's version of that theme says false below
+    600 dp and true from 600 dp up. PermissionController declares `<overlayable>` without its
+    list backgrounds, so its compiled backgrounds get the cards' corners.
+  - The fold follows the window's height when a screen is created. Settings' home page keeps
+    its views when its window is resized, so a window resized across 600 dp keeps its title
+    area until the page opens again. Files has no title of its own to enlarge: its layouts
+    are not overlayable, so it gets the colours and its rounded Material 3 look only.
 - The lists that set their own padding get the same 24 dp, edited in the apps themselves
   (`LIST_BOTTOM_MARGIN_DP`). Settings' home page: on Android 16 its
   `TopLevelSettings.onCreateRecyclerView` no longer calls `setPadding(0, 0, 0, 0)` over the
