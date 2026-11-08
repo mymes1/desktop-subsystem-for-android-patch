@@ -1,5 +1,5 @@
 //! The Mac's power as the user's Android sees it: AC or battery, the charge, Low Power Mode,
-//! and the Mac's sleep and wake.
+//! the Mac's sleep and wake, and the Mac running short of memory.
 //!
 //! The agent runs in the user's login session and reads it all itself, on one thread of its
 //! own ([`watch`]) with its own run loop:
@@ -15,6 +15,11 @@
 //!   Mac sleeps every Android is told and puts its data on disk, and the agent holds the sleep
 //!   until they answer or [`dsa_host_core::power::SLEEP_WAIT`] passes, then lets it go on
 //!   (`IOAllowPowerChange`). When the Mac wakes every Android has its clock set.
+//!
+//! - The memory comes from the kernel's memory pressure level
+//!   (`kern.memorystatus_vm_pressure_level`), read every [`SAVER_POLL`]. While macOS says
+//!   memory is under pressure ([`memory_low_at`]), every Android is told the Mac is short of
+//!   memory and gives back what it can spare, cached app processes first.
 //!
 //! Each reading goes to the agent's [`dsa_host_core::power::PowerHub`], which passes on only
 //! what changed, the same as on the other hosts.
@@ -123,6 +128,25 @@ pub fn needs_answer(message_type: u32) -> bool {
     matches!(message_type, CAN_SYSTEM_SLEEP | SYSTEM_WILL_SLEEP)
 }
 
+/// `kern.memorystatus_vm_pressure_level` (and `DISPATCH_MEMORYPRESSURE_*`): memory is fine.
+pub const PRESSURE_NORMAL: i32 = 1;
+/// The system is under memory pressure and asks processes to free what they can.
+pub const PRESSURE_WARN: i32 = 2;
+/// The system is critically short of memory.
+pub const PRESSURE_CRITICAL: i32 = 4;
+
+/// Whether the Mac is short of memory at the kernel's pressure `level`, as the guests are
+/// told: short at warn and critical, no longer short once the level is normal again. The
+/// kernel already keeps a margin between its levels, so no threshold is added here. A level
+/// it does not name leaves `was_low` as it was.
+pub fn memory_low_at(level: i32, was_low: bool) -> bool {
+    match level {
+        PRESSURE_WARN | PRESSURE_CRITICAL => true,
+        PRESSURE_NORMAL => false,
+        _ => was_low,
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use std::cell::Cell;
@@ -137,7 +161,9 @@ mod mac {
 
     use dsa_host_core::power::{PowerHub, PowerState};
 
-    use super::{from_power_sources, needs_answer, sleep_event, PowerSource, POLL, SAVER_POLL};
+    use super::{
+        from_power_sources, memory_low_at, needs_answer, sleep_event, PowerSource, POLL, SAVER_POLL,
+    };
 
     type CFTypeRef = *const c_void;
     type IONotificationPortRef = *mut c_void;
@@ -358,6 +384,23 @@ mod mac {
         from_power_sources(providing.as_deref(), &sources, low_power_mode())
     }
 
+    /// The kernel's memory pressure level now, or `None` when it cannot be read.
+    pub fn memory_pressure_level() -> Option<i32> {
+        let mut level: i32 = 0;
+        let mut size = std::mem::size_of::<i32>();
+        // SAFETY: a NUL-terminated name, and a buffer of `size` bytes for the integer.
+        let result = unsafe {
+            libc::sysctlbyname(
+                c"kern.memorystatus_vm_pressure_level".as_ptr(),
+                (&mut level as *mut i32).cast(),
+                &mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        (result == 0).then_some(level)
+    }
+
     /// What the root power domain's callback needs: the hub, and the connection its answers
     /// go to, set once the registration made it. Both live on the watch's thread.
     struct SleepContext {
@@ -446,6 +489,7 @@ mod mac {
         let mut battery = read();
         hub.update(battery);
         let mut read_at = Instant::now();
+        let mut memory_low = false;
         while !stop.load(Ordering::Relaxed) {
             // SAFETY: runs this thread's run loop, where the callbacks above are called.
             let result = unsafe { CFRunLoopRunInMode(mode, SAVER_POLL.as_secs_f64(), 1) };
@@ -461,6 +505,17 @@ mod mac {
                 power_saver: low_power_mode(),
                 ..battery
             });
+            if let Some(level) = memory_pressure_level() {
+                let low = memory_low_at(level, memory_low);
+                if low != memory_low {
+                    eprintln!(
+                        "host memory: macOS memory pressure level {level}, {}",
+                        if low { "short" } else { "no longer short" }
+                    );
+                    memory_low = low;
+                }
+                hub.update_memory(low);
+            }
         }
 
         // SAFETY: the sources and the registration made above, ended before the context they
@@ -482,4 +537,4 @@ mod mac {
 }
 
 #[cfg(target_os = "macos")]
-pub use mac::{low_power_mode, power_sources, read, watch};
+pub use mac::{low_power_mode, memory_pressure_level, power_sources, read, watch};

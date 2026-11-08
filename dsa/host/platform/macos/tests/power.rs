@@ -136,3 +136,40 @@ fn fr10_this_macs_power_can_be_read() {
     let state = dsa_host_macos::power::read();
     assert!(state.battery_percent <= 100);
 }
+
+#[test]
+fn nfr2_the_macs_memory_pressure_is_what_the_guest_is_told() {
+    use dsa_host_macos::power::{memory_low_at, PRESSURE_CRITICAL, PRESSURE_NORMAL, PRESSURE_WARN};
+    // Warn and critical tell the guest the Mac is short of memory, whatever it was before.
+    assert!(memory_low_at(PRESSURE_WARN, false));
+    assert!(memory_low_at(PRESSURE_CRITICAL, false));
+    assert!(memory_low_at(PRESSURE_CRITICAL, true));
+    // Normal again ends the shortage.
+    assert!(!memory_low_at(PRESSURE_NORMAL, true));
+    assert!(!memory_low_at(PRESSURE_NORMAL, false));
+    // A level the kernel does not name changes nothing.
+    assert!(memory_low_at(0, true));
+    assert!(!memory_low_at(3, false));
+}
+
+#[test]
+fn nfr2_the_macs_memory_pressure_reaches_the_hub_only_when_it_changes() {
+    use dsa_host_macos::power::{memory_low_at, PRESSURE_NORMAL, PRESSURE_WARN};
+    let hub = PowerHub::new();
+    let mut low = false;
+    for level in [PRESSURE_NORMAL, PRESSURE_WARN, PRESSURE_WARN] {
+        low = memory_low_at(level, low);
+        hub.update_memory(low);
+    }
+    assert!(hub.memory_low());
+    low = memory_low_at(PRESSURE_NORMAL, low);
+    hub.update_memory(low);
+    assert!(!hub.memory_low());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn nfr2_this_macs_memory_pressure_can_be_read() {
+    let level = dsa_host_macos::power::memory_pressure_level().expect("the sysctl");
+    assert!([1, 2, 4].contains(&level), "level {level}");
+}
