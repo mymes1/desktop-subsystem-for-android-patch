@@ -178,7 +178,7 @@ jobs:
       # what its compiler cache holds, so they name it.
       - name: Name the compiler cache
         shell: bash
-        run: echo "COMPILER_CACHE_KEY=$COMPILER_CACHE_PREFIX${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
+        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
 
       # The newest entry of an older key still holds most of the upstream code.
       - name: Restore the compiler cache
@@ -313,7 +313,7 @@ jobs:
       # what its compiler cache holds, so they name it.
       - name: Name the compiler cache
         shell: bash
-        run: echo "COMPILER_CACHE_KEY=$COMPILER_CACHE_PREFIX${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
+        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
 
       # The newest entry of an older key still holds most of the upstream code.
       - name: Restore the compiler cache
@@ -541,7 +541,7 @@ jobs:
       # what its compiler cache holds, so they name it.
       - name: Name the compiler cache
         shell: bash
-        run: echo "COMPILER_CACHE_KEY=$COMPILER_CACHE_PREFIX${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
+        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/build-macos.sh', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
 
       # The newest entry of an older key still holds most of the upstream code.
       - name: Restore the compiler cache
