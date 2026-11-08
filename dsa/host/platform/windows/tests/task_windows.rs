@@ -132,6 +132,9 @@ struct Running {
     stop: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
     service: Option<RunningService>,
+    /// A way into the local API kept until the service has stopped, so the service's
+    /// listener never sees its last client go while it still serves (it would say so).
+    _api: MemoryLocalConnector,
 }
 
 impl Drop for Running {
@@ -178,6 +181,7 @@ fn start(presenter: Option<Arc<CapturingPresenter>>) -> Running {
         hosts: Arc::clone(&hosts),
         started: Arc::clone(&started),
     };
+    let kept_api = api_connector.clone();
     let mut compositor = Compositor::with_custom_transport(
         config,
         Arc::new(FakeRenderer::new()),
@@ -205,6 +209,7 @@ fn start(presenter: Option<Arc<CapturingPresenter>>) -> Running {
         stop,
         thread: Some(thread),
         service: Some(service),
+        _api: kept_api,
     }
 }
 
@@ -1644,6 +1649,14 @@ fn fr10_minimizing_and_closing_every_task_window_tells_the_guest_none_is_shown()
 mod real_input {
     use super::*;
     use std::ffi::c_void;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
+        PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
+    };
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYEVENTF_KEYUP, VK_ESCAPE,
+    };
     use windows_sys::Win32::UI::Input::Pointer::{
         POINTER_FLAG_DOWN, POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_FLAG_UP,
         POINTER_FLAG_UPDATE, POINTER_PEN_INFO, POINTER_TOUCH_INFO,
@@ -1654,6 +1667,7 @@ mod real_input {
         PEN_MASK_TILT_Y, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH, SWP_NOSIZE, TOUCH_MASK_CONTACTAREA,
         TOUCH_MASK_PRESSURE, WM_NCHITTEST,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow};
 
     /// One contact of a synthetic pointer device's frame (`POINTER_TYPE_INFO`).
     #[repr(C)]
@@ -1786,6 +1800,12 @@ mod real_input {
     /// screen, once the window is the one under `points` (client points). A point counts as
     /// on the window when the window under it, or the top-level window that holds it, is the
     /// task window.
+    ///
+    /// A topmost window still sits below the shell's own windows, such as the Start menu,
+    /// which the ARM64 runner opens by itself. While one covers the contacts it is closed as
+    /// a user would close it, with Escape, and the task window is brought to the front; one
+    /// that stays is ended. The task window is made the foreground window too, as it is when
+    /// a user works in it.
     fn window_on_top(running: &Running, points: &[(i32, i32)]) -> (HWND, POINT) {
         let open = windows_of(running, 1);
         let hwnd = open[0].hwnd as HWND;
@@ -1795,15 +1815,24 @@ mod real_input {
             unsafe { WindowFromPoint(on_screen(origin, point)) }
         };
         let deadline = Instant::now() + WAIT;
+        let mut tries = 0u32;
+        let mut next_try = Instant::now();
         loop {
             let mut origin = POINT { x: 0, y: 0 };
             unsafe { ClientToScreen(hwnd, &mut origin) };
-            let all_on_it = points.iter().all(|&point| {
-                let found = under(origin, point);
-                found == hwnd || unsafe { GetAncestor(found, GA_ROOT) } == hwnd
-            });
-            if all_on_it {
+            let covers: Vec<HWND> = points
+                .iter()
+                .map(|&point| under(origin, point))
+                .filter(|&found| found != hwnd && unsafe { GetAncestor(found, GA_ROOT) } != hwnd)
+                .collect();
+            let in_front = unsafe { GetForegroundWindow() } == hwnd;
+            if covers.is_empty() && (in_front || tries >= 3) {
                 return (hwnd, origin);
+            }
+            if Instant::now() >= next_try {
+                tries += 1;
+                next_try = Instant::now() + Duration::from_millis(500);
+                bring_to_front(hwnd, covers.first().copied(), tries);
             }
             if Instant::now() >= deadline {
                 let (window, work) = window_and_work_area(open[0].hwnd);
@@ -1841,7 +1870,86 @@ mod real_input {
         }
     }
 
-    /// A window's handle and class, for a failure's message.
+    /// The shell's programs whose windows open over every other window: the Start menu,
+    /// search, and the notification and quick settings panes.
+    const SHELL_POPUPS: &[&str] = &[
+        "StartMenuExperienceHost.exe",
+        "SearchHost.exe",
+        "SearchApp.exe",
+        "ShellExperienceHost.exe",
+    ];
+
+    /// Brings `hwnd` to the front as a user would: Escape closes a Start menu or a search
+    /// pane that holds the keyboard, and an Alt tap lets this process move the foreground.
+    /// From the third try on, a shell window that still covers the contacts (`cover`) is
+    /// ended; Windows starts its program again when it is next needed.
+    fn bring_to_front(hwnd: HWND, cover: Option<HWND>, tries: u32) {
+        // SAFETY: plain calls on window handles. The keys go to the foreground window, which
+        // is not the task window then, so the task gets neither key.
+        unsafe {
+            if GetForegroundWindow() != hwnd {
+                keybd_event(VK_ESCAPE as u8, 0, 0, 0);
+                keybd_event(VK_ESCAPE as u8, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_MENU as u8, 0, 0, 0);
+                keybd_event(VK_MENU as u8, 0, KEYEVENTF_KEYUP, 0);
+                SetForegroundWindow(hwnd);
+            }
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+        }
+        let Some(cover) = cover else {
+            return;
+        };
+        if tries < 3 {
+            return;
+        }
+        let (process_id, program) = program_of(cover);
+        if SHELL_POPUPS
+            .iter()
+            .any(|name| program.eq_ignore_ascii_case(name))
+        {
+            eprintln!(
+                "{} covers the task window's contacts; ending {program} ({process_id})",
+                describe_window(cover)
+            );
+            // SAFETY: opens the shell process by its ID, ends it, and closes the handle.
+            unsafe {
+                let process = OpenProcess(PROCESS_TERMINATE, 0, process_id);
+                if !process.is_null() {
+                    TerminateProcess(process, 1);
+                    CloseHandle(process);
+                }
+            }
+        }
+    }
+
+    /// The ID and the program file name of the process that owns `hwnd`.
+    fn program_of(hwnd: HWND) -> (u32, String) {
+        let mut process_id = 0u32;
+        // SAFETY: writes the owner's ID into a local.
+        unsafe { GetWindowThreadProcessId(hwnd, &mut process_id) };
+        let mut name = [0u16; 1024];
+        let mut length = name.len() as u32;
+        // SAFETY: opens the process for its name only, reads it into `name` and closes it.
+        let read = unsafe {
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id);
+            if process.is_null() {
+                false
+            } else {
+                let read = QueryFullProcessImageNameW(process, 0, name.as_mut_ptr(), &mut length);
+                CloseHandle(process);
+                read != 0
+            }
+        };
+        let path = if read {
+            String::from_utf16_lossy(&name[..length as usize])
+        } else {
+            String::new()
+        };
+        let program = path.rsplit('\\').next().unwrap_or_default().to_string();
+        (process_id, program)
+    }
+
+    /// A window's handle, class and program, for a failure's message.
     fn describe_window(hwnd: HWND) -> String {
         if hwnd.is_null() {
             return "no window".to_string();
@@ -1849,7 +1957,8 @@ mod real_input {
         let mut class = [0u16; 128];
         let length = unsafe { GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32) };
         let class = String::from_utf16_lossy(&class[..length.max(0) as usize]);
-        format!("{hwnd:?} of class {class:?}")
+        let (process_id, program) = program_of(unsafe { GetAncestor(hwnd, GA_ROOT) });
+        format!("{hwnd:?} of class {class:?} of {program} ({process_id})")
     }
 
     fn on_screen(origin: POINT, (x, y): (i32, i32)) -> POINT {
@@ -1908,7 +2017,14 @@ mod real_input {
             (middle + (index * 2 - 9) * (width / 40 + spread), row)
         };
         let wide: Vec<(i32, i32)> = (0..10).map(|index| at(index, 6)).collect();
-        let (_, origin) = window_on_top(&running, &wide);
+        let (hwnd, origin) = window_on_top(&running, &wide);
+        // Which window has the keyboard says, if fingers go missing, whether the task window
+        // was the one in use when they landed.
+        eprintln!(
+            "ten fingers on {}; the foreground window is {}",
+            describe_window(hwnd),
+            describe_window(unsafe { GetForegroundWindow() })
+        );
 
         let fingers = Device::new(PT_TOUCH, 10);
         let frame = |flags: u32, spread: i32| -> Vec<PointerTypeInfo> {
