@@ -500,6 +500,17 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if (name.startswith("VENDOR/etc/vintf/manifest/") and name != sensors_manifest
                 and b"<name>android.hardware.sensors</name>" in z.read(name)):
             problems.append(f"{name} declares a second sensors HAL, which fails the VINTF check")
+    # A sensors HAL installed as plain files beside DSA's (Android 17's Cuttlefish multi-HAL):
+    # init starts it, its sub-HAL cannot reach Cuttlefish's sensors control socket, and it
+    # aborts every five seconds, pushing everything else out of the log.
+    for name in sorted(names):
+        base = name.rsplit("/", 1)[-1]
+        if (name.startswith(("VENDOR/bin/hw/", "VENDOR/etc/init/", "VENDOR/lib/hw/", "VENDOR/lib64/hw/"))
+                and "sensors" in base.lower()
+                and name not in ("VENDOR/bin/hw/dsa-sensors", "VENDOR/etc/init/dsa-sensors.rc")):
+            problems.append(f"{name} is a second sensors HAL, which init starts and which aborts in a loop")
+        elif name.startswith("VENDOR/etc/sensors/") and base:
+            problems.append(f"{name} lists sub-HALs for a sensors multi-HAL the image must not have")
     # DSA's camera HAL: without it apps see Cuttlefish's emulated cameras, or none.
     if "VENDOR/bin/hw/dsa-camera" not in names:
         problems.append("VENDOR/bin/hw/dsa-camera is missing from the image")

@@ -671,6 +671,7 @@ def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False, came
             for apex in removed_apexes(hwcomposer, power, gnss, sensors, camera)
         )
         or (gnss and cuttlefish_gnss_file(name))
+        or (sensors and cuttlefish_sensors_file(name))
     )
 
 
@@ -681,6 +682,20 @@ def cuttlefish_gnss_file(name):
         return False
     return any(name.startswith(folder) and "gnss" in name[len(folder):].lower()
                for folder in CUTTLEFISH_GNSS_FOLDERS)
+
+
+def cuttlefish_sensors_file(name):
+    """Whether a target_files member is part of a sensors HAL installed as plain files (its
+    service, init script, sub-HAL library or sub-HAL list), other than DSA's own. Android 17's
+    Cuttlefish has its multi-HAL that way, not in an APEX. Left in the image, init starts it,
+    its Cuttlefish sub-HAL finds no sensors control socket to connect to, and it aborts every
+    five seconds, filling the log and the tombstones."""
+    if name in SENSORS_FILES:
+        return False
+    if name.startswith(CUTTLEFISH_SENSORS_CONFIG) and name != CUTTLEFISH_SENSORS_CONFIG:
+        return True
+    return any(name.startswith(folder) and "sensors" in name[len(folder):].lower()
+               for folder in CUTTLEFISH_SENSORS_FOLDERS)
 
 
 def other_sensors_manifest(name, data):
@@ -2618,6 +2633,17 @@ CUTTLEFISH_SENSORS_APEXES = [
     "com.android.hardware.sensors",
     "com.google.cf.sensors",
 ]
+# Where a sensors HAL installed as plain files keeps its service, init script and sub-HAL
+# libraries. The interface libraries (VENDOR/lib64/android.hardware.sensors*.so) are not in
+# these folders and stay: DSA's HAL links them.
+CUTTLEFISH_SENSORS_FOLDERS = [
+    "VENDOR/bin/hw/",
+    "VENDOR/etc/init/",
+    "VENDOR/lib/hw/",
+    "VENDOR/lib64/hw/",
+]
+# The multi-HAL's list of sub-HALs to load.
+CUTTLEFISH_SENSORS_CONFIG = "VENDOR/etc/sensors/"
 # DSA's camera provider HAL (dsa/guest/camera), which lends the host computer's cameras to
 # Android, and the Cuttlefish APEX whose emulated cameras it replaces. It runs in the vendor
 # camera HAL domain (hal_camera_default); camera.cil lets it reach the host's camera port and
