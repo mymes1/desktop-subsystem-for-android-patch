@@ -35,6 +35,19 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn(".unlocked_ioctl\t= shmem_file_ioctl,", patch)
         self.assertIn("config MEMFD_ASHMEM_SHIM", patch)
 
+    def test_fr35_the_su_guard_is_built_in_and_hides_su_by_inode(self):
+        # su exists only for the uids the host allows; the guard returns -ENOENT for any
+        # other task, so an app that may not ask never finds su (INTENT D28).
+        config = CONFIG.read_text()
+        self.assertIn("CONFIG_DSA_SU_GUARD=y", config)
+        self.assertIn("CONFIG_SECURITYFS=y", config)
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertIn("security/dsa_su/dsa_su.c", patch)
+        self.assertIn("return -ENOENT;", patch)
+        self.assertIn("LSM_HOOK_INIT(inode_permission", patch)
+        self.assertIn("LSM_HOOK_INIT(bprm_creds_for_exec", patch)
+        self.assertIn("securityfs_create_dir(\"dsa_su\"", patch)
+
     def test_nfr1_reclaim_ages_pages_with_the_multi_generational_lru(self):
         # The guest's gradual trim reclaims a bounded amount of the coldest cache; without
         # MGLRU it cannot tell cold cache from the visible app's working set as well.

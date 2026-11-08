@@ -886,6 +886,61 @@ message GoogleDeviceId {
   string id = 1;
 }
 
+// How far an app may elevate to root, as the user set it on the host.
+enum RootLevel {
+  // The app cannot ask: su does not exist for it.
+  ROOT_LEVEL_OFF = 0;
+  // The app may ask; each su call waits for the host's administrator approval.
+  ROOT_LEVEL_ASK = 1;
+  // The host approves the app's su calls without asking, within the grace.
+  ROOT_LEVEL_REMEMBER = 2;
+}
+
+// One app's root elevation level, with the Android uid the kernel keys su visibility on.
+message RootApp {
+  string package = 1;
+  uint32 uid = 2;
+  RootLevel level = 3;
+}
+
+// Host to guest, to the control daemon: the whole root elevation state for this boot. The
+// host sends it once the agent has connected (so uids are known) and whenever the feature or
+// an app's level changes. The daemon tells the kernel which uids may see su (the ask and
+// remember apps) while `enabled`; with `enabled` false the daemon clears the kernel allowlist
+// and stops the su relay, so su exists for no app. The whole feature applies from a boot: the
+// host does not send this with `enabled` true unless the boot was started with it on.
+message RootElevationConfig {
+  bool enabled = 1;
+  repeated RootApp apps = 2;
+}
+
+// Guest to host, from the control daemon's su relay: an app called su and wants to run a
+// command as uid 0. The host decides by the app's level: a remember app within its grace is
+// approved at once, an ask app (or a remember app past its grace) brings up the host's
+// administrator approval under that app's window program. Answered with SuDecision.
+message SuRequest {
+  // Pairs the request with its SuDecision; unique while the daemon runs.
+  uint64 request_id = 1;
+  // The calling app's package, which the host shows in the approval and writes to the log.
+  string package = 2;
+  // The calling app's Android uid.
+  uint32 uid = 3;
+  // The command after `su -c`, or after a `su` with a command on standard input, split as a
+  // shell would; empty for an interactive shell (`su` with a pty).
+  repeated string command = 4;
+  // True when su has a controlling terminal (an interactive shell or `su -` with a pty).
+  bool interactive = 5;
+}
+
+// Host to guest, to the control daemon's su relay: whether a SuRequest may run as uid 0.
+message SuDecision {
+  uint64 request_id = 1;
+  bool approved = 2;
+  // Why it was refused, in words the person can act on, for su to print and the log to keep;
+  // empty when approved.
+  string reason = 3;
+}
+
 // Guest to host, from the agent: a notification an app posted, or a new version of one it
 // posted before under the same key, which replaces it. Only notifications a person would see
 // come: not the ongoing notice of a foreground service, and not a group's summary, whose
@@ -2274,6 +2329,9 @@ message Envelope {
     GappsState gapps_state = 404;
     GoogleDeviceIdQuery google_device_id_query = 405;
     GoogleDeviceId google_device_id = 406;
+    RootElevationConfig root_elevation_config = 408;
+    SuRequest su_request = 409;
+    SuDecision su_decision = 410;
     DeviceIdle device_idle = 42;
     HostMemory host_memory = 43;
     HostSleep host_sleep = 44;

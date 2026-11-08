@@ -1,0 +1,342 @@
+diff --git a/security/Kconfig b/security/Kconfig
+index 0000000..0000001 100644
+--- a/security/Kconfig
++++ b/security/Kconfig
+@@ -32,6 +32,8 @@ config SECURITY
+
+ 	  If you are unsure how to answer this question, answer N.
+
++source "security/dsa_su/Kconfig"
++
+ config SECURITYFS
+ 	bool "Enable the securityfs filesystem"
+ 	help
+diff --git a/security/Makefile b/security/Makefile
+index 0000000..0000002 100644
+--- a/security/Makefile
++++ b/security/Makefile
+@@ -13,6 +13,7 @@ obj-$(CONFIG_SECURITY) += security.o
+ obj-$(CONFIG_SECURITYFS) += inode.o
+ obj-$(CONFIG_SECURITY_NETWORK) += lsm_audit.o
+ obj-$(CONFIG_SECURITY_SELINUX) += selinux/
++obj-$(CONFIG_DSA_SU_GUARD) += dsa_su/
+ obj-$(CONFIG_SECURITY_SMACK) += smack/
+ obj-$(CONFIG_SECURITY_TOMOYO) += tomoyo/
+ obj-$(CONFIG_SECURITY_APPARMOR) += apparmor/
+diff --git a/security/dsa_su/Kconfig b/security/dsa_su/Kconfig
+new file mode 100644
+index 0000000..0000003
+--- /dev/null
++++ b/security/dsa_su/Kconfig
+@@ -0,0 +1,19 @@
++# SPDX-License-Identifier: GPL-2.0
++config DSA_SU_GUARD
++	bool "DSA su guard (per-uid visibility of the su binary)"
++	depends on SECURITY && SECURITYFS
++	default n
++	help
++	  Makes the su binary of the Desktop Subsystem for Android image exist
++	  only for the Android uids the host has allowed. For any other task a
++	  lookup, stat, access, open or exec of a watched su inode returns
++	  -ENOENT, so su is a file that is not there.
++
++	  The host's control daemon drives it through
++	  /sys/kernel/security/dsa_su/control: it names the su inode(s) to
++	  watch, the uids that may see them, and whether the guard is on. With
++	  the guard off, or with no uid allowed, su is hidden from every task.
++	  Nothing is looked up at run time outside this module, and the module
++	  is built in, so the image ships no kernel module for it.
++
++	  Unless you are building the DSA guest kernel, say N.
+diff --git a/security/dsa_su/Makefile b/security/dsa_su/Makefile
+new file mode 100644
+index 0000000..0000004
+--- /dev/null
++++ b/security/dsa_su/Makefile
+@@ -0,0 +1,2 @@
++# SPDX-License-Identifier: GPL-2.0
++obj-$(CONFIG_DSA_SU_GUARD) += dsa_su.o
+diff --git a/security/dsa_su/dsa_su.c b/security/dsa_su/dsa_su.c
+new file mode 100644
+index 0000000..0000005
+--- /dev/null
++++ b/security/dsa_su/dsa_su.c
+@@ -0,0 +1,330 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * DSA su guard: the su binary exists only for the Android uids the host has
++ * allowed. For any other task, a lookup, stat, access, open or exec of a
++ * watched su inode returns -ENOENT, so su is a file that is not there.
++ *
++ * The host's control daemon drives it through a single securityfs file,
++ * /sys/kernel/security/dsa_su/control, one command per line:
++ *
++ *   path <absolute path>   watch the inode at <absolute path> (the su binary)
++ *   allow <uid>            let this Android uid see the watched inodes
++ *   enable                 turn the guard on
++ *   disable                turn the guard off (su is then hidden from all)
++ *   reset                  forget every watched inode and allowed uid
++ *
++ * The file is written only by a task whose fsuid is root; SELinux policy
++ * restricts its label to the control daemon's domain, so no app can reach it.
++ * Nothing is looked up at run time outside this module.
++ */
++
++#include <linux/module.h>
++#include <linux/lsm_hooks.h>
++#include <linux/security.h>
++#include <linux/securityfs.h>
++#include <linux/namei.h>
++#include <linux/fs.h>
++#include <linux/cred.h>
++#include <linux/uidgid.h>
++#include <linux/slab.h>
++#include <linux/spinlock.h>
++#include <linux/uaccess.h>
++#include <linux/binfmts.h>
++#include <linux/path.h>
++
++#define DSA_SU_MAX_INODES 8
++#define DSA_SU_MAX_UIDS 256
++
++struct dsa_su_inode {
++	dev_t dev;
++	unsigned long ino;
++};
++
++static DEFINE_SPINLOCK(dsa_su_lock);
++static bool dsa_su_enabled;
++static struct dsa_su_inode dsa_su_inodes[DSA_SU_MAX_INODES];
++static unsigned int dsa_su_inode_count;
++static kuid_t dsa_su_uids[DSA_SU_MAX_UIDS];
++static unsigned int dsa_su_uid_count;
++
++/* Whether (dev, ino) is one of the watched su inodes. Called from hooks. */
++static bool dsa_su_is_watched(dev_t dev, unsigned long ino)
++{
++	unsigned int i;
++	bool found = false;
++
++	spin_lock(&dsa_su_lock);
++	if (dsa_su_enabled) {
++		for (i = 0; i < dsa_su_inode_count; i++) {
++			if (dsa_su_inodes[i].dev == dev &&
++			    dsa_su_inodes[i].ino == ino) {
++				found = true;
++				break;
++			}
++		}
++	}
++	spin_unlock(&dsa_su_lock);
++	return found;
++}
++
++/* Whether the current task's fsuid may see the watched su inodes. */
++static bool dsa_su_current_allowed(void)
++{
++	kuid_t uid = current_fsuid();
++	unsigned int i;
++	bool allowed = false;
++
++	spin_lock(&dsa_su_lock);
++	for (i = 0; i < dsa_su_uid_count; i++) {
++		if (uid_eq(dsa_su_uids[i], uid)) {
++			allowed = true;
++			break;
++		}
++	}
++	spin_unlock(&dsa_su_lock);
++	return allowed;
++}
++
++/* -ENOENT when the inode is a watched su and the caller may not see it. */
++static int dsa_su_check_inode(const struct inode *inode)
++{
++	if (!inode)
++		return 0;
++	if (!dsa_su_is_watched(inode->i_sb->s_dev, inode->i_ino))
++		return 0;
++	if (dsa_su_current_allowed())
++		return 0;
++	return -ENOENT;
++}
++
++static int dsa_su_inode_permission(struct inode *inode, int mask)
++{
++	return dsa_su_check_inode(inode);
++}
++
++static int dsa_su_inode_getattr(const struct path *path)
++{
++	return dsa_su_check_inode(d_backing_inode(path->dentry));
++}
++
++static int dsa_su_file_open(struct file *file)
++{
++	return dsa_su_check_inode(file_inode(file));
++}
++
++static int dsa_su_bprm_creds_for_exec(struct linux_binprm *bprm)
++{
++	if (!bprm->file)
++		return 0;
++	return dsa_su_check_inode(file_inode(bprm->file));
++}
++
++static struct security_hook_list dsa_su_hooks[] __ro_after_init = {
++	LSM_HOOK_INIT(inode_permission, dsa_su_inode_permission),
++	LSM_HOOK_INIT(inode_getattr, dsa_su_inode_getattr),
++	LSM_HOOK_INIT(file_open, dsa_su_file_open),
++	LSM_HOOK_INIT(bprm_creds_for_exec, dsa_su_bprm_creds_for_exec),
++};
++
++static int dsa_su_add_path(const char *name)
++{
++	struct path path;
++	struct inode *inode;
++	int err;
++
++	err = kern_path(name, LOOKUP_FOLLOW, &path);
++	if (err)
++		return err;
++	inode = d_backing_inode(path.dentry);
++	if (!inode) {
++		path_put(&path);
++		return -ENOENT;
++	}
++	spin_lock(&dsa_su_lock);
++	if (dsa_su_inode_count >= DSA_SU_MAX_INODES) {
++		spin_unlock(&dsa_su_lock);
++		path_put(&path);
++		return -ENOSPC;
++	}
++	dsa_su_inodes[dsa_su_inode_count].dev = inode->i_sb->s_dev;
++	dsa_su_inodes[dsa_su_inode_count].ino = inode->i_ino;
++	dsa_su_inode_count++;
++	spin_unlock(&dsa_su_lock);
++	path_put(&path);
++	return 0;
++}
++
++static int dsa_su_add_uid(const char *digits)
++{
++	unsigned int value;
++	kuid_t uid;
++	int err;
++
++	err = kstrtouint(digits, 10, &value);
++	if (err)
++		return err;
++	uid = make_kuid(current_user_ns(), value);
++	if (!uid_valid(uid))
++		return -EINVAL;
++	spin_lock(&dsa_su_lock);
++	if (dsa_su_uid_count >= DSA_SU_MAX_UIDS) {
++		spin_unlock(&dsa_su_lock);
++		return -ENOSPC;
++	}
++	dsa_su_uids[dsa_su_uid_count++] = uid;
++	spin_unlock(&dsa_su_lock);
++	return 0;
++}
++
++static int dsa_su_command(char *line)
++{
++	char *arg;
++
++	/* Trim trailing whitespace. */
++	arg = strchr(line, ' ');
++	if (arg)
++		*arg++ = '\0';
++	while (arg && *arg == ' ')
++		arg++;
++
++	if (!strcmp(line, "enable")) {
++		spin_lock(&dsa_su_lock);
++		dsa_su_enabled = true;
++		spin_unlock(&dsa_su_lock);
++		return 0;
++	}
++	if (!strcmp(line, "disable")) {
++		spin_lock(&dsa_su_lock);
++		dsa_su_enabled = false;
++		spin_unlock(&dsa_su_lock);
++		return 0;
++	}
++	if (!strcmp(line, "reset")) {
++		spin_lock(&dsa_su_lock);
++		dsa_su_inode_count = 0;
++		dsa_su_uid_count = 0;
++		dsa_su_enabled = false;
++		spin_unlock(&dsa_su_lock);
++		return 0;
++	}
++	if (!strcmp(line, "path") && arg)
++		return dsa_su_add_path(arg);
++	if (!strcmp(line, "allow") && arg)
++		return dsa_su_add_uid(arg);
++	return -EINVAL;
++}
++
++static ssize_t dsa_su_control_write(struct file *file, const char __user *buf,
++				    size_t count, loff_t *ppos)
++{
++	char *kbuf, *line, *next;
++	ssize_t ret = count;
++
++	/* Only root may drive the guard; SELinux restricts the file's label on
++	 * top of this to the control daemon's domain. */
++	if (!uid_eq(current_fsuid(), GLOBAL_ROOT_UID))
++		return -EPERM;
++	if (count == 0 || count > PAGE_SIZE)
++		return -EINVAL;
++	kbuf = memdup_user_nul(buf, count);
++	if (IS_ERR(kbuf))
++		return PTR_ERR(kbuf);
++
++	next = kbuf;
++	while ((line = strsep(&next, "\n")) != NULL) {
++		int err;
++
++		if (*line == '\0')
++			continue;
++		err = dsa_su_command(line);
++		if (err) {
++			ret = err;
++			break;
++		}
++	}
++	kfree(kbuf);
++	return ret;
++}
++
++static const struct file_operations dsa_su_control_fops = {
++	.write = dsa_su_control_write,
++	.llseek = noop_llseek,
++};
++
++static int __init dsa_su_securityfs_init(void)
++{
++	struct dentry *dir;
++
++	dir = securityfs_create_dir("dsa_su", NULL);
++	if (IS_ERR(dir))
++		return PTR_ERR(dir);
++	if (IS_ERR(securityfs_create_file("control", 0200, dir, NULL,
++					  &dsa_su_control_fops)))
++		return -ENOMEM;
++	return 0;
++}
++fs_initcall(dsa_su_securityfs_init);
++
++static int __init dsa_su_init(void)
++{
++	security_add_hooks(dsa_su_hooks, ARRAY_SIZE(dsa_su_hooks), "dsa_su");
++	pr_info("dsa_su: su guard ready (off until the host enables it)\n");
++	return 0;
++}
++
++DEFINE_LSM(dsa_su) = {
++	.name = "dsa_su",
++	.init = dsa_su_init,
++};

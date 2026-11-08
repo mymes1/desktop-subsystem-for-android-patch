@@ -3141,6 +3141,93 @@ impl HostApiService {
         }
     }
 
+    /// Sets how far one app may elevate to root. The feature must be on;
+    /// moving an app to "remember" needs an administrator, as does the whole feature. A
+    /// change clears that app's grace. The new level applies to the running Android from the
+    /// next root elevation config the service sends, which it does on this change.
+    fn set_app_root(&self, peer: &Peer, set: types::SetAppRoot) -> response::Body {
+        use crate::root_elevation::Level;
+        if !apk::valid_package_name(&set.package_name) {
+            return not_a_package(&set.package_name);
+        }
+        let Some((store, _facts)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let app_root = |status: types::AppRootStatus, level: &str, message: &str| {
+            response::Body::AppRootResult(types::AppRootResult {
+                package_name: set.package_name.clone(),
+                status: status.into(),
+                level: level.to_string(),
+                message: message.to_string(),
+            })
+        };
+        let Some(level) = Level::from_code(&set.level) else {
+            return app_root(
+                types::AppRootStatus::InvalidLevel,
+                "off",
+                "the level must be off, ask or remember",
+            );
+        };
+        if !store.machine().root_elevation {
+            return app_root(
+                types::AppRootStatus::FeatureOff,
+                "off",
+                "root elevation is off for this computer; turn it on first",
+            );
+        }
+        if level.change_needs_admin() && !peer.administrator {
+            return app_root(
+                types::AppRootStatus::NotPermitted,
+                &store
+                    .root_apps(&peer.user)
+                    .ok()
+                    .and_then(|apps| {
+                        apps.into_iter()
+                            .find(|a| a.package == set.package_name)
+                            .map(|a| a.level)
+                    })
+                    .unwrap_or_else(|| "off".to_string()),
+                "letting an app keep root without asking needs an administrator. Run the \
+                 command as an administrator.",
+            );
+        }
+        match store.set_root_app(&peer.user, &set.package_name, level.code()) {
+            Ok(()) => {
+                eprintln!(
+                    "local API: {} set the root level of {} to {} (su visibility applies from \
+                     the next start of Android; the host decides each call by this level now)",
+                    peer.user,
+                    set.package_name,
+                    level.code()
+                );
+                app_root(types::AppRootStatus::Success, level.code(), "")
+            }
+            Err(why) => app_root(types::AppRootStatus::Other, "off", &why),
+        }
+    }
+
+    /// Fills each listed app's `root` with its level: "unavailable" when the feature is off
+    /// for the computer, otherwise the per-app level ("off", "ask" or "remember").
+    fn fill_app_root(&self, user: &str, installed: &mut types::InstalledApps) {
+        let Some((store, _facts)) = &self.settings else {
+            return;
+        };
+        if !store.machine().root_elevation {
+            for app in &mut installed.apps {
+                app.root = "unavailable".to_string();
+            }
+            return;
+        }
+        let levels = store.root_apps(user).unwrap_or_default();
+        for app in &mut installed.apps {
+            app.root = levels
+                .iter()
+                .find(|a| a.package == app.package_name)
+                .map(|a| a.level.clone())
+                .unwrap_or_else(|| "off".to_string());
+        }
+    }
+
     fn drag_out(&self, peer: &Peer, out: types::DragOut) -> response::Body {
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -3774,11 +3861,15 @@ impl HostApiService {
                         error(ErrorCode::NotRunning, why)
                     }
                     Some(Err(TaskRequestError::Failed(why))) => error(ErrorCode::Unavailable, why),
-                    Some(Ok(())) | None => response::Body::InstalledApps(installed_to_wire(
-                        android
-                            .watch_tasks()
-                            .and_then(|watch| installed_of(watch.current)),
-                    )),
+                    Some(Ok(())) | None => {
+                        let mut installed = installed_to_wire(
+                            android
+                                .watch_tasks()
+                                .and_then(|watch| installed_of(watch.current)),
+                        );
+                        self.fill_app_root(&peer.user, &mut installed);
+                        response::Body::InstalledApps(installed)
+                    }
                 },
             },
             Some(request::Body::OpenAppSettings(open)) => {
@@ -3793,6 +3884,7 @@ impl HostApiService {
                 self.uninstall_app(peer, &uninstall.package_name)
             }
             Some(request::Body::SetRunAsArm(set)) => self.set_run_as_arm(peer, set),
+            Some(request::Body::SetAppRoot(set)) => self.set_app_root(peer, set),
             Some(request::Body::CloseTask(close)) => self.request(
                 peer,
                 TaskRequest::Close {
@@ -4634,6 +4726,7 @@ impl HostApiService {
             image_updates: wanted.image_updates,
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
+            root_elevation: wanted.root_elevation,
             developer_mode: wanted.developer_mode,
             adb_auto_connect: wanted.adb_auto_connect,
             arm_translation: wanted.arm_translation,
@@ -4671,6 +4764,10 @@ impl HostApiService {
             ),
             ("input trace", wanted.input_trace != machine.input_trace),
             ("resize trace", wanted.resize_trace != machine.resize_trace),
+            (
+                "root elevation",
+                wanted.root_elevation != machine.root_elevation,
+            ),
         ]
         .into_iter()
         .filter_map(|(name, changed)| changed.then_some(name))
@@ -4733,6 +4830,17 @@ impl HostApiService {
                     settings.shared_folders.join(", "),
                     on_off(settings.advanced_networking)
                 );
+                if settings.root_elevation != machine.root_elevation {
+                    // The feature is set up at boot (the kernel hook and the guest relay), so
+                    // a change applies from the next start of Android. The settings app says
+                    // so; nothing in the running Android changes now.
+                    eprintln!(
+                        "local API: {} turned root elevation {} (it applies from the next \
+                         start of Android)",
+                        peer.user,
+                        on_off(settings.root_elevation)
+                    );
+                }
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
@@ -4775,6 +4883,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         stop_without_asking: settings.stop_without_asking,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
+        root_elevation: settings.root_elevation,
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
         adb_auto_connect: settings.adb_auto_connect,
@@ -4807,6 +4916,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
             resize_trace: settings.resize_trace,
+            root_elevation: settings.root_elevation,
             developer_mode: settings.developer_mode,
             adb_port: crate::settings::normalise_adb_port(
                 u16::try_from(settings.adb_port).unwrap_or(0),
@@ -5415,6 +5525,28 @@ impl HostApiClient {
             response::Body::RunAsArmResult(result) => Ok(RunAsArmOutcome::from_wire(result)),
             _ => Err(ClientError::Malformed(
                 "expected how installing the app again went".into(),
+            )),
+        }
+    }
+
+    /// Sets how far one app may elevate to root: "off", "ask" or "remember".
+    /// Returns the level as it stands now and a message. Moving an app to "remember" needs
+    /// the caller to be an administrator, as turning the whole feature on does.
+    pub fn set_app_root(
+        &mut self,
+        package: &str,
+        level: &str,
+    ) -> Result<types::AppRootResult, ClientError> {
+        match self.exchange(
+            request::Body::SetAppRoot(types::SetAppRoot {
+                package_name: package.to_string(),
+                level: level.to_string(),
+            }),
+            self.timeout,
+        )? {
+            response::Body::AppRootResult(result) => Ok(result),
+            _ => Err(ClientError::Malformed(
+                "expected how setting the app's root level went".into(),
             )),
         }
     }

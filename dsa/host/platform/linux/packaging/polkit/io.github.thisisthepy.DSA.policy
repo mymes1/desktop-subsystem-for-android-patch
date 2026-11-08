@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Root elevation for Android apps. When an app the user set to "ask" calls su,
+  the DSA service asks polkit to authorize this action before the command runs as uid 0. The
+  service passes the app's name and package in the authorization details, so the polkit agent
+  names the app that asked. Authorization is not retained by polkit: DSA keeps its own
+  15-minute per-app grace, so each grant is a fresh administrator decision.
+-->
+<policyconfig>
+  <vendor>Desktop Subsystem for Android</vendor>
+  <vendor_url>https://github.com/thisisthepy/desktop-subsystem-for-android</vendor_url>
+
+  <action id="io.github.thisisthepy.DSA.root-elevation">
+    <description>Run an Android app's command as root</description>
+    <message>An Android app is asking to run a command as root. Authentication is required to allow it.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -117,6 +117,10 @@ pub struct Settings {
     /// The host folders shared while file sharing is on, by name, in the order of
     /// [`file_share::FOLDERS`]. All of them by default.
     pub shared_folders: Vec<String>,
+    /// Whether apps may elevate to root through the host's administrator approval. The
+    /// machine's, shared by every user; off by default. It takes effect from the next start
+    /// of Android.
+    pub root_elevation: bool,
 }
 
 impl Default for Settings {
@@ -140,6 +144,7 @@ impl Default for Settings {
             arm_translation: true,
             file_sharing: true,
             shared_folders: file_share::all_folders(),
+            root_elevation: false,
         }
     }
 }
@@ -159,6 +164,10 @@ pub struct MachineSettings {
     pub input_trace: bool,
     #[serde(default)]
     pub resize_trace: bool,
+    /// Whether apps may elevate to root through the host's administrator approval. Off
+    /// unless an administrator turns it on. It takes effect from the next start of Android.
+    #[serde(default)]
+    pub root_elevation: bool,
 }
 
 impl MachineSettings {
@@ -176,6 +185,7 @@ impl Default for MachineSettings {
             image_updates: true,
             input_trace: false,
             resize_trace: false,
+            root_elevation: false,
         }
     }
 }
@@ -371,6 +381,25 @@ pub trait SettingsStore: Send + Sync {
         let _ = (user, package);
         Err("this service keeps no Google apps".into())
     }
+    /// The root elevation level of each of `user`'s apps that has one other than off, by
+    /// package name. Apps the user has not set are off and are not listed.
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        let _ = user;
+        Ok(Vec::new())
+    }
+    /// Records the root elevation level of one of `user`'s apps. Off forgets the app.
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let _ = (user, package, level);
+        Err("this service keeps no app root levels".into())
+    }
+}
+
+/// One app's stored root elevation level: the package and its level ("off", "ask" or
+/// "remember"). Kept per user in `<dir>/users/<user>.root-apps.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RootApp {
+    pub package: String,
+    pub level: String,
 }
 
 /// Finds the render GPU a user chose before they first saved settings, if any.
@@ -458,6 +487,13 @@ impl FileSettings {
             .join(format!("{}.gapps.json", user_file_stem(user)?)))
     }
 
+    fn root_apps_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.root-apps.json", user_file_stem(user)?)))
+    }
+
     fn arm_translation_boot_file(&self, user: &str) -> Result<PathBuf, String> {
         Ok(self.dir.join("users").join(format!(
             "{}.arm-translation-boot.json",
@@ -536,6 +572,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
         resize_trace: machine.resize_trace,
+        root_elevation: machine.root_elevation,
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
         adb_auto_connect: mine.adb_auto_connect,
@@ -556,6 +593,7 @@ fn machine_part(settings: &Settings) -> MachineSettings {
         image_updates: settings.image_updates,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
+        root_elevation: settings.root_elevation,
     }
 }
 
@@ -673,6 +711,35 @@ impl SettingsStore for FileSettings {
             },
         }
     }
+
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        let file = self.root_apps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(read_json::<Vec<RootApp>>(&file)?.unwrap_or_default())
+    }
+
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let file = self.root_apps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut apps = read_json::<Vec<RootApp>>(&file)?.unwrap_or_default();
+        apps.retain(|app| app.package != package);
+        if level != "off" {
+            apps.push(RootApp {
+                package: package.to_string(),
+                level: level.to_string(),
+            });
+        }
+        apps.sort_by(|a, b| a.package.cmp(&b.package));
+        if apps.is_empty() {
+            match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            }
+        } else {
+            write_json(&file, &apps)
+        }
+    }
 }
 
 /// Settings kept in memory, for tests and for a service that keeps no folder.
@@ -684,6 +751,7 @@ pub struct MemorySettings {
     arm_translation_boot: Mutex<std::collections::HashMap<String, Translator>>,
     app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
     gapps: Mutex<std::collections::HashMap<String, GappsPackage>>,
+    root_apps: Mutex<std::collections::HashMap<String, Vec<RootApp>>>,
 }
 
 impl SettingsStore for MemorySettings {
@@ -802,6 +870,30 @@ impl SettingsStore for MemorySettings {
             Some(package) => packages.insert(user.to_string(), package.clone()),
             None => packages.remove(user),
         };
+        Ok(())
+    }
+
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        Ok(self
+            .root_apps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let mut all = self.root_apps.lock().unwrap_or_else(|e| e.into_inner());
+        let apps = all.entry(user.to_string()).or_default();
+        apps.retain(|app| app.package != package);
+        if level != "off" {
+            apps.push(RootApp {
+                package: package.to_string(),
+                level: level.to_string(),
+            });
+        }
+        apps.sort_by(|a, b| a.package.cmp(&b.package));
         Ok(())
     }
 }

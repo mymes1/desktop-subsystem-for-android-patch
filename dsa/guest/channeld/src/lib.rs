@@ -37,6 +37,7 @@ pub mod pressure;
 pub mod reclaim;
 pub mod router;
 pub mod share_mount;
+pub mod su_relay;
 pub mod webdav;
 
 use std::sync::atomic::{AtomicBool, Ordering};

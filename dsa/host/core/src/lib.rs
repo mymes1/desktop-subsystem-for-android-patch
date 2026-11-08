@@ -108,6 +108,7 @@ pub mod power_hints;
 pub mod print;
 pub mod renderer;
 pub mod resize_trace;
+pub mod root_elevation;
 pub mod sensors;
 pub mod session;
 pub mod settings;

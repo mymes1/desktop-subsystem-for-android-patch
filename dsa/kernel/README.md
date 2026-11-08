@@ -60,6 +60,13 @@ in probe order, which changes when the host attaches another disk.
   directly and creates `/dev/binder`, `/dev/hwbinder` and `/dev/vndbinder` for Android's
   early services. An out-of-tree module on the stock WSL kernel cannot: the driver needs
   about a dozen kernel symbols that the WSL kernel does not export to modules.
+- **The su guard, built in.** `patches/dsa-su-guard-lsm.patch` adds a small security module,
+  `security/dsa_su`, so the image's su binary exists only for the Android uids the host has
+  allowed. For any other task a lookup, stat, access, open or exec of a watched su inode
+  returns `ENOENT`. The host's control daemon drives it through
+  `/sys/kernel/security/dsa_su/control`: it names the su inode to watch, the uids that may
+  see it, and whether the guard is on. It is off until the host turns it on, so a guest with
+  root elevation off is as it was. Built in, because the image ships no kernel modules.
 - **What Android's userspace expects:** wake locks, dma-buf heaps for graphics buffers,
   utilisation clamps, uinput and evdev, file-based encryption and fs-verity, erofs and f2fs,
   dm-crypt, quotas, and the eBPF and netfilter pieces netd uses.

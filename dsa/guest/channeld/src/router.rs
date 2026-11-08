@@ -52,7 +52,7 @@ use std::time::Duration;
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
     AndroidFiles, ArmTranslationState, Envelope, FileSharing, GappsState, GuestBoot,
-    LocationRequest, PowerHintKind,
+    LocationRequest, PowerHintKind, RootElevationConfig,
 };
 
 use crate::arm_translation::ArmTranslation;
@@ -244,6 +244,10 @@ pub struct Router {
     gapps: Option<Arc<Gapps>>,
     /// The gamepad devices of the host's controllers.
     gamepads: Option<Arc<GamepadDevices>>,
+    /// Drives the kernel's su guard for the host's root elevation config.
+    root_elevation: Option<RootElevationSwitch>,
+    /// The su relay, which the host's su decisions answer.
+    su_relay: Option<Arc<crate::su_relay::SuRelay>>,
     /// Where the agent's diagnostics go instead of the host's control channel.
     diagnostics: Mutex<Option<Sender<Vec<u8>>>>,
     /// How many times an app's last task has ended, and the wake-up for whoever waits on it.
@@ -260,6 +264,9 @@ type FileSharingSwitch = Box<dyn Fn(&FileSharing) + Send + Sync>;
 
 /// Serves the shared storage to the host on the port, with the token, it names.
 type AndroidFilesSwitch = Box<dyn Fn(&AndroidFiles) + Send + Sync>;
+
+/// Drives the kernel's su guard for a root elevation config: which uids may see su, on or off.
+type RootElevationSwitch = Box<dyn Fn(&RootElevationConfig) + Send + Sync>;
 
 /// Says whether the caller of the current call is the agent. It runs on the caller's thread.
 type AgentCheck = Box<dyn Fn(Peer) -> Result<(), String> + Send + Sync>;
@@ -281,6 +288,8 @@ impl Router {
             arm_translation: None,
             gapps: None,
             gamepads: None,
+            root_elevation: None,
+            su_relay: None,
             diagnostics: Mutex::new(None),
             apps_closed: (Mutex::new(0), Condvar::new()),
             closed_packages: Mutex::new(Vec::new()),
@@ -363,6 +372,18 @@ impl Router {
     /// Hands the host's messages about the Google apps to `gapps`, and its answers to the host.
     pub fn on_gapps(mut self, gapps: Arc<Gapps>) -> Router {
         self.gapps = Some(gapps);
+        self
+    }
+
+    /// Hands the host's root elevation config to `switch`, which drives the kernel's su guard,
+    /// and keeps `relay` so the host's su decisions reach the waiting su calls.
+    pub fn on_root_elevation(
+        mut self,
+        relay: Arc<crate::su_relay::SuRelay>,
+        switch: impl Fn(&RootElevationConfig) + Send + Sync + 'static,
+    ) -> Router {
+        self.su_relay = Some(relay);
+        self.root_elevation = Some(Box::new(switch));
         self
     }
 
@@ -556,6 +577,20 @@ impl Router {
             if let Some(switch) = &self.file_sharing {
                 switch(sharing);
             }
+        }
+        if let Some(Body::RootElevationConfig(config)) = &body {
+            // For the daemon alone: it drives the kernel's su guard.
+            if let Some(switch) = &self.root_elevation {
+                switch(config);
+            }
+            return;
+        }
+        if let Some(Body::SuDecision(decision)) = &body {
+            // For the daemon alone: it answers a waiting su call.
+            if let Some(relay) = &self.su_relay {
+                relay.decide(decision);
+            }
+            return;
         }
         if let Some(body) = &body {
             // For the daemon alone, like developer mode.
