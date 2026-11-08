@@ -1,0 +1,122 @@
+; Desktop Subsystem for Android (DSA)
+; Root elevation: an app the user allowed runs a command as root once the computer's
+; administrator approves it on the host. Three pieces take part, each in a domain of its own:
+;
+; - the su client, /system/bin/su (dsa_su_exec). It runs in the calling app's own domain and
+;   holds no privilege: it connects to the helper's socket, relays its standard streams and
+;   returns the exit code. The kernel's su guard makes the file exist only for the uids of the
+;   apps the user set to ask or remember.
+; - the elevation helper, dsa-channeld --su-relay (dsa_su), as root. init starts it only
+;   while root elevation is on (vendor.dsa.root_elevation, dsa-channeld.rc), and it is the
+;   only domain that may start the approved commands. It takes su calls on
+;   /dev/socket/dsa_su, hands each one to dsa-channeld on /dev/socket/dsa_su_relay, which asks
+;   the host, and runs the command only on the host's approval.
+; - the approved command (dsa_su_root): the shell the helper runs it in. Nothing but the
+;   helper can enter this domain.
+;
+; SELinux cannot tell apart two apps in the same domain, so it lets every user-installed app
+; reach the socket; which uid may go further is the kernel guard's and the helper's to decide
+; (the helper refuses a caller whose uid the host did not allow, before it asks the host).
+; With root elevation off the helper does not run and the socket does not exist, so an app
+; gains nothing from the rules below.
+
+; The su client. A system file of its own type, so the rule that lets apps run it names that
+; file alone. AOSP's own su (su_exec, /system/xbin/su) stays refused to apps, as before.
+(type dsa_su_exec)
+(roletype object_r dsa_su_exec)
+(typeattributeset file_type (dsa_su_exec))
+(typeattributeset system_file_type (dsa_su_exec))
+(typeattributeset exec_type (dsa_su_exec))
+; User-installed apps run it in their own domain: it needs no privilege of its own.
+(allow untrusted_app_all dsa_su_exec (file (read open getattr map execute execute_no_trans)))
+
+; The helper.
+(type dsa_su)
+(roletype object_r dsa_su)
+(typeattributeset domain (dsa_su))
+; init starts it from the daemon's program in its own domain (seclabel in dsa-channeld.rc),
+; as it does the file sharing jobs.
+(allow init dsa_su (process (transition siginh rlimitinh)))
+(dontaudit init dsa_su (process (noatsecure)))
+(allow dsa_su dsa_channeld_exec (file (entrypoint read getattr map execute open)))
+(allow dsa_su init (fd (use)))
+(allow dsa_su kmsg_device (chr_file (write append getattr)))
+(allow dsa_su kmsg_debug_device (chr_file (write append getattr)))
+
+; The apps' socket, /dev/socket/dsa_su (stream), which init makes when it starts the helper:
+; the socket carries the helper's context, and its file the label vendor_file_contexts gives.
+; An app runs at an MLS level of its own (s0:c512,c768); it may write the socket file only
+; when the file is mlstrustedobject and connect to the helper only when the helper is
+; mlstrustedsubject. Neither lets the helper reach anything this file does not allow.
+(type dsa_su_socket)
+(roletype object_r dsa_su_socket)
+(typeattributeset file_type (dsa_su_socket))
+(typeattributeset mlstrustedobject (dsa_su_socket))
+(typeattributeset mlstrustedsubject (dsa_su))
+(allow untrusted_app_all dsa_su_socket (sock_file (write)))
+(allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))
+; The helper listens on the sockets init hands it and talks on the ones it accepts.
+(allow dsa_su self (unix_stream_socket (listen accept read write getattr getopt setopt shutdown)))
+
+; The link to dsa-channeld, /dev/socket/dsa_su_relay (seqpacket, root:system 0660): the
+; helper's su calls go to the host and its decisions come back through the daemon, which holds
+; the control channel. Only the daemon may connect.
+(type dsa_su_relay_socket)
+(roletype object_r dsa_su_relay_socket)
+(typeattributeset file_type (dsa_su_relay_socket))
+(allow dsa_channeld dsa_su_relay_socket (sock_file (write)))
+(allow dsa_channeld dsa_su (unix_stream_socket (connectto)))
+
+; vendor.dsa.root_elevation (vendor_property_contexts): dsa-channeld sets it to 1 when the
+; host's config turns root elevation on for this boot and to 0 when it is off, and
+; dsa-channeld.rc starts or stops the helper to match. Nothing else may set it.
+(type dsa_root_elevation_prop)
+(roletype object_r dsa_root_elevation_prop)
+(typeattributeset property_type (dsa_root_elevation_prop))
+(typeattributeset vendor_property_type (dsa_root_elevation_prop))
+(allow dsa_channeld dsa_root_elevation_prop (property_service (set)))
+(allow dsa_channeld dsa_root_elevation_prop (file (read open getattr map)))
+
+; The kernel's su guard, /sys/kernel/security/dsa_su/control on securityfs, which init mounts
+; (dsa-channeld.rc). The file takes the su paths to hide and the uids that may see them.
+; init writes it once at boot, so su is hidden from every app before any app starts; after
+; that only the helper may change it. The kernel also asks the writer to be root, which keeps
+; it from the daemon, which runs as system.
+(type dsa_su_control_file)
+(roletype object_r dsa_su_control_file)
+(typeattributeset fs_type (dsa_su_control_file))
+(genfscon securityfs "/dsa_su" (u object_r dsa_su_control_file ((s0) (s0))))
+(allow init securityfs (dir (search)))
+(allow init dsa_su_control_file (dir (search)))
+(allow init dsa_su_control_file (file (write open getattr)))
+(allow dsa_su securityfs (dir (search)))
+(allow dsa_su dsa_su_control_file (dir (search)))
+(allow dsa_su dsa_su_control_file (file (write open getattr)))
+; A "path" line makes the kernel look the su binary up as the writer, so the helper walks the
+; folders the watched paths are in. Every domain may already; kept here because the hiding
+; depends on it.
+(allow dsa_su rootfs (dir (search)))
+(allow dsa_su system_file (dir (search)))
+
+; An interactive su gets a terminal the helper opens, and the helper relays it to the client.
+(allow dsa_su ptmx_device (chr_file (read write open getattr ioctl)))
+(allow dsa_su devpts (chr_file (read write open getattr ioctl)))
+
+; The approved command. The helper runs it as /system/bin/sh (shell_exec), which moves it into
+; dsa_su_root; no other domain may transition there, so a root process exists only while an
+; approved command runs. The domain is permissive: a root shell confined to a short list of
+; rules would refuse the very work (reading every app's data, a backup app's restore) the user
+; approved, and SELinux stays enforcing for every other domain.
+(type dsa_su_root)
+(roletype object_r dsa_su_root)
+(typeattributeset domain (dsa_su_root))
+(typepermissive dsa_su_root)
+(typetransition dsa_su shell_exec process dsa_su_root)
+(allow dsa_su shell_exec (file (read open getattr map execute)))
+(allow dsa_su dsa_su_root (process (transition)))
+(allow dsa_su_root shell_exec (file (entrypoint read open getattr map execute)))
+; The kernel clears the dynamic loader's environment across the transition (AT_SECURE), as it
+; does for any domain change; the refusal of the exemption is expected and not logged.
+(dontaudit dsa_su dsa_su_root (process (noatsecure)))
+; The helper ends a command whose client went away or whose call timed out.
+(allow dsa_su dsa_su_root (process (signal sigkill)))
