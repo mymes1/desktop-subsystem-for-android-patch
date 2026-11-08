@@ -130,7 +130,7 @@ struct Rect {
 impl Rect {
     fn parse(text: &str) -> Option<Rect> {
         let numbers: Vec<i32> = text
-            .split(|c: char| c == '[' || c == ']' || c == ',')
+            .split(['[', ']', ','])
             .filter(|part| !part.is_empty())
             .map(|part| part.parse().ok())
             .collect::<Option<Vec<i32>>>()?;
