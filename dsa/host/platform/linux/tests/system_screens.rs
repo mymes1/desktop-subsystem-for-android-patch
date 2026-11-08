@@ -8,6 +8,11 @@
 //! tall, and that the rows of a Settings list are grouped in rounded cards: the first row of a
 //! group has rounded corners, and a row joined to the one above it square ones.
 //!
+//! It also checks that `screencap` shows what the GPU drew: the guest driver copies a
+//! capture's drawing back from the host for the CPU that reads it, so no capture may come back
+//! blank. When one does, the screen is still read from screenrecord so the checks above run,
+//! and the test fails.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test,
 //! `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when the folder carries none, and
@@ -18,6 +23,7 @@
 
 mod boot_check;
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -226,6 +232,23 @@ fn empty_picture(pixels: &[u8]) -> bool {
     pixels.iter().all(|&byte| byte == 0)
 }
 
+/// Whether an RGBA picture is one colour from edge to edge: all zeros when the GPU's drawing
+/// never reached the capture's memory, and never a screen with Settings on it.
+fn blank_picture(pixels: &[u8]) -> bool {
+    match pixels.get(..4) {
+        Some(first) => pixels.chunks_exact(4).all(|pixel| pixel == first),
+        None => true,
+    }
+}
+
+/// Why the captures in `names` fail the check.
+fn blank_screencaps_failure(names: &[String]) -> String {
+    format!(
+        "screencap gave a blank picture of {}: the GPU's drawing did not come back to the memory screencap reads",
+        names.join(", ")
+    )
+}
+
 /// The newest whole frame of `screenrecord --output-format=raw-frames`, which writes each
 /// frame as `width` x `height` RGB pixels and nothing between them, as opaque RGBA. `None`
 /// when not even one whole frame came.
@@ -417,6 +440,8 @@ fn decode_png(png: &[u8]) -> Result<(usize, usize, usize, Vec<u8>), String> {
 struct Adb {
     program: PathBuf,
     serial: String,
+    /// The captures screencap gave blank, by name.
+    blank_screencaps: RefCell<Vec<String>>,
 }
 
 impl Adb {
@@ -487,16 +512,21 @@ impl Adb {
 
     /// The screen, kept in `dir` as `name.png`, as `(width, RGBA pixels)`.
     ///
-    /// `screencap` maps SurfaceFlinger's capture for the CPU, and in the guest a buffer the
-    /// GPU drew can map as nothing but zeros. Then the screen is read again from a
-    /// `screenrecord` frame, which the GPU reads back itself (`glReadPixels`), and that
-    /// picture is kept as `name-record.png`. screenrecord runs for [SCREENRECORD_LIMIT] at
-    /// most, and stops once it has sent [SCREENRECORD_FRAMES] frames: a screenrecord that sends
-    /// nothing held the whole check until the job's timeout.
+    /// `screencap` maps SurfaceFlinger's capture for the CPU, and the guest driver copies
+    /// the GPU's drawing into it from the host. A capture that comes back blank is noted in
+    /// [Adb::blank_screencaps], which fails the test. Only then, and only so the other checks
+    /// still run, the screen is read again from a `screenrecord` frame, which the GPU reads
+    /// back itself (`glReadPixels`), and that picture is kept as `name-record.png`.
+    /// screenrecord runs for [SCREENRECORD_LIMIT] at most, and stops once it has sent
+    /// [SCREENRECORD_FRAMES] frames: a screenrecord that sends nothing held the whole check
+    /// until the job's timeout.
     fn screen(&self, dir: &Path, name: &str) -> Result<(usize, Vec<u8>), String> {
         let png = self.run(&["exec-out", "screencap", "-p"])?;
         let _ = std::fs::write(dir.join(format!("{name}.png")), &png);
         let (width, height, _, pixels) = decode_png(&png)?;
+        if blank_picture(&pixels) {
+            self.blank_screencaps.borrow_mut().push(name.to_string());
+        }
         if !empty_picture(&pixels) {
             return Ok((width, pixels));
         }
@@ -736,6 +766,20 @@ fn fr34_an_empty_capture_is_read_again_from_the_newest_whole_screenrecord_frame(
 }
 
 #[test]
+fn pr3_a_screencap_of_one_colour_is_blank_and_fails_the_check() {
+    // What screencap gave before the driver copied the GPU's drawing back: all zeros.
+    assert!(blank_picture(&[0; 16]));
+    // One opaque colour over the whole screen is no drawing either.
+    assert!(blank_picture(&[0, 0, 0, 255, 0, 0, 0, 255]));
+    assert!(blank_picture(&[]));
+    // A drawn screen has more than one colour.
+    assert!(!blank_picture(&[0, 0, 0, 255, 250, 250, 250, 255]));
+    let why = blank_screencaps_failure(&["home-tall".into(), "display".into()]);
+    assert!(why.contains("of home-tall, display:"), "{why}");
+    assert!(why.contains("did not come back"), "{why}");
+}
+
+#[test]
 fn fr34_a_screenrecord_that_sends_nothing_is_stopped_at_its_limit_with_a_reason() {
     // A command that never ends and never writes stands in for a screenrecord that hangs.
     let started = Instant::now();
@@ -881,6 +925,7 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
     let adb = Adb {
         program: adb_program,
         serial: format!("127.0.0.1:{port}"),
+        blank_screencaps: RefCell::default(),
     };
     if let Err(why) = adb.connect(Duration::from_secs(120)) {
         fail(
@@ -992,6 +1037,12 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
             )),
             Err(why) => failures.push(why),
         }
+    }
+
+    // screencap reads what the GPU drew, with no screenrecord in between.
+    let blank = adb.blank_screencaps.borrow().clone();
+    if !blank.is_empty() {
+        failures.push(blank_screencaps_failure(&blank));
     }
 
     if !failures.is_empty() {
