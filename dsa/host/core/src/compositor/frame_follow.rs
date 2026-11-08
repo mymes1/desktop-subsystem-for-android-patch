@@ -207,6 +207,9 @@ mod tests {
                     self.propose(kept);
                 }
                 Arrival::Wait => panic!("no claim is open between steps"),
+                // A frame of the size before a scale change: out of sight, and the window
+                // keeps the size it took.
+                Arrival::Stale => {}
             }
             self.check();
         }
