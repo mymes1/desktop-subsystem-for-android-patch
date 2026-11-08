@@ -4,7 +4,9 @@
 # dsa/kernel/android-arm64.config.
 #
 # The build takes tens of minutes, so it runs when the kernel inputs change, by hand, and
-# once a week to notice a newer WSL kernel tag.
+# once a week to notice a newer WSL kernel tag. A kernel built from the same inputs before
+# (the same dsa/kernel/, merged configuration and build tools) comes from the cache instead
+# (.github/actions/guest-kernel); the configuration is still merged and tested every time.
 
 name: Kernel test
 
@@ -15,6 +17,7 @@ on:
     paths:
       - "dsa/kernel/**"
       - ".github/workflows/test-kernel.yml"
+      - ".github/actions/guest-kernel/**"
   workflow_dispatch:
     inputs:
       tag:
@@ -54,35 +57,40 @@ jobs:
             runner: ubuntu-24.04-arm
             image: Image
             artifact: kernel-arm64
+    permissions:
+      contents: read
+      # Deletes the cached kernel a new one replaces.
+      actions: write
     env:
-      DSA_KERNEL_ARCH: ${{ matrix.arch }}
       DSA_KERNEL_OUT: ${{ github.workspace }}/.scratch/kernel-out-${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install the kernel build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential flex bison bc dwarves libssl-dev libelf-dev cpio file
 
       - name: Use the requested tag
         if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
         run: echo "${{ inputs.tag }}" > dsa/kernel/wsl-kernel.tag
 
-      - name: Test the kernel configuration
-        run: python3 dsa/kernel/test_android_config.py
+      - name: Build the kernel, or take the one built from the same inputs
+        uses: ./.github/actions/guest-kernel
+        with:
+          arch: ${{ matrix.arch }}
+          out: ${{ env.DSA_KERNEL_OUT }}
+          check-config: "true"
+          save: ${{ github.ref == 'refs/heads/develop' }}
+          token: ${{ github.token }}
 
-      - name: Configure and check the fragments
-        run: dsa/kernel/build.sh --config-only
-
-      - name: Test the merged configuration
+      # On one runner only: the tag is the same for both kernels.
+      - name: Check for a newer WSL kernel tag
+        if: matrix.arch == 'x86_64'
         run: |
-          DSA_KERNEL_MERGED_CONFIG="$(ls "$DSA_KERNEL_OUT"/config-*)" \
-            python3 dsa/kernel/test_android_config.py
-
-      - name: Build
-        run: dsa/kernel/build.sh
+          pinned="$(tr -d '[:space:]' < dsa/kernel/wsl-kernel.tag)"
+          newest="$(git ls-remote --tags https://github.com/microsoft/WSL2-Linux-Kernel 'linux-msft-wsl-*' \
+            | sed -E 's#.*refs/tags/##; s#\^\{\}$##' | sort -uV | tail -1)"
+          echo "pinned: $pinned"
+          echo "newest: $newest"
+          if [[ "$pinned" != "$newest" ]]; then
+            echo "::warning::A newer WSL kernel tag exists: $newest (pinned: $pinned). Run this workflow with tag=$newest, then update dsa/kernel/wsl-kernel.tag."
+          fi
 
       - name: Check the kernel image
         run: |
@@ -102,20 +110,3 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ env.DSA_KERNEL_OUT }}/
           if-no-files-found: error
-
-  newer-tag:
-    name: Check for a newer WSL kernel tag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compare the pinned tag with the newest one
-        run: |
-          pinned="$(tr -d '[:space:]' < dsa/kernel/wsl-kernel.tag)"
-          newest="$(git ls-remote --tags https://github.com/microsoft/WSL2-Linux-Kernel 'linux-msft-wsl-*' \
-            | sed -E 's#.*refs/tags/##; s#\^\{\}$##' | sort -uV | tail -1)"
-          echo "pinned: $pinned"
-          echo "newest: $newest"
-          if [[ "$pinned" != "$newest" ]]; then
-            echo "::warning::A newer WSL kernel tag exists: $newest (pinned: $pinned). Run this workflow with tag=$newest, then update dsa/kernel/wsl-kernel.tag."
-          fi

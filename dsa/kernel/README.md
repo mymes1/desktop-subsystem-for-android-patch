@@ -136,3 +136,10 @@ CI runs the full build for both architectures in "Kernel test"
 (`.github/workflows/test-kernel.yml`, the arm64 one on a native arm64 runner) when these
 files change, by hand, and weekly. The weekly run warns when a newer WSL kernel tag
 exists. To try one, run the workflow with its `tag` input, then update `wsl-kernel.tag`.
+
+CI builds a kernel once per input. A kernel built from the same files here, the same
+merged configuration and the same build tools is kept as an Actions cache, and the next
+run that needs it, a "Kernel test" or an "Image release", takes it from there
+(`.github/actions/guest-kernel`). The configuration is still merged and checked on every
+run, and the source checked out, so the release bundles the source of exactly the kernel
+it ships.
