@@ -18,11 +18,16 @@ if [[ -e "$source" && ! -d "$source/.git" ]]; then
     exit 1
 fi
 
+# A new checkout fetches the pinned commit alone: no build reads the history, and all of it
+# took a minute or more to download on every CI run.
+depth=()
 if [[ ! -d "$source/.git" ]]; then
-    git clone "$remote" "$source"
+    git init -q "$source"
+    git -C "$source" remote add origin "$remote"
+    depth=(--depth 1)
 fi
 
-git -C "$source" fetch --no-tags origin "$revision"
+git -C "$source" fetch ${depth[@]+"${depth[@]}"} --no-tags origin "$revision"
 git -C "$source" checkout --detach "$revision"
 git -C "$source" reset --hard "$revision"
 git -C "$source" clean -fdx
@@ -121,10 +126,13 @@ git -C "$frameworks_native_dir" sparse-checkout set libs/nativewindow/include li
 # Shallow dependencies required to build the host gfxstream renderer:
 aemu_dir="$scratch_dir/aemu"
 aemu_revision="3ff20aed307f55bc4ae865373d07bf76c9efa43c"
+aemu_depth=()
 if [[ ! -d "$aemu_dir/.git" ]]; then
-    git clone https://android.googlesource.com/platform/hardware/google/aemu "$aemu_dir"
+    git init -q "$aemu_dir"
+    git -C "$aemu_dir" remote add origin https://android.googlesource.com/platform/hardware/google/aemu
+    aemu_depth=(--depth 1)
 fi
-git -C "$aemu_dir" fetch --no-tags origin "$aemu_revision"
+git -C "$aemu_dir" fetch ${aemu_depth[@]+"${aemu_depth[@]}"} --no-tags origin "$aemu_revision"
 git -C "$aemu_dir" checkout --detach "$aemu_revision"
 git -C "$aemu_dir" reset --hard "$aemu_revision"
 
