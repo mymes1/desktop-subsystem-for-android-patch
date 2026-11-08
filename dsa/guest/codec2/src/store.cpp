@@ -4,7 +4,9 @@
 #include "store.h"
 
 #include <chrono>
+#include <cstring>
 
+#include <C2Config.h>
 #include <codec2/aidl/Configurable.h>
 #include <codec2/aidl/ParamTypes.h>
 
@@ -35,28 +37,88 @@ constexpr int32_t kRank = 0x80;
 
 ndk::ScopedAStatus status(c2_status_t error) { return ndk::ScopedAStatus::fromServiceSpecificError(error); }
 
-// The store's own parameters: none the framework needs.
-struct StoreIntf : public ConfigurableC2Intf {
-    StoreIntf() : ConfigurableC2Intf("dsa.codec2.store", 0) {}
-    c2_status_t query(const std::vector<C2Param::Index>& indices, c2_blocking_t,
-                      std::vector<std::unique_ptr<C2Param>>* const params) const override {
-        params->clear();
-        return indices.empty() ? C2_OK : C2_BAD_INDEX;
+// The store's own parameters: how the framework allocates the linear memory of codec buffers.
+//
+// The framework makes this store, the device's default one, the preferred store of every
+// process that uses a codec, and asks it how to allocate linear memory (the input of every
+// decoder, software ones included, and the output of audio decoders): which DMA-BUF heap, or
+// which ion heaps, for a usage. Once the store says it knows the fields, each allocation asks
+// it with config, and a refused config fails the allocation. A store that answered the
+// question and refused the config failed every MediaCodec.start() with NO_MEMORY, in every
+// app. The answers are the platform's own store's: the system heap, no flags, no alignment.
+class StoreParams : public C2InterfaceHelper {
+   public:
+    explicit StoreParams(const std::shared_ptr<C2ReflectorHelper>& reflector) : C2InterfaceHelper(reflector) {
+        setDerivedInstance(this);
+
+        addParameter(DefineParam(mIonUsage, "ion-usage")
+                         .withDefault(new C2StoreIonUsageInfo())
+                         .withFields({
+                             C2F(mIonUsage, usage).flags({C2MemoryUsage::CPU_READ | C2MemoryUsage::CPU_WRITE}),
+                             C2F(mIonUsage, capacity).inRange(0, UINT32_MAX, 1024),
+                             C2F(mIonUsage, heapMask).any(),
+                             C2F(mIonUsage, allocFlags).flags({}),
+                             C2F(mIonUsage, minAlignment).equalTo(0),
+                         })
+                         .withSetter(SetIonUsage)
+                         .build());
+
+        addParameter(DefineParam(mDmaBufUsage, "dmabuf-usage")
+                         .withDefault(C2StoreDmaBufUsageInfo::AllocShared(0))
+                         .withFields({
+                             C2F(mDmaBufUsage, m.usage).flags({C2MemoryUsage::CPU_READ | C2MemoryUsage::CPU_WRITE}),
+                             C2F(mDmaBufUsage, m.capacity).inRange(0, UINT32_MAX, 1024),
+                             C2F(mDmaBufUsage, m.allocFlags).flags({}),
+                             C2F(mDmaBufUsage, m.heapName).any(),
+                         })
+                         .withSetter(SetDmaBufUsage)
+                         .build());
     }
-    c2_status_t config(const std::vector<C2Param*>& params, c2_blocking_t,
-                       std::vector<std::unique_ptr<C2SettingResult>>* const) override {
-        return params.empty() ? C2_OK : C2_BAD_INDEX;
+
+    // Any ion heap, with no flags. The guest's kernel has no ion, so the framework takes the
+    // DMA-BUF heaps; the answer is here for a framework that asks anyway.
+    static C2R SetIonUsage(bool, C2P<C2StoreIonUsageInfo>& me) {
+        me.set().heapMask = ~0u;
+        me.set().allocFlags = 0;
+        me.set().minAlignment = 0;
+        return C2R::Ok();
+    }
+
+    // The system heap (/dev/dma_heap/system), the only DMA-BUF heap the guest's kernel has.
+    static C2R SetDmaBufUsage(bool, C2P<C2StoreDmaBufUsageInfo>& me) {
+        strncpy(me.set().m.heapName, kSystemHeap, me.v.flexCount());
+        me.set().m.allocFlags = 0;
+        return C2R::Ok();
+    }
+
+   private:
+    static constexpr const char* kSystemHeap = "system";
+
+    std::shared_ptr<C2StoreIonUsageInfo> mIonUsage;
+    std::shared_ptr<C2StoreDmaBufUsageInfo> mDmaBufUsage;
+};
+
+// The store's parameters as the HAL's configurable serves them.
+struct StoreIntf : public ConfigurableC2Intf {
+    explicit StoreIntf(const std::shared_ptr<C2ReflectorHelper>& reflector)
+        : ConfigurableC2Intf("dsa.codec2.store", 0), mParams(std::make_shared<StoreParams>(reflector)) {}
+    c2_status_t query(const std::vector<C2Param::Index>& indices, c2_blocking_t mayBlock,
+                      std::vector<std::unique_ptr<C2Param>>* const params) const override {
+        return mParams->query({}, indices, mayBlock, params);
+    }
+    c2_status_t config(const std::vector<C2Param*>& params, c2_blocking_t mayBlock,
+                       std::vector<std::unique_ptr<C2SettingResult>>* const failures) override {
+        return mParams->config(params, mayBlock, failures);
     }
     c2_status_t querySupportedParams(std::vector<std::shared_ptr<C2ParamDescriptor>>* const params) const override {
-        params->clear();
-        return C2_OK;
+        return mParams->querySupportedParams(params);
     }
-    c2_status_t querySupportedValues(std::vector<C2FieldSupportedValuesQuery>& fields, c2_blocking_t) const override {
-        for (C2FieldSupportedValuesQuery& query : fields) {
-            query.status = C2_BAD_INDEX;
-        }
-        return C2_OK;
+    c2_status_t querySupportedValues(std::vector<C2FieldSupportedValuesQuery>& fields,
+                                     c2_blocking_t mayBlock) const override {
+        return mParams->querySupportedValues(fields, mayBlock);
     }
+
+    std::shared_ptr<StoreParams> mParams;
 };
 
 struct NoCache : public c2aidl::utils::ParameterCache {
@@ -67,7 +129,7 @@ struct NoCache : public c2aidl::utils::ParameterCache {
 
 Store::Store() : mReflector(std::make_shared<C2ReflectorHelper>()) {
     auto configurable =
-        ndk::SharedRefBase::make<c2aidl::utils::CachedConfigurable>(std::make_unique<StoreIntf>());
+        ndk::SharedRefBase::make<c2aidl::utils::CachedConfigurable>(std::make_unique<StoreIntf>(mReflector));
     configurable->init(std::make_shared<NoCache>());
     mConfigurable = configurable;
 }

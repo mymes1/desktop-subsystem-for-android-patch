@@ -43,4 +43,6 @@ falls back to the event queue.
 
 `make-image.py --sensors <out>/dsa-sensors` installs it with its init script and VINTF
 fragment, in the vendor sensors domain (`hal_sensors_default`), in place of Cuttlefish's
-sensors HAL.
+sensors HAL. `sepolicy/sensors.cil` lets it reach the host's sensor port and use the event
+queue and the wake lock queue the framework's sensor service hands it, which are memfds of
+system_server's; `check-image.py` checks both rules.

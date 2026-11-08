@@ -1920,3 +1920,39 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 - 두 번째 태스크를 열 때 앱 창 프로그램이 끝난 정확한 길. 이번 수정 뒤의 로그가 그 까닭을 적는다.
 - 리셋 자체의 원인(Intel 드라이버의 엔진 리셋을 부른 게스트 명령). 렌더러 로그는 어느 게스트 프로세스의 제출인지 적지 않는다.
 - 위의 모든 수정은 이 PC에서 빌드하거나 시험하지 않았다. `dsa-host-core`와 `dsa-host-windows`의 clippy와 설치 화면의 `dotnet build`만 `scripts/compile-check.ps1`로 확인했고, 시험과 이미지, 렌더러, 에이전트 빌드는 develop의 CI가 처음 확인한다.
+
+## R25. 앱의 소리와 MediaCodec이 안 되던 까닭: memfd의 MLS 제약과 코덱 저장소의 설정 거절 (PR-4, FR-26, 이슈 #387)
+
+### 확인한 자료
+- 이슈 #387: Android 17 이미지 `17.0.0-16373615-9`, 게스트 커널 6.18.54.1-dsa(KernelSU를 넣은 커널과 원래 커널 모두). 첨부한 `dsa-wm.log`(1,467줄)는 열 번 남짓 연 오디오 스트림이 모두 `0 frames received`로 닫혔음을 보인다.
+- 소유자 PC의 0.1.9 묶음(`.scratch/rel-0.1.9/diag.zip`)의 `host/dsa-wm.log`, `android/logcat.txt`, `host/android-console.log`. 같은 증상(`audio stream primary closed (the guest closed it): 0 frames received`)과, 부팅마다 남는 `scontext=u:r:hal_sensors_default:s0 tcontext=u:object_r:system_server_tmpfs:s0 tclass=file` 거절이 있다.
+- Android 16 입력(`aosp_cf_x86_64_only_phone` 15581820)의 `plat_sepolicy.cil`, `vendor_sepolicy.cil`, `ashmem_compat_memfd_context.txt`.
+- AOSP 소스(gitiles, 2026-11-08): `system/sepolicy`의 `android16-release`, `android16-qpr2-release`, `android17-release`(`private/mls`, `te_macros`, `app.te`, `audioserver.te`, `mediaserver.te`, `mediaextractor.te`, `system_server.te`, `hal_sensors.te`, `hal_codec2.te`), `system/core`의 `libcutils/ashmem-dev.cpp`(세 갈래), `frameworks/av` `android16-qpr2-release`의 `C2Store.cpp`, `C2DmaBufAllocator.cpp`, `CCodecBufferChannel.cpp`, `CCodec.cpp`, `hal/client/client.cpp`, `hal/aidl/Configurable.cpp`, `module/codecserviceregistrant/CodecServiceRegistrant.cpp`.
+
+### 방법
+- 정책은 컴파일한 CIL을 읽어 규칙과 MLS 제약을 대조했다. 코덱은 이슈의 로그 줄을 소스에서 찾아 거꾸로 따라갔다.
+- 이 PC에서는 아무것도 실행하지 않았다. 이미지도 정책도 빌드하지 않았다.
+
+### 찾은 것
+- **소리**: DSA의 커널에는 ashmem이 없어 이미지가 `sys.use_memfd=true`로 공유 메모리를 memfd로 만든다. memfd는 만든 도메인의 tmpfs 타입을 받는다(audioserver가 만든 트랙의 컨트롤 블록은 `audioserver_tmpfs`, 수준 `s0`). 앱은 자기 MLS 수준(`s0:c149,c256,c512,c768` 같은 범주)에서 돈다. `private/mls`는 수준이 낮은 파일에 쓰기를 `l1 eq l2`이거나 대상 타입이 `mlstrustedobject`일 때만 허락한다. binder는 옮기는 fd마다 받는 쪽의 read와 write를 확인하므로, 컨트롤 블록을 실은 응답 전체가 거절되고 `AudioTrack`은 "Could not get control block"(-20, NO_INIT)으로 실패했다. 플랫폼 정책은 `appdomain audioserver_tmpfs`를 이미 허락하지만 제약은 allow 규칙으로 풀리지 않는다. 신고자의 KernelSU 규칙이 듣지 않은 까닭이다. `system_server_tmpfs`는 같은 까닭으로 `mlstrustedobject`이고, `audioserver_tmpfs`, `mediaserver_tmpfs`, `mediaextractor_tmpfs`, `cameraserver_tmpfs`는 아니다. 휴대전화는 `/dev/ashmem`(`ashmem_device`, `mlstrustedobject`)을 쓰므로 이 길을 지나지 않는다.
+- **타입 규칙**: Android 17은 memfd의 공유를 `memfd_file` 클래스 규칙으로만 준다(`appdomain audioserver:memfd_file`, `mediaserver mediaextractor:memfd_file`, `system_server audioserver:memfd_file`, `audioserver appdomain:memfd_file` 들). 이 클래스는 커널과 정책의 `memfd_class` 정책 능력이 함께 있어야 쓰이고, Android 17의 `policy_capabilities`에는 그것이 없다. 신고자의 거절도 `file` 클래스의 `audioserver_tmpfs`다. 그래서 같은 짝의 `file` 규칙이 tmpfs 타입에 없다. 신고자의 `mediaserver mediaextractor_tmpfs` 거절이 그 하나다.
+- **libcutils**: Android 16 QPR2의 정책에는 모든 도메인이 쓸 수 있는 `ashmem_compat_memfd` 타입과 `tmpfs_domain`의 `relabelfrom`이 있지만, `android16-qpr2-release`와 `android17-release`의 `ashmem-dev.cpp`는 memfd의 레이블을 바꾸지 않는다. Android 17의 libcutils는 `sys.use_memfd`가 없으면 `memfd_class` 능력, vendor API 202604 이상, 앱의 target SDK 37 이상일 때만 memfd를 쓴다. DSA는 그 속성을 켜므로 모든 프로세스가 memfd를 쓴다.
+- **센서**: 프레임워크의 센서 서비스(system_server)가 이벤트 큐와 웨이크 락 큐를 memfd로 만들어 `ISensors.initialize`로 넘긴다. Android 16과 17의 정책에는 `hal_sensors`가 system_server의 memfd를 쓰는 규칙이 없다(17은 앱과 `hal_allocator`의 `memfd_file`만 준다). 그래서 부팅마다 그 호출이 거절되었고 DSA의 센서 HAL은 이벤트를 쓸 큐를 받지 못했다. 둘 다 `s0`이므로 MLS 제약은 없다.
+- **MediaCodec**: `CCodec::allocate`는 `IComponentStore/default`가 있으면 그것을 앱 프로세스의 선호 저장소로 정한다(`media.swcodec`의 `CodecServiceRegistrant`도 같다). Cuttlefish에는 그런 저장소가 없었고, DSA의 `dsa-codec2`가 처음으로 그 이름을 쓴다. `C2DmaBufAllocator`는 선호 저장소에 `C2StoreDmaBufUsageInfo`의 지원 값을 묻고, 답이 `C2_OK`이면 할당마다 그 매개변수를 `config`하는 매퍼를 단다. 그 `config`가 실패하면 할당이 실패한다(`newLinearAllocation`의 `if (ret && ret != C2_NO_INIT) return ret`). `dsa-codec2`의 저장소는 `querySupportedValues`에 필드마다 `C2_BAD_INDEX`를 적고 전체로는 `C2_OK`를 돌려주었으며(플랫폼의 `C2InterfaceHelper`도 그렇게 답한다), `config`는 모두 `C2_BAD_INDEX`로 거절했다. 그래서 입력 기본 풀의 `fetchLinearBlock`이 모두 실패했고 `start: cannot allocate memory at all`, NO_MEMORY가 났다. SELinux와 상관이 없어 permissive에서도 같았고, 소프트웨어 디코더도 같은 앱 쪽 할당을 쓰므로 함께 실패했다. 플랫폼의 저장소(`C2PlatformComponentStore`)는 `ion-usage`와 `dmabuf-usage`를 선언하고 답한다.
+- **코덱의 memfd**: `mediaswcodec`과 `mediacodec`(dsa-codec2)에는 tmpfs 타입이 없어 그 memfd(버퍼 풀 연결의 큐)가 plain `tmpfs`였다. 앱은 그것을 매핑할 규칙도 없고, MLS 수준 때문에 쓸 수도 없다. Android 17은 `appdomain hal_codec2:memfd_file`을 준다.
+
+### 결정
+- `memory.cil`: `audioserver_tmpfs`, `mediaextractor_tmpfs`, `mediaserver_tmpfs`, `cameraserver_tmpfs`를 `mlstrustedobject`에 넣고, Android 17의 `memfd_file` 규칙과 같은 짝을 tmpfs 타입의 `file` 규칙으로 준다. 코덱 서비스의 memfd에는 `dsa_codec2_tmpfs`를 주고(`mediaswcodec`, `mediacodec`의 타입 전이), `hal_codec2_client`가 쓰게 하며 `mlstrustedobject`로 둔다.
+- `sensors.cil`: `hal_sensors_server`가 system_server와 앱의 memfd를 쓰게 한다.
+- `dsa-codec2`: 저장소가 플랫폼 저장소와 같은 `ion-usage`, `dmabuf-usage`를 선언하고 답한다(`system` 힙, 플래그 없음). 게스트 커널의 DMA-BUF 힙은 `system` 하나다.
+- 시험: `check-image.py`가 공유 규칙과 `mlstrustedobject` 타입을 확인한다(`make-image.py`의 `MEMFD_SHARING`, `MEMFD_SHARING_SENSORS`). 이미지 워크플로는 보통 앱인 미디어 프로브(`dsa/guest/media-probe/`)를 SDK 도구로 빌드하고, 부팅한 이미지에서 SELinux enforcing으로 실행한다(`dsa/host/platform/linux/tests/media.rs`). 스트리밍 트랙과 정적 트랙이 1초 음을 받아 재생해야 하고, 1초의 H.264와 AAC를 인코딩해 게스트가 나열한 모든 디코더로 디코딩해야 하며, 게스트 로그에 미디어 서비스의 공유 메모리 거절이 없어야 한다.
+
+### 대가와 남은 것
+- `mlstrustedobject`는 그 타입의 파일에 대해 앱 사이의 MLS 분리를 푼다. 이 타입들의 파일은 서비스가 만들어 binder로 건넨 memfd뿐이고, 경로로 열 수 없으며, 받을 수 있는 쪽은 여전히 타입 규칙이 정한다. `system_server_tmpfs`와 같은 처지다.
+- 전원 HAL(ADPF)과 ContextHub HAL이 앱에 주는 memfd도 Android 17은 `memfd_file`로 허락한다. DSA의 그 HAL들에는 tmpfs 타입이 없어 이번에 다루지 않았다. 앱이 그 큐를 받지 못하면 그 기능만 binder로 물러나는지 확인해야 한다.
+- 시험은 게스트가 재생한 위치까지 확인하고, 호스트가 프레임을 받았는지는 확인하지 않는다. 호스트의 오디오 포트는 스트림이 닫힐 때에만 받은 프레임 수를 적는다.
+
+### 확인하지 못한 것
+- 이 PC에서는 이미지, 정책(secilc), dsa-codec2, 미디어 프로브를 빌드하지 않았다. Android 17 입력의 `plat_sepolicy.cil`은 받아 두지 않아, 새 규칙이 Android 17의 neverallow에 걸리지 않는지는 Android 16 정책으로만 확인했다. develop의 이미지 워크플로가 처음 확인한다.
+- `media.swcodec`의 `querySupportedValues -- transaction failed`와 binder의 `-22`(없는 핸들로의 호출)는 소스로 원인을 찾지 못했다. 앱 쪽 실패와는 따로 일어난다(그 실패가 있으면 media.swcodec은 매퍼 없이 기본 힙을 쓴다). 수정한 이미지의 로그로 다시 본다.
+- 신고자의 이미지(KernelSU, LiteGapps)에서의 결과와, 호스트의 GPU 디코더(`c2.dsa.avc.decoder`)로의 디코딩. CI의 호스트는 GPU 디코더를 내놓지 않을 수 있다.

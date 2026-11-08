@@ -2189,10 +2189,10 @@ class ImageLayoutTests(unittest.TestCase):
 class GuestMemoryTests(unittest.TestCase):
     """The image keeps the guest's memory small, so the host gets back what it does not use."""
 
-    def _modify(self, root, channeld=False, extra=None):
+    def _modify(self, root, channeld=False, extra=None, policy="(type init)\n"):
         source = root / "target-files.zip"
         with zipfile.ZipFile(source, "w") as archive:
-            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", policy)
             archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
             for name, data in (extra or {}).items():
                 archive.writestr(name, data)
@@ -2203,6 +2203,35 @@ class GuestMemoryTests(unittest.TestCase):
         modified = root / "modified.zip"
         make_image.modify(source, modified, channeld=daemon)
         return zipfile.ZipFile(modified)
+
+    # The rules on the memfd types the published Android 16 and 17 policies already carry.
+    PLATFORM_MEMFD_RULES = (
+        "(type init)\n"
+        "(typeattributeset mlstrustedobject (ashmem_device system_server_tmpfs traced_tmpfs))\n"
+        "(allow appdomain audioserver_tmpfs (file (read write getattr map)))\n"
+        "(allow appdomain system_server_tmpfs (file (read write getattr map)))\n"
+        "(allow hal_audio_server system_server_tmpfs (file (read getattr map)))\n"
+        "(allow mediaextractor mediaserver_tmpfs (file (read write getattr map)))\n"
+    )
+
+    def test_pr4_the_platform_policy_alone_refuses_apps_the_audio_control_block(self):
+        problems = make_image.memfd_sharing_problems(self.PLATFORM_MEMFD_RULES)
+        self.assertTrue(any(p.startswith("audioserver_tmpfs is not mlstrustedobject") for p in problems), problems)
+        self.assertIn("the SELinux policy does not let mediaserver getattr map read write the memfds labelled "
+                      "mediaextractor_tmpfs, so the binder calls that carry them fail", problems)
+
+    def test_pr4_the_image_lets_apps_and_the_media_services_share_their_memfds(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), policy=self.PLATFORM_MEMFD_RULES) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        self.assertEqual(make_image.memfd_sharing_problems(policy), [])
+
+    def test_fr26_the_sensors_hal_may_use_the_event_queue_system_server_hands_it(self):
+        sensors = make_image.MEMFD_SHARING_SENSORS
+        refused = make_image.memfd_sharing_problems(self.PLATFORM_MEMFD_RULES, sharing=sensors, to_apps=[])
+        self.assertIn("the SELinux policy does not let hal_sensors_server getattr map read write the memfds "
+                      "labelled system_server_tmpfs, so the binder calls that carry them fail", refused)
+        policy = self.PLATFORM_MEMFD_RULES + make_image.SENSORS_POLICY.read_text()
+        self.assertEqual(make_image.memfd_sharing_problems(policy, sharing=sensors, to_apps=[]), [])
 
     def test_nfr1_the_guest_swaps_to_zram_of_half_its_memory(self):
         fstab = (Path(make_image.__file__).with_name("fstab.dsa")).read_text()
