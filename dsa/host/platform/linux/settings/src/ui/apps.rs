@@ -96,7 +96,18 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
             }
             for app in shown {
                 let window = windows.borrow().get(&app.package).cloned();
-                rows.add(&app_row(&ctx, &page, app, window, reload.clone()));
+                let row = app_row(&ctx, &page, app, window, reload.clone());
+                // The app App info was opened for: its row opens and comes into view, once.
+                let focused = ctx.focus_app.borrow().as_deref() == Some(app.package.as_str());
+                if focused {
+                    ctx.focus_app.replace(None);
+                    row.set_expanded(true);
+                    let shown_row = row.clone();
+                    gtk::glib::idle_add_local_once(move || {
+                        shown_row.grab_focus();
+                    });
+                }
+                rows.add(&row);
             }
         }));
     }

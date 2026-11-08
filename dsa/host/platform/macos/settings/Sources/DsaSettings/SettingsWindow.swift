@@ -128,6 +128,14 @@ struct SettingsWindow: View {
             }
         }
         .task { await model.settings.load() }
+        // App Info in a task window's Window menu: the Apps page, searched for that app so its
+        // row is the one in view.
+        .onOpenURL { url in
+            guard let package = AppPageLink.package(of: url) else { return }
+            page = .apps
+            model.apps.search = package
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     @ViewBuilder private var detail: some View {

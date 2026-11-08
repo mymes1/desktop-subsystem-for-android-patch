@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
-use dsa_host_core::compositor::window_hosts::FromHost;
+use dsa_host_core::compositor::window_hosts::{FromHost, MenuWork};
 use dsa_host_core::drag::{DragOffer, DragOut};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::HostApiClient;
@@ -33,6 +33,7 @@ use dsa_transport::Connector;
 use super::frames::{LatestFrames, Shown};
 use super::gfxstream::{self, FrameSink};
 use super::wayland::{Desktop, Event, Events, Wake};
+use super::window_menu::{app_page_arguments, menu_work, reads_korean_in};
 use crate::input::evdev::EvdevGamepads;
 use crate::renderer::client::RendererClient;
 use crate::shell::dbus::{Notifier, Signal};
@@ -108,11 +109,18 @@ fn reads_korean() -> bool {
     reads_korean_in(|name| std::env::var(name).ok())
 }
 
-fn reads_korean_in(var: impl Fn(&str) -> Option<String>) -> bool {
-    ["LC_ALL", "LC_MESSAGES", "LANG"]
-        .into_iter()
-        .find_map(|name| var(name).filter(|value| !value.is_empty()))
-        .is_some_and(|locale| locale.starts_with("ko"))
+/// Opens DSA Settings (the settings app installed beside this program) on the Apps page at
+/// `package`, as the window menu's App info does. The settings app runs on its own; nothing
+/// waits for it.
+fn open_app_page(package: &str) -> Result<(), String> {
+    let program = std::env::current_exe()
+        .map_err(|e| format!("this program's place is not known: {e}"))?
+        .with_file_name("dsa-settings");
+    std::process::Command::new(&program)
+        .args(app_page_arguments(package))
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not start {}: {e}", program.display()))
 }
 
 fn connector() -> UnixLocalConnector {
@@ -598,6 +606,7 @@ impl Main {
                 self.apps.retain(|package, _| known.contains(package));
                 for app in apps {
                     self.apps.insert(app.package_name.clone(), app.clone());
+                    self.desktop.state.set_app(app);
                 }
                 self.sync_entries();
             }
@@ -605,6 +614,7 @@ impl Main {
                 let changed = self.apps.get(&app.package_name) != Some(app);
                 if changed {
                     self.apps.insert(app.package_name.clone(), app.clone());
+                    self.desktop.state.set_app(app);
                     self.sync_entries();
                 }
             }
@@ -676,9 +686,38 @@ impl Main {
                     let requests = self.windows.window_caption(task_id, band);
                     self.requests(requests);
                 }
-                // The Linux windows have no system menu with Android items, so none is chosen.
-                FromHost::MenuChosen { .. } => {}
+                FromHost::MenuChosen { task_id, action } => self.menu_chosen(task_id, action),
             },
+        }
+    }
+
+    /// The user chose `action` in the window menu of `task_id`'s window.
+    fn menu_chosen(
+        &mut self,
+        task_id: i32,
+        action: dsa_host_core::compositor::window_hosts::MenuAction,
+    ) {
+        let Some(package) = self
+            .desktop
+            .state
+            .windows
+            .get(&task_id)
+            .map(|window| window.model.package.clone())
+        else {
+            return;
+        };
+        let multiple_windows = self
+            .apps
+            .get(&package)
+            .is_some_and(|app| app.multiple_windows);
+        match menu_work(action, &package, multiple_windows) {
+            Some(MenuWork::Request(request)) => self.request(request),
+            Some(MenuWork::AppPage { package }) => {
+                if let Err(why) = open_app_page(&package) {
+                    log(&format!("App info of {package} did not open: {why}"));
+                }
+            }
+            None => {}
         }
     }
 

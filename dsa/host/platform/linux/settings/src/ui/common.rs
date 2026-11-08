@@ -18,6 +18,9 @@ pub struct Ctx {
     pub client: Client,
     pub window: adw::ApplicationWindow,
     pub toasts: adw::ToastOverlay,
+    /// The app whose row the Apps page opens and brings into view the next time it lists the
+    /// apps, as `--app` asks.
+    pub focus_app: RefCell<Option<String>>,
 }
 
 pub type Shared = Rc<Ctx>;

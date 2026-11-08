@@ -61,6 +61,8 @@ struct DsaSettingsApp: App {
                 .frame(minWidth: 720, minHeight: 480)
         }
         .defaultSize(width: 960, height: 680)
+        // A task window's App Info link opens this window, or brings it forward, at the app.
+        .handlesExternalEvents(matching: [AppPageLink.scheme])
         .commands {
             CommandGroup(replacing: .appSettings) {
                 OpenSettingsButton()

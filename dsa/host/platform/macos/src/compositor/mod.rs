@@ -14,8 +14,13 @@
 
 pub mod frame_gate;
 pub mod frames;
+pub mod screenshot;
 pub mod sizing;
+pub mod title_bar;
+pub mod window_menu;
 
+#[cfg(target_os = "macos")]
+pub mod menu_bar;
 #[cfg(target_os = "macos")]
 pub mod metal;
 #[cfg(target_os = "macos")]

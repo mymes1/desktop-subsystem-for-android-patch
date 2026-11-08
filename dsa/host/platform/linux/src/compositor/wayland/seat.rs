@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use dsa_host_core::compositor::caption::{CaptionButton, CaptionHit};
 use dsa_host_core::compositor::window_hosts::FromHost;
 use dsa_host_core::input::{buttons, ContactPhase, PointerTool, WindowInput};
-use dsa_host_core::keys::KeyInput;
+use dsa_host_core::keys::{keycode, KeyInput};
 use wayland_client::protocol::{
     wl_keyboard::{self, WlKeyboard},
     wl_pointer::{self, WlPointer},
@@ -15,7 +15,7 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
     wl_touch::{self, WlTouch},
 };
-use wayland_client::{event_created_child, Connection, Dispatch, QueueHandle, WEnum};
+use wayland_client::{event_created_child, Connection, Dispatch, Proxy, QueueHandle, WEnum};
 use wayland_protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::Shape;
 use wayland_protocols::wp::tablet::zv2::client::{
     zwp_tablet_pad_group_v2::{self, ZwpTabletPadGroupV2},
@@ -31,6 +31,7 @@ use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
 };
 use wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
 
+use super::menu::{MenuPlace, MenuSurface};
 use super::shm::ShmBuffer;
 use super::{task_of, Event, State};
 use crate::input::keymap::{self, evdev_key, guest_key};
@@ -73,6 +74,11 @@ pub struct SeatState {
     scroll: Scroll,
     /// The caption button a press started on, while it is held.
     pressed_button: Option<CaptionButton>,
+    /// Whether a press started on the back arrow, while it is held.
+    pressed_back: bool,
+    /// Whether the pointer is on the window menu, and where on it, in logical units.
+    pub(crate) on_menu: bool,
+    menu_position: (f64, f64),
     /// Whether the window's app has the pointer's buttons, so the title bar keeps out.
     pointer_in_app: bool,
     shape: Option<Shape>,
@@ -99,6 +105,9 @@ impl Default for SeatState {
             offset: (0.0, 0.0),
             scroll: Scroll::default(),
             pressed_button: None,
+            pressed_back: false,
+            on_menu: false,
+            menu_position: (0.0, 0.0),
             pointer_in_app: false,
             shape: None,
             enter_serial: 0,
@@ -187,13 +196,15 @@ impl State {
                 border,
                 x as i32,
                 y as i32,
+                &window.title_bar,
             );
         }
         let hovered = match hit {
             WindowHit::Caption(CaptionHit::Button(button)) => Some(button),
             _ => None,
         };
-        let changed = window.hover(hovered);
+        let mut changed = window.hover(hovered);
+        changed |= window.title_bar.hover_back(hit == WindowHit::Back);
         let shape = match hit {
             WindowHit::Resize(edge) => edge_shape(edge as u32),
             _ => Shape::Default,
@@ -248,11 +259,21 @@ impl State {
                 layout.resize_border,
                 x as i32,
                 y as i32,
+                &window.title_bar,
             )
         } else {
             WindowHit::Caption(CaptionHit::Client)
         };
         let left = code == evdev_button::LEFT;
+        let right = code == evdev_button::RIGHT;
+        // A press on the back arrow that ends elsewhere sends nothing.
+        if left && !down && hit != WindowHit::Back && self.seat_state.pressed_back {
+            self.seat_state.pressed_back = false;
+            if window.title_bar.press_back(false) {
+                self.redraw(task_id);
+            }
+            return;
+        }
         match hit {
             WindowHit::Caption(CaptionHit::Client) => {
                 if left {
@@ -299,11 +320,8 @@ impl State {
                     } else {
                         window.toplevel._move(&seat, serial);
                     }
-                } else if code == evdev_button::RIGHT {
-                    let (lx, ly) = self.seat_state.position;
-                    window
-                        .toplevel
-                        .show_window_menu(&seat, serial, lx as i32, ly as i32);
+                } else if right {
+                    self.window_menu_at_pointer(task_id, serial);
                 }
             }
             WindowHit::Caption(CaptionHit::Button(button)) if left => {
@@ -325,6 +343,42 @@ impl State {
                 }
                 self.redraw(task_id);
             }
+            // The icon's cell opens the window menu below itself, as a caption icon does.
+            WindowHit::WindowMenu if left && down => {
+                let layout = window.model.caption_layout();
+                let scale = window.model.scale.max(1) as i32;
+                if let Some((cell_left, top, width, height)) = layout.icon_cell() {
+                    let place = MenuPlace::Below(
+                        cell_left / scale,
+                        top / scale,
+                        (width as i32).div_ceil(scale),
+                        (height as i32).div_ceil(scale),
+                    );
+                    if !self.open_menu(task_id, place, serial) {
+                        self.desktop_window_menu(task_id, serial);
+                    }
+                }
+            }
+            // While the task can go back, the cell is the back arrow: a click sends Back.
+            WindowHit::Back if left => {
+                if down {
+                    self.seat_state.pressed_back = true;
+                    window.title_bar.press_back(true);
+                    self.redraw(task_id);
+                } else {
+                    window.title_bar.press_back(false);
+                    let clicked = std::mem::take(&mut self.seat_state.pressed_back);
+                    self.redraw(task_id);
+                    if clicked {
+                        let time = self.key_time(Instant::now());
+                        self.send_back(task_id, time);
+                    }
+                }
+            }
+            // A right click on the icon's cell opens the window menu too, as on the band.
+            WindowHit::WindowMenu | WindowHit::Back if right && down => {
+                self.window_menu_at_pointer(task_id, serial);
+            }
             _ => {
                 if !down {
                     self.seat_state.pressed_button = None;
@@ -333,8 +387,41 @@ impl State {
         }
     }
 
+    /// Opens the window menu where the pointer is, from the press `serial`; the desktop's own
+    /// window menu where the window cannot draw its own.
+    fn window_menu_at_pointer(&mut self, task_id: i32, serial: u32) {
+        let (x, y) = self.seat_state.position;
+        if !self.open_menu(task_id, MenuPlace::At(x as i32, y as i32), serial) {
+            self.desktop_window_menu(task_id, serial);
+        }
+    }
+
+    /// The desktop's own window menu, at the pointer.
+    fn desktop_window_menu(&mut self, task_id: i32, serial: u32) {
+        let (x, y) = self.seat_state.position;
+        if let (Some(seat), Some(window)) = (&self.seat, self.windows.get(&task_id)) {
+            window
+                .toplevel
+                .show_window_menu(seat, serial, x as i32, y as i32);
+        }
+    }
+
+    /// Sends the task Back, pressed and released, through the window's keys as any key goes,
+    /// as the back arrow in the title bar does.
+    pub(crate) fn send_back(&mut self, task_id: i32, time_ms: u32) {
+        self.send_key(task_id, keycode::BACK, true, time_ms);
+        self.send_key(task_id, keycode::BACK, false, time_ms);
+    }
+
     fn key(&mut self, serial: u32, time: u32, code: u32, down: bool) {
         self.serial = serial;
+        // The window menu takes the keyboard while it is open.
+        if self.menu.is_some() {
+            if down {
+                self.menu_key(serial, code);
+            }
+            return;
+        }
         let Some(task_id) = self.seat_state.keyboard_focus else {
             return;
         };
@@ -626,6 +713,16 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_x,
                 surface_y,
             } => {
+                state.seat_state.enter_serial = serial;
+                state.seat_state.shape = None;
+                if surface.data::<MenuSurface>().is_some() {
+                    state.seat_state.pointer_focus = None;
+                    state.seat_state.on_menu = true;
+                    state.seat_state.menu_position = (surface_x, surface_y);
+                    state.set_shape(Shape::Default);
+                    state.menu_pointer((surface_x, surface_y));
+                    return;
+                }
                 state.seat_state.pointer_focus = task_of(&surface);
                 let offset = state
                     .seat_state
@@ -634,16 +731,20 @@ impl Dispatch<WlPointer, ()> for State {
                     .unwrap_or((0.0, 0.0));
                 state.seat_state.offset = offset;
                 state.seat_state.position = (surface_x + offset.0, surface_y + offset.1);
-                state.seat_state.enter_serial = serial;
-                state.seat_state.shape = None;
                 if let Some(task_id) = state.seat_state.pointer_focus {
                     state.pointer_moved(task_id);
                 }
             }
             wl_pointer::Event::Leave { .. } => {
+                if std::mem::take(&mut state.seat_state.on_menu) {
+                    state.menu_pointer_left();
+                    return;
+                }
                 if let Some(task_id) = state.seat_state.pointer_focus.take() {
                     if let Some(window) = state.windows.get_mut(&task_id) {
-                        if window.hover(None) {
+                        let caption = window.hover(None);
+                        let back = window.title_bar.hover_back(false);
+                        if caption || back {
                             state.redraw(task_id);
                         }
                     }
@@ -655,6 +756,11 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_y,
                 ..
             } => {
+                if state.seat_state.on_menu {
+                    state.seat_state.menu_position = (surface_x, surface_y);
+                    state.menu_pointer((surface_x, surface_y));
+                    return;
+                }
                 let offset = state.seat_state.offset;
                 state.seat_state.position = (surface_x + offset.0, surface_y + offset.1);
                 if let Some(task_id) = state.seat_state.pointer_focus {
@@ -667,8 +773,14 @@ impl Dispatch<WlPointer, ()> for State {
                 state: WEnum::Value(button_state),
                 ..
             } => {
+                let down = button_state == wl_pointer::ButtonState::Pressed;
+                if state.seat_state.on_menu {
+                    state.serial = serial;
+                    let position = state.seat_state.menu_position;
+                    state.menu_button(serial, position, down);
+                    return;
+                }
                 if let Some(task_id) = state.seat_state.pointer_focus {
-                    let down = button_state == wl_pointer::ButtonState::Pressed;
                     state.pointer_button(task_id, serial, button, down);
                 }
             }
@@ -798,6 +910,10 @@ impl Dispatch<WlTouch, ()> for State {
                 ..
             } => {
                 state.serial = serial;
+                if surface.data::<MenuSurface>().is_some() {
+                    state.menu_touch(serial, (x, y));
+                    return;
+                }
                 let Some(task_id) = task_of(&surface) else {
                     return;
                 };
