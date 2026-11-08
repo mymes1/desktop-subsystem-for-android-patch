@@ -869,6 +869,7 @@ fn settings_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> R
                 version: "0.0.9".into(),
                 log_dir: Some("C:\\ProgramData\\DSA\\logs".into()),
                 program_updates_available: true,
+                update_channel_available: true,
                 image_updates_available: true,
                 android_version: Some("17.0.0-16373615-7".into()),
             },
@@ -2818,6 +2819,7 @@ fn fr15_settings_say_where_program_updates_come_from() {
             version: "0.0.9".into(),
             log_dir: None,
             program_updates_available: false,
+            update_channel_available: false,
             image_updates_available: true,
             android_version: None,
         },
@@ -3005,4 +3007,61 @@ fn fr32_dsa_installs_reports_and_removes_google_play() {
     assert!(removed["package"].is_null());
     assert_eq!(removed["android"]["installed"], false);
     assert_eq!(removed["restart_needed"], false);
+}
+
+#[test]
+fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
+    use dsa_cli::Change;
+    let parse = |line: &str| {
+        dsa_cli::parse(&line.split(' ').map(str::to_string).collect::<Vec<_>>())
+            .unwrap()
+            .change
+    };
+    assert_eq!(
+        parse("settings set prerelease-updates on"),
+        Some(Change::PrereleaseUpdates(true))
+    );
+    assert_eq!(
+        parse("settings set prerelease-updates off"),
+        Some(Change::PrereleaseUpdates(false))
+    );
+    assert!(dsa_cli::parse(
+        &"settings set prerelease-updates later"
+            .split(' ')
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    )
+    .is_err());
+
+    use dsa_host_core::host_api::{ServiceFacts, SettingsReport};
+    let report = |prereleases: bool, available: bool| SettingsReport {
+        settings: dsa_host_core::settings::Settings {
+            prerelease_updates: prereleases,
+            ..Default::default()
+        },
+        facts: ServiceFacts {
+            version: "0.1.10".into(),
+            program_updates_available: available,
+            update_channel_available: available,
+            ..Default::default()
+        },
+        network: None,
+        adb_auto_connect_state: Default::default(),
+    };
+    let channel_line = |report: &SettingsReport| {
+        dsa_cli::describe_settings(report)
+            .lines()
+            .find(|line| line.starts_with("Update channel:"))
+            .expect("an update channel line")
+            .to_string()
+    };
+    let line = channel_line(&report(true, true));
+    assert!(line.contains("pre-release"), "{line}");
+    let line = channel_line(&report(false, true));
+    assert!(line.starts_with("Update channel: stable"), "{line}");
+    let line = channel_line(&report(false, false));
+    assert!(line.contains("does not update DSA"), "{line}");
+    let json = dsa_cli::settings_json(&report(true, true));
+    assert_eq!(json["prerelease_updates"], true);
+    assert_eq!(json["update_channel_available"], true);
 }

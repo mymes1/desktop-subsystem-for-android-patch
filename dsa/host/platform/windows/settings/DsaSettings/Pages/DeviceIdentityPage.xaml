@@ -25,21 +25,6 @@
                             AutomationProperties.Name="{Binding Label}" />
             </ui:CardControl>
         </DataTemplate>
-        <!-- A value that follows the computer: its name, what it is for, where it came from,
-             and the value, which can be selected and copied but not changed. -->
-        <DataTemplate x:Key="ComputerCard">
-            <ui:CardControl Margin="0,0,0,4">
-                <ui:CardControl.Header>
-                    <StackPanel>
-                        <TextBlock Text="{Binding Label}" Style="{StaticResource CardTitle}" />
-                        <TextBlock Text="{Binding Description}" Style="{StaticResource CardDescription}" />
-                        <TextBlock Text="{Binding OriginText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
-                    </StackPanel>
-                </ui:CardControl.Header>
-                <TextBox Style="{StaticResource SelectableCode}" MaxWidth="320" Text="{Binding Value, Mode=OneWay}"
-                         AutomationProperties.Name="{Binding Label}" />
-            </ui:CardControl>
-        </DataTemplate>
     </Page.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -51,6 +36,50 @@
         </Grid>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Style="{StaticResource PageContent}">
+                <!-- This computer, as the firmware and the system report it: its name large, its
+                     maker and model under it, then its specifications. Nothing here can be
+                     changed; the values can be selected and copied. -->
+                <StackPanel x:Name="ComputerBanner" Margin="0,0,0,12">
+                    <TextBox Style="{StaticResource SelectableText}" Text="{Binding ComputerName, Mode=OneWay}"
+                             FontSize="28" FontFamily="{DynamicResource StrongDisplayFont}"
+                             AutomationProperties.Name="{l:Text Identity_device_name}" />
+                    <TextBox Style="{StaticResource SelectableText}" Text="{Binding ComputerMakeModel, Mode=OneWay}"
+                             Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0"
+                             AutomationProperties.Name="{l:Text Identity_model}" />
+                </StackPanel>
+                <ui:CardExpander x:Name="SpecsCard" IsExpanded="True" Icon="{ui:SymbolIcon Info24}" Margin="0,0,0,4">
+                    <ui:CardExpander.Header>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{l:Text IdentitySpecsCard.Header}" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
+                            <ui:Button x:Name="SpecsCopyButton" Grid.Column="1" Margin="0,0,12,0" Content="{l:Text IdentityCopyButton.Content}"
+                                       Click="OnCopySpecs" />
+                        </Grid>
+                    </ui:CardExpander.Header>
+                    <ItemsControl x:Name="SpecsRows" ItemsSource="{Binding AboutRows, Mode=OneWay}" Grid.IsSharedSizeScope="True">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="SpecLabel" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Label}" Margin="0,0,24,0" VerticalAlignment="Top"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBox Grid.Column="1" Style="{StaticResource SelectableText}" Text="{Binding Value, Mode=OneWay}"
+                                             TextWrapping="Wrap" AutomationProperties.Name="{Binding Label}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ui:CardExpander>
+                <TextBlock Text="{l:Text IdentityComputerNote.Text}" Style="{StaticResource Note}" />
+
+                <!-- What Android reports to apps, which can be changed. -->
+                <TextBlock Text="{l:Text IdentityAndroidHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <TextBlock Text="{l:Text IdentityIntro.Text}" Style="{StaticResource Note}" />
 
                 <ProgressBar IsIndeterminate="True" Margin="0,8,0,0"
@@ -74,10 +103,6 @@
 
                 <TextBlock Text="{l:Text IdentityNamesHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ItemsControl ItemsSource="{Binding Names, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
-
-                <TextBlock Text="{l:Text IdentityComputerHeader.Text}" Style="{StaticResource SectionHeader}" />
-                <TextBlock Text="{l:Text IdentityComputerNote.Text}" Style="{StaticResource Note}" />
-                <ItemsControl ItemsSource="{Binding ComputerValues, Mode=OneWay}" ItemTemplate="{StaticResource ComputerCard}" />
 
                 <TextBlock Text="{l:Text IdentityFingerprintHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Fingerprint24}">

@@ -298,6 +298,12 @@
   <data name="ProgramUpdatesCard.Description" xml:space="preserve">
     <value>서명된 새 버전의 DSA를 내려받고, 실행 중인 Android가 없을 때 설치합니다.</value>
   </data>
+  <data name="PrereleaseUpdatesCard.Header" xml:space="preserve">
+    <value>프리릴리스 버전 받기</value>
+  </data>
+  <data name="PrereleaseUpdatesCard.Description" xml:space="preserve">
+    <value>정식 버전과 함께 아직 다듬는 중인 버전도 설치합니다. 1.0 전에는 모든 릴리스가 프리릴리스입니다. 이 설정을 꺼도 DSA가 이전 버전으로 돌아가지 않으며, 설치된 버전보다 새 정식 버전이 나올 때까지 기다립니다.</value>
+  </data>
   <data name="ImageUpdatesCard.Header" xml:space="preserve">
     <value>Android 이미지 자동 업데이트</value>
   </data>
@@ -390,6 +396,9 @@
   </data>
   <data name="AndroidFilesCard.Description" xml:space="preserve">
     <value>Android 공유 저장소를 파일 탐색기에서 엽니다. 사진과 다운로드처럼 Android 앱이 저장한 파일이 있습니다. Android가 실행 중이 아니면 시작합니다. 파일 탐색기 탐색 창의 Android 항목도 같은 일을 합니다.</value>
+  </data>
+  <data name="FilesDropCard.Header" xml:space="preserve">
+    <value>Android 앱에 파일 보내기</value>
   </data>
   <data name="FilesNote.Text" xml:space="preserve">
     <value>Android 앱에 파일을 보내려면 파일 탐색기에서 앱 창으로 끌어 놓습니다. 끌어 놓은 APK는 설치됩니다.</value>
@@ -1031,10 +1040,10 @@
     <value>준비되면 실행</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
-    <value>Android 로그</value>
+    <value>로그</value>
   </data>
   <data name="LogsTitle.Text" xml:space="preserve">
-    <value>Android 로그</value>
+    <value>로그</value>
   </data>
   <data name="LogsNote.Text" xml:space="preserve">
     <value>이 화면이 열려 있는 동안에만 Android가 로그를 보내고, 디스크에는 아무것도 쓰지 않습니다. 진단 정보 저장은 문제를 알릴 때 필요한 것을 zip 파일 하나로 모읍니다.</value>
@@ -1570,12 +1579,6 @@
   <data name="Toggle.Off" xml:space="preserve">
     <value>끔</value>
   </data>
-  <data name="NavAndroid.Content" xml:space="preserve">
-    <value>Android</value>
-  </data>
-  <data name="AndroidTitle.Text" xml:space="preserve">
-    <value>Android</value>
-  </data>
   <data name="AndroidRunningHeader.Text" xml:space="preserve">
     <value>지금 실행 중</value>
   </data>
@@ -1746,5 +1749,41 @@
   </data>
   <data name="ApkWindow_Reason_invalid-bundle" xml:space="preserve">
     <value>Android가 설치할 수 있는 하나의 앱으로 된 묶음이 아닙니다.</value>
+  </data>
+  <data name="UpdatesAndroidHeader.Text" xml:space="preserve">
+    <value>Android</value>
+  </data>
+  <data name="UpdatesProgramHeader.Text" xml:space="preserve">
+    <value>DSA</value>
+  </data>
+  <data name="AndroidFollowsCard.Header" xml:space="preserve">
+    <value>따르는 버전</value>
+  </data>
+  <data name="Android_FollowsLatest" xml:space="preserve">
+    <value>지원하는 가장 새 버전(지금은 Android {0})</value>
+  </data>
+  <data name="Android_FollowsMajor" xml:space="preserve">
+    <value>Android {0} 버전과 그 보안 업데이트</value>
+  </data>
+  <data name="AndroidUpdateCard.Header" xml:space="preserve">
+    <value>Android 업데이트</value>
+  </data>
+  <data name="Android_UpToDate" xml:space="preserve">
+    <value>기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다.</value>
+  </data>
+  <data name="AndroidCheckButton.Content" xml:space="preserve">
+    <value>지금 확인</value>
+  </data>
+  <data name="IdentitySpecsCard.Header" xml:space="preserve">
+    <value>기기 사양</value>
+  </data>
+  <data name="IdentityCopyButton.Content" xml:space="preserve">
+    <value>복사</value>
+  </data>
+  <data name="IdentityAndroidHeader.Text" xml:space="preserve">
+    <value>Android가 알리는 정보</value>
+  </data>
+  <data name="Identity_NotReported" xml:space="preserve">
+    <value>알 수 없음</value>
   </data>
 </root>

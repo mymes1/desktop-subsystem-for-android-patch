@@ -113,6 +113,10 @@ public struct SettingsInfo: Equatable, Sendable {
     public var programUpdates = false
     public var imageUpdates = false
     public var programUpdatesAvailable = false
+    /// Whether DSA takes pre-releases as well as stable releases: the pre-release channel.
+    public var prereleaseUpdates = false
+    /// Whether this installation follows a release channel at all.
+    public var updateChannelAvailable = false
     public var imageUpdatesAvailable = false
     public var version = ""
     public var logDir: String?

@@ -11,7 +11,7 @@ grep -Fq 'WindowFromPoint(POINT point)' "$workflow"
 grep -Fq 'if ($cover.ProcessId -eq $owner)' "$workflow"
 grep -Fq 'screens\settings-covered.png' "$workflow"
 grep -Fq 'another window covers DSA Settings where the wheel goes' "$workflow"
-for item in "'Android'" "'Network'"; do
+for item in "'Updates'" "'Network'"; do
   grep -F '$items = ' "$workflow" | grep -Fq "$item"
 done
 echo "settings scroll check: ok"

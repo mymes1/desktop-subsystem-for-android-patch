@@ -33,7 +33,12 @@
 #
 # -ProgramListUrl names the signed program list the service updates DSA itself from (it
 # needs -ListUrl, and the same -TrustedKey signs both lists). Without it the installed DSA
-# is updated by hand.
+# is updated by hand. It is the stable channel's list; -PrereleaseProgramListUrl names the
+# pre-release channel's, which a computer that takes pre-releases reads beside it.
+#
+# -Channel is the release channel this installer is published on, stable or prerelease. A
+# computer whose settings record no channel yet starts on it; upgrades keep the channel the
+# computer has. Without it the version decides: below 1.0 every release is a pre-release.
 #
 # -ReleaseTag names the GitHub release this build is published as (v<version>); the licence
 # bundle points at the kernel source asset of that release.
@@ -48,6 +53,9 @@ param(
     [string]$ListUrl,
     [string[]]$TrustedKey = @(),
     [string]$ProgramListUrl,
+    [string]$PrereleaseProgramListUrl,
+    [ValidateSet("", "stable", "prerelease")]
+    [string]$Channel = "",
     [string]$PipeSddl,
     [int]$AndroidMajor,
     [string]$GfxstreamBackend,
@@ -169,6 +177,14 @@ if ($ProgramListUrl) {
     # Administrators can write to, since the service runs them.
     $config.update.program_list_url = $ProgramListUrl
     $config.update.program_dir = "{data}\updates"
+}
+if ($PrereleaseProgramListUrl) {
+    if (-not $ProgramListUrl) { throw "-PrereleaseProgramListUrl needs -ProgramListUrl" }
+    $config.update.prerelease_program_list_url = $PrereleaseProgramListUrl
+}
+if ($Channel) {
+    if (-not $ProgramListUrl) { throw "-Channel needs -ProgramListUrl" }
+    $config.update.channel = $Channel
 }
 $config | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM (Join-Path $stage "dsa-hostd.json")
 # An upgrade keeps dsa-hostd.json as the user left it, so it goes on naming the first

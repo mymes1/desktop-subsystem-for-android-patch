@@ -153,6 +153,37 @@ fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
     Arc::new(FileSettings::new(config.settings_dir()))
 }
 
+/// The service's settings: a computer whose settings record no release channel yet starts on
+/// the channel of the repository entry the package wrote (else the one this version was
+/// published on), and records it now so upgrades keep it; from then on the entries follow
+/// the setting.
+fn service_settings_store(config: &HostConfig, build: &str) -> Arc<dyn SettingsStore> {
+    use crate::package_updates::{ChannelFollowingSettings, RepositoryEntries};
+    use dsa_host_core::update::program::ReleaseChannel;
+    let entries = RepositoryEntries::system();
+    let first = entries
+        .channel()
+        .unwrap_or_else(|| ReleaseChannel::of_version(crate::VERSION));
+    let files = FileSettings::new(config.settings_dir()).with_first_channel(first);
+    match files.keep_first_channel() {
+        Ok(channel) => eprintln!("{build}: DSA follows the {channel} release channel"),
+        Err(why) => eprintln!("{build}: recording the release channel failed: {why}"),
+    }
+    let store = ChannelFollowingSettings::new(Arc::new(files), entries);
+    match store.bring_entries_in_line() {
+        Ok(changed) => {
+            for path in changed {
+                eprintln!(
+                    "{build}: {} now follows the chosen release channel",
+                    path.display()
+                );
+            }
+        }
+        Err(why) => eprintln!("{build}: {why}"),
+    }
+    Arc::new(store)
+}
+
 /// The image folder the next boot starts from, and its version.
 fn current_image(
     config: &HostConfig,
@@ -668,7 +699,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         );
     }
     let grace = Duration::from_secs(config.stop_timeout_secs + 15);
-    let store = settings_store(&config);
+    let store = service_settings_store(&config, build);
     let updates = match open_updates(&config, build) {
         Ok(updates) => updates,
         Err(error) => {
@@ -696,6 +727,8 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         log_dir: None,
         // The system's package manager updates DSA itself; `dsa update` says so.
         program_updates_available: false,
+        // The release channel chooses which of DSA's package repositories the entries point at.
+        update_channel_available: true,
         image_updates_available: updates.is_some() && config.update.is_some(),
         android_version: config.first_image.as_ref().map(|i| i.version.clone()),
     };

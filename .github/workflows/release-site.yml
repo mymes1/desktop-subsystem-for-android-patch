@@ -1,7 +1,10 @@
 # Publishes DSA's GitHub Pages site. A Pages deployment replaces the whole site, so this one
 # workflow builds every part of it each time:
 #   /           the guidebook, docs/site/
-#   /apt, /rpm  the signed Linux package repositories, when the signing key is set
+#   /apt, /rpm, /rpm-prerelease
+#               the signed Linux package repositories, when the signing key is set: the
+#               packages of a GitHub pre-release go to the pre-release channel only (the apt
+#               suite prerelease and rpm-prerelease/), the others to both channels
 #
 # It runs when the guidebook changes on main (the release sync brings it there), by hand, and
 # from "Linux repository release" after the packages of a version are attached to its
@@ -61,12 +64,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p .scratch/linux-packages
-          gh release list --limit 200 --json tagName --jq '.[].tagName' | grep '^v' | while read -r tag; do
-            gh release download "$tag" --dir .scratch/linux-packages \
-              --pattern '*.deb' --pattern '*.rpm' --skip-existing || true
-          done
-          ls -l .scratch/linux-packages
+          mkdir -p .scratch/linux-packages .scratch/linux-prerelease-packages
+          gh release list --limit 200 --json tagName,isPrerelease \
+            --jq '.[] | select(.tagName | startswith("v")) | "\(.tagName) \(.isPrerelease)"' \
+            | while read -r tag prerelease; do
+              if [[ "$prerelease" == true ]]; then
+                dir=.scratch/linux-prerelease-packages
+              else
+                dir=.scratch/linux-packages
+              fi
+              gh release download "$tag" --dir "$dir" \
+                --pattern '*.deb' --pattern '*.rpm' --skip-existing || true
+            done
+          ls -l .scratch/linux-packages .scratch/linux-prerelease-packages
 
       - name: Build the repositories into the site
         if: env.HAS_REPO_KEY == 'true'
@@ -75,7 +85,8 @@ jobs:
           DSA_REPO_GPG_PASSPHRASE: ${{ secrets.DSA_REPO_GPG_PASSPHRASE }}
         run: |
           .github/scripts/release/build-linux-repo.sh \
-            --packages .scratch/linux-packages --out .scratch/linux-repo
+            --packages .scratch/linux-packages \
+            --prerelease-packages .scratch/linux-prerelease-packages --out .scratch/linux-repo
           cp -R .scratch/linux-repo/. .scratch/site/
 
       - uses: actions/upload-pages-artifact@v3

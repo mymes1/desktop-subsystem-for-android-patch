@@ -13,6 +13,13 @@
 //! installed again on its own, since it would most likely fail the same way; `dsa update`
 //! tries it again, and a newer version replaces it.
 //!
+//! The service follows one release channel ([`ReleaseChannel`]): on the stable channel it
+//! reads the stable program list alone, and on the pre-release channel it reads the
+//! pre-release list too and takes the higher version. A computer that moves from the
+//! pre-release channel to the stable one keeps the version it has: nothing lower is ever
+//! installed, so it waits until the stable list offers a newer version, and an update that
+//! only the pre-release list offered and that is still waiting to be installed is dropped.
+//!
 //! Running setup is behind [`ProgramInstaller`]; the platform crates supply it.
 
 use std::fs;
@@ -28,7 +35,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::manifest::is_plain_name;
-use super::program::{self, ProgramDecision, ProgramError, ProgramManifest, Version};
+use super::program::{
+    self, ProgramDecision, ProgramError, ProgramManifest, ReleaseChannel, Version,
+};
 use super::service::UpdateNotices;
 use super::store::{download_checked, DownloadFailure, Expected, Fetch};
 use super::{from_hex, to_hex};
@@ -66,9 +75,16 @@ pub trait RunningSetup: Send {
 /// How the service updates the program.
 #[derive(Debug, Clone)]
 pub struct ProgramSettings {
-    /// The signed program list. Its signature is at the same URL plus `.sig`. Without it
-    /// nothing is checked.
+    /// The signed program list of the stable channel. Its signature is at the same URL plus
+    /// `.sig`. Without it or [`prerelease_list_url`](Self::prerelease_list_url) nothing is
+    /// checked.
     pub list_url: Option<String>,
+    /// The signed program list of the pre-release channel, read beside the stable one on that
+    /// channel. Its signature is at the same URL plus `.sig`.
+    pub prerelease_list_url: Option<String>,
+    /// The channel followed unless [`ProgramUpdates::follow_channel`] says otherwise: the
+    /// channel of the installer that put this version here.
+    pub channel: ReleaseChannel,
     /// False turns program updates off: the list is never fetched.
     pub enabled: bool,
     /// Public keys, any of which may sign the list.
@@ -131,6 +147,10 @@ struct Pending {
     sha256: String,
     /// The version that was running when it was downloaded.
     from: String,
+    /// The channel whose list offered it. A download only the pre-release list offered is
+    /// not installed once the computer follows the stable channel.
+    #[serde(default = "stable")]
+    list: ReleaseChannel,
     /// Set just before setup runs.
     #[serde(default)]
     installing: bool,
@@ -147,6 +167,15 @@ struct ProgramState {
     /// The version whose installation failed here.
     #[serde(default)]
     failed: Option<String>,
+}
+
+fn stable() -> ReleaseChannel {
+    ReleaseChannel::Stable
+}
+
+/// Whether a download from the list of `list` may be installed on `channel`.
+fn allowed_on(channel: ReleaseChannel, list: ReleaseChannel) -> bool {
+    channel == ReleaseChannel::Prerelease || list == ReleaseChannel::Stable
 }
 
 fn store_error(what: &str, path: &Path, error: impl std::fmt::Display) -> ProgramError {
@@ -168,6 +197,8 @@ pub struct ProgramUpdates {
     me: Weak<ProgramUpdates>,
     /// The user's setting that turns updates off while the service runs, if it follows one.
     switch: OnceLock<Box<dyn Fn() -> bool + Send + Sync>>,
+    /// The user's setting that chooses the release channel, if it follows one.
+    channel: OnceLock<Box<dyn Fn() -> ReleaseChannel + Send + Sync>>,
 }
 
 /// When the service checks and installs.
@@ -201,6 +232,7 @@ impl ProgramUpdates {
             name: name.to_string(),
             me: me.clone(),
             switch: OnceLock::new(),
+            channel: OnceLock::new(),
         });
         if let Err(error) = updates.report_last_install() {
             updates.log(&error.to_string());
@@ -220,6 +252,19 @@ impl ProgramUpdates {
 
     fn switched_off(&self) -> bool {
         self.switch.get().is_some_and(|switch| !switch())
+    }
+
+    /// Follows the setting that chooses the release channel while the service runs: each
+    /// check reads the lists of the channel `channel` answers.
+    pub fn follow_channel(&self, channel: Box<dyn Fn() -> ReleaseChannel + Send + Sync>) {
+        let _ = self.channel.set(channel);
+    }
+
+    /// The release channel followed now.
+    pub fn channel(&self) -> ReleaseChannel {
+        self.channel
+            .get()
+            .map_or(self.settings.channel, |channel| channel())
     }
 
     fn tell(&self, notice: String) {
@@ -329,7 +374,9 @@ impl ProgramUpdates {
         self.check_locked(false)
     }
 
-    fn list_url(&self) -> Result<&str, ProgramError> {
+    /// The lists `channel` reads, with the channel each is published on: on the pre-release
+    /// channel the pre-release list, then the stable list on either channel.
+    fn lists(&self, channel: ReleaseChannel) -> Result<Vec<(ReleaseChannel, &str)>, ProgramError> {
         if !self.settings.enabled {
             return Err(ProgramError::Off(
                 "program updates are turned off in the service's configuration".into(),
@@ -340,31 +387,103 @@ impl ProgramUpdates {
                 "program updates are turned off in the settings".into(),
             ));
         }
-        self.settings
-            .list_url
-            .as_deref()
-            .ok_or_else(|| ProgramError::Off("the configuration names no program list".into()))
+        let mut lists = Vec::new();
+        if channel == ReleaseChannel::Prerelease {
+            if let Some(url) = self.settings.prerelease_list_url.as_deref() {
+                lists.push((ReleaseChannel::Prerelease, url));
+            }
+        }
+        if let Some(url) = self.settings.list_url.as_deref() {
+            lists.push((ReleaseChannel::Stable, url));
+        }
+        if lists.is_empty() {
+            return Err(ProgramError::Off(format!(
+                "the configuration names no program list for the {channel} channel"
+            )));
+        }
+        Ok(lists)
+    }
+
+    /// Fetches the list at `url` and its signature, and checks both.
+    fn read_list(&self, url: &str) -> Result<ProgramManifest, ProgramError> {
+        let mut bytes = Vec::new();
+        self.fetch
+            .fetch(url, &mut bytes)
+            .map_err(|e| ProgramError::Download(format!("the program list: {e}")))?;
+        let mut signature = Vec::new();
+        self.fetch
+            .fetch(&format!("{url}.sig"), &mut signature)
+            .map_err(|e| ProgramError::BadSignature(format!("fetching the signature: {e}")))?;
+        program::verify(
+            &bytes,
+            &String::from_utf8_lossy(&signature),
+            &self.settings.keys,
+        )
+    }
+
+    /// Reads the lists of `channel` and picks the one to follow, with the channel it was
+    /// published on. On the pre-release channel a list that cannot be read is logged and the
+    /// other one is followed; only when no list can be read is the check an error.
+    fn chosen_list(
+        &self,
+        channel: ReleaseChannel,
+    ) -> Result<(ReleaseChannel, ProgramManifest), ProgramError> {
+        let mut stable = None;
+        let mut prerelease = None;
+        let mut first_error = None;
+        for (list, url) in self.lists(channel)? {
+            match self.read_list(url) {
+                Ok(read) if list == ReleaseChannel::Stable => stable = Some(read),
+                Ok(read) => prerelease = Some(read),
+                Err(error) => {
+                    self.log(&format!("reading the {list} program list {url}: {error}"));
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        match program::choose(channel, stable.as_ref(), prerelease.as_ref()) {
+            Some((list, chosen)) => Ok((list, chosen.clone())),
+            None => Err(first_error.unwrap_or_else(|| {
+                ProgramError::Off(format!(
+                    "there is no program list for the {channel} channel"
+                ))
+            })),
+        }
+    }
+
+    /// Drops a downloaded update that `channel` does not take: one only the pre-release list
+    /// offered, after a switch to the stable channel.
+    fn drop_pending_not_on(&self, channel: ReleaseChannel) -> Result<(), ProgramError> {
+        let mut state = self.state()?;
+        let Some(pending) = &state.pending else {
+            return Ok(());
+        };
+        if pending.installing || allowed_on(channel, pending.list) {
+            return Ok(());
+        }
+        self.log(&format!(
+            "DSA {} came from the {} program list, so it is not installed on the {channel} \
+             channel",
+            pending.version, pending.list
+        ));
+        state.pending = None;
+        self.write_state(&state)?;
+        self.remove_downloads(None);
+        Ok(())
     }
 
     /// [`check`](Self::check) with `busy` held. `retry_failed` downloads a version that
     /// failed here before, as `dsa update` asks.
     fn check_locked(&self, retry_failed: bool) -> Result<CheckOutcome, ProgramError> {
-        let list_url = self.list_url()?;
-        let mut bytes = Vec::new();
-        self.fetch
-            .fetch(list_url, &mut bytes)
-            .map_err(|e| ProgramError::Download(format!("the program list: {e}")))?;
-        let mut signature = Vec::new();
-        self.fetch
-            .fetch(&format!("{list_url}.sig"), &mut signature)
-            .map_err(|e| ProgramError::BadSignature(format!("fetching the signature: {e}")))?;
-        let list = program::verify(
-            &bytes,
-            &String::from_utf8_lossy(&signature),
-            &self.settings.keys,
-        )?;
+        let channel = self.channel();
+        let (from, list) = self.chosen_list(channel)?;
+        self.drop_pending_not_on(channel)?;
         let offered = match program::decide(&self.settings.running, &list)? {
-            ProgramDecision::NotNewer(why) => return Ok(CheckOutcome::NotNewer(why)),
+            ProgramDecision::NotNewer(why) => {
+                return Ok(CheckOutcome::NotNewer(format!(
+                    "{why} (this computer follows the {channel} channel)"
+                )))
+            }
             ProgramDecision::Install(offered) => offered,
         };
         let mut state = self.state()?;
@@ -375,15 +494,21 @@ impl ProgramUpdates {
                 list.version
             )));
         }
-        if let Some(pending) = &state.pending {
+        if let Some(pending) = &mut state.pending {
             if pending.version == list.version
                 && pending.sha256.eq_ignore_ascii_case(&list.setup.sha256)
                 && self.matches(pending).is_ok()
             {
-                return Ok(CheckOutcome::AlreadyDownloaded(pending.version.clone()));
+                let version = pending.version.clone();
+                if pending.list != from {
+                    // The same file, now offered by the other list: it follows that one.
+                    pending.list = from;
+                    self.write_state(&state)?;
+                }
+                return Ok(CheckOutcome::AlreadyDownloaded(version));
             }
         }
-        let pending = self.download(&list, &offered)?;
+        let pending = self.download(&list, &offered, from)?;
         state.pending = Some(pending);
         self.write_state(&state)?;
         self.remove_downloads(Some(&list.version));
@@ -395,7 +520,12 @@ impl ProgramUpdates {
         Ok(CheckOutcome::Downloaded(list.version))
     }
 
-    fn download(&self, list: &ProgramManifest, offered: &Version) -> Result<Pending, ProgramError> {
+    fn download(
+        &self,
+        list: &ProgramManifest,
+        offered: &Version,
+        from: ReleaseChannel,
+    ) -> Result<Pending, ProgramError> {
         let dir = &self.settings.dir;
         // The file keeps the name the URL gives it, so setup sees the name it was
         // published under; the folder is the version, which is only digits and dots.
@@ -430,6 +560,7 @@ impl ProgramUpdates {
             size: list.setup.size,
             sha256: list.setup.sha256.to_ascii_lowercase(),
             from: self.settings.running.clone(),
+            list: from,
             installing: false,
             log: None,
         };
@@ -478,6 +609,7 @@ impl ProgramUpdates {
         };
         if pending.installing
             || (!retry_failed && state.failed.as_deref() == Some(&pending.version))
+            || !allowed_on(self.channel(), pending.list)
         {
             return Ok(None);
         }
@@ -516,7 +648,7 @@ impl ProgramUpdates {
     /// their own.
     pub fn install_now(&self) -> Result<ProgramUpdate, ProgramError> {
         let _busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
-        self.list_url()?;
+        self.lists(self.channel())?;
         if let Some(version) = self.status.installing() {
             return Ok(ProgramUpdate {
                 installing: Some(version.clone()),
@@ -663,7 +795,9 @@ impl ProgramUpdates {
     pub fn run(&self, stop: &AtomicBool, timing: Timing) {
         // The configuration cannot change while the service runs; the settings can, so a
         // loop that the settings turned off keeps waiting for them to turn it on again.
-        if !self.settings.enabled || self.settings.list_url.is_none() {
+        if !self.settings.enabled
+            || (self.settings.list_url.is_none() && self.settings.prerelease_list_url.is_none())
+        {
             return;
         }
         let mut next_check = Instant::now() + timing.first_check;

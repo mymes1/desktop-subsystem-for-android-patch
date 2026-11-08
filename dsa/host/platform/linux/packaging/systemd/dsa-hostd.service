@@ -26,6 +26,9 @@ DeviceAllow=char-macvtap rw
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN CAP_NET_ADMIN CAP_SYS_RESOURCE CAP_SYS_NICE
 NoNewPrivileges=yes
 ProtectSystem=full
+# The repository entries the package wrote, which follow the release channel the settings
+# choose. A folder this distribution does not have is skipped (the leading "-").
+ReadWritePaths=-/etc/apt/sources.list.d -/etc/yum.repos.d -/etc/zypp/repos.d
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 

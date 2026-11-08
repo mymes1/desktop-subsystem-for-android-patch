@@ -325,6 +325,52 @@ pub fn android_choice_index(info: &AndroidVersion) -> usize {
         .unwrap_or(0)
 }
 
+/// The version the image updates follow: the newest supported one, or one major version and
+/// its security updates.
+pub fn android_channel_text(info: &AndroidVersion) -> String {
+    if info.channel == "latest" {
+        let newest = info.supported.iter().copied().max().unwrap_or(info.major);
+        trf(
+            "The newest supported version (now Android {0})",
+            &[&newest.to_string()],
+        )
+    } else {
+        trf("Android {0} and its security updates", &[&info.channel])
+    }
+}
+
+/// How far an image download has got, from the service's notice ("downloading Android
+/// ...: 45% ..."), or `None` when nothing is downloading.
+pub fn android_download_percent(notice: Option<&str>) -> Option<u8> {
+    let rest = notice?.strip_prefix("downloading Android ")?;
+    let (_, after) = rest.split_once(": ")?;
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() || !after[digits.len()..].starts_with('%') {
+        return None;
+    }
+    digits.parse::<u32>().ok().map(|p| p.min(100) as u8)
+}
+
+/// Where the Android image update stands, in one line: the service's news (a download with
+/// its progress, or what was applied), a version waiting for the next start, or that none is
+/// waiting.
+pub fn android_update_text(info: &AndroidVersion) -> String {
+    match &info.notice {
+        Some(notice) if !notice.is_empty() => notice.clone(),
+        _ if info.target_major != info.major => trf(
+            "Android {0} is chosen. It is downloaded now and used the next time Android starts.",
+            &[&info.target_major.to_string()],
+        ),
+        _ => tr("No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."),
+    }
+}
+
+/// The channel to choose again so that the service checks for an image now: the one it
+/// already follows, which changes nothing else.
+pub fn android_check_channel(info: &AndroidVersion) -> String {
+    info.channel.clone()
+}
+
 pub fn android_move(info: &AndroidVersion, choice: &AndroidChoice) -> AndroidMove {
     if choice.major == info.major {
         AndroidMove::Same

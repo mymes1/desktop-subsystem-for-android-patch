@@ -609,7 +609,15 @@ pub fn serve(
             "{build}: this Mac reports no support for virtual machines; Android cannot start"
         );
     }
-    let settings: Arc<dyn SettingsStore> = Arc::new(FileSettings::new(config.settings_dir(&user)));
+    // A computer whose settings record no release channel yet starts on the one this version
+    // was published on, and keeps it through upgrades.
+    let files = FileSettings::new(config.settings_dir(&user)).with_first_channel(
+        dsa_host_core::update::program::ReleaseChannel::of_version(crate::VERSION),
+    );
+    if let Err(why) = files.keep_first_channel() {
+        eprintln!("{build}: recording the release channel failed: {why}");
+    }
+    let settings: Arc<dyn SettingsStore> = Arc::new(files);
     let store = open_store(&config, build);
     let notices = Arc::new(UpdateNotices::default());
     let check_now = Arc::new(CheckNow::default());
@@ -657,6 +665,8 @@ pub fn serve(
         version: crate::VERSION.into(),
         log_dir: Some(user.logs().to_string_lossy().into_owned()),
         program_updates_available: false,
+        // No updater of its own here, so no release channel to follow.
+        update_channel_available: false,
         image_updates_available: store.is_some() && config.update.is_some(),
         android_version: config.first_image.as_ref().map(|i| i.version.clone()),
     };

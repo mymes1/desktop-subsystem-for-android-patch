@@ -5,6 +5,7 @@
 #                     --vm-programs <folder> [--licenses <folder>]
 #                     (--kernel <file> | --placeholder-kernel) [--image-dir <folder>]
 #                     --repo-key <armored public key> [--repo-url <url>]
+#                     [--channel stable|prerelease]
 #                     [--arch amd64|arm64] [--no-deb] [--no-rpm]
 #
 # The packages install the same things:
@@ -38,6 +39,13 @@
 # (.github/scripts/release/build-linux-repo.sh); --repo-url is where that repository is
 # served, GitHub Pages by default.
 #
+# The repository has two release channels: the apt suites stable and prerelease, and the
+# dnf and zypper repositories rpm/<arch> and rpm-prerelease/<arch>. --channel is the channel
+# the package is published on (below 1.0 every version is a pre-release, and that is the
+# default; from 1.0 the default is stable). A first installation writes the entry of that
+# channel. An upgrade keeps the channel the entry already has, because the user chose it (the
+# service points the entries at the channel the prerelease-updates setting chooses).
+#
 #   AppArmor                 crosvm's and passt's sandboxes, which make user namespaces
 #   /usr/share/doc/<package> the licences, crosvm's crate list and passt's source
 #
@@ -65,6 +73,7 @@ make_deb=1
 make_rpm=1
 repo_key=""
 repo_url="https://thisisthepy.github.io/desktop-subsystem-for-android"
+channel=""
 
 die() {
     echo "build-packages: $*" >&2
@@ -86,6 +95,7 @@ while [[ $# -gt 0 ]]; do
         --no-rpm) make_rpm=0; shift ;;
         --repo-key) repo_key="$2"; shift 2 ;;
         --repo-url) repo_url="${2%/}"; shift 2 ;;
+        --channel) channel="$2"; shift 2 ;;
         *) die "unknown argument $1" ;;
     esac
 done
@@ -112,6 +122,13 @@ fi
 [[ -n "$repo_key" && -f "$repo_key" ]] \
     || die "name the repository's public key (ASCII armored) with --repo-key"
 [[ "$repo_url" =~ ^https?://[^[:space:]]+$ ]] || die "the repository URL $repo_url is not a URL"
+if [[ -z "$channel" ]]; then
+    if [[ "${version%%.*}" == 0 ]]; then channel=prerelease; else channel=stable; fi
+fi
+case "$channel" in
+    stable | prerelease) ;;
+    *) die "the channel is stable or prerelease, not $channel" ;;
+esac
 command -v gpg >/dev/null || die "gpg is needed to write the repository keyring"
 for file in crosvm passt passt-source.tar.gz crosvm-crates.txt; do
     [[ -f "$vm_programs/$file" ]] || die "name the folder crosvm/build.sh filled with --vm-programs (it has no $file)"
@@ -287,28 +304,41 @@ if [[ -n "$licenses" ]]; then
 fi
 
 # The repository entries the package scripts write. They are not package files: a conffile
-# would stay behind after a removal, and the entry must go with the package.
-read -r -d '' apt_source <<EOF || true
+# would stay behind after a removal, and the entry must go with the package. Each comes in
+# both channels; the scripts pick one.
+# apt's entry for channel $1.
+apt_source() {
+    cat <<EOF
 Types: deb
 URIs: $repo_url/apt
-Suites: stable
+Suites: $1
 Components: main
 Architectures: $arch
 Signed-By: /usr/share/keyrings/dsa-archive-keyring.gpg
 EOF
-read -r -d '' dnf_repo <<EOF || true
+}
+# The folder of channel $1's rpm repository.
+rpm_folder() {
+    if [[ "$1" == prerelease ]]; then echo rpm-prerelease; else echo rpm; fi
+}
+# dnf's entry for channel $1.
+dnf_repo() {
+    cat <<EOF
 [dsa]
 name=Desktop Subsystem for Android
-baseurl=$repo_url/rpm/\$basearch
+baseurl=$repo_url/$(rpm_folder "$1")/\$basearch
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
 EOF
-read -r -d '' zypp_repo <<EOF || true
+}
+# zypper's entry for channel $1.
+zypp_repo() {
+    cat <<EOF
 [dsa]
 name=Desktop Subsystem for Android
-baseurl=$repo_url/rpm/$rpm_arch
+baseurl=$repo_url/$(rpm_folder "$1")/$rpm_arch
 enabled=1
 autorefresh=1
 type=rpm-md
@@ -316,23 +346,43 @@ gpgcheck=1
 repo_gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
 EOF
+}
+# Writes entry $1 for the channel in $channel at run time: the package's own on a first
+# installation, the one the entry already names on an upgrade.
+write_entry() {
+    local file="$1" kind="$2"
+    echo "if [ \"\$channel\" = prerelease ]; then"
+    echo "cat > $file <<'DSA_EOF'"
+    "$kind" prerelease
+    echo "DSA_EOF"
+    echo "else"
+    echo "cat > $file <<'DSA_EOF'"
+    "$kind" stable
+    echo "DSA_EOF"
+    echo "fi"
+    echo "chmod 0644 $file"
+}
+# The channel an existing entry names, for the scripts: \$channel keeps it.
+keep_channel="channel=$channel
+for entry in /etc/apt/sources.list.d/dsa.sources /etc/yum.repos.d/dsa.repo /etc/zypp/repos.d/dsa.repo; do
+    [ -f \"\$entry\" ] || continue
+    if grep -qx 'Suites: prerelease' \"\$entry\" || grep -q '^baseurl=.*/rpm-prerelease/' \"\$entry\"; then
+        channel=prerelease
+    elif grep -qx 'Suites: stable' \"\$entry\" || grep -q '^baseurl=.*/rpm/' \"\$entry\"; then
+        channel=stable
+    fi
+    break
+done"
 deb_add_repo="mkdir -p /etc/apt/sources.list.d
-cat > /etc/apt/sources.list.d/dsa.sources <<'DSA_EOF'
-$apt_source
-DSA_EOF
-chmod 0644 /etc/apt/sources.list.d/dsa.sources"
+$keep_channel
+$(write_entry /etc/apt/sources.list.d/dsa.sources apt_source)"
 deb_remove_repo="rm -f /etc/apt/sources.list.d/dsa.sources"
-rpm_add_repo="if [ -d /etc/yum.repos.d ]; then
-cat > /etc/yum.repos.d/dsa.repo <<'DSA_EOF'
-$dnf_repo
-DSA_EOF
-chmod 0644 /etc/yum.repos.d/dsa.repo
+rpm_add_repo="$keep_channel
+if [ -d /etc/yum.repos.d ]; then
+$(write_entry /etc/yum.repos.d/dsa.repo dnf_repo)
 fi
 if [ -d /etc/zypp/repos.d ]; then
-cat > /etc/zypp/repos.d/dsa.repo <<'DSA_EOF'
-$zypp_repo
-DSA_EOF
-chmod 0644 /etc/zypp/repos.d/dsa.repo
+$(write_entry /etc/zypp/repos.d/dsa.repo zypp_repo)
 fi"
 # The key file goes with the package. dnf and zypper import it into rpm's database the first
 # time they read the repository; a scriptlet cannot take it out again, because rpm holds its

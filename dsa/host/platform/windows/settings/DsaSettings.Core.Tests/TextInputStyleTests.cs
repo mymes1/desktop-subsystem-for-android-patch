@@ -125,7 +125,7 @@ public class TextInputStyleTests
         Assert.Equal("4", Setter(block, "CornerRadius"));
         Assert.Equal("0,8,0,0", Setter(block, "Margin"));
 
-        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var command = page.Descendants(Wpf + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbCommand");
         var border = command.Ancestors(Wpf + "Border").First();
         Assert.Equal("{StaticResource CodeBlock}", (string?)border.Attribute("Style"));
@@ -135,10 +135,54 @@ public class TextInputStyleTests
     [Fact]
     public void Fr17_the_adb_port_is_a_library_box_with_a_body_text_label()
     {
-        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var box = page.Descendants(Ui + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbPortBox");
         var label = box.Parent!.Elements(Wpf + "TextBlock").Single();
         Assert.Equal("{StaticResource CardTitle}", (string?)label.Attribute("Style"));
         Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment"));
+    }
+
+    [Fact]
+    public void Fr17_developer_mode_and_adb_are_on_the_network_page_only()
+    {
+        string[] adb = { "DeveloperModeSwitch", "AdbAutoConnectSwitch", "AdbCommand", "AdbPortBox" };
+        var network = File_(Path.Combine("Pages", "NetworkPage.xaml"));
+        var advanced = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        foreach (var name in adb)
+        {
+            Assert.Contains(network.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+            Assert.DoesNotContain(advanced.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+        }
+    }
+
+    [Fact]
+    public void Fr17_the_drag_and_drop_note_wraps_inside_a_card()
+    {
+        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var note = page.Descendants(Wpf + "TextBlock").Single(e => (string?)e.Attribute("Text") == "{l:Text FilesNote.Text}");
+        Assert.Equal("{StaticResource CardDescription}", (string?)note.Attribute("Style"));
+        Assert.Contains(note.Ancestors(), e => e.Name == Ui + "CardControl");
+    }
+
+    [Fact]
+    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_above_about()
+    {
+        var window = File_("MainWindow.xaml");
+        var menu = window.Descendants(Ui + "NavigationView.MenuItems").Single().Elements()
+            .Select(e => ((string?)e.Attribute("Content"))?.Replace("{l:Text ", "").Replace(".Content}", ""))
+            .ToList();
+        Assert.Equal(new[]
+        {
+            "NavGeneral", "NavMemory", "NavApps", "NavBackground", "NavWidgets", "NavDisplay",
+            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced", "NavLogs",
+        }, menu);
+        var footer = window.Descendants(Ui + "NavigationView.FooterMenuItems").Single().Elements()
+            .Select(e => (string?)e.Attribute("Content")).ToList();
+        Assert.Equal(new[] { "{l:Text NavAbout.Content}" }, footer);
+        var updates = File_(Path.Combine("Pages", "UpdatesPage.xaml"));
+        foreach (var name in new[] { "Choice", "CheckNowButton", "ImageSwitch", "ProgramSwitch", "PrereleaseSwitch", "UpdateNowButton" })
+        {
+            Assert.Contains(updates.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+        }
     }
 }

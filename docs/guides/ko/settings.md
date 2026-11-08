@@ -24,12 +24,11 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **백그라운드에서 실행 중** | 창 없이 실행 중인 앱: **열기**, **중지**, 중지 전에 물을지 여부 | `dsa background`, `stop-without-asking` |
 | **위젯** | 바탕 화면의 위젯, **바탕 화면에 추가** | `dsa widgets` |
 | **디스플레이 및 GPU** | **렌더링 GPU**, **창 관리자 다시 시작** | `render-gpu`, `dsa gpus` |
-| **안드로이드** | 실행 중인 버전, **사용할 버전**(관리자) | `dsa android version`, `dsa android use` |
-| **업데이트** | **DSA 자동 업데이트**(관리자), **안드로이드 이미지 자동 업데이트**(관리자), **지금 설치** | `program-updates`, `image-updates`, `dsa update` |
-| **기기 정보** | Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
-| **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹** | `dsa network`, `advanced-networking` |
-| **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 개발자 모드, 추적(관리자), 로그 폴더 | 아래 표 |
-| **Android 로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
+| **기기 정보** | 먼저 바꿀 수 없는 이 컴퓨터의 정보: 이름, 제조사와 모델, **복사**가 있는 **기기 사양**. 그다음 Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
+| **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹**, **개발자 모드**(adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
+| **업데이트** | **Android**: 실행 중인 버전과 빌드, 따르는 버전, 진행률과 **지금 확인**(관리자)이 있는 Android 업데이트, **안드로이드 이미지 자동 업데이트**(관리자), **사용할 버전**(관리자). **DSA**: **DSA 자동 업데이트**(관리자), **프리릴리스 버전 받기**(관리자), **지금 설치** | `dsa android version`, `dsa android use`, `image-updates`, `program-updates`, `prerelease-updates`, `dsa update` |
+| **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 추적(관리자), 로그 폴더 | 아래 표 |
+| **로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
 | **정보** | 버전, 라이선스, 소스 코드 | |
 
 ## 고급 페이지
@@ -45,7 +44,6 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **ARM 전용 앱 실행** | | `arm-translation` |
 | **Google의 ARM 번역기** (ARM64 제외) | | `dsa arm-translation fetch google` |
 | **기본 번역기 사용** (ARM64 제외) | | `dsa arm-translation use-default` |
-| **개발자 모드** | 끔 | `developer-mode`, `adb-port` |
 | **입력 추적**(관리자) | 끔 | `input-trace` |
 | **크기 조정 추적**(관리자) | 끔 | `resize-trace` |
 
@@ -65,6 +63,10 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
   같은 크기
 - `shared-folders`: `all`, `none`, 또는 쉼표로 구분한 폴더 이름(예: `Documents,Pictures`)
 - `adb-port`: 1부터 65535까지의 TCP 포트. 기본값은 58526입니다.
+- `prerelease-updates`: `on`이면 정식 버전과 함께 프리릴리스도 받고, `off`이면 정식 버전만 받습니다. 처음 값은
+  설치한 설치 파일을 따릅니다. 프리릴리스 설치 파일은 켜고, 정식 설치 파일은 끈 채로 두며, 업그레이드는 고른 값을
+  그대로 둡니다. 1.0 전에는 모든 릴리스가 프리릴리스입니다. 꺼도 DSA가 이전 버전으로 돌아가지 않으며, 설치된
+  버전보다 새 정식 버전이 나올 때까지 기다립니다.
 - `device.<field>`: `manufacturer`, `brand`, `model`, `device`, `name`, `characteristics`,
   `fingerprint`, 또는 `fingerprint.release` 같은 지문의 일부. `dsa settings reset device`는 모든 값을
   되돌립니다.

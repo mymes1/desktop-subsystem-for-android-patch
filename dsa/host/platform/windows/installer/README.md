@@ -9,7 +9,8 @@ dotnet tool install --global wix --version 5.0.2
 pwsh dsa/host/platform/windows/installer/build.ps1 -Version 0.1.0 -Kernel bzImage `
     -GfxstreamBackend gfxstream_backend.dll `
     -ListUrl https://.../images.json -TrustedKey <public key> -AndroidMajor 17 `
-    -ProgramListUrl https://.../program.json
+    -ProgramListUrl https://.../program-stable.json `
+    -PrereleaseProgramListUrl https://.../program-prerelease.json -Channel prerelease
 ```
 
 The results land in `dsa/target/installer/`.
@@ -47,6 +48,10 @@ copies only `setup.exe` itself, because the package is embedded in it.)
   it quietly once no user's Android is running (or at once on `dsa update`). Setup logs to
   `C:\ProgramData\DSA\logs\setup-<version>.log`. `"program": false` in the `update`
   section of the configuration turns it off.
+- With `-PrereleaseProgramListUrl` as well, a computer that takes pre-releases reads that
+  list beside the stable one and installs the higher version. `-Channel` (`stable` or
+  `prerelease`) records the channel the installer is published on; a first installation
+  starts on it, and an upgrade keeps the channel the computer has.
 - Keeps each user's Android disk in their own profile, as
   `%LOCALAPPDATA%\DSA\android.vhdx`, the way WSL keeps each user's distributions. The
   service creates it the first time that user starts Android, and gives the VM access to

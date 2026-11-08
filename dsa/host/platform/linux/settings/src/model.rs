@@ -202,6 +202,11 @@ pub struct Settings {
     pub adb_auto_connect: bool,
     /// Where that stands, as the service last said.
     pub adb_auto_connect_state: AdbAutoConnectState,
+    /// Whether DSA takes pre-releases as well as stable releases: the pre-release channel.
+    /// The machine's; it starts from the package that was installed.
+    pub prerelease_updates: bool,
+    /// Whether this installation follows a release channel at all.
+    pub update_channel_available: bool,
 }
 
 /// Where attaching developer mode's port to the user's adb server stands.
@@ -276,6 +281,8 @@ impl Settings {
                 json,
                 "adb_auto_connect_state",
             )),
+            prerelease_updates: flag(json, "prerelease_updates", false),
+            update_channel_available: flag(json, "update_channel_available", false),
         }
     }
 
@@ -856,7 +863,20 @@ pub struct Identity {
     pub effective: Vec<(String, String)>,
     pub sources: Vec<(String, String)>,
     pub computer: Vec<(String, String)>,
+    /// What Android reports when nothing is chosen.
+    pub defaults: Vec<(String, String)>,
 }
+
+/// This computer's specifications, in the order the page lists them: its name, its
+/// manufacturer and model, the model name and the chip.
+pub const ABOUT_KEYS: [&str; 6] = [
+    "device_name",
+    "manufacturer",
+    "model",
+    "model_name",
+    "soc_manufacturer",
+    "soc_model",
+];
 
 impl Identity {
     pub fn read(json: &Value) -> Identity {
@@ -888,7 +908,48 @@ impl Identity {
                 .iter()
                 .map(|key| (key.to_string(), text(&json["effective"], key)))
                 .collect(),
+            defaults: read(&json["defaults"]),
         }
+    }
+
+    /// This computer's own value of `key`, as the firmware and the system report it: one of
+    /// the values that follow the computer, or for the manufacturer and the model the default,
+    /// when it came from the computer. A value chosen for Android is not the computer's, and
+    /// empty means the computer does not say.
+    pub fn of_computer(&self, key: &str) -> &str {
+        if dsa_host_core::device_identity::COMPUTER_KEYS.contains(&key) {
+            self.computer(key)
+        } else if self.origin(key) == "computer" {
+            Self::find(&self.defaults, key)
+        } else {
+            ""
+        }
+    }
+
+    /// This computer's manufacturer and model, as the page shows them under its name.
+    pub fn computer_make_model(&self) -> String {
+        [self.of_computer("manufacturer"), self.of_computer("model")]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// The specifications as text, a row per line with the label and the value apart, as
+    /// Copy puts them on the clipboard. `label` names each key and `missing` stands for a
+    /// value the computer does not say.
+    pub fn about_text(&self, label: impl Fn(&str) -> String, missing: &str) -> String {
+        ABOUT_KEYS
+            .iter()
+            .map(|key| {
+                let value = match self.of_computer(key) {
+                    "" => missing,
+                    value => value,
+                };
+                format!("{}\t{value}", label(key))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub fn chosen(&self, key: &str) -> &str {
@@ -1125,7 +1186,8 @@ impl Client {
     }
 
     /// Changes a setting that applies to every user of the computer, which only an
-    /// administrator may: image updates, program updates and the traces.
+    /// administrator may: image updates, program updates, the release channel
+    /// (`prerelease-updates`) and the traces.
     pub fn set_machine(&self, name: &str, on: bool) -> Result<Settings, Failure> {
         Ok(Settings::read(&self.machine_json(&[
             "settings",
