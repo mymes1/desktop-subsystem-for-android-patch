@@ -5,7 +5,9 @@
 # release signs with the project's keys.
 #
 # The Android 17 x86_64 image is then booted by four boot checks at once, each on a runner of
-# its own.
+# its own. That image is kept in the Actions cache, keyed on everything that decides it, so a
+# run whose inputs did not change takes it from there instead of making it again; the check
+# runs on it all the same.
 
 name: Image test
 
@@ -37,12 +39,14 @@ on:
       - "dsa/host/platform/linux/tests/overlays.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
       - ".github/scripts/linux-vm/**"
+      - ".github/scripts/cache/prune.sh"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
       - "scripts/tests/image-audio-workflow.test.sh"
       - "scripts/tests/image-media-workflow.test.sh"
       - "scripts/tests/image-boot-overlays-workflow.test.sh"
       - "scripts/tests/image-boot-check-image-dir.test.sh"
+      - "scripts/tests/image-cache-workflow.test.sh"
       - "scripts/tests/image-boot-parallel-workflow.test.sh"
       - "dsa/host/platform/linux/src/config.rs"
   workflow_dispatch:
@@ -564,6 +568,10 @@ jobs:
           - android: "17"
             arch: x86_64
     env:
+      # Whether a checked image is kept in the Actions cache for the next run with the same
+      # inputs. One image is about 3 GB there; the four would not fit in the repository's
+      # 10 GB with the other caches, so only the one the boot checks wait for is kept.
+      CACHE_IMAGE: "false"
       # Whether the image is handed to the boot checks.
       BOOT_IMAGE: "false"
     steps: &image-steps
@@ -582,7 +590,7 @@ jobs:
       - name: Install the disk tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gdisk qemu-utils
+          sudo apt-get install -y --no-install-recommends gdisk qemu-utils zip
 
       - name: Fetch the pinned inputs
         run: dsa/guest/image/fetch.sh ${{ matrix.android }} ${{ matrix.arch }}
@@ -741,10 +749,15 @@ jobs:
           echo "::error::no published x86_64 Android 17 image release carries arm-translation.zip"
           exit 1
 
-      - name: Make a throwaway key set
-        run: dsa/guest/image/make-keys.sh .scratch/image-keys
-
-      - name: Make the image
+      # Everything that decides the image names its cache entry: the pinned AOSP build
+      # (inputs.json), make-image.py and every file beside it (they name the image's build
+      # tag too), the files it lays into the image from the rest of dsa/guest, the framework
+      # lock, the guest programs and the agent built above, the default ARM translator, the
+      # arguments the image is made with, and the tools that make it. The key set is not an
+      # input: each run makes a throwaway one, so the one an image was signed with is kept with
+      # it, and the check below reads that one.
+      - name: Name the image's inputs
+        id: image-key
         run: |
           args=(--major "${{ matrix.android }}" --arch ${{ matrix.arch }} --keys .scratch/image-keys)
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
@@ -759,8 +772,50 @@ jobs:
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           args+=(${{ steps.translator.outputs.args }})
+          printf '%s\n' "${args[@]}" > .scratch/image-args
+          programs=(.scratch/guest-graphics .scratch/channeld .scratch/hwcomposer .scratch/codec2 .scratch/audio
+                    .scratch/sensors .scratch/camera .scratch/power-hal .scratch/gnss-hal .scratch/agent
+                    .scratch/build-tools/aapt2)
+          [[ -d .scratch/arm-translation ]] && programs+=(.scratch/arm-translation)
+          {
+            echo "runner: $ImageOS"
+            sed 's/^/argument: /' .scratch/image-args
+            find "${programs[@]}" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+            sgdisk --version | head -1
+            qemu-img --version | head -1
+          } | tee "$RUNNER_TEMP/image-inputs.txt"
+          inputs="$(sha256sum < "$RUNNER_TEMP/image-inputs.txt" | cut -c1-16)"
+          prefix="guest-image-android-${{ matrix.android }}-${{ matrix.arch }}-"
+          key="$prefix${{ hashFiles('dsa/android-versions.json', 'dsa/guest/image/**', 'dsa/guest/framework/**', 'dsa/guest/*/*.rc', 'dsa/guest/*/*.xml', '!dsa/guest/**/__pycache__/**') }}-$inputs"
+          echo "the image's key: $key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Take the image made from the same inputs
+        id: image-cache
+        if: env.CACHE_IMAGE == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            dsa/target/image
+            .scratch/image-keys
+          key: ${{ steps.image-key.outputs.key }}
+
+      - name: Use the image from the cache
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: ls -l dsa/target/image/*/ .scratch/image-keys
+
+      - name: Make a throwaway key set
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: dsa/guest/image/make-keys.sh .scratch/image-keys
+
+      - name: Make the image
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: |
+          mapfile -t args < .scratch/image-args
           uv run dsa/guest/image/make-image.py "${args[@]}"
 
+      # Runs on every image, the one from the cache too.
       - name: Check the image
         run: uv run dsa/guest/image/check-image.py dsa/target/image/*/ .scratch/image-keys
 
@@ -810,19 +865,54 @@ jobs:
           echo "kernel release: $tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-  # Android 17 on x86_64: made and checked with the image job's steps, and handed to the boot
-  # checks. One combination is enough to boot, and the runner's KVM is x86_64.
+      # The partition images in the signed build are what the system disk already holds, and
+      # nothing reads them after the disk is made (the check above does not), so the cache
+      # keeps the build without them: about 3 GB for the image instead of about 5 GB.
+      - name: Leave out the partition images the system disk holds
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        run: |
+          zip -d dsa/target/image/*/signed-target_files.zip 'IMAGES/*' >/dev/null || test $? -eq 12
+          ls -l dsa/target/image/*/
+
+      - name: Keep the image for the next run with the same inputs
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            dsa/target/image
+            .scratch/image-keys
+          key: ${{ steps.image-key.outputs.key }}
+
+      - name: Delete the image it replaces from the cache
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cache/prune.sh superseded "${{ steps.image-key.outputs.prefix }}" "${{ steps.image-key.outputs.key }}"
+
+  # Android 17 on x86_64: made and checked with the image job's steps, kept in the cache, and
+  # handed to the boot checks. One combination is enough to boot, and the runner's KVM is x86_64.
   boot-image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
     needs: [guest-programs, agent]
     if: github.event_name != 'workflow_dispatch' || inputs.android == '17' || inputs.android == 'all'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      # Deletes the cached image a new one replaces.
+      actions: write
     strategy:
       matrix:
         android: ["17"]
         arch: [x86_64]
     env:
+      CACHE_IMAGE: "true"
       BOOT_IMAGE: "true"
     outputs:
       kernel: ${{ steps.kernel.outputs.tag }}
