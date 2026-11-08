@@ -1551,6 +1551,17 @@ pub struct Settings {
     /// change it.
     #[prost(message, optional, tag = "20")]
     pub network: ::core::option::Option<NetworkStatus>,
+    /// Whether DSA is updated to pre-releases as well as stable releases (the pre-release
+    /// channel). It applies to every user of the computer, so only an administrator may change
+    /// it. A computer starts on the channel of the installer that put DSA on it and keeps it
+    /// through upgrades; moving to the stable channel never installs a lower version.
+    #[prost(bool, tag = "32")]
+    pub prerelease_updates: bool,
+    /// Whether this installation follows a release channel at all: the service updates DSA
+    /// itself, or the package repository entries DSA's package registered follow the channel. A
+    /// client cannot change it.
+    #[prost(bool, tag = "33")]
+    pub update_channel_available: bool,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

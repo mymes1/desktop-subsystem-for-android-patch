@@ -298,6 +298,12 @@
   <data name="ProgramUpdatesCard.Description" xml:space="preserve">
     <value>Download signed new versions of DSA and install them when no Android is running.</value>
   </data>
+  <data name="PrereleaseUpdatesCard.Header" xml:space="preserve">
+    <value>Get pre-release versions</value>
+  </data>
+  <data name="PrereleaseUpdatesCard.Description" xml:space="preserve">
+    <value>Also install versions that are still being finished, as well as stable releases. Every release before 1.0 is a pre-release. Turning this off never moves DSA back to an older version: it waits for a stable release newer than the one installed.</value>
+  </data>
   <data name="ImageUpdatesCard.Header" xml:space="preserve">
     <value>Update the Android image automatically</value>
   </data>
@@ -390,6 +396,9 @@
   </data>
   <data name="AndroidFilesCard.Description" xml:space="preserve">
     <value>Opens Android's shared storage in File Explorer: the files Android apps saved, such as photos and downloads. Android starts if it is not running. Android in File Explorer's navigation pane does the same.</value>
+  </data>
+  <data name="FilesDropCard.Header" xml:space="preserve">
+    <value>Send files to Android apps</value>
   </data>
   <data name="FilesNote.Text" xml:space="preserve">
     <value>To send a file to an Android app, drag it from File Explorer onto the app's window. An APK you drop is installed.</value>
@@ -1031,10 +1040,10 @@
     <value>Launch when ready</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
-    <value>Android log</value>
+    <value>Logs</value>
   </data>
   <data name="LogsTitle.Text" xml:space="preserve">
-    <value>Android log</value>
+    <value>Logs</value>
   </data>
   <data name="LogsNote.Text" xml:space="preserve">
     <value>Android sends its log only while this page is open, and nothing is written to disk. Save diagnostics gathers what a problem report needs into one zip file.</value>
@@ -1570,12 +1579,6 @@
   <data name="Toggle.Off" xml:space="preserve">
     <value>Off</value>
   </data>
-  <data name="NavAndroid.Content" xml:space="preserve">
-    <value>Android</value>
-  </data>
-  <data name="AndroidTitle.Text" xml:space="preserve">
-    <value>Android</value>
-  </data>
   <data name="AndroidRunningHeader.Text" xml:space="preserve">
     <value>Running now</value>
   </data>
@@ -1746,5 +1749,41 @@
   </data>
   <data name="ApkWindow_Reason_invalid-bundle" xml:space="preserve">
     <value>The bundle is not one app that Android can install.</value>
+  </data>
+  <data name="UpdatesAndroidHeader.Text" xml:space="preserve">
+    <value>Android</value>
+  </data>
+  <data name="UpdatesProgramHeader.Text" xml:space="preserve">
+    <value>DSA</value>
+  </data>
+  <data name="AndroidFollowsCard.Header" xml:space="preserve">
+    <value>Version it follows</value>
+  </data>
+  <data name="Android_FollowsLatest" xml:space="preserve">
+    <value>The newest supported version (now Android {0})</value>
+  </data>
+  <data name="Android_FollowsMajor" xml:space="preserve">
+    <value>Android {0} and its security updates</value>
+  </data>
+  <data name="AndroidUpdateCard.Header" xml:space="preserve">
+    <value>Android update</value>
+  </data>
+  <data name="Android_UpToDate" xml:space="preserve">
+    <value>No Android update is waiting. DSA checks every day, and an update applies at the next start of Android.</value>
+  </data>
+  <data name="AndroidCheckButton.Content" xml:space="preserve">
+    <value>Check now</value>
+  </data>
+  <data name="IdentitySpecsCard.Header" xml:space="preserve">
+    <value>Device specifications</value>
+  </data>
+  <data name="IdentityCopyButton.Content" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="IdentityAndroidHeader.Text" xml:space="preserve">
+    <value>What Android reports</value>
+  </data>
+  <data name="Identity_NotReported" xml:space="preserve">
+    <value>Not reported</value>
   </data>
 </root>

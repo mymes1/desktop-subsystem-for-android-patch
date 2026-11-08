@@ -10,27 +10,27 @@ pub enum Page {
     Background,
     Widgets,
     Display,
-    Android,
-    Updates,
     Identity,
     Network,
+    /// DSA itself and the Android image: the version that runs, the version it follows, its
+    /// update and the version choice.
+    Updates,
     Advanced,
     Logs,
     About,
 }
 
 impl Page {
-    pub const ALL: [Page; 13] = [
+    pub const ALL: [Page; 12] = [
         Page::General,
         Page::Memory,
         Page::Apps,
         Page::Background,
         Page::Widgets,
         Page::Display,
-        Page::Android,
-        Page::Updates,
         Page::Identity,
         Page::Network,
+        Page::Updates,
         Page::Advanced,
         Page::Logs,
         Page::About,
@@ -45,12 +45,11 @@ impl Page {
             Page::Background => "Running in the background",
             Page::Widgets => "Widgets",
             Page::Display => "Display and GPU",
-            Page::Android => "Android version",
             Page::Updates => "Updates",
             Page::Identity => "Device identity",
             Page::Network => "Network",
             Page::Advanced => "Advanced",
-            Page::Logs => "Android log",
+            Page::Logs => "Logs",
             Page::About => "About",
         }
     }
@@ -63,7 +62,6 @@ impl Page {
             Page::Background => "media-playback-start-symbolic",
             Page::Widgets => "view-grid-symbolic",
             Page::Display => "video-display-symbolic",
-            Page::Android => "phone-symbolic",
             Page::Updates => "software-update-available-symbolic",
             Page::Identity => "contact-new-symbolic",
             Page::Network => "network-wired-symbolic",
@@ -82,7 +80,6 @@ impl Page {
             Page::Background => "background",
             Page::Widgets => "widgets",
             Page::Display => "display",
-            Page::Android => "android",
             Page::Updates => "updates",
             Page::Identity => "identity",
             Page::Network => "network",
@@ -93,6 +90,10 @@ impl Page {
     }
 
     pub fn from_id(id: &str) -> Option<Page> {
+        // The Android page is part of Updates now; its old name still opens it.
+        if id == "android" {
+            return Some(Page::Updates);
+        }
         Page::ALL.into_iter().find(|page| page.id() == id)
     }
 }
@@ -123,5 +124,21 @@ mod tests {
         assert_eq!(app_of(&args(&["--app", "../evil"])), None);
         assert_eq!(app_of(&args(&["--app", "notes"])), None);
         assert_eq!(app_of(&args(&["--page", "apps"])), None);
+    }
+
+    #[test]
+    fn fr17_updates_holds_android_and_sits_directly_above_advanced() {
+        let updates = Page::ALL.iter().position(|p| *p == Page::Updates).unwrap();
+        assert_eq!(Page::ALL[updates + 1], Page::Advanced);
+        assert_eq!(Page::ALL[updates - 1], Page::Network);
+        assert_eq!(Page::from_id("android"), Some(Page::Updates));
+    }
+
+    #[test]
+    fn fr17_the_log_page_is_called_logs_and_sits_directly_above_about() {
+        assert_eq!(Page::Logs.title(), "Logs");
+        let logs = Page::ALL.iter().position(|p| *p == Page::Logs).unwrap();
+        assert_eq!(Page::ALL[logs + 1], Page::About);
+        assert_eq!(Page::ALL.last(), Some(&Page::About));
     }
 }

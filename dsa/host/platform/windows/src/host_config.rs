@@ -30,7 +30,9 @@
 //!
 //! `update.program_list_url` and `update.program_dir` let the service update DSA itself
 //! from the signed program list, downloading setup files into that folder;
-//! `"program": false` turns that off.
+//! `"program": false` turns that off. `update.program_list_url` is the stable channel's list
+//! and `update.prerelease_program_list_url` the pre-release channel's; `update.channel` is the
+//! channel the installer was published on, which a computer starts on.
 //!
 //! `settings_dir` is where the service keeps the settings users change from the settings
 //! app (`%ProgramData%\DSA\settings` when absent). The settings can turn either kind of
@@ -55,6 +57,7 @@ pub use dsa_host_core::host_config::{
     expand_locations, HostConfigError, UpdateSettings, DEFAULT_MEMORY_MB,
 };
 use dsa_host_core::update::policy::InstalledImage;
+use dsa_host_core::update::program::ReleaseChannel;
 use dsa_host_core::update::program_service::ProgramSettings;
 
 use crate::vm::{console_pipe_path, is_sid, AndroidVmConfig};
@@ -373,6 +376,30 @@ impl HostConfig {
         let has_store = self.images_dir.is_some();
         match (&mut self.update, &package.update) {
             (Some(ours), Some(theirs)) => {
+                // A configuration from before the release channels names one program list
+                // and no channel; the package's channel lists replace it, so the computer
+                // reads the list of the channel it follows.
+                if ours.prerelease_program_list_url.is_none()
+                    && ours.channel.is_none()
+                    && theirs.prerelease_program_list_url.is_some()
+                {
+                    notes.push(format!(
+                        "the configuration names one program list {:?} from before release \
+                         channels; using the installed package's stable list {:?} and \
+                         pre-release list {:?}",
+                        ours.program_list_url,
+                        theirs.program_list_url,
+                        theirs.prerelease_program_list_url
+                    ));
+                    ours.program_list_url = theirs.program_list_url.clone();
+                    ours.prerelease_program_list_url = theirs.prerelease_program_list_url.clone();
+                    if ours.program_dir.is_none() {
+                        ours.program_dir = theirs.program_dir.clone();
+                    }
+                }
+                // The channel of the installer used last, for a computer whose settings
+                // record none yet.
+                ours.channel = theirs.channel.or(ours.channel);
                 let differs = ours.list_url != theirs.list_url
                     || ours.program_list_url != theirs.program_list_url
                     || ours.trusted_keys != theirs.trusted_keys;
@@ -391,6 +418,7 @@ impl HostConfig {
                     ours.list_url = theirs.list_url.clone();
                     ours.trusted_keys = theirs.trusted_keys.clone();
                     ours.program_list_url = theirs.program_list_url.clone();
+                    ours.prerelease_program_list_url = theirs.prerelease_program_list_url.clone();
                     ours.program_dir = theirs.program_dir.clone();
                 } else if differs {
                     notes.push(format!(
@@ -444,6 +472,8 @@ impl HostConfig {
         let log_dir = self.log_dir().unwrap_or_else(|| dir.clone());
         Ok(Some(ProgramSettings {
             list_url: update.program_list_url.clone(),
+            prerelease_list_url: update.prerelease_program_list_url.clone(),
+            channel: update.installer_channel(running),
             enabled: update.program,
             keys: update.keys()?,
             dir: dir.clone(),
@@ -462,8 +492,17 @@ impl HostConfig {
     /// Whether this installation updates DSA itself at all.
     pub fn program_updates_available(&self) -> bool {
         self.update.as_ref().is_some_and(|update| {
-            update.program && update.program_list_url.is_some() && update.program_dir.is_some()
+            update.program && update.has_program_list() && update.program_dir.is_some()
         })
+    }
+
+    /// The channel of the installer that put version `running` here, which a computer whose
+    /// settings record no channel yet starts on.
+    pub fn installer_channel(&self, running: &str) -> ReleaseChannel {
+        self.update.as_ref().map_or_else(
+            || ReleaseChannel::of_version(running),
+            |update| update.installer_channel(running),
+        )
     }
 
     /// The service's log folder: the folder of `log_file`, when there is one. Split as

@@ -10,11 +10,58 @@ use crate::i18n::tr;
 use crate::model::{AdbAutoConnectState, Identity, Settings};
 use crate::view;
 
-/// The names and the build fingerprint Android reports to apps.
+/// This computer, as its firmware and system report it (its name, maker and model, then its
+/// specifications, which cannot be changed), and then the names and the build fingerprint
+/// Android reports to apps, which can.
 pub fn identity(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
+    // This computer: its name large, its maker and model under it, as GNOME's About shows the
+    // device.
+    let banner = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    banner.set_margin_bottom(6);
+    let computer_name = gtk::Label::builder()
+        .xalign(0.0)
+        .selectable(true)
+        .wrap(true)
+        .build();
+    computer_name.add_css_class("title-1");
+    let make_model = gtk::Label::builder()
+        .xalign(0.0)
+        .selectable(true)
+        .wrap(true)
+        .build();
+    make_model.add_css_class("dim-label");
+    banner.append(&computer_name);
+    banner.append(&make_model);
+    let banner_group = group("", None);
+    banner_group.add(&banner);
+    page.add(&banner_group);
+    let specs = group(
+        &tr("Device specifications"),
+        Some(&tr("These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.")),
+    );
+    let copy = gtk::Button::with_label(&tr("Copy"));
+    copy.add_css_class("flat");
+    specs.set_header_suffix(Some(&copy));
+    let spec_rows: Rc<Vec<(&'static str, adw::ActionRow)>> = Rc::new(
+        crate::model::ABOUT_KEYS
+            .iter()
+            .map(|key| {
+                let row = adw::ActionRow::builder()
+                    .title(view::identity_label(key))
+                    .subtitle_selectable(true)
+                    .use_markup(false)
+                    .build();
+                row.add_css_class("property");
+                specs.add(&row);
+                (*key, row)
+            })
+            .collect(),
+    );
+    page.add(&specs);
+
     let intro = group(
-        "",
+        &tr("What Android reports"),
         Some(&tr("The names and build fingerprint Android reports to apps. Leave a box empty to keep the value shown in it. Android reads these when it starts, so a change applies from its next start.")),
     );
     let warning = action_row(
@@ -61,22 +108,6 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             .collect(),
     );
     page.add(&names);
-    // The values that follow the computer, which are shown and not chosen.
-    let computer = group(
-        &tr("From this computer"),
-        Some(&tr("These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.")),
-    );
-    let computer_rows: Rc<Vec<(&'static str, adw::ActionRow, gtk::Label)>> = Rc::new(
-        dsa_host_core::device_identity::COMPUTER_KEYS
-            .iter()
-            .map(|key| {
-                let (row, value) = value_row(&view::identity_label(key), "");
-                computer.add(&row);
-                (*key, row, value)
-            })
-            .collect(),
-    );
-    page.add(&computer);
     page.add(&print);
     let (preview_row, preview) = value_row(&tr("Fingerprint from the next start"), "");
     print.add(&preview_row);
@@ -138,24 +169,29 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         entry.connect_changed(move |_| update_preview());
     }
     let show: Rc<dyn Fn(Result<Identity, crate::api::Failure>)> = {
-        let (page, entries, known, update_preview, origins, computer_rows) = (
+        let (page, entries, known, update_preview, origins, spec_rows) = (
             page.clone(),
             entries.clone(),
             known.clone(),
             update_preview.clone(),
             origins.clone(),
-            computer_rows.clone(),
+            spec_rows.clone(),
         );
+        let (computer_name, make_model) = (computer_name.clone(), make_model.clone());
         Rc::new(move |r: Result<Identity, crate::api::Failure>| {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(identity) = r else { return };
             for (key, origin) in origins.iter() {
                 origin.set_label(&view::origin_label(identity.origin(key)));
             }
-            for (key, row, value) in computer_rows.iter() {
-                value.set_label(&view::computer_value(identity.computer(key)));
-                row.set_subtitle(&view::origin_label(identity.origin(key)));
+            for (key, row) in spec_rows.iter() {
+                row.set_subtitle(&match identity.of_computer(key) {
+                    "" => tr("Not reported"),
+                    value => value.to_string(),
+                });
             }
+            computer_name.set_label(identity.of_computer("device_name"));
+            make_model.set_label(&identity.computer_make_model());
             for (key, entry) in entries.iter() {
                 entry.set_text(identity.chosen(key));
                 // The value Android reports shows where nothing is chosen.
@@ -174,6 +210,16 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             update_preview();
         })
     };
+    // Copy puts every specification on the clipboard, a row per line.
+    {
+        let known = known.clone();
+        copy.connect_clicked(move |button| {
+            if let Some(identity) = known.borrow().as_ref() {
+                let text = identity.about_text(view::identity_label, &tr("Not reported"));
+                button.clipboard().set_text(&text);
+            }
+        });
+    }
     let restart_hint = {
         let (ctx, restart) = (ctx.clone(), restart.clone());
         Rc::new(move |saved: &str, saved_restart: &str| {
@@ -365,6 +411,7 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
     advanced.add(&restart);
     *switch.borrow_mut() = Some(advanced_switch);
     page.add(&advanced);
+    page.add(&developer(ctx, &page));
 
     let reload = {
         let (ctx, show, switch) = (ctx.clone(), show.clone(), switch.clone());
@@ -397,16 +444,13 @@ struct Switches {
     links: Switch,
     clipboard: Switch,
     arm: Switch,
-    developer: Switch,
-    auto_connect: Switch,
-    auto_connect_state: adw::ActionRow,
     freeze: Switch,
     input_trace: Switch,
     resize_trace: Switch,
 }
 
-/// Files, links, ARM apps, developer mode, the clipboard, freezing, the diagnostics, the logs,
-/// the command line and resetting Android's data.
+/// Files, links, ARM apps, the clipboard, freezing, the diagnostics, the logs, the command line
+/// and resetting Android's data.
 pub fn advanced(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
     let settings: Rc<RefCell<Option<Settings>>> = Rc::default();
@@ -448,7 +492,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     };
 
     // Files.
-    let files = group(&tr("Files"), Some(&tr("To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed.")));
+    let files = group(&tr("Files"), None);
     let file_sharing = user_switch(
         "file-sharing",
         tr("Share folders with Android"),
@@ -489,6 +533,11 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         &tr("Opens Android's shared storage in the file manager: the files Android apps saved, such as photos and downloads. Android starts if it is not running. DSA Files in the app grid does the same."),
     );
     files.add(&android_files);
+    // A row of its own, so the text wraps inside the group like the other rows.
+    files.add(&action_row(
+        &tr("Send files to Android apps"),
+        &tr("To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed."),
+    ));
     {
         let (ctx, page) = (ctx.clone(), page.clone());
         android_files.connect_activated(move |_| {
@@ -595,49 +644,8 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     // Google Play.
     google_play(ctx, &page);
 
-    // Developer.
-    let developer_group = group(&tr("Developer"), None);
-    let developer = user_switch(
-        "developer-mode",
-        tr("Developer mode"),
-        tr("Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."),
-    );
-    developer_group.add(&developer.row);
-    let auto_connect = user_switch(
-        "adb-auto-connect",
-        tr("Connect adb automatically"),
-        tr("On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."),
-    );
-    developer_group.add(&auto_connect.row);
-    let auto_connect_state = action_row(
-        &tr("Automatic connection"),
-        &view::adb_auto_connect_text(AdbAutoConnectState::Off),
-    );
-    developer_group.add(&auto_connect_state);
-    let (adb_row, adb_command) = value_row(
-        &tr("Connect adb"),
-        &format!("adb connect 127.0.0.1:{}", crate::model::DEFAULT_ADB_PORT),
-    );
-    adb_row.set_subtitle(&tr(
-        "While developer mode is on and Android is running, run this command:",
-    ));
-    adb_command.add_css_class("monospace");
-    developer_group.add(&adb_row);
-    let port = adw::EntryRow::builder()
-        .title(tr("Port"))
-        .show_apply_button(true)
-        .input_purpose(gtk::InputPurpose::Digits)
-        .use_markup(false)
-        .build();
-    {
-        let (ctx, show) = (ctx.clone(), show.clone());
-        port.connect_apply(move |entry| {
-            let value = entry.text().trim().to_string();
-            let show = show.clone();
-            request(&ctx, move |c| c.set("adb-port", &value), move |r| show(r));
-        });
-    }
-    developer_group.add(&port);
+    // The clipboard and freezing.
+    let developer_group = group("", None);
     let clipboard = user_switch(
         "clipboard",
         tr("Share the clipboard with Android"),
@@ -748,26 +756,100 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         links,
         clipboard,
         arm,
-        developer,
-        auto_connect,
-        auto_connect_state: auto_connect_state.clone(),
         freeze,
         input_trace,
         resize_trace,
     });
-    {
-        let (show, port) = (show.clone(), port.clone());
-        request(
-            ctx,
-            |c| c.settings(),
-            move |r| {
-                if let Ok(settings) = r.as_ref() {
-                    port.set_text(&settings.adb_port.to_string());
-                    adb_command.set_label(&settings.adb_connect());
-                }
-                show(r);
-            },
+    request(ctx, |c| c.settings(), move |r| show(r));
+    page.root.clone().upcast()
+}
+
+/// Developer mode: whether adb reaches Android through this computer's loopback port, the
+/// port, attaching it to the adb server by itself, and the command that connects. It is on
+/// the Network page, since it is how a program on this computer reaches Android.
+fn developer(ctx: &Shared, page: &Rc<Page>) -> adw::PreferencesGroup {
+    let settings: Rc<RefCell<Option<Settings>>> = Rc::default();
+    let switches: Rc<RefCell<Option<(Switch, Switch)>>> = Rc::default();
+    let developer_group = group(&tr("Developer"), None);
+    let auto_connect_state = action_row(
+        &tr("Automatic connection"),
+        &view::adb_auto_connect_text(AdbAutoConnectState::Off),
+    );
+    let (adb_row, adb_command) = value_row(
+        &tr("Connect adb"),
+        &format!("adb connect 127.0.0.1:{}", crate::model::DEFAULT_ADB_PORT),
+    );
+    let port = adw::EntryRow::builder()
+        .title(tr("Port"))
+        .show_apply_button(true)
+        .input_purpose(gtk::InputPurpose::Digits)
+        .use_markup(false)
+        .build();
+    // Shows what the service now keeps; every row follows it.
+    let show: Rc<dyn Fn(Result<Settings, crate::api::Failure>)> = {
+        let (page, settings, switches) = (page.clone(), settings.clone(), switches.clone());
+        let (state, command, port) = (
+            auto_connect_state.clone(),
+            adb_command.clone(),
+            port.clone(),
         );
+        Rc::new(move |r: Result<Settings, crate::api::Failure>| {
+            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+            let now = match r {
+                Ok(now) => now,
+                Err(_) => match settings.borrow().clone() {
+                    Some(kept) => kept,
+                    None => return,
+                },
+            };
+            if let Some((developer, auto_connect)) = switches.borrow().as_ref() {
+                developer.set(now.developer_mode);
+                auto_connect.set(now.adb_auto_connect);
+            }
+            state.set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
+            command.set_label(&now.adb_connect());
+            port.set_text(&now.adb_port.to_string());
+            *settings.borrow_mut() = Some(now);
+        })
+    };
+    let user_switch = |name: &'static str, title: String, subtitle: String| {
+        let (ctx, show) = (ctx.clone(), show.clone());
+        Switch::new(&title, &subtitle, move |on| {
+            let show = show.clone();
+            request(&ctx, move |c| c.switch(name, on), move |r| show(r));
+        })
+    };
+    let developer = user_switch(
+        "developer-mode",
+        tr("Developer mode"),
+        tr("Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."),
+    );
+    developer_group.add(&developer.row);
+    let auto_connect = user_switch(
+        "adb-auto-connect",
+        tr("Connect adb automatically"),
+        tr("On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."),
+    );
+    developer_group.add(&auto_connect.row);
+    developer_group.add(&auto_connect_state);
+    adb_row.set_subtitle(&tr(
+        "While developer mode is on and Android is running, run this command:",
+    ));
+    adb_command.add_css_class("monospace");
+    developer_group.add(&adb_row);
+    {
+        let (ctx, show) = (ctx.clone(), show.clone());
+        port.connect_apply(move |entry| {
+            let value = entry.text().trim().to_string();
+            let show = show.clone();
+            request(&ctx, move |c| c.set("adb-port", &value), move |r| show(r));
+        });
+    }
+    developer_group.add(&port);
+    *switches.borrow_mut() = Some((developer, auto_connect));
+    {
+        let show = show.clone();
+        request(ctx, |c| c.settings(), move |r| show(r));
     }
     // Where auto-connect stands changes by itself, so it is read again every few seconds
     // while the page is shown and developer mode is on. Only the state row follows it, so a
@@ -802,7 +884,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
             gtk::glib::ControlFlow::Continue
         });
     }
-    page.root.clone().upcast()
+    developer_group
 }
 
 /// The rows of the ARM apps section for Google's ARM translator: getting it, the notice while
@@ -1039,10 +1121,6 @@ fn apply(s: &Switches, now: &Settings) {
     s.links.set(now.links_in_android);
     s.clipboard.set(now.clipboard);
     s.arm.set(now.arm_translation);
-    s.developer.set(now.developer_mode);
-    s.auto_connect.set(now.adb_auto_connect);
-    s.auto_connect_state
-        .set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
     s.freeze.set(now.freeze);
     s.input_trace.set(now.input_trace);
     s.resize_trace.set(now.resize_trace);

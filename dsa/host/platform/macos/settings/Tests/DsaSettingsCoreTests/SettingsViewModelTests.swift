@@ -152,6 +152,23 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(settings.needsAdministrator)
     }
 
+    func test_fr15_the_release_channel_is_chosen_only_by_an_administrator() async {
+        let (cli, service) = make()
+        cli.answer("settings --json", #"{"update_channel_available":true,"prerelease_updates":true}"#)
+        let settings = SettingsViewModel(service: service, text: KeyText())
+        await settings.load()
+        XCTAssertTrue(settings.prereleaseUpdates)
+        XCTAssertTrue(settings.prereleaseUpdatesNeedAdministrator)
+        XCTAssertFalse(settings.canChangePrereleaseUpdates)
+        XCTAssertTrue(settings.needsAdministrator)
+        settings.isAdministrator = true
+        XCTAssertTrue(settings.canChangePrereleaseUpdates)
+        cli.answer("settings set prerelease-updates off --json", #"{"update_channel_available":true,"prerelease_updates":false}"#)
+        await settings.setPrereleaseUpdates(false)
+        XCTAssertFalse(settings.prereleaseUpdates)
+        XCTAssertTrue(cli.calls.contains(["settings", "set", "prerelease-updates", "off", "--json"]))
+    }
+
     func test_fr17_network_page_says_when_a_restart_applies_the_switch() async {
         let (cli, service) = make()
         cli.answer("settings --json", #"{"advanced_networking":true,"network":{"mode":"nat","addresses":["10.0.2.15"],"dns_servers":[],"gateway":"10.0.2.2"}}"#)

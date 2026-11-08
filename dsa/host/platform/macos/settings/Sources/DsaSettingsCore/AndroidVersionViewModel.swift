@@ -43,8 +43,9 @@ public enum AndroidMove: Sendable {
     case down
 }
 
-/// The Android page: the version that runs (major, build, security patch) and the supported
-/// major versions to choose from.
+/// The Android part of the Updates page: the version that runs (major, build, security patch),
+/// the version it follows, where its image update stands, and the supported major versions to
+/// choose from.
 @MainActor
 public final class AndroidVersionViewModel: ObservableObject {
     private let cli: DsaCli
@@ -77,6 +78,55 @@ public final class AndroidVersionViewModel: ObservableObject {
     public var switchingText: String { info.map { text.format("Android_Switching", $0.targetMajor) } ?? "" }
 
     public var selected: AndroidVersionChoice? { choices.first { $0.channel == selectedChannel } }
+
+    /// The version the image updates follow: the newest supported one, or one major version and
+    /// its security updates.
+    public var channelText: String {
+        guard let info else {
+            return ""
+        }
+        if info.channel == "latest" {
+            return text.format("Android_FollowsLatest", info.supported.max() ?? info.major)
+        }
+        return text.format("Android_FollowsMajor", info.channel)
+    }
+
+    /// How far the image download has got, from the service's notice ("downloading Android
+    /// ...: 45% ..."), or nil when nothing is downloading.
+    public var downloadPercent: Int? { AndroidVersionViewModel.downloadPercent(of: info?.notice) }
+    public var isDownloading: Bool { downloadPercent != nil }
+
+    /// Where the Android image update stands, in one line.
+    public var updateStatusText: String {
+        guard info != nil else {
+            return ""
+        }
+        if hasNotice {
+            return notice
+        }
+        return isSwitching ? switchingText : text.get("Android_UpToDate")
+    }
+
+    /// Whether the service can be asked to check for an Android image now.
+    public var canCheckNow: Bool { !isBusy && info != nil }
+
+    /// The dsa arguments that ask for a check now: choosing the version the service already
+    /// follows, which checks the signed image list at once and changes nothing else.
+    public var checkArguments: [String] { ["android", "use", info?.channel ?? "latest", "--json"] }
+
+    /// The percentage in a download notice, or nil.
+    public nonisolated static func downloadPercent(of notice: String?) -> Int? {
+        guard let notice, notice.hasPrefix("downloading Android "),
+              let colon = notice.range(of: ": ") else {
+            return nil
+        }
+        let after = notice[colon.upperBound...]
+        let digits = after.prefix { $0.isASCII && $0.isNumber }
+        guard !digits.isEmpty, after.dropFirst(digits.count).hasPrefix("%"), let percent = Int(digits) else {
+            return nil
+        }
+        return min(max(percent, 0), 100)
+    }
 
     /// Whether the picked choice differs from the one the service keeps.
     public var canApply: Bool {
@@ -114,6 +164,23 @@ public final class AndroidVersionViewModel: ObservableObject {
     }
 
     public func load() async { await run(["android", "version", "--json"]) }
+
+    /// Reads the version again without showing the page as busy, for following a download
+    /// while the page is shown.
+    public func refresh() async {
+        guard !isBusy, let result = try? await cli.run(["android", "version", "--json"]), result.exitCode == 0,
+              let info = try? AndroidVersionInfo.parse(result.output), !isBusy else {
+            return
+        }
+        let picked = selectedChannel
+        show(info)
+        if let picked, choices.contains(where: { $0.channel == picked }) {
+            selectedChannel = picked
+        }
+    }
+
+    /// Asks the service to check for an Android image now.
+    public func checkNow() async { await run(checkArguments) }
 
     /// Chooses `choice`; `eraseData` is the user's agreement that an older major erases the
     /// data.

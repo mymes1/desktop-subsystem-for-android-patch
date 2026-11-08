@@ -4167,6 +4167,7 @@ fn facts() -> ServiceFacts {
         version: "0.0.9".into(),
         log_dir: Some("C:\\ProgramData\\DSA\\logs".into()),
         program_updates_available: true,
+        update_channel_available: true,
         image_updates_available: false,
         android_version: Some("16.0.0-15581820-7".into()),
     }

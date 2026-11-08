@@ -227,9 +227,12 @@ struct AdministratorSwitchRow: View {
     }
 }
 
-/// Updates: automatic updates of DSA and of the Android image, and installing now.
+/// Updates: the Android image (the version that runs, the version it follows, its update with
+/// the download's progress, and choosing a supported version), then DSA itself (automatic
+/// updates, the release channel, installing now).
 struct UpdatesPage: View {
     @ObservedObject var vm: SettingsViewModel
+    @ObservedObject var android: AndroidVersionViewModel
     @ObservedObject var general: GeneralViewModel
     let service: DsaService
     @State private var updating = false
@@ -237,14 +240,32 @@ struct UpdatesPage: View {
     var body: some View {
         Form {
             BannerSection(shown: vm.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: vm.error ?? "")
-            BannerSection(shown: general.hasUpdateNotice, kind: .info, title: T("UpdateNoticeBar.Title"), message: general.updateNotice)
+            BannerSection(shown: android.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: android.error ?? "")
             BannerSection(shown: vm.needsAdministrator, kind: .warning, title: T("AdminBar.Title"), message: T("AdminBar.Message"))
-            Section {
-                AdministratorSwitchRow(
-                    title: T("ProgramUpdatesCard.Header"), detail: T("ProgramUpdatesCard.Description"),
-                    isOn: vm.programUpdates, canChange: vm.canChangeProgramUpdates,
-                    needsAdministrator: vm.programUpdatesNeedAdministrator, set: { await vm.setProgramUpdates($0) }) {
-                    Task { await changeAsAdministrator(vm, ["settings", "set", "program-updates", vm.programUpdates ? "off" : "on"]) }
+            Section(T("UpdatesAndroidHeader.Text")) {
+                HStack {
+                    Text(android.versionText).font(.title3.weight(.semibold))
+                    Spacer()
+                    if android.isBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(android.imageVersion).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                LabeledContent(T("AndroidBuildCard.Header"), value: android.buildId)
+                LabeledContent(T("AndroidPatchCard.Header"), value: android.securityPatch)
+                LabeledContent(T("AndroidFollowsCard.Header"), value: android.channelText)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            RowLabel(title: T("AndroidUpdateCard.Header"), detail: android.updateStatusText)
+                            Image(systemName: "lock.shield").foregroundStyle(.secondary).help(T("AdminShield.ToolTip"))
+                        }
+                        if let percent = android.downloadPercent {
+                            ProgressView(value: Double(percent), total: 100)
+                        }
+                    }
+                    Spacer()
+                    Button(T("AndroidCheckButton.Content")) { checkNow() }.disabled(!android.canCheckNow)
                 }
                 AdministratorSwitchRow(
                     title: T("ImageUpdatesCard.Header"), detail: T("ImageUpdatesCard.Description"),
@@ -252,9 +273,38 @@ struct UpdatesPage: View {
                     needsAdministrator: vm.imageUpdatesNeedAdministrator, set: { await vm.setImageUpdates($0) }) {
                     Task { await changeAsAdministrator(vm, ["settings", "set", "image-updates", vm.imageUpdates ? "off" : "on"]) }
                 }
-                Text(T("UpdatesMachineNote.Text")).font(.callout).foregroundStyle(.secondary)
+                HStack {
+                    Picker(selection: $android.selectedChannel) {
+                        ForEach(android.choices, id: \.channel) { choice in
+                            Text(choice.label).tag(Optional(choice.channel))
+                        }
+                    } label: {
+                        HStack(alignment: .firstTextBaseline) {
+                            RowLabel(title: T("AndroidChooseCard.Header"),
+                                     detail: T("AndroidChooseCard.Description") + "\n" + android.supportedText)
+                            Image(systemName: "lock.shield").foregroundStyle(.secondary).help(T("AdminShield.ToolTip"))
+                        }
+                    }
+                    Button(T("AndroidApplyButton.Content")) { apply() }.disabled(!android.canApply)
+                }
+                Text(T("AndroidChooseNote.Text")).font(.callout).foregroundStyle(.secondary)
             }
-            Section(T("UpdateNowHeader.Text")) {
+            Section(T("UpdatesProgramHeader.Text")) {
+                if general.hasUpdateNotice {
+                    Banner(kind: .info, title: T("UpdateNoticeBar.Title"), message: general.updateNotice)
+                }
+                AdministratorSwitchRow(
+                    title: T("ProgramUpdatesCard.Header"), detail: T("ProgramUpdatesCard.Description"),
+                    isOn: vm.programUpdates, canChange: vm.canChangeProgramUpdates,
+                    needsAdministrator: vm.programUpdatesNeedAdministrator, set: { await vm.setProgramUpdates($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "program-updates", vm.programUpdates ? "off" : "on"]) }
+                }
+                AdministratorSwitchRow(
+                    title: T("PrereleaseUpdatesCard.Header"), detail: T("PrereleaseUpdatesCard.Description"),
+                    isOn: vm.prereleaseUpdates, canChange: vm.canChangePrereleaseUpdates,
+                    needsAdministrator: vm.prereleaseUpdatesNeedAdministrator, set: { await vm.setPrereleaseUpdates($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "prerelease-updates", vm.prereleaseUpdates ? "off" : "on"]) }
+                }
                 ButtonRow(title: T("UpdateNowCard.Header"), detail: T("UpdateNowCard.Description"),
                           action: T("UpdateNowButton.Content"), enabled: vm.canUpdateNow && !updating, busy: updating) {
                     guard Shell.confirm(T("UpdateNowTitle"), T("UpdateNowBody"), T("UpdateNowAction")) else {
@@ -270,91 +320,69 @@ struct UpdatesPage: View {
                         updating = false
                     }
                 }
+                Text(T("UpdatesMachineNote.Text")).font(.callout).foregroundStyle(.secondary)
             }
         }
         .settingsPage()
         .task {
             await vm.load()
+            await android.load()
             await general.poll()
+            // A download moves on by itself, so the version is read again while the page is
+            // shown; the task ends when the page goes away.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await android.refresh()
+            }
         }
     }
-}
 
-/// Android: the version that runs, and choosing one of the supported ones.
-struct AndroidPage: View {
-    @ObservedObject var vm: AndroidVersionViewModel
-    @ObservedObject var settings: SettingsViewModel
-
-    var body: some View {
-        Form {
-            BannerSection(shown: vm.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: vm.error ?? "")
-            BannerSection(shown: vm.isSwitching, kind: .info, title: T("AndroidSwitchingBar.Title"), message: vm.switchingText)
-            BannerSection(shown: vm.hasNotice, kind: .info, title: T("UpdateNoticeBar.Title"), message: vm.notice)
-            Section(T("AndroidRunningHeader.Text")) {
-                HStack {
-                    Text(vm.versionText).font(.title3.weight(.semibold))
-                    Spacer()
-                    if vm.isBusy {
-                        ProgressView().controlSize(.small)
-                    }
-                    Text(vm.imageVersion).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                LabeledContent(T("AndroidBuildCard.Header"), value: vm.buildId)
-                LabeledContent(T("AndroidPatchCard.Header"), value: vm.securityPatch)
+    /// Asks the service to look for an Android image now. The image is shared by every user of
+    /// this Mac, so an administrator asks; macOS asks for an administrator's password.
+    private func checkNow() {
+        Task {
+            if Shell.isAdministrator {
+                await android.checkNow()
+                return
             }
-            Section(T("AndroidChooseHeader.Text")) {
-                HStack {
-                    Picker(selection: $vm.selectedChannel) {
-                        ForEach(vm.choices, id: \.channel) { choice in
-                            Text(choice.label).tag(Optional(choice.channel))
-                        }
-                    } label: {
-                        HStack(alignment: .firstTextBaseline) {
-                            RowLabel(title: T("AndroidChooseCard.Header"),
-                                     detail: T("AndroidChooseCard.Description") + "\n" + vm.supportedText)
-                            Image(systemName: "lock.shield").foregroundStyle(.secondary).help(T("AdminShield.ToolTip"))
-                        }
-                    }
-                    Button(T("AndroidApplyButton.Content")) { apply() }.disabled(!vm.canApply)
-                }
-                Text(T("AndroidChooseNote.Text")).font(.callout).foregroundStyle(.secondary)
+            if let problem = await Shell.runDsaElevated(android.checkArguments) {
+                Shell.tell(T("SettingsErrorBar.Title"), problem)
             }
+            await android.load()
         }
-        .settingsPage()
-        .task { await vm.load() }
     }
 
     private func apply() {
-        guard let choice = vm.selected else {
+        guard let choice = android.selected else {
             return
         }
-        let move = vm.moveTo(choice)
+        let move = android.moveTo(choice)
         let confirmed: Bool
         switch move {
         case .down:
             // Moving down loses data, so the user reads what goes first.
-            confirmed = Shell.confirm(T("AndroidDownConfirm.Title"), vm.downWarning(choice), T("AndroidDownConfirm.Action"))
+            confirmed = Shell.confirm(T("AndroidDownConfirm.Title"), android.downWarning(choice), T("AndroidDownConfirm.Action"))
         case .up:
-            confirmed = Shell.confirm(T("AndroidUpConfirm.Title"), vm.upWarning(choice), T("AndroidApplyButton.Content"), destructive: false)
+            confirmed = Shell.confirm(T("AndroidUpConfirm.Title"), android.upWarning(choice), T("AndroidApplyButton.Content"), destructive: false)
         case .same:
             confirmed = true
         }
         Task {
             guard confirmed else {
-                await vm.load()
+                await android.load()
                 return
             }
             let erase = move == .down
             // The image is shared by every user of this Mac, so the service takes the choice
             // from an administrator only; macOS asks for an administrator's password.
             if Shell.isAdministrator {
-                await vm.use(choice, eraseData: erase)
+                await android.use(choice, eraseData: erase)
                 return
             }
             if let problem = await Shell.runDsaElevated(AndroidVersionViewModel.useArguments(choice, eraseData: erase)) {
                 Shell.tell(T("SettingsErrorBar.Title"), problem)
             }
-            await vm.load()
+            await android.load()
         }
     }
 }

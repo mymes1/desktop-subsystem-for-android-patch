@@ -5,6 +5,7 @@ use std::path::Path;
 use dsa_host_core::host_config::{
     check_image_sources, expand_locations, sized_memory_mb, UpdateSettings, DEFAULT_MEMORY_MB,
 };
+use dsa_host_core::update::program::ReleaseChannel;
 
 fn update(program_list_url: Option<&str>) -> UpdateSettings {
     UpdateSettings {
@@ -13,6 +14,8 @@ fn update(program_list_url: Option<&str>) -> UpdateSettings {
         check_interval_hours: 24,
         boot_timeout_secs: 300,
         program_list_url: program_list_url.map(str::to_string),
+        prerelease_program_list_url: None,
+        channel: None,
         program: true,
         program_dir: None,
     }
@@ -47,4 +50,28 @@ fn fr19_installer_locations_are_filled_in() {
         Path::new("/opt/dsa"),
     );
     assert_eq!(text, r#"{"a":"D:\\Data\\images","b":"/opt/dsa"}"#);
+}
+
+#[test]
+fn fr15_the_installers_channel_is_the_configured_one_or_follows_the_version() {
+    let mut update = update(Some("https://example.invalid/program-stable.json"));
+    assert_eq!(
+        update.installer_channel("0.1.10"),
+        ReleaseChannel::Prerelease
+    );
+    assert_eq!(update.installer_channel("1.0.0"), ReleaseChannel::Stable);
+    update.channel = Some(ReleaseChannel::Prerelease);
+    assert_eq!(
+        update.installer_channel("1.2.0"),
+        ReleaseChannel::Prerelease
+    );
+    let read: UpdateSettings = serde_json::from_str(
+        r#"{"list_url": "https://example.invalid/images.json", "trusted_keys": [],
+            "program_list_url": "https://example.invalid/program-stable.json",
+            "prerelease_program_list_url": "https://example.invalid/program-prerelease.json",
+            "channel": "prerelease"}"#,
+    )
+    .unwrap();
+    assert_eq!(read.channel, Some(ReleaseChannel::Prerelease));
+    assert!(read.has_program_list());
 }

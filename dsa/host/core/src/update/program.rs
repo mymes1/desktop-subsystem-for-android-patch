@@ -15,6 +15,12 @@
 //!
 //! Versions are dot-separated numbers and compare as numbers, so 0.1.10 is newer than
 //! 0.1.9. A version that is not in that form is refused, never guessed at.
+//!
+//! The project publishes one such list per release channel: the stable list names the newest
+//! stable release, the pre-release list the newest pre-release. A computer on the stable
+//! channel reads the stable list alone; one on the pre-release channel reads both and takes
+//! the higher version, so a stable release newer than every pre-release reaches it too
+//! ([`choose`]).
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -26,6 +32,74 @@ use super::{check_signature, from_hex};
 
 /// The program list format this build reads.
 pub const FORMAT: u32 = 1;
+
+/// Which releases of DSA a computer takes: stable releases only, or pre-releases too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReleaseChannel {
+    /// Stable releases only.
+    Stable,
+    /// Pre-releases as well as stable releases.
+    Prerelease,
+}
+
+impl ReleaseChannel {
+    /// The channel's name as configuration files, package repositories and the release
+    /// workflow write it: `stable` or `prerelease`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReleaseChannel::Stable => "stable",
+            ReleaseChannel::Prerelease => "prerelease",
+        }
+    }
+
+    /// The channel a name stands for. `pre-release` is read as `prerelease`.
+    pub fn parse(text: &str) -> Result<ReleaseChannel, String> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "stable" => Ok(ReleaseChannel::Stable),
+            "prerelease" | "pre-release" => Ok(ReleaseChannel::Prerelease),
+            _ => Err(format!(
+                "{text:?} is not a release channel; use stable or prerelease"
+            )),
+        }
+    }
+
+    /// The channel a release of `version` was published on when nothing else says: every
+    /// release below 1.0 is a pre-release, and from 1.0 a release is stable unless the person
+    /// releasing it chose otherwise, which the installer then records. A version that cannot
+    /// be read counts as a pre-release, the channel that takes the most.
+    pub fn of_version(version: &str) -> ReleaseChannel {
+        match Version::parse(version) {
+            Ok(version) if version >= Version::parse("1.0").expect("1.0 is a version") => {
+                ReleaseChannel::Stable
+            }
+            _ => ReleaseChannel::Prerelease,
+        }
+    }
+
+    /// The channel of the switch "take pre-releases too".
+    pub fn from_prereleases(on: bool) -> ReleaseChannel {
+        if on {
+            ReleaseChannel::Prerelease
+        } else {
+            ReleaseChannel::Stable
+        }
+    }
+
+    /// Whether this channel takes pre-releases.
+    pub fn takes_prereleases(self) -> bool {
+        self == ReleaseChannel::Prerelease
+    }
+}
+
+impl fmt::Display for ReleaseChannel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ReleaseChannel::Stable => "stable",
+            ReleaseChannel::Prerelease => "pre-release",
+        })
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -204,4 +278,32 @@ pub fn decide(running: &str, list: &ProgramManifest) -> Result<ProgramDecision, 
              {running}; DSA is never moved to a lower version"
         )),
     })
+}
+
+/// Picks the list a computer on `channel` follows, from the lists that could be read: the
+/// stable list alone on the stable channel, and on the pre-release channel whichever list
+/// offers the higher version. When both offer the same version the stable list is taken, so
+/// what is installed stays installable after a switch to the stable channel. Returns the list
+/// and the channel it was published on, or `None` when the channel has no list to follow.
+pub fn choose<'a>(
+    channel: ReleaseChannel,
+    stable: Option<&'a ProgramManifest>,
+    prerelease: Option<&'a ProgramManifest>,
+) -> Option<(ReleaseChannel, &'a ProgramManifest)> {
+    let stable = stable.map(|list| (ReleaseChannel::Stable, list));
+    if channel == ReleaseChannel::Stable {
+        return stable;
+    }
+    let prerelease = prerelease.map(|list| (ReleaseChannel::Prerelease, list));
+    match (stable, prerelease) {
+        (Some(stable), Some(prerelease)) => {
+            let version = |list: &ProgramManifest| Version::parse(&list.version).ok();
+            if version(prerelease.1) > version(stable.1) {
+                Some(prerelease)
+            } else {
+                Some(stable)
+            }
+        }
+        (stable, prerelease) => stable.or(prerelease),
+    }
 }

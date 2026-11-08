@@ -7,7 +7,7 @@ adb는 DSA에 들어 있지 않습니다. Android SDK Platform-Tools에서 받�
 
 ## adb 연결하기
 
-1. DSA 설정 **고급** 페이지에서 **개발자 모드**를 켭니다. 또는 `dsa settings set developer-mode on`을
+1. DSA 설정 **네트워크** 페이지에서 **개발자 모드**를 켭니다. 또는 `dsa settings set developer-mode on`을
    실행합니다.
 2. Android가 실행 중이 아니면 시작합니다: `dsa start --wait`
 3. 연결합니다.
@@ -21,7 +21,7 @@ adb는 DSA에 들어 있지 않습니다. Android SDK Platform-Tools에서 받�
    수 없습니다.
 4. 다 쓰면 **개발자 모드**를 다시 끄거나 `dsa settings set developer-mode off`를 실행합니다.
 
-**고급** 페이지의 **adb 연결**에 정확한 명령이 나오고, `dsa settings`도 `Developer mode` 줄에 이 명령을
+**네트워크** 페이지의 **adb 연결**에 정확한 명령이 나오고, `dsa settings`도 `Developer mode` 줄에 이 명령을
 보여 줍니다.
 
 ## 다른 포트 쓰기

@@ -118,7 +118,9 @@ public sealed partial class DsaService
             ? Strings(json, "shared_folders")
             : null,
         Bool(json, "adb_auto_connect", missing: true),
-        ReadAdbAutoConnectState(OptionalString(json, "adb_auto_connect_state")));
+        ReadAdbAutoConnectState(OptionalString(json, "adb_auto_connect_state")),
+        Bool(json, "prerelease_updates"),
+        Bool(json, "update_channel_available"));
 
     /// <summary>The auto-connect state a name stands for. An empty or unknown name, as an older
     /// service gives, is off.</summary>
@@ -273,6 +275,10 @@ public sealed partial class DsaService
         ReadArmTranslation(await RunJsonAsync("arm-translation", "use-default").ConfigureAwait(true));
 
     public Task<SettingsInfo> SetProgramUpdatesAsync(bool on) => SetAsync("program-updates", on ? "on" : "off");
+
+    /// <summary>Chooses the release channel: on takes pre-releases as well as stable
+    /// releases. Moving to the stable channel never installs a lower version.</summary>
+    public Task<SettingsInfo> SetPrereleaseUpdatesAsync(bool on) => SetAsync("prerelease-updates", on ? "on" : "off");
 
     public Task<SettingsInfo> SetImageUpdatesAsync(bool on) => SetAsync("image-updates", on ? "on" : "off");
 

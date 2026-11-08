@@ -140,12 +140,18 @@ public final class SettingsViewModel: ObservableObject {
     public var imageUpdates: Bool { settings?.imageUpdates ?? false }
     public var programUpdatesAvailable: Bool { settings?.programUpdatesAvailable ?? false }
     public var imageUpdatesAvailable: Bool { settings?.imageUpdatesAvailable ?? false }
+    public var prereleaseUpdates: Bool { settings?.prereleaseUpdates ?? false }
+    public var updateChannelAvailable: Bool { settings?.updateChannelAvailable ?? false }
+    public var canChangePrereleaseUpdates: Bool { canChange && updateChannelAvailable && isAdministrator }
+    public var prereleaseUpdatesNeedAdministrator: Bool { canChange && updateChannelAvailable && !isAdministrator }
     public var canChangeProgramUpdates: Bool { canChange && programUpdatesAvailable && isAdministrator }
     public var canChangeImageUpdates: Bool { canChange && imageUpdatesAvailable && isAdministrator }
     /// Whether a switch can be changed only by running dsa as an administrator.
     public var programUpdatesNeedAdministrator: Bool { canChange && programUpdatesAvailable && !isAdministrator }
     public var imageUpdatesNeedAdministrator: Bool { canChange && imageUpdatesAvailable && !isAdministrator }
-    public var needsAdministrator: Bool { loaded && !isAdministrator && (programUpdatesAvailable || imageUpdatesAvailable) }
+    public var needsAdministrator: Bool {
+        loaded && !isAdministrator && (programUpdatesAvailable || imageUpdatesAvailable || updateChannelAvailable)
+    }
     /// Whether the newest version can be installed now; any user may ask.
     public var canUpdateNow: Bool { canChange && programUpdatesAvailable }
 
@@ -430,6 +436,11 @@ public final class SettingsViewModel: ObservableObject {
     public func setImageUpdates(_ on: Bool) async {
         if on == imageUpdates && loaded { return }
         await change { try await service.setImageUpdates(on) }
+    }
+
+    public func setPrereleaseUpdates(_ on: Bool) async {
+        if on == prereleaseUpdates && loaded { return }
+        await change { try await service.setPrereleaseUpdates(on) }
     }
 
     /// Sets the limit, in MiB (0 for automatic). A size below the smallest the service takes

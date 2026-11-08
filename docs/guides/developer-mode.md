@@ -7,7 +7,7 @@ adb is not part of DSA. Get it from the Android SDK Platform-Tools.
 
 ## Connect adb
 
-1. Open the **Advanced** page of DSA Settings and turn on **Developer mode**. Or run
+1. Open the **Network** page of DSA Settings and turn on **Developer mode**. Or run
    `dsa settings set developer-mode on`.
 2. Start Android, if it is not running: `dsa start --wait`.
 3. Connect:
@@ -22,7 +22,7 @@ adb is not part of DSA. Get it from the Android SDK Platform-Tools.
 4. When you are done, turn **Developer mode** off again, or run
    `dsa settings set developer-mode off`.
 
-**Connect adb** on the **Advanced** page shows the exact command, and `dsa settings` prints
+**Connect adb** on the **Network** page shows the exact command, and `dsa settings` prints
 it on the `Developer mode` line.
 
 ## Use another port

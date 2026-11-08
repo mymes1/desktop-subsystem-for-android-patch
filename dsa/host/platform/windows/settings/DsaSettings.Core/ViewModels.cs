@@ -250,6 +250,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool ProgramUpdates => _settings?.ProgramUpdates ?? false;
     public bool ImageUpdates => _settings?.ImageUpdates ?? false;
     public bool ProgramUpdatesAvailable => _settings?.ProgramUpdatesAvailable ?? false;
+    /// <summary>Whether DSA takes pre-releases as well as stable releases: the pre-release
+    /// channel. The machine's; it starts from the installer that was used.</summary>
+    public bool PrereleaseUpdates => _settings?.PrereleaseUpdates ?? false;
+    /// <summary>Whether this installation follows a release channel at all.</summary>
+    public bool UpdateChannelAvailable => _settings?.UpdateChannelAvailable ?? false;
     public bool ImageUpdatesAvailable => _settings?.ImageUpdatesAvailable ?? false;
     /// <summary>Whether the app runs as an administrator (an elevated process). The update
     /// settings apply to every user, so the service lets only an administrator change
@@ -266,10 +271,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public bool CanChangeProgramUpdates => Loaded && !_busy && ProgramUpdatesAvailable && _administrator;
     public bool CanChangeImageUpdates => Loaded && !_busy && ImageUpdatesAvailable && _administrator;
+    public bool CanChangePrereleaseUpdates => Loaded && !_busy && UpdateChannelAvailable && _administrator;
+    public bool PrereleaseUpdatesNeedAdministrator => Loaded && !_busy && UpdateChannelAvailable && !_administrator;
     /// <summary>Whether a switch can be changed only by running dsa as an administrator.</summary>
     public bool ProgramUpdatesNeedAdministrator => Loaded && !_busy && ProgramUpdatesAvailable && !_administrator;
     public bool ImageUpdatesNeedAdministrator => Loaded && !_busy && ImageUpdatesAvailable && !_administrator;
-    public bool NeedsAdministrator => Loaded && !_administrator && (ProgramUpdatesAvailable || ImageUpdatesAvailable);
+    public bool NeedsAdministrator =>
+        Loaded && !_administrator && (ProgramUpdatesAvailable || ImageUpdatesAvailable || UpdateChannelAvailable);
     /// <summary>Whether the newest version can be installed now; any user may ask.</summary>
     public bool CanUpdateNow => Loaded && !_busy && ProgramUpdatesAvailable;
     public bool CanChange => Loaded && !_busy;
@@ -533,6 +541,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public Task SetImageUpdatesAsync(bool on) =>
         on == ImageUpdates && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetImageUpdatesAsync(on));
+
+    public Task SetPrereleaseUpdatesAsync(bool on) =>
+        on == PrereleaseUpdates && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetPrereleaseUpdatesAsync(on));
 }
 
 /// <summary>How the install bar looks.</summary>

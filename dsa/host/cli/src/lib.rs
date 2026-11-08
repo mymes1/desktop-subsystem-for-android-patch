@@ -181,10 +181,15 @@
 //! Android may be frozen when idle (`freeze`), whether text copied on the host can be pasted in
 //! Android and the reverse (`clipboard`, on by default), whether web links apps in Android open
 //! go to apps in Android instead of the default browser (`links-in-android`, off by default),
-//! whether DSA (`program-updates`) and the Android image (`image-updates`) are updated, and
-//! whether every DSA process writes the input trace (`input-trace`) and each stage of each
-//! resize (`resize-trace`) to its log, off by default. Those last four are the computer's, so
-//! only an administrator changes them. `developer-mode` (off by default) lets adb reach the
+//! whether DSA (`program-updates`) and the Android image (`image-updates`) are updated,
+//! whether DSA takes pre-releases as well as stable releases (`prerelease-updates`, the
+//! pre-release channel, which starts from the installer that was used), and whether every DSA
+//! process writes the input trace (`input-trace`) and each stage of each resize
+//! (`resize-trace`) to its log, off by default. Those last five are the computer's, so only an
+//! administrator changes them. Moving from the pre-release channel to the stable one never
+//! installs a lower version: DSA waits until a stable release passes the one it has. On Linux
+//! the channel chooses which of DSA's package repositories the system's package manager
+//! reads. `developer-mode` (off by default) lets adb reach the
 //! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
 //! accept in Android. `adb-port` picks another loopback port than 58526. `adb-auto-connect`
 //! (on by default) attaches that port to this computer's adb server by itself while developer
@@ -486,6 +491,8 @@ pub enum Change {
     LinksInAndroid(bool),
     Clipboard(bool),
     ProgramUpdates(bool),
+    /// Whether pre-releases are taken too: the release channel.
+    PrereleaseUpdates(bool),
     ImageUpdates(bool),
     InputTrace(bool),
     ResizeTrace(bool),
@@ -524,6 +531,7 @@ impl Change {
             "clipboard" => switch().map(Change::Clipboard),
             "links-in-android" => switch().map(Change::LinksInAndroid),
             "program-updates" => switch().map(Change::ProgramUpdates),
+            "prerelease-updates" => switch().map(Change::PrereleaseUpdates),
             "image-updates" => switch().map(Change::ImageUpdates),
             "input-trace" => switch().map(Change::InputTrace),
             "resize-trace" => switch().map(Change::ResizeTrace),
@@ -543,8 +551,8 @@ impl Change {
             },
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
-                 clipboard, links-in-android, program-updates, image-updates, input-trace, \
-                 resize-trace, memory-limit, developer-mode, adb-port, adb-auto-connect, \
+                 clipboard, links-in-android, program-updates, prerelease-updates, \
+                 image-updates, input-trace, resize-trace, memory-limit, developer-mode, adb-port, adb-auto-connect, \
                  arm-translation, stop-without-asking, file-sharing, shared-folders, \
                  advanced-networking and device.<field>"
             )),
@@ -1933,6 +1941,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "links_in_android": report.settings.links_in_android,
         "clipboard": report.settings.clipboard,
         "program_updates": report.settings.program_updates,
+        "prerelease_updates": report.settings.prerelease_updates,
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
@@ -1949,6 +1958,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "advanced_networking": report.settings.advanced_networking,
         "network": network_json(report.network.as_ref()),
         "program_updates_available": report.facts.program_updates_available,
+        "update_channel_available": report.facts.update_channel_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
         "log_dir": report.facts.log_dir,
@@ -2156,6 +2166,23 @@ fn android_version(invocation: &Invocation, client: &mut HostApiClient) -> Resul
 const LINUX_PROGRAM_UPDATES: &str =
     "Program updates: from the system's package manager (software center, apt, dnf or zypper)";
 
+/// The release channel line of `dsa settings`: which releases DSA takes, and on Linux what
+/// the channel changes.
+fn describe_channel(prereleases: bool, available: bool) -> String {
+    let channel = if prereleases {
+        "pre-release (pre-releases and stable releases; prerelease-updates on)"
+    } else {
+        "stable (stable releases only; prerelease-updates off)"
+    };
+    if !available {
+        format!("Update channel: {channel} (this installation does not update DSA)")
+    } else if cfg!(target_os = "linux") {
+        format!("Update channel: {channel}; DSA's package repository entries follow it")
+    } else {
+        format!("Update channel: {channel}")
+    }
+}
+
 /// The settings, one per line.
 pub fn describe_settings(report: &SettingsReport) -> String {
     let settings = &report.settings;
@@ -2189,6 +2216,7 @@ pub fn describe_settings(report: &SettingsReport) -> String {
                 available(settings.program_updates, facts.program_updates_available)
             )
         },
+        describe_channel(settings.prerelease_updates, facts.update_channel_available),
         format!(
             "Image updates: {}",
             available(settings.image_updates, facts.image_updates_available)
@@ -2436,6 +2464,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::LinksInAndroid(on) => wanted.links_in_android = *on,
             Change::Clipboard(on) => wanted.clipboard = *on,
             Change::ProgramUpdates(on) => wanted.program_updates = *on,
+            Change::PrereleaseUpdates(on) => wanted.prerelease_updates = *on,
             Change::ImageUpdates(on) => wanted.image_updates = *on,
             Change::InputTrace(on) => wanted.input_trace = *on,
             Change::ResizeTrace(on) => wanted.resize_trace = *on,

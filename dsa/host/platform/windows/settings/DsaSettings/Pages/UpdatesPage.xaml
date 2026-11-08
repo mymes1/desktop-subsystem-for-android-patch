@@ -5,6 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:l="clr-namespace:Dsa.Settings">
+    <!-- Two parts, each with its own view model: Android (the image: the version that runs,
+         the version it follows, its update and the version choice) and DSA itself. -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -17,11 +19,103 @@
             <StackPanel Style="{StaticResource PageContent}">
                 <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
                             IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" Margin="0,0,0,4" />
-                <ui:InfoBar x:Name="NoticeBar" Title="{l:Text UpdateNoticeBar.Title}" Severity="Informational" IsClosable="False"
-                            Margin="0,0,0,4" />
                 <ui:InfoBar Title="{l:Text AdminBar.Title}" Message="{l:Text AdminBar.Message}" Severity="Warning"
                             IsClosable="False" IsOpen="{Binding NeedsAdministrator, Mode=OneWay}" Margin="0,0,0,4" />
 
+                <!-- Android: the image and its updates. -->
+                <TextBlock Text="{l:Text UpdatesAndroidHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <StackPanel x:Name="AndroidStatus">
+                    <ProgressBar IsIndeterminate="True" Margin="0,0,0,4"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                    <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
+                                IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" Margin="0,0,0,4" />
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Phone24}">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="{Binding VersionText, Mode=OneWay}" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{Binding ImageVersion, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                    </ui:CardControl>
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Wrench24}">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="{l:Text AndroidBuildCard.Header}" Style="{StaticResource CardTitle}" />
+                        </ui:CardControl.Header>
+                        <TextBlock Text="{Binding BuildId, Mode=OneWay}" />
+                    </ui:CardControl>
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Shield24}">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="{l:Text AndroidPatchCard.Header}" Style="{StaticResource CardTitle}" />
+                        </ui:CardControl.Header>
+                        <TextBlock Text="{Binding SecurityPatch, Mode=OneWay}" />
+                    </ui:CardControl>
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRouting24}">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="{l:Text AndroidFollowsCard.Header}" Style="{StaticResource CardTitle}" />
+                        </ui:CardControl.Header>
+                        <TextBlock Text="{Binding ChannelText, Mode=OneWay}" TextWrapping="Wrap" MaxWidth="320" />
+                    </ui:CardControl>
+                    <ui:CardControl x:Name="AndroidUpdateCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowDownload24}">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{l:Text AndroidUpdateCard.Header}" Style="{StaticResource CardTitle}" />
+                                    <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding UpdateStatusText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                                <ProgressBar Margin="0,6,0,0" Minimum="0" Maximum="100" Value="{Binding DownloadPercent, Mode=OneWay, TargetNullValue=0}"
+                                             Visibility="{Binding IsDownloading, Converter={StaticResource Visible}}" />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:Button x:Name="CheckNowButton" Content="{l:Text AndroidCheckButton.Content}" Click="OnCheckNow"
+                                   IsEnabled="{Binding CanCheckNow, Mode=OneWay}" />
+                    </ui:CardControl>
+                </StackPanel>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{l:Text ImageUpdatesCard.Header}" Style="{StaticResource CardTitle}" />
+                                <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                            </StackPanel>
+                            <TextBlock Text="{l:Text ImageUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
+                                   Visibility="{Binding ImageUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnImageAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="ImageSwitch" IsChecked="{Binding ImageUpdates, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangeImageUpdates, Mode=OneWay}" Click="OnImageToggled" />
+                    </StackPanel>
+                </ui:CardControl>
+                <StackPanel x:Name="AndroidChoice">
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSwap24}">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{l:Text AndroidChooseCard.Header}" Style="{StaticResource CardTitle}" />
+                                    <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                                </StackPanel>
+                                <TextBlock Text="{l:Text AndroidChooseCard.Description}" Style="{StaticResource CardDescription}" />
+                                <TextBlock Text="{Binding SupportedText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox x:Name="Choice" MinWidth="200" ItemsSource="{Binding Choices}" DisplayMemberPath="Label"
+                                      SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                                      AutomationProperties.Name="{l:Text AndroidChooseCard.Header}" />
+                            <ui:Button Content="{l:Text AndroidApplyButton.Content}" Appearance="Primary" Margin="8,0,0,0"
+                                       IsEnabled="{Binding CanApply, Mode=OneWay}" Click="OnApply" />
+                        </StackPanel>
+                    </ui:CardControl>
+                    <TextBlock Text="{l:Text AndroidChooseNote.Text}" Style="{StaticResource Note}" />
+                </StackPanel>
+
+                <!-- DSA itself. -->
+                <TextBlock Text="{l:Text UpdatesProgramHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:InfoBar x:Name="NoticeBar" Title="{l:Text UpdateNoticeBar.Title}" Severity="Informational" IsClosable="False"
+                            Margin="0,0,0,4" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
                     <ui:CardControl.Header>
                         <StackPanel>
@@ -40,27 +134,24 @@
                                          IsEnabled="{Binding CanChangeProgramUpdates, Mode=OneWay}" Click="OnProgramToggled" />
                     </StackPanel>
                 </ui:CardControl>
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowDownload24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Beaker24}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{l:Text ImageUpdatesCard.Header}" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{l:Text PrereleaseUpdatesCard.Header}" Style="{StaticResource CardTitle}" />
                                 <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
                             </StackPanel>
-                            <TextBlock Text="{l:Text ImageUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{l:Text PrereleaseUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
                     <StackPanel Orientation="Horizontal">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
-                                   Visibility="{Binding ImageUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
-                                   Click="OnImageAsAdministrator" />
-                        <ui:ToggleSwitch x:Name="ImageSwitch" IsChecked="{Binding ImageUpdates, Mode=OneWay}"
-                                         IsEnabled="{Binding CanChangeImageUpdates, Mode=OneWay}" Click="OnImageToggled" />
+                                   Visibility="{Binding PrereleaseUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnPrereleaseAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="PrereleaseSwitch" IsChecked="{Binding PrereleaseUpdates, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangePrereleaseUpdates, Mode=OneWay}" Click="OnPrereleaseToggled" />
                     </StackPanel>
                 </ui:CardControl>
-                <TextBlock Text="{l:Text UpdatesMachineNote.Text}" Style="{StaticResource Note}" />
-
-                <TextBlock Text="{l:Text UpdateNowHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowUpload24}">
                     <ui:CardControl.Header>
                         <StackPanel>
@@ -75,6 +166,7 @@
                                    IsEnabled="{Binding CanUpdateNow, Mode=OneWay}" />
                     </StackPanel>
                 </ui:CardControl>
+                <TextBlock Text="{l:Text UpdatesMachineNote.Text}" Style="{StaticResource Note}" />
             </StackPanel>
         </ScrollViewer>
     </Grid>

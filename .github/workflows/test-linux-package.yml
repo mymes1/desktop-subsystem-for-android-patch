@@ -115,9 +115,15 @@ jobs:
           dsa/host/platform/linux/packaging/build-packages.sh \
             --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
             --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages \
-            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 \
+            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 --channel stable \
             --vm-programs .scratch/vm-programs --licenses .scratch/licenses
           ls -l .scratch/packages
+          # A first installation writes the entry of the package's channel, and an upgrade
+          # keeps the channel the entry has: both channels' entries are in the scripts.
+          grep -q 'Suites: stable' .scratch/packages/deb/DEBIAN/postinst
+          grep -q 'Suites: prerelease' .scratch/packages/deb/DEBIAN/postinst
+          grep -q '/rpm-prerelease/' .scratch/packages/rpmbuild/SPECS/dsa.spec
+          grep -q '^channel=stable$' .scratch/packages/deb/DEBIAN/postinst
 
       - name: Check the package contents
         run: |
@@ -184,6 +190,13 @@ jobs:
           ls .scratch/linux-repo/rpm/*/repodata/repomd.xml.asc
           gpgv --keyring "$PWD/.scratch/linux-repo/dsa-archive-keyring.gpg" \
             .scratch/linux-repo/apt/dists/stable/InRelease
+          # The pre-release channel carries the stable packages too.
+          test -f .scratch/linux-repo/apt/dists/prerelease/InRelease
+          gpgv --keyring "$PWD/.scratch/linux-repo/dsa-archive-keyring.gpg" \
+            .scratch/linux-repo/apt/dists/prerelease/InRelease
+          zgrep -q '^Package: desktop-subsystem-for-android$' \
+            .scratch/linux-repo/apt/dists/prerelease/main/binary-${{ matrix.arch }}/Packages.gz
+          ls .scratch/linux-repo/rpm-prerelease/*/repodata/repomd.xml.asc
 
       - name: Install the .deb, check it, and remove it
         run: |
@@ -198,9 +211,16 @@ jobs:
           ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update
           apt-cache policy desktop-subsystem-for-android | tee .scratch/apt-policy
           grep -q '127.0.0.1:8080/apt stable/main' .scratch/apt-policy
+          # The entry pointed at the pre-release suite (as the service does when the user
+          # chooses pre-releases) reads that suite, and an upgrade keeps the channel.
+          sudo sed -i 's/^Suites: stable$/Suites: prerelease/' /etc/apt/sources.list.d/dsa.sources
+          sudo apt-get update 2>&1 | tee .scratch/apt-update-prerelease
+          ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update-prerelease
+          apt-cache policy desktop-subsystem-for-android | grep -q '127.0.0.1:8080/apt prerelease/main'
           # An upgrade keeps the entry; only a removal takes it away.
           sudo apt-get install -y --reinstall "./$(ls .scratch/packages/*.deb)"
           test -f /etc/apt/sources.list.d/dsa.sources
+          grep -qx 'Suites: prerelease' /etc/apt/sources.list.d/dsa.sources
           dsa --version || dsa --help || true
           test -x /usr/lib/dsa/bin/dsa-devices
           /usr/lib/dsa/bin/dsa-devices --version
@@ -275,6 +295,12 @@ jobs:
           grep -q 'digests signatures OK' rpm-check
           dnf -y reinstall --repo=dsa desktop-subsystem-for-android
           test -f /etc/yum.repos.d/dsa.repo
+          # Pointed at the pre-release repository, dnf reads it, and an upgrade keeps it.
+          sed -i 's|/rpm/|/rpm-prerelease/|' /etc/yum.repos.d/dsa.repo
+          dnf -y makecache --repo=dsa
+          dnf -y --repo=dsa repoquery desktop-subsystem-for-android | grep -q desktop-subsystem-for-android
+          dnf -y reinstall --repo=dsa desktop-subsystem-for-android
+          grep -q '/rpm-prerelease/' /etc/yum.repos.d/dsa.repo
           /usr/lib/dsa/bin/dsa-devices --version
           /usr/lib/dsa/bin/crosvm version
           /usr/lib/dsa/bin/passt --version

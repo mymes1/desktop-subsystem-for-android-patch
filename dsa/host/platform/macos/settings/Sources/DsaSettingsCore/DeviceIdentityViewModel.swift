@@ -115,6 +115,13 @@ public final class DeviceIdentityViewModel: ObservableObject {
     /// The model name, the device name and the chip.
     @Published public private(set) var computerValues: [ComputerValue] =
         DeviceIdentityViewModel.computerKeys.map { ComputerValue(key: $0) }
+
+    /// This Mac's specifications, in the order the page lists them: its name, its manufacturer
+    /// and model, the model name and the chip. They come from the firmware and the system and
+    /// cannot be changed here.
+    public static let aboutKeys = ["device_name", "manufacturer", "model", "model_name", "soc_manufacturer", "soc_model"]
+    /// This Mac's own value of each of `aboutKeys`; empty when it does not say.
+    @Published public private(set) var aboutValues: [String: String] = [:]
     @Published public private(set) var error: String?
     @Published public private(set) var message: String?
     @Published public private(set) var isBusy = false
@@ -148,6 +155,24 @@ public final class DeviceIdentityViewModel: ObservableObject {
 
     public func computerValue(_ key: String) -> ComputerValue {
         computerValues.first { $0.key == key } ?? ComputerValue(key: key)
+    }
+
+    /// This Mac's name, shown large at the top of the page.
+    public var computerName: String { aboutValues["device_name"] ?? "" }
+    /// This Mac's manufacturer and model, under its name.
+    public var computerMakeModel: String {
+        [aboutValues["manufacturer"] ?? "", aboutValues["model"] ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    /// The label of a specification.
+    public func aboutLabel(_ key: String) -> String { text.get("Identity_\(key)") }
+    /// The value of a specification as the page shows it.
+    public func aboutValue(_ key: String) -> String {
+        let value = aboutValues[key] ?? ""
+        return value.isEmpty ? text.get("Identity_NotReported") : value
+    }
+    /// What Copy puts on the clipboard: one specification per line, label and value apart.
+    public var aboutText: String {
+        DeviceIdentityViewModel.aboutKeys.map { "\(aboutLabel($0))\t\(aboutValue($0))" }.joined(separator: "\n")
     }
 
     public func label(_ value: ComputerValue) -> String { text.get("Identity_\(value.key)") }
@@ -202,6 +227,18 @@ public final class DeviceIdentityViewModel: ObservableObject {
         computerValues = DeviceIdentityViewModel.computerKeys.map {
             ComputerValue(key: $0, value: report["effective"].string($0), origin: origin($0))
         }
+        // This Mac's own value: what the system reports for the values that follow the Mac,
+        // and for the manufacturer and model the default, when it came from the Mac. A value
+        // chosen for Android is not the Mac's.
+        var about: [String: String] = [:]
+        for key in DeviceIdentityViewModel.aboutKeys {
+            if DeviceIdentityViewModel.computerKeys.contains(key) {
+                about[key] = report["effective"].string(key)
+            } else {
+                about[key] = origin(key) == "computer" ? report["defaults"].string(key) : ""
+            }
+        }
+        aboutValues = about
         loaded = true
     }
 

@@ -44,7 +44,7 @@ starts as it was first installed. The Android image and DSA's settings stay.
 Android's log stays in memory in Android and is never written to a file. It reaches your PC
 only while something reads it.
 
-- In DSA Settings: the **Android log** page. You can filter by tag or text, and pause.
+- In DSA Settings: the **Logs** page. You can filter by tag or text, and pause.
 - On the command line:
 
   ```
@@ -55,7 +55,7 @@ only while something reads it.
 
 ## Send a problem report
 
-1. Save the diagnostics. On the **Android log** page select **Save diagnostics**, or run:
+1. Save the diagnostics. On the **Logs** page select **Save diagnostics**, or run:
 
    ```
    dsa logs collect -o diag.zip

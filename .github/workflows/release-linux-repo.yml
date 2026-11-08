@@ -7,6 +7,11 @@
 # published version stays installable, and signs the repositories with
 # .github/scripts/release/build-linux-repo.sh.
 #
+# The packages of a release marked as a GitHub pre-release (every release below 1.0) go to the
+# pre-release channel only: the apt suite prerelease and rpm-prerelease/. The others go to the
+# stable channel and the pre-release one. Build each version's packages with the --channel
+# of its release (build-packages.sh), so a first installation registers that channel.
+#
 # It runs only by hand, after the packages of a version are attached to its release. The
 # packages must be built with --repo-key set to the public half of the same key. It needs
 # these repository secrets:
