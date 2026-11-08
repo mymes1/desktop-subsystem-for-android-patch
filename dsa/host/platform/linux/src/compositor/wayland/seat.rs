@@ -387,8 +387,8 @@ impl State {
                     let place = MenuPlace::Below(
                         cell_left / scale,
                         top / scale,
-                        (width as i32).div_ceil(scale),
-                        (height as i32).div_ceil(scale),
+                        width.div_ceil(scale as u32) as i32,
+                        height.div_ceil(scale as u32) as i32,
                     );
                     if !self.open_menu(task_id, place, serial) {
                         self.desktop_window_menu(task_id, serial);
