@@ -4,8 +4,9 @@
 
 It fails when the shell apps are still there, when the build is still debuggable, when adbd
 could start without developer mode, listen on TCP or ask for an authorisation, when an
-app is not signed with one of the keys in the key folder, when the framework overlay or the
-trace script is missing, when the agent is missing or not signed with the platform key, when
+app is not signed with one of the keys in the key folder, when a system screen overlay is
+missing or was built against another framework-res or another build of the app it overlays,
+when Settings' pages would open with their large title folded, when the trace script is missing, when the agent is missing or not signed with the platform key, when
 Settings still has the preferences or code that crash it without Bluetooth, when a list in
 Settings or Files that sets its own padding keeps no room below its last row, when a system
 app users open is not compiled for the guest's boot image and its own dex, when an app the
@@ -209,6 +210,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                 if left:
                     problems.append(f"{name} still has {'; '.join(left)}, so the last row of its list "
                                     "sits on the window's bottom edge")
+    # Settings' pages take whether their large title opens expanded from the theme, which the
+    # Settings overlay sets by the window's height.
+    for name in names:
+        if name.endswith(make_image.SETTINGS_APK):
+            left = make_image.apk_edits_left(z.read(name),
+                                             theme_attributes=make_image.SETTINGS_TITLE_EXPANDED)
+            if left:
+                problems.append(f"{name} still has {'; '.join(left)}, so its pages open with the large "
+                                "title folded in every window")
     # The system apps users open, compiled when the image was made: each odex must be there,
     # made for the APK's own (edited, signed) dex and the guest's boot image, or ART drops it
     # and the app runs interpreted again.
@@ -324,14 +334,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # The network: eth0 shown as Wi-Fi, with its address and DNS servers from DHCP.
     problems.extend(make_image.network_problems(names, z.read, manifest["kernel_cmdline"]))
 
-    # The framework overlay, without which every list row shows a mouse press 100 ms late.
-    if "VENDOR/overlay/DsaFrameworkOverlay.apk" not in names:
-        problems.append("VENDOR/overlay/DsaFrameworkOverlay.apk is missing, so a press on a list row "
-                        "shows only after the 100 ms tap timeout")
-    if "VENDOR/overlay/DsaSettingsOverlay.apk" not in names:
-        problems.append("VENDOR/overlay/DsaSettingsOverlay.apk is missing, so Settings' back button shows "
-                        "its hover and ripple 8 dp left of its circle, and the last row of a Settings "
-                        "list sits on the window's bottom edge")
+    # The system screen overlays: the framework's (the tap timeout, the dialogs, toasts and
+    # colours), Settings', Files', PermissionController's, PackageInstaller's and the share
+    # sheet's, each built against this image's framework-res and the app it overlays.
+    problems += make_image.system_overlay_problems(names, z.read)
     if "SYSTEM/etc/init/dsa-trace.rc" not in names:
         problems.append("SYSTEM/etc/init/dsa-trace.rc is missing, so the input trace has no main thread timing")
 

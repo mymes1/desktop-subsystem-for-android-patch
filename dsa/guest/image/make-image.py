@@ -874,71 +874,458 @@ def vendor_vintf_problems(names, read, cmdline):
     return problems
 
 
-def framework_overlay_sources(dest):
-    """Writes the framework overlay's manifest and values into `dest`."""
-    (dest / "res/values").mkdir(parents=True, exist_ok=True)
-    (dest / "AndroidManifest.xml").write_text(
-        '<?xml version="1.0" encoding="utf-8"?>\n'
-        '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
-        f'    package="{FRAMEWORK_OVERLAY_PACKAGE}">\n'
+XML_HEADER = '<?xml version="1.0" encoding="utf-8"?>\n'
+ANDROID_XMLNS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
+APP_XMLNS = 'xmlns:app="http://schemas.android.com/apk/res-auto"'
+
+
+def overlay_manifest(package, target, resource_map=False):
+    """The manifest of a static overlay of `target` with no code; with `resource_map`, its
+    resource map (SYSTEM_OVERLAY_MAP) names what it replaces, and only that."""
+    mapping = f'\n        android:resourcesMap="@xml/{SYSTEM_OVERLAY_MAP}"' if resource_map else ""
+    return (
+        XML_HEADER
+        + f'<manifest {ANDROID_XMLNS}\n'
+        f'    package="{package}">\n'
         # Android 14 and later refuse a package that targets an old SDK, and the default is 1.
         '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
         '    <application android:hasCode="false" />\n'
-        '    <overlay android:targetPackage="android" android:isStatic="true" android:priority="100" />\n'
+        f'    <overlay android:targetPackage="{target}" android:isStatic="true" android:priority="100"{mapping} />\n'
         '</manifest>\n'
     )
+
+
+def overlay_apkcerts(apk):
+    """The apkcerts.txt line that has signing give an overlay in /vendor/overlay the platform key."""
+    return (f'name="{apk}" certificate="build/make/target/product/security/platform.x509.pem" '
+            'private_key="build/make/target/product/security/platform.pk8" partition="vendor"')
+
+
+def overlay_fs_config(apk):
+    """The vendor filesystem config lines of an overlay in /vendor/overlay."""
+    return ["vendor/overlay 0 0 755 capabilities=0x0", f"vendor/overlay/{apk} 0 0 644 capabilities=0x0"]
+
+
+def resources_xml(lines):
+    """A values file of the given lines."""
+    return XML_HEADER + "<resources>\n" + "".join(f"    {line}\n" for line in lines) + "</resources>\n"
+
+
+def overlay_map(mapping):
+    """The resource map of an overlay: each target resource ("type/name") and the overlay's
+    resource that replaces it."""
+    items = "".join(f'    <item target="{target}" value="@{value}" />\n' for target, value in mapping.items())
+    return XML_HEADER + f"<overlay>\n{items}</overlay>\n"
+
+
+def write_overlay_files(dest, files):
+    """Writes each of `files` ({path under dest: text}) into `dest`."""
+    for path, text in files.items():
+        (dest / path).parent.mkdir(parents=True, exist_ok=True)
+        (dest / path).write_text(text)
+
+
+def write_overlay_record(dest, record):
+    """Writes what an overlay was built against (SYSTEM_OVERLAY_RECORD), when `record` says."""
+    if record is not None:
+        write_overlay_files(dest, {SYSTEM_OVERLAY_RECORD: json.dumps(record, indent=2, sort_keys=True) + "\n"})
+
+
+def build_overlay(aapt2, framework_res, sources, apk):
+    """Compiles and links the overlay whose sources are in `sources` against `framework_res`,
+    with its record as an asset when it has one. The APK is unsigned; signing gives it the
+    platform key."""
+    compiled = sources / "compiled.zip"
+    run(aapt2, "compile", "--dir", sources / "res", "-o", compiled)
+    assets = ["-A", sources / "assets"] if (sources / "assets").is_dir() else []
+    run(aapt2, "link", "-o", apk, "--manifest", sources / "AndroidManifest.xml", "-I", framework_res,
+        *assets, compiled)
+    return apk
+
+
+def design_style(name, parent, size=None, color=None, extra=()):
+    """A text style of the design: Roboto at its bold weight, with `parent`'s other items
+    (no parent when `parent` is empty), and the size and colour given."""
+    items = [f'<item name="android:fontFamily">{DESIGN_FONT}</item>',
+             '<item name="android:textStyle">bold</item>', *extra]
+    if size is not None:
+        items.append(f'<item name="android:textSize">{size}</item>')
+    if color is not None:
+        items.append(f'<item name="android:textColor">{color}</item>')
+    body = "".join(f"\n        {item}" for item in items)
+    return f'<style name="{name}" parent="{parent}">{body}\n    </style>'
+
+
+def dialog_button_bar():
+    """The framework's dialog button bar, with its buttons side by side, sharing its width.
+
+    The ids are the framework's, which AlertController finds the buttons by. ButtonBarLayout
+    stacks the buttons when they do not fit, as it did; wrap_content keeps a stacked button
+    as wide as its text."""
+    def button(number, role):
+        return (f'        <Button\n'
+                f'            android:id="@android:id/button{number}"\n'
+                f'            style="?android:attr/buttonBar{role}ButtonStyle"\n'
+                '            android:layout_width="wrap_content"\n'
+                '            android:layout_height="wrap_content"\n'
+                '            android:layout_weight="1" />\n')
+    return (
+        XML_HEADER
+        + f'<ScrollView {ANDROID_XMLNS}\n'
+        '    android:id="@*android:id/buttonPanel"\n'
+        '    android:layout_width="match_parent"\n'
+        '    android:layout_height="wrap_content"\n'
+        '    android:scrollbarAlwaysDrawVerticalTrack="true"\n'
+        '    android:scrollIndicators="top|bottom"\n'
+        '    android:fillViewport="true"\n'
+        '    style="?android:attr/buttonBarStyle">\n'
+        '    <com.android.internal.widget.ButtonBarLayout\n'
+        '        android:layout_width="match_parent"\n'
+        '        android:layout_height="wrap_content"\n'
+        '        android:layoutDirection="locale"\n'
+        '        android:orientation="horizontal"\n'
+        '        android:paddingStart="16dp"\n'
+        '        android:paddingEnd="16dp"\n'
+        '        android:paddingTop="4dp"\n'
+        '        android:paddingBottom="12dp"\n'
+        '        android:gravity="bottom">\n'
+        + button(3, "Neutral")
+        + '        <Space\n'
+        '            android:id="@*android:id/spacer"\n'
+        '            android:layout_width="0dp"\n'
+        '            android:layout_height="0dp"\n'
+        '            android:visibility="invisible" />\n'
+        + button(2, "Negative")
+        + button(1, "Positive")
+        + '    </com.android.internal.widget.ButtonBarLayout>\n'
+        '</ScrollView>\n'
+    )
+
+
+def toast_layout():
+    """The toast an app draws itself: the framework's layout on the rounded toast frame."""
+    return (
+        XML_HEADER
+        + f'<LinearLayout {ANDROID_XMLNS}\n'
+        '    android:layout_width="wrap_content"\n'
+        '    android:layout_height="wrap_content"\n'
+        '    android:orientation="horizontal"\n'
+        '    android:gravity="center_vertical"\n'
+        '    android:maxWidth="@*android:dimen/toast_width"\n'
+        f'    android:background="@*android:drawable/{TOAST_FRAME}"\n'
+        '    android:elevation="@*android:dimen/toast_elevation"\n'
+        '    android:layout_marginEnd="16dp"\n'
+        '    android:layout_marginStart="16dp"\n'
+        '    android:paddingStart="20dp"\n'
+        '    android:paddingEnd="20dp">\n'
+        '    <TextView\n'
+        '        android:id="@android:id/message"\n'
+        '        android:layout_width="wrap_content"\n'
+        '        android:layout_height="wrap_content"\n'
+        '        android:ellipsize="end"\n'
+        '        android:maxLines="2"\n'
+        '        android:paddingTop="12dp"\n'
+        '        android:paddingBottom="12dp"\n'
+        '        android:textAppearance="@*android:style/TextAppearance.Toast" />\n'
+        '</LinearLayout>\n'
+    )
+
+
+def toast_frame():
+    """The toast's frame: a pill on the theme's surface."""
+    return (
+        XML_HEADER
+        + f'<shape {ANDROID_XMLNS}\n'
+        '    android:shape="rectangle">\n'
+        '    <solid android:color="?android:attr/colorSurface" />\n'
+        f'    <corners android:radius="{DESIGN_CORNER_DP}dp" />\n'
+        '</shape>\n'
+    )
+
+
+def framework_overlay_sources(dest, record=None):
+    """Writes the framework overlay's manifest, values and layouts into `dest`, with what it
+    was built against when `record` says."""
+    (dest / "res/values").mkdir(parents=True, exist_ok=True)
+    (dest / "AndroidManifest.xml").write_text(overlay_manifest(FRAMEWORK_OVERLAY_PACKAGE, "android"))
     integers = "".join(f'    <integer name="{name}">{value}</integer>\n'
                        for name, value in FRAMEWORK_OVERLAY_INTEGERS.items())
     booleans = "".join(f'    <bool name="{name}">{str(value).lower()}</bool>\n'
                        for name, value in FRAMEWORK_OVERLAY_BOOLEANS.items())
     (dest / "res/values/dsa.xml").write_text(
         f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}</resources>\n')
+    write_overlay_files(dest, {
+        "res/values/dsa_design.xml": resources_xml(
+            [f'<color name="{name}">{value}</color>' for name, value in DESIGN_COLORS.items()]
+            + [f'<dimen name="{name}">{value}</dimen>' for name, value in DESIGN_FRAMEWORK_DIMENS.items()]
+            + [design_style(name, f"@*android:style/{parent}") for name, parent in DESIGN_FRAMEWORK_TITLES.items()]),
+        f"res/layout/{DIALOG_BUTTON_BAR_LAYOUT}.xml": dialog_button_bar(),
+        f"res/layout/{TOAST_LAYOUT}.xml": toast_layout(),
+        f"res/drawable/{TOAST_FRAME}.xml": toast_frame(),
+    })
+    write_overlay_record(dest, record)
 
 
-def build_framework_overlay(aapt2, framework_res, work):
+def framework_overlaid():
+    """Every framework resource the framework overlay replaces, by name: it has no resource
+    map, so the framework matches its resources to its own by name."""
+    return ([f"integer/{name}" for name in FRAMEWORK_OVERLAY_INTEGERS]
+            + [f"bool/{name}" for name in FRAMEWORK_OVERLAY_BOOLEANS]
+            + FRAMEWORK_DESIGN_OVERLAID)
+
+
+def build_framework_overlay(aapt2, framework_res, work, record=None):
     """Builds the framework overlay APK (unsigned; signing gives it the platform key)."""
     sources = work / "framework-overlay"
     shutil.rmtree(sources, ignore_errors=True)
-    framework_overlay_sources(sources)
-    compiled = sources / "compiled.zip"
-    apk = sources / "DsaFrameworkOverlay.apk"
-    run(aapt2, "compile", "--dir", sources / "res", "-o", compiled)
-    run(aapt2, "link", "-o", apk, "--manifest", sources / "AndroidManifest.xml", "-I", framework_res, compiled)
-    return apk
+    framework_overlay_sources(sources, record)
+    return build_overlay(aapt2, framework_res, sources, sources / "DsaFrameworkOverlay.apk")
 
 
-def settings_overlay_sources(dest, home_padding=False):
-    """Writes the Settings overlay's manifest, its resource map, its back button drawables and
-    its preference list layout into `dest`, and with `home_padding` the home list's bottom
-    padding (SETTINGS_HOME_PADDING_DIMEN), for a Settings that has it."""
-    overlaid = SETTINGS_OVERLAID + ([f"dimen/{SETTINGS_HOME_PADDING_DIMEN}"] if home_padding else [])
-    (dest / "res").mkdir(parents=True, exist_ok=True)
-    (dest / "AndroidManifest.xml").write_text(
-        '<?xml version="1.0" encoding="utf-8"?>\n'
-        '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
-        f'    package="{SETTINGS_OVERLAY_PACKAGE}">\n'
-        '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
-        '    <application android:hasCode="false" />\n'
-        f'    <overlay android:targetPackage="{SETTINGS_OVERLAY_TARGET}" android:isStatic="true" '
-        f'android:priority="100" android:resourcesMap="@xml/{SETTINGS_OVERLAY_MAP}" />\n'
-        '</manifest>\n'
-    )
+def settings_overlay_sources(dest, home_padding=False, record=None):
+    """Writes the Settings overlay's manifest, its resource map, its back button drawables,
+    its preference list layout and the design's resources (cards, large titles, the home
+    page) into `dest`, with `home_padding` the home list's bottom padding
+    (SETTINGS_HOME_PADDING_DIMEN), for a Settings that has it, and what it was built against
+    when `record` says."""
+    write_overlay_files(dest, {
+        **settings_overlay_files(home_padding),
+        f"res/xml/{SETTINGS_OVERLAY_MAP}.xml": overlay_map(settings_overlay_map(home_padding)),
+    })
+    write_overlay_record(dest, record)
+
+
+def settings_overlay_map(home_padding=False):
+    """What the Settings overlay replaces ("type/name" in Settings) and with which of its own
+    resources. The ids and attributes map onto themselves: nothing reads their values, and
+    the map makes the framework rewrite the overlay layouts' references to them into
+    Settings' ids."""
+    mapping = {name: name for name in SETTINGS_OVERLAID}
+    if home_padding:
+        mapping[f"dimen/{SETTINGS_HOME_PADDING_DIMEN}"] = f"dimen/{SETTINGS_HOME_PADDING_DIMEN}"
+    mapping.update({f"drawable/{name}": f"drawable/{name}" for name in SETTINGS_CARDS})
+    mapping["dimen/settingslib_preference_corner_radius"] = "dimen/settingslib_preference_corner_radius"
+    mapping[f"style/{SETTINGS_TITLE_THEME}"] = "style/DsaAppBarTheme"
+    mapping[f"style/{SETTINGS_TITLE_THEME_PARENT}"] = f"style/{SETTINGS_TITLE_THEME_PARENT}"
+    mapping["attr/expanded"] = "attr/expanded"
+    mapping.update({f"style/{name}": f"style/{ours}" for name, (ours, _) in SETTINGS_TITLE_STYLES.items()})
+    mapping[f"layout/{SETTINGS_HOME_LAYOUT}"] = f"layout/{SETTINGS_HOME_LAYOUT}"
+    mapping.update({f"id/{name}": f"id/{name}" for name in SETTINGS_HOME_IDS})
+    mapping.update({f"attr/{name}": f"attr/{name}" for name in SETTINGS_HOME_ATTRS})
+    return mapping
+
+
+def settings_overlay_files(home_padding=False):
+    """The Settings overlay's manifest and resource files, by their path in its sources.
+
+    The drawables and values SettingsLib keeps in -v36 folders are here in the same folders:
+    an overlay's value is used only where its configuration matches at least as well as the
+    one it replaces."""
+    files = {
+        "AndroidManifest.xml": overlay_manifest(SETTINGS_OVERLAY_PACKAGE, SETTINGS_OVERLAY_TARGET,
+                                                resource_map=True),
+        f"res/layout/{SETTINGS_LIST_LAYOUT}.xml": settings_preference_list(),
+        "res/values/dsa.xml": resources_xml(
+            [f'<attr name="{SETTINGS_LIST_STYLE_ATTR}" format="reference" />', *SETTINGS_HOME_ATTRS.values(),
+             '<attr name="expanded" format="boolean" />']
+            + ([f'<dimen name="{SETTINGS_HOME_PADDING_DIMEN}">{SETTINGS_LIST_BOTTOM_MARGIN_DP}dp</dimen>']
+               if home_padding else [])),
+        "res/values-v36/dsa_design.xml": resources_xml(
+            [f'<dimen name="settingslib_preference_corner_radius">{DESIGN_CORNER_DP}dp</dimen>']
+            + [design_style(ours, "", f"{size}dp") for ours, size in SETTINGS_TITLE_STYLES.values()]),
+        f"res/layout/{SETTINGS_HOME_LAYOUT}.xml": settings_home_layout(large_title=False),
+        f"res/layout-h{DESIGN_TALL_WINDOW_DP}dp/{SETTINGS_HOME_LAYOUT}.xml": settings_home_layout(large_title=True),
+        f"res/drawable/{SETTINGS_SEARCH_ICON}.xml": search_icon(),
+    }
+    for folder, expanded in SETTINGS_TITLE_EXPANDS.items():
+        files[f"res/{folder}/dsa_title.xml"] = resources_xml([
+            f'<style name="DsaAppBarTheme" parent="@style/{SETTINGS_TITLE_THEME_PARENT}">'
+            f'<item name="expanded">{str(expanded).lower()}</item></style>'])
+    # The stand-in for Material's theme: only for watches, so Settings' own is always used.
+    files["res/values-watch/dsa_stand_ins.xml"] = resources_xml(
+        [f'<style name="{SETTINGS_TITLE_THEME_PARENT}" parent="" />'])
+    for folder, theme in (("drawable-v36", "light"), ("drawable-night-v36", "dark")):
+        files[f"res/{folder}/{SETTINGS_BACK_ICON}.xml"] = settings_back_icon(theme)
+        for name, (top, bottom) in SETTINGS_CARDS.items():
+            files[f"res/{folder}/{name}.xml"] = settings_card(top, bottom, theme)
     for folder, theme in (("drawable", "light"), ("drawable-night", "dark")):
-        (dest / "res" / folder).mkdir(exist_ok=True)
-        (dest / "res" / folder / f"{SETTINGS_BACK_ICON}.xml").write_text(settings_back_icon(theme))
-    (dest / "res/layout").mkdir(exist_ok=True)
-    (dest / "res/layout" / f"{SETTINGS_LIST_LAYOUT}.xml").write_text(settings_preference_list())
-    (dest / "res/values").mkdir(exist_ok=True)
-    (dest / "res/values/dsa.xml").write_text(
-        '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
-        f'    <attr name="{SETTINGS_LIST_STYLE_ATTR}" format="reference" />\n'
-        + (f'    <dimen name="{SETTINGS_HOME_PADDING_DIMEN}">{SETTINGS_LIST_BOTTOM_MARGIN_DP}dp</dimen>\n'
-           if home_padding else '')
-        + '</resources>\n')
-    (dest / "res/xml").mkdir(exist_ok=True)
-    items = "".join(f'    <item target="{name}" value="@{name}" />\n' for name in overlaid)
-    (dest / "res/xml" / f"{SETTINGS_OVERLAY_MAP}.xml").write_text(
-        f'<?xml version="1.0" encoding="utf-8"?>\n<overlay>\n{items}</overlay>\n')
+        files[f"res/{folder}/{SETTINGS_SEARCH_ICON}_background.xml"] = search_background(theme)
+    return files
+
+
+def settings_card(top, bottom, theme):
+    """One of SettingsLib's group backgrounds: the row's surface, inset from the list's sides
+    as SettingsLib insets it, with the group's outer corners rounded (`top`, `bottom`) and
+    square corners where the next row of the same group joins it. The 32 dp padding is
+    SettingsLib's own, which its adapter gives the row."""
+    top_dp, bottom_dp = (DESIGN_CORNER_DP if top else 0), (DESIGN_CORNER_DP if bottom else 0)
+    return (
+        XML_HEADER
+        + f'<ripple {ANDROID_XMLNS}\n'
+        '    android:color="?android:attr/colorControlHighlight"\n'
+        '    android:paddingStart="32dp"\n'
+        '    android:paddingEnd="32dp">\n'
+        '    <item\n'
+        '        android:start="?android:attr/listPreferredItemPaddingStart"\n'
+        '        android:end="?android:attr/listPreferredItemPaddingEnd">\n'
+        '        <shape android:shape="rectangle">\n'
+        f'            <solid android:color="@*android:color/system_surface_bright_{theme}" />\n'
+        '            <corners\n'
+        f'                android:topLeftRadius="{top_dp}dp"\n'
+        f'                android:topRightRadius="{top_dp}dp"\n'
+        f'                android:bottomLeftRadius="{bottom_dp}dp"\n'
+        f'                android:bottomRightRadius="{bottom_dp}dp" />\n'
+        '        </shape>\n'
+        '    </item>\n'
+        '</ripple>\n'
+    )
+
+
+def search_icon():
+    """A magnifying glass, drawn for DSA: a ring and its handle."""
+    return (
+        XML_HEADER
+        + f'<vector {ANDROID_XMLNS}\n'
+        '    android:width="24dp"\n'
+        '    android:height="24dp"\n'
+        '    android:viewportWidth="24"\n'
+        '    android:viewportHeight="24"\n'
+        '    android:tint="?android:attr/textColorSecondary">\n'
+        '    <path\n'
+        '        android:strokeColor="@android:color/white"\n'
+        '        android:strokeWidth="2"\n'
+        '        android:strokeLineCap="round"\n'
+        '        android:pathData="M10,4A6,6 0,1 1,10,16A6,6 0,1 1,10,4Z M14.5,14.5L20,20" />\n'
+        '</vector>\n'
+    )
+
+
+def search_background(theme):
+    """The home page's search bar: a pill on the cards' surface."""
+    return (
+        XML_HEADER
+        + f'<shape {ANDROID_XMLNS}\n'
+        '    android:shape="rectangle">\n'
+        f'    <solid android:color="@*android:color/system_surface_bright_{theme}" />\n'
+        f'    <corners android:radius="{DESIGN_CORNER_DP}dp" />\n'
+        '</shape>\n'
+    )
+
+
+def settings_home_layout(large_title):
+    """Settings' home page: Settings' own layout of its lists, under an app bar with the
+    search bar, and with `large_title` the large title above the search bar.
+
+    The title scrolls away with the list (scroll|snap) and leaves the search bar as the
+    toolbar. The home page's code sets the search bar's click and the container's padding by
+    their ids, which are Settings' own; the text is the framework's, in every language."""
+    title = (
+        '        <TextView\n'
+        '            android:layout_width="match_parent"\n'
+        f'            android:layout_height="{DESIGN_TITLE_AREA_DP}dp"\n'
+        '            android:gravity="center"\n'
+        '            android:paddingStart="?android:attr/listPreferredItemPaddingStart"\n'
+        '            android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"\n'
+        '            android:maxLines="2"\n'
+        '            android:ellipsize="end"\n'
+        '            android:text="@*android:string/global_action_settings"\n'
+        f'            android:textSize="{DESIGN_LARGE_TITLE_DP}dp"\n'
+        f'            android:fontFamily="{DESIGN_FONT}"\n'
+        '            android:textStyle="bold"\n'
+        '            android:textColor="?android:attr/textColorPrimary"\n'
+        '            android:accessibilityHeading="true"\n'
+        '            app:layout_scrollFlags="scroll|snap" />\n'
+    ) if large_title else ""
+    return (
+        XML_HEADER
+        + '<androidx.coordinatorlayout.widget.CoordinatorLayout\n'
+        f'    {ANDROID_XMLNS}\n'
+        f'    {APP_XMLNS}\n'
+        '    android:id="@+id/settings_homepage_container"\n'
+        '    android:layout_width="match_parent"\n'
+        '    android:layout_height="match_parent">\n'
+        '    <androidx.core.widget.NestedScrollView\n'
+        '        android:id="@+id/main_content_scrollable_container"\n'
+        '        android:layout_width="match_parent"\n'
+        '        android:layout_height="match_parent"\n'
+        '        app:layout_behavior="com.android.settings.widget.HomepageAppBarScrollingViewBehavior">\n'
+        '        <LinearLayout\n'
+        '            android:id="@+id/homepage_container"\n'
+        '            android:layout_width="match_parent"\n'
+        '            android:layout_height="wrap_content"\n'
+        '            android:layout_marginTop="-8dp"\n'
+        '            android:orientation="vertical">\n'
+        '            <FrameLayout\n'
+        '                android:id="@+id/suggestion_content"\n'
+        '                android:layout_width="match_parent"\n'
+        '                android:layout_height="wrap_content"\n'
+        '                android:layout_marginStart="?android:attr/listPreferredItemPaddingStart"\n'
+        '                android:layout_marginEnd="?android:attr/listPreferredItemPaddingEnd" />\n'
+        '            <FrameLayout\n'
+        '                android:id="@+id/contextual_cards_content"\n'
+        '                android:layout_width="match_parent"\n'
+        '                android:layout_height="wrap_content"\n'
+        '                android:layout_marginStart="4dp"\n'
+        '                android:layout_marginEnd="4dp" />\n'
+        '            <FrameLayout\n'
+        '                android:id="@+id/main_content"\n'
+        '                android:layout_width="match_parent"\n'
+        '                android:layout_height="wrap_content"\n'
+        '                android:animateLayoutChanges="true" />\n'
+        '        </LinearLayout>\n'
+        '    </androidx.core.widget.NestedScrollView>\n'
+        '    <com.google.android.material.appbar.AppBarLayout\n'
+        '        android:id="@+id/app_bar"\n'
+        '        android:layout_width="match_parent"\n'
+        '        android:layout_height="wrap_content"\n'
+        '        android:background="?android:attr/colorBackground"\n'
+        '        android:touchscreenBlocksFocus="false"\n'
+        '        android:keyboardNavigationCluster="false">\n'
+        + title
+        + '        <LinearLayout\n'
+        '            android:id="@+id/app_bar_container"\n'
+        '            android:layout_width="match_parent"\n'
+        '            android:layout_height="wrap_content"\n'
+        '            android:orientation="horizontal"\n'
+        '            android:paddingTop="8dp"\n'
+        '            android:paddingBottom="8dp"\n'
+        '            android:paddingStart="?android:attr/listPreferredItemPaddingStart"\n'
+        '            android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"\n'
+        '            android:background="?android:attr/colorBackground">\n'
+        '            <LinearLayout\n'
+        '                android:id="@+id/search_action_bar"\n'
+        '                android:layout_width="match_parent"\n'
+        '                android:layout_height="wrap_content"\n'
+        '                android:minHeight="56dp"\n'
+        '                android:gravity="center_vertical"\n'
+        '                android:orientation="horizontal"\n'
+        '                android:paddingStart="20dp"\n'
+        '                android:paddingEnd="20dp"\n'
+        '                android:clickable="true"\n'
+        '                android:focusable="true"\n'
+        '                android:focusedByDefault="true"\n'
+        '                android:clipToOutline="true"\n'
+        f'                android:background="@drawable/{SETTINGS_SEARCH_ICON}_background"\n'
+        '                android:foreground="?android:attr/selectableItemBackground">\n'
+        '                <ImageView\n'
+        '                    android:layout_width="24dp"\n'
+        '                    android:layout_height="24dp"\n'
+        '                    android:importantForAccessibility="no"\n'
+        f'                    android:src="@drawable/{SETTINGS_SEARCH_ICON}" />\n'
+        '                <TextView\n'
+        '                    android:id="@+id/search_bar_title"\n'
+        '                    android:layout_width="wrap_content"\n'
+        '                    android:layout_height="wrap_content"\n'
+        '                    android:layout_marginStart="12dp"\n'
+        '                    android:paddingEnd="8dp"\n'
+        '                    android:text="@android:string/search_go"\n'
+        '                    android:textSize="16sp"\n'
+        '                    android:textColor="?android:attr/textColorSecondary" />\n'
+        '            </LinearLayout>\n'
+        '        </LinearLayout>\n'
+        '    </com.google.android.material.appbar.AppBarLayout>\n'
+        '</androidx.coordinatorlayout.widget.CoordinatorLayout>\n'
+    )
 
 
 def settings_preference_list():
@@ -995,16 +1382,251 @@ def settings_back_icon(theme):
     )
 
 
-def build_settings_overlay(aapt2, framework_res, work, home_padding=False):
+def build_settings_overlay(aapt2, framework_res, work, home_padding=False, record=None):
     """Builds the Settings overlay APK (unsigned; signing gives it the platform key)."""
     sources = work / "settings-overlay"
     shutil.rmtree(sources, ignore_errors=True)
-    settings_overlay_sources(sources, home_padding)
-    compiled = sources / "compiled.zip"
-    apk = sources / "DsaSettingsOverlay.apk"
-    run(aapt2, "compile", "--dir", sources / "res", "-o", compiled)
-    run(aapt2, "link", "-o", apk, "--manifest", sources / "AndroidManifest.xml", "-I", framework_res, compiled)
-    return apk
+    settings_overlay_sources(sources, home_padding, record)
+    return build_overlay(aapt2, framework_res, sources, sources / "DsaSettingsOverlay.apk")
+
+
+def design_overlay_resources(apk):
+    """The resource files of one of DESIGN_OVERLAYS, by their path in its sources, and its
+    resource map: each target resource and the overlay's resource that replaces it."""
+    if apk == "DsaDocumentsUiOverlay.apk":
+        return ({"res/values/dsa.xml": resources_xml(
+            [f'<bool name="{key.split("/", 1)[1]}">{value}</bool>' for key, value in DOCUMENTSUI_DESIGN.items()])},
+            {key: key for key in DOCUMENTSUI_DESIGN})
+    if apk == "DsaPermissionControllerOverlay.apk":
+        # The dialog's title view takes its size and place from the style, which it names as
+        # its style: the style says them all, with no parent of PermissionController's.
+        place = ['<item name="android:layout_width">match_parent</item>',
+                 '<item name="android:layout_height">wrap_content</item>',
+                 '<item name="android:gravity">center</item>']
+        files = {f"res/{folder}/dsa.xml": resources_xml([design_style(
+            "DsaPermissionTitle", "", "24sp", f"@*android:color/system_on_surface_{theme}", place)])
+            for folder, theme in (("values-v36", "light"), ("values-night-v36", "dark"))}
+        return files, {f"style/{PERMISSION_TITLE_STYLE}": "style/DsaPermissionTitle"}
+    if apk == "DsaPackageInstallerOverlay.apk":
+        styles = [design_style(ours, "@android:style/TextAppearance.DeviceDefault.Headline",
+                               f"{size}sp" if size else None,
+                               "?android:attr/textColorPrimary" if size else None)
+                  for ours, size in PACKAGE_INSTALLER_TITLES.values()]
+        return ({"res/values/dsa.xml": resources_xml(styles)},
+                {f"style/{name}": f"style/{ours}" for name, (ours, _) in PACKAGE_INSTALLER_TITLES.items()})
+    if apk == "DsaIntentResolverOverlay.apk":
+        return ({"res/values/dsa.xml": resources_xml(
+            [f'<dimen name="{key.split("/", 1)[1]}">{value}</dimen>' for key, value in INTENT_RESOLVER_DESIGN.items()])},
+            {key: key for key in INTENT_RESOLVER_DESIGN})
+    raise ValueError(f"{apk} is not one of the design's overlays")
+
+
+def system_overlay(apk):
+    """The entry of SYSTEM_OVERLAYS for the overlay file `apk`."""
+    return next(overlay for overlay in SYSTEM_OVERLAYS if overlay["apk"] == apk)
+
+
+def design_overlay_sources(dest, apk, record=None):
+    """Writes the sources of one of DESIGN_OVERLAYS into `dest`: its manifest, resource map
+    and resources, and what it was built against when `record` says."""
+    overlay = system_overlay(apk)
+    files, mapping = design_overlay_resources(apk)
+    write_overlay_files(dest, {
+        "AndroidManifest.xml": overlay_manifest(overlay["package"], overlay["target"], resource_map=True),
+        **files,
+        f"res/xml/{SYSTEM_OVERLAY_MAP}.xml": overlay_map(mapping),
+    })
+    write_overlay_record(dest, record)
+
+
+def build_design_overlay(aapt2, framework_res, work, apk, record=None):
+    """Builds one of DESIGN_OVERLAYS (unsigned; signing gives it the platform key)."""
+    sources = work / f"overlay-{Path(apk).stem}"
+    shutil.rmtree(sources, ignore_errors=True)
+    design_overlay_sources(sources, apk, record)
+    return build_overlay(aapt2, framework_res, sources, sources / apk)
+
+
+def overlaid_resources(apk, home_padding=False):
+    """The resources ("type/name") the overlay file `apk` replaces in the package it overlays."""
+    if apk == "DsaFrameworkOverlay.apk":
+        return framework_overlaid()
+    if apk == "DsaSettingsOverlay.apk":
+        return list(settings_overlay_map(home_padding))
+    return list(design_overlay_resources(apk)[1])
+
+
+# A compiled resource table (resources.arsc): a table chunk holding a string pool and one
+# package chunk per package. A package holds its type names and its entry names (key
+# strings), then a type chunk per type and configuration, each with an offset per entry.
+ARSC_TABLE = 0x0002
+ARSC_PACKAGE = 0x0200
+ARSC_TYPE = 0x0201
+ARSC_TYPE_SPARSE = 0x01
+ARSC_TYPE_OFFSET16 = 0x02
+ARSC_ENTRY_COMPACT = 0x0008
+ARSC_NO_ENTRY = 0xFFFFFFFF
+ARSC_NO_ENTRY16 = 0xFFFF
+
+
+def _arsc_entry_offsets(table, at, flags, count):
+    """The offsets of the entries a type chunk holds, from its offset array at `at`."""
+    if flags & ARSC_TYPE_SPARSE:
+        return [4 * struct.unpack_from("<HH", table, at + 4 * i)[1] for i in range(count)]
+    if flags & ARSC_TYPE_OFFSET16:
+        offsets = struct.unpack_from(f"<{count}H", table, at)
+        return [4 * offset for offset in offsets if offset != ARSC_NO_ENTRY16]
+    return [offset for offset in struct.unpack_from(f"<{count}I", table, at) if offset != ARSC_NO_ENTRY]
+
+
+def arsc_resource_names(table):
+    """The resources a compiled resource table defines in any configuration, as "type/name"."""
+    chunk_type, header_size, _ = struct.unpack_from("<HHI", table, 0)
+    if chunk_type != ARSC_TABLE:
+        raise ValueError("not a compiled resource table")
+    names = set()
+    offset = header_size
+    while offset < len(table):
+        chunk_type, header_size, size = struct.unpack_from("<HHI", table, offset)
+        if chunk_type == ARSC_PACKAGE:
+            # After the chunk header: the package id, its name (128 UTF-16 units), then the
+            # offsets of its type and key string pools from the package's start.
+            type_strings, _, key_strings = struct.unpack_from("<III", table, offset + 8 + 4 + 256)
+            types = xml_strings(table, offset + type_strings)
+            keys = xml_strings(table, offset + key_strings)
+            child = offset + header_size
+            while child < offset + size:
+                kind, child_header, child_size = struct.unpack_from("<HHI", table, child)
+                if kind == ARSC_TYPE:
+                    type_id, flags, _, count, entries_start = struct.unpack_from("<BBHII", table, child + 8)
+                    for entry in _arsc_entry_offsets(table, child + child_header, flags, count):
+                        at = child + entries_start + entry
+                        first, entry_flags = struct.unpack_from("<HH", table, at)
+                        key = first if entry_flags & ARSC_ENTRY_COMPACT else struct.unpack_from("<I", table, at + 4)[0]
+                        names.add(f"{types[type_id - 1]}/{keys[key]}")
+                child += child_size
+        offset += size
+    return names
+
+
+def apk_resource_table(apk):
+    """An APK's compiled resource table."""
+    with zipfile.ZipFile(io.BytesIO(apk)) as z:
+        return z.read("resources.arsc")
+
+
+def table_digest(apk):
+    """The SHA-256 of an APK's compiled resource table, or None for a file that is no APK
+    with one."""
+    try:
+        return hashlib.sha256(apk_resource_table(apk)).hexdigest()
+    except (zipfile.BadZipFile, KeyError):
+        return None
+
+
+def missing_overlaid(overlaid, table):
+    """What of `overlaid` ("type/name") the package whose resource table is `table` lacks: an
+    overlay written for another build of it, which would overlay nothing there."""
+    return sorted(set(overlaid) - arsc_resource_names(table))
+
+
+def overlay_record(target, framework_table, target_table):
+    """What an overlay of `target` is built against: the SHA-256 of the framework-res and
+    target resource tables it was checked with. Signing changes neither table."""
+    return {"target": target,
+            "framework_res": hashlib.sha256(framework_table).hexdigest(),
+            "target_resources": hashlib.sha256(target_table).hexdigest()}
+
+
+def system_overlay_record_of(apk):
+    """The record (SYSTEM_OVERLAY_RECORD) an overlay APK carries, or None."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(apk)) as z:
+            return json.loads(z.read(SYSTEM_OVERLAY_RECORD))
+    except (zipfile.BadZipFile, KeyError, ValueError):
+        return None
+
+
+def apk_named(names, suffix):
+    """The target_files name of the APK that ends with `suffix`, or None."""
+    return next((name for name in names if name == suffix or name.endswith(suffix)), None)
+
+
+def system_overlay_targets(z, otatools, work, env):
+    """The resource table of each package a system screen overlay overlays, by overlay file,
+    read from the target_files `z`: from the APK, or for PermissionController from inside the
+    permission APEX, which otatools unpacks."""
+    names = z.namelist()
+    tables = {}
+    for overlay in SYSTEM_OVERLAYS:
+        if overlay["target_apk"] is not None:
+            name = apk_named(names, overlay["target_apk"])
+            if name is None:
+                raise ValueError(f"the image has no {overlay['target_apk'].lstrip('/')}, which "
+                                 f"{overlay['apk']} overlays")
+            tables[overlay["apk"]] = apk_resource_table(z.read(name))
+            continue
+        apex = next((n for n in PERMISSION_APEXES if n in names), None)
+        if apex is None:
+            raise ValueError(f"the image has no permission APEX, whose {PERMISSION_CONTROLLER_APK} "
+                             f"{overlay['apk']} overlays")
+        folder = Path(work).resolve() / "apex-overlay-target"
+        _, payload = apex_payload(z.read(apex), apex, Path(otatools).resolve(), folder, env)
+        apks = sorted(payload.rglob(PERMISSION_CONTROLLER_APK))
+        if not apks:
+            raise ValueError(f"{apex} has no {PERMISSION_CONTROLLER_APK}, which {overlay['apk']} overlays")
+        tables[overlay["apk"]] = apk_resource_table(apks[0].read_bytes())
+        shutil.rmtree(folder, ignore_errors=True)
+    return tables
+
+
+def build_system_overlays(aapt2, framework_res, work, tables, home_padding=False):
+    """Builds every system screen overlay against `framework_res`, each first checked against
+    the resource table of the package it overlays (`tables`, by overlay file): an overlay
+    that would replace a resource the package lacks was written for another build, and the
+    image is not made. Returns the framework overlay, the Settings overlay and the others
+    ({file name: APK})."""
+    framework_table = tables["DsaFrameworkOverlay.apk"]
+    records = {}
+    for overlay in SYSTEM_OVERLAYS:
+        apk = overlay["apk"]
+        missing = missing_overlaid(overlaid_resources(apk, home_padding), tables[apk])
+        if missing:
+            raise ValueError(f"{apk} replaces {', '.join(missing)}, which {overlay['target']} in this "
+                             "image does not have: the overlay was written for another build of it")
+        records[apk] = overlay_record(overlay["target"], framework_table, tables[apk])
+    framework_overlay = build_framework_overlay(aapt2, framework_res, work, records["DsaFrameworkOverlay.apk"])
+    settings_overlay = build_settings_overlay(aapt2, framework_res, work, home_padding,
+                                              records["DsaSettingsOverlay.apk"])
+    others = {apk: build_design_overlay(aapt2, framework_res, work, apk, records[apk]) for apk in DESIGN_OVERLAYS}
+    return framework_overlay, settings_overlay, others
+
+
+def system_overlay_problems(names, read):
+    """What is wrong with the system screen overlays in a target_files whose names are `names`
+    and whose files `read` reads: one missing, or one built against another framework-res or
+    another build of the app it overlays. PermissionController is inside the permission APEX,
+    which takes otatools to read; make-image.py checks its overlay against it."""
+    problems = []
+    framework = table_digest(read(FRAMEWORK_RES)) if FRAMEWORK_RES in names else None
+    for overlay in SYSTEM_OVERLAYS:
+        path = f"VENDOR/overlay/{overlay['apk']}"
+        if path not in names:
+            problems.append(f"{path} is missing, so {overlay['without']}")
+            continue
+        record = system_overlay_record_of(read(path))
+        if not isinstance(record, dict) or record.get("target") != overlay["target"]:
+            problems.append(f"{path} does not say which framework-res and {overlay['target']} it was built "
+                            "against, so nothing shows it matches this image")
+            continue
+        if framework is not None and record.get("framework_res") != framework:
+            problems.append(f"{path} was built against another framework-res than this image's, so its "
+                            "references into the framework may name other resources")
+        target = apk_named(names, overlay["target_apk"]) if overlay["target_apk"] else None
+        if target is not None and record.get("target_resources") != table_digest(read(target)):
+            problems.append(f"{path} was built for another build of {overlay['target']} than {target}, so "
+                            "what it replaces may not be there")
+    return problems
 
 
 def settings_has_home_padding(apk):
@@ -1184,6 +1806,51 @@ def set_xml_dimensions(axml, edits):
         offset += size
     result = b"".join(out)
     return result[:4] + struct.pack("<I", len(result)) + result[8:], changed
+
+
+XML_TYPE_ATTRIBUTE = 0x02
+
+
+def set_xml_theme_attributes(axml, edits):
+    """Compiled XML with, for each (element, attribute name) in `edits`, that attribute of
+    every `element` set to the theme's value of the same attribute (?attr/name). The attribute
+    is found by its name, in any namespace, as an app's own attributes (app:expanded) have ids
+    that differ from build to build; its id comes from the file's resource map. An element
+    without the attribute is left as it is. Returns the new file and the number of attributes
+    it changed."""
+    file_type, file_header, _ = struct.unpack_from("<HHI", axml, 0)
+    if file_type != XML_FILE:
+        raise ValueError("not a compiled Android XML file")
+    out = bytearray(axml)
+    strings, resource_ids = [], []
+    changed = 0
+    offset = file_header
+    while offset < len(axml):
+        chunk_type, header_size, size = struct.unpack_from("<HHI", axml, offset)
+        if chunk_type == XML_STRING_POOL:
+            strings = xml_strings(axml, offset)
+        elif chunk_type == XML_RESOURCE_MAP:
+            entries = (size - header_size) // 4
+            resource_ids = list(struct.unpack_from(f"<{entries}I", axml, offset + header_size))
+        elif chunk_type == XML_START_ELEMENT:
+            _, name, attribute_start, attribute_size, count = struct.unpack_from("<IIHHH", axml, offset + header_size)
+            for element, attribute in edits:
+                if strings[name] != element:
+                    continue
+                for i in range(count):
+                    at = offset + header_size + attribute_start + i * attribute_size
+                    _, attribute_name = struct.unpack_from("<II", axml, at)
+                    if strings[attribute_name] != attribute:
+                        continue
+                    if attribute_name >= len(resource_ids):
+                        raise ValueError(f"the compiled XML gives {attribute} of {element} no resource id")
+                    reference = resource_ids[attribute_name]
+                    if struct.unpack_from("<BI", out, at + 15) == (XML_TYPE_ATTRIBUTE, reference):
+                        continue
+                    struct.pack_into("<IHBBI", out, at + 8, XML_NO_INDEX, 8, 0, XML_TYPE_ATTRIBUTE, reference)
+                    changed += 1
+        offset += size
+    return bytes(out), changed
 
 
 def _uleb128(data, at):
@@ -1461,12 +2128,13 @@ def edit_dex(dex, edits):
     return bytes(out), changed
 
 
-def edit_apk(data, name, code=None, controllers=None, dimensions=None):
+def edit_apk(data, name, code=None, controllers=None, dimensions=None, theme_attributes=None):
     """An APK with `code` edited in its dex files (see edit_dex), the preference elements
     whose controller `controllers` names removed from its compiled XML ({xml: [controller]}),
-    and the dimensions `dimensions` names set in its compiled XML ({xml: [(element,
-    attribute, dp)]}, see set_xml_dimensions). Prints each change; returns the APK as it was
-    when nothing changed."""
+    the dimensions `dimensions` names set in its compiled XML ({xml: [(element,
+    attribute, dp)]}, see set_xml_dimensions), and the attributes `theme_attributes` names
+    taken from the theme ({xml: [(element, attribute name)]}, see set_xml_theme_attributes).
+    Prints each change; returns the APK as it was when nothing changed."""
     replacements = {}
     with zipfile.ZipFile(io.BytesIO(data)) as apk:
         files = set(apk.namelist())
@@ -1495,6 +2163,15 @@ def edit_apk(data, name, code=None, controllers=None, dimensions=None):
                 for element, attribute, dp in edits:
                     print(f"setting {element} attribute {attribute:#x} to {dp} dp in {name}:{xml}", flush=True)
                 replacements[xml] = edited
+        for xml, edits in (theme_attributes or {}).items():
+            if xml not in files:
+                continue
+            edited, changed = set_xml_theme_attributes(replacements.get(xml) or apk.read(xml), edits)
+            if changed:
+                for element, attribute in edits:
+                    print(f"setting {element} attribute {attribute} to ?attr/{attribute} in {name}:{xml}",
+                          flush=True)
+                replacements[xml] = edited
         if not replacements:
             return data
         out = io.BytesIO()
@@ -1508,9 +2185,12 @@ def edit_apk(data, name, code=None, controllers=None, dimensions=None):
 
 def edit_settings_apk(data, name):
     """Settings.apk without the preferences, and the code, that need the Bluetooth service,
-    and with room below the last row of the lists that set their own padding."""
+    with room below the last row of the lists that set their own padding, and with its pages'
+    large titles opening expanded or folded as the Settings overlay's theme says
+    (SETTINGS_TITLE_EXPANDED)."""
     return edit_apk(data, name, code={**SETTINGS_CODE_WITHOUT_BLUETOOTH, **SETTINGS_CODE_LIST_MARGIN},
-                    controllers=SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH, dimensions=SETTINGS_LIST_DIMENSIONS)
+                    controllers=SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH, dimensions=SETTINGS_LIST_DIMENSIONS,
+                    theme_attributes=SETTINGS_TITLE_EXPANDED)
 
 
 def edit_documentsui_apk(data, name):
@@ -1520,8 +2200,14 @@ def edit_documentsui_apk(data, name):
 
 
 def edit_permission_controller_apk(data, name):
-    """PermissionController.apk with room below the last row of its preference lists."""
-    return edit_apk(data, name, dimensions=PERMISSION_CONTROLLER_DIMENSIONS)
+    """PermissionController.apk with room below the last row of its preference lists, and
+    those lists grouped in cards with Settings' corners."""
+    return edit_apk(data, name, dimensions=permission_controller_edits())
+
+
+def permission_controller_edits():
+    """The compiled XML edits PermissionController.apk gets: its lists' room and its cards."""
+    return {**PERMISSION_CONTROLLER_DIMENSIONS, **PERMISSION_CONTROLLER_CARDS}
 
 
 # Properties the vendor and odm build.prop files may not set. init reads those two files as
@@ -2428,6 +3114,245 @@ SETTINGS_OVERLAY_FS_CONFIG = [
     "vendor/overlay/DsaSettingsOverlay.apk 0 0 644 capabilities=0x0",
 ]
 
+# The design of the screens Android draws itself: Settings, Files (DocumentsUI), the
+# permission screens and dialogs (PermissionController), the install dialogs
+# (PackageInstaller), the share sheet (IntentResolver), and the framework's dialogs and toasts.
+# A large title at the top of a screen folds into the toolbar as the list scrolls, and starts
+# folded in a window under 600 dp tall, where it would take a third of the height. Lists are
+# grouped in rounded cards with the page showing between the groups, titles are bold, the
+# accent is blue, both themes follow the same rules, and dialogs have rounded corners with
+# their buttons side by side along the bottom.
+#
+# Static overlays carry it, one per app, each built with aapt2 against the image's own
+# framework-res and checked against the app it overlays: every resource it replaces must be
+# there, and the overlay records the resource tables it was built against
+# (SYSTEM_OVERLAY_RECORD), which check-image.py compares with the image's. Overlays reference
+# the framework's resources and the resources they replace; their own, such as the search
+# icon, resolve in the overlay itself. The fonts are the image's own Roboto, at its bold
+# weight, and every drawing is DSA's own.
+DESIGN_CORNER_DP = 26
+DESIGN_TALL_WINDOW_DP = 600
+DESIGN_TITLE_AREA_DP = 200
+DESIGN_LARGE_TITLE_DP = 36
+DESIGN_TOOLBAR_TITLE_DP = 20
+DESIGN_FONT = "sans-serif"
+SYSTEM_OVERLAY_RECORD = "assets/dsa-overlay.json"
+SYSTEM_OVERLAY_MAP = "dsa_overlay"
+FRAMEWORK_RES = "SYSTEM/framework/framework-res.apk"
+# Each overlay: its file in /vendor/overlay, its package, the package it overlays, where that
+# package's APK is in target_files (a path suffix, or the permission APEX), and what is wrong
+# with an image that lacks it.
+SYSTEM_OVERLAYS = [
+    {"apk": "DsaFrameworkOverlay.apk", "package": FRAMEWORK_OVERLAY_PACKAGE, "target": "android",
+     "target_apk": FRAMEWORK_RES,
+     "without": "a press on a list row shows only after the 100 ms tap timeout, and the framework's "
+                "dialogs, toasts and colours keep Android's own look"},
+    {"apk": "DsaSettingsOverlay.apk", "package": SETTINGS_OVERLAY_PACKAGE, "target": SETTINGS_OVERLAY_TARGET,
+     "target_apk": "/priv-app/Settings/Settings.apk",
+     "without": "Settings' back button shows its hover and ripple 8 dp left of its circle, the last row "
+                "of a Settings list sits on the window's bottom edge, and Settings has no large title "
+                "or rounded cards"},
+    {"apk": "DsaDocumentsUiOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.documentsui",
+     "target": "com.android.documentsui", "target_apk": "/priv-app/DocumentsUI/DocumentsUI.apk",
+     "without": "Files keeps its old look instead of the rounded one"},
+    {"apk": "DsaPermissionControllerOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.permissioncontroller",
+     "target": "com.android.permissioncontroller", "target_apk": None,
+     "without": "the permission dialog's title is not bold"},
+    {"apk": "DsaPackageInstallerOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.packageinstaller",
+     "target": "com.android.packageinstaller", "target_apk": "/priv-app/PackageInstaller/PackageInstaller.apk",
+     "without": "the install dialog's title is not bold"},
+    {"apk": "DsaIntentResolverOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.intentresolver",
+     "target": "com.android.intentresolver", "target_apk": "/priv-app/IntentResolver/IntentResolver.apk",
+     "without": "the share sheet's headline keeps its small size"},
+]
+SYSTEM_OVERLAY_FILES = [overlay["apk"] for overlay in SYSTEM_OVERLAYS]
+# The overlays this section adds; the framework and Settings overlays are built by their own
+# functions, which other changes made first.
+DESIGN_OVERLAYS = SYSTEM_OVERLAY_FILES[2:]
+
+# The blue accent: one tonal ramp (tone 0 is white, 1000 black) for the framework's first
+# accent palette, which older apps and the DeviceDefault theme read, and the colour roles
+# Material 3 apps read, in both themes. With no theme service in the guest (no SystemUI),
+# the framework's own values are the colours every app gets.
+DESIGN_BLUE_TONES = {
+    0: "#FFFFFF", 10: "#FAFBFF", 50: "#EDF2FF", 100: "#D8E3FF", 200: "#ADC6FF", 300: "#7FA8FF",
+    400: "#4F8AFF", 500: "#2B6EF2", 600: "#1A5AD7", 700: "#0D46AE", 800: "#053486", 900: "#001B4A",
+    1000: "#000000",
+}
+# The page is a light grey (or black) and the cards on it white (or a dark grey), so the
+# cards stand out; dialogs and sheets sit a step above the page.
+DESIGN_COLORS = {
+    **{f"system_accent1_{tone}_{theme}": value for tone, value in DESIGN_BLUE_TONES.items()
+       for theme in ("light", "dark")},
+    "system_primary_light": "#0B64D8",
+    "system_on_primary_light": "#FFFFFF",
+    "system_primary_container_light": "#D8E3FF",
+    "system_on_primary_container_light": "#001B4A",
+    "system_inverse_primary_light": "#ADC6FF",
+    "system_surface_tint_light": "#0B64D8",
+    "system_palette_key_color_primary_light": "#2B6EF2",
+    "system_primary_dim_light": "#0D56BD",
+    "system_primary_dark": "#6FA3FF",
+    "system_on_primary_dark": "#002E6E",
+    "system_primary_container_dark": "#0D46AE",
+    "system_on_primary_container_dark": "#D8E3FF",
+    "system_inverse_primary_dark": "#0B64D8",
+    "system_surface_tint_dark": "#6FA3FF",
+    "system_palette_key_color_primary_dark": "#2B6EF2",
+    "system_primary_dim_dark": "#5B94F5",
+    "system_primary_fixed": "#D8E3FF",
+    "system_primary_fixed_dim": "#ADC6FF",
+    "system_on_primary_fixed": "#001B4A",
+    "system_on_primary_fixed_variant": "#0D46AE",
+    "system_background_light": "#F2F2F5",
+    "system_surface_light": "#F2F2F5",
+    "system_surface_dim_light": "#DADADF",
+    "system_surface_bright_light": "#FFFFFF",
+    "system_surface_container_lowest_light": "#FFFFFF",
+    "system_surface_container_low_light": "#F7F7FA",
+    "system_surface_container_light": "#F2F2F5",
+    "system_surface_container_high_light": "#FAFAFC",
+    "system_surface_container_highest_light": "#E6E6EB",
+    "system_background_dark": "#000000",
+    "system_surface_dark": "#000000",
+    "system_surface_dim_dark": "#000000",
+    "system_surface_bright_dark": "#1C1C1F",
+    "system_surface_container_lowest_dark": "#000000",
+    "system_surface_container_low_dark": "#0B0B0D",
+    "system_surface_container_dark": "#000000",
+    "system_surface_container_high_dark": "#242428",
+    "system_surface_container_highest_dark": "#2C2C31",
+}
+# Rounded dialogs and sheets, with the cards' radius.
+DESIGN_FRAMEWORK_DIMENS = {
+    "config_dialogCornerRadius": f"{DESIGN_CORNER_DP}dp",
+    "config_bottomDialogCornerRadius": f"{DESIGN_CORNER_DP}dp",
+}
+# Bold titles: dialog titles, window titles (the share sheet's among them) and toolbar
+# titles of the apps that use the DeviceDefault theme. Each keeps its own parent.
+DESIGN_FRAMEWORK_TITLES = {
+    "TextAppearance.DeviceDefault.DialogWindowTitle": "TextAppearance.Material.DialogWindowTitle",
+    "TextAppearance.DeviceDefault.WindowTitle": "TextAppearance.Material.WindowTitle",
+    "TextAppearance.DeviceDefault.Widget.ActionBar.Title": "TextAppearance.Material.Widget.ActionBar.Title",
+}
+# A dialog's buttons, side by side across its bottom, each as wide as the others' share; a
+# dialog whose buttons cannot fit still stacks them, as ButtonBarLayout does.
+DIALOG_BUTTON_BAR_LAYOUT = "alert_dialog_button_bar_material"
+# A toast of an app that draws its own (one that targets Android 10 or earlier): a pill on
+# the theme's surface, as the framework's own toast frame draws it, rather than a square.
+TOAST_LAYOUT = "transient_notification"
+TOAST_FRAME = "toast_frame"
+FRAMEWORK_DESIGN_OVERLAID = (
+    [f"color/{name}" for name in DESIGN_COLORS]
+    + [f"dimen/{name}" for name in DESIGN_FRAMEWORK_DIMENS]
+    + [f"style/{name}" for name in DESIGN_FRAMEWORK_TITLES]
+    + [f"layout/{DIALOG_BUTTON_BAR_LAYOUT}", f"layout/{TOAST_LAYOUT}", f"drawable/{TOAST_FRAME}"]
+)
+
+# Settings: SettingsLib's group backgrounds round the outer corners of a group by
+# settingslib_preference_corner_radius and the inner ones by 4 dp, so every row is a card of
+# its own. Here the inner corners are square, and a group reads as one card; the 2 dp
+# SettingsLib keeps below each row shows the page through as the line between rows.
+SETTINGS_CARDS = {
+    "settingslib_round_background": (True, True),
+    "settingslib_round_background_top": (True, False),
+    "settingslib_round_background_center": (False, False),
+    "settingslib_round_background_bottom": (False, True),
+}
+# The large title of a SettingsLib page opens expanded in a window 600 dp tall or more and
+# folded below it. SettingsLib's app bar takes the theme overlay SETTINGS_TITLE_THEME (an
+# empty style over Material's theme); the overlay's version of it says whether the app bar
+# opens expanded, in two configurations, and the app bar's layout reads that from the theme
+# (SETTINGS_TITLE_EXPANDED). The style keeps Material's theme as its parent: the overlay names
+# that style through a stand-in kept only for watches, which never matches, so the reference
+# resolves to Settings' own style.
+SETTINGS_TITLE_THEME = "SettingsLibTheme.CollapsingToolbar.Expressive"
+SETTINGS_TITLE_THEME_PARENT = "Theme.MaterialComponents.DayNight"
+SETTINGS_TITLE_EXPANDS = {"values-v36": False, f"values-h{DESIGN_TALL_WINDOW_DP}dp-v36": True}
+SETTINGS_TITLE_STYLES = {
+    "SettingsLibCollapsingToolbarTitle.Expanded": ("DsaLargeTitle", DESIGN_LARGE_TITLE_DP),
+    "SettingsLibCollapsingToolbarTitle.Collapsed": ("DsaToolbarTitle", DESIGN_TOOLBAR_TITLE_DP),
+}
+# Settings' home page has no title: its app bar holds only the search bar. The overlay's
+# layout puts the large title above the search bar in windows 600 dp tall or more, where it
+# scrolls away and leaves the search bar as the toolbar. The ids are Settings' own, which the
+# home page's code finds its views by; the search bar is drawn here, so the layout includes
+# nothing of Settings'.
+SETTINGS_HOME_LAYOUT = "settings_homepage_container"
+SETTINGS_HOME_IDS = [
+    "settings_homepage_container", "main_content_scrollable_container", "homepage_container",
+    "suggestion_content", "contextual_cards_content", "main_content", "app_bar", "app_bar_container",
+    "search_action_bar", "search_bar_title",
+]
+# Material's attributes the home layout uses, as Settings defines them.
+SETTINGS_HOME_ATTRS = {
+    "layout_behavior": '<attr name="layout_behavior" format="string" />',
+    "layout_scrollFlags": (
+        '<attr name="layout_scrollFlags">'
+        '<flag name="noScroll" value="0x0" /><flag name="scroll" value="0x1" />'
+        '<flag name="exitUntilCollapsed" value="0x2" /><flag name="enterAlways" value="0x4" />'
+        '<flag name="enterAlwaysCollapsed" value="0x8" /><flag name="snap" value="0x10" />'
+        '<flag name="snapMargins" value="0x20" /></attr>'),
+}
+SETTINGS_SEARCH_ICON = "dsa_search"
+
+# Files: DocumentsUI's Material 3 look (rounded containers and the colour roles), which the
+# app offers to devices through an overlayable switch and otherwise keeps for a developer
+# option. Its layouts are not overlayable, so it gets no large title.
+DOCUMENTSUI_DESIGN = {"bool/force_material3": "true"}
+# PermissionController lets an overlay replace only what it declares overlayable: the
+# permission dialog's title is, its list backgrounds are not (PERMISSION_CONTROLLER_CARDS).
+PERMISSION_TITLE_STYLE = "PermissionGrantTitleMessageExpressive"
+# PackageInstaller's dialog titles, for its DeviceDefault and Material 3 themes.
+PACKAGE_INSTALLER_TITLES = {
+    "TextAppearance.PackageInstaller.Title": ("DsaInstallerTitle", None),
+    "TextAppearance.PackageInstaller.Material.Title": ("DsaInstallerMaterialTitle", 24),
+}
+# The share sheet's headline; its title is the framework's window title (bold above) and its
+# sheet's corners the framework's bottom sheet radius.
+INTENT_RESOLVER_DESIGN = {"dimen/chooser_headline_text_size": "20sp"}
+
+# SettingsLib opens every page's large title folded: the app bar of its collapsing toolbar
+# says app:expanded="false" in the layout itself, in every window. An overlay cannot change
+# that attribute: it belongs to the layout, not to a style or value an overlay could replace,
+# and the layout includes other SettingsLib layouts, which an overlay can name only by
+# replacing them too. The compiled layouts in Settings.apk take the value from the app bar's
+# theme instead (?attr/expanded), which the Settings overlay sets by the window's height
+# (SETTINGS_TITLE_EXPANDS).
+APP_BAR_LAYOUT = "com.google.android.material.appbar.AppBarLayout"
+SETTINGS_TITLE_EXPANDED = {
+    "res/layout-v36/settingslib_expressive_collapsing_toolbar_content_layout.xml": [(APP_BAR_LAYOUT, "expanded")],
+    "res/layout-v36/settingslib_expressive_support_toolbar_layout.xml": [(APP_BAR_LAYOUT, "expanded")],
+}
+# PermissionController's lists are SettingsLib's, but the app declares <overlayable> and its
+# list backgrounds are not in it, so idmap2 refuses any overlay of them. Their compiled
+# drawables in the APK get the corners Settings' cards have instead: outer corners of
+# DESIGN_CORNER_DP, square inner ones.
+ANDROID_RADIUS = 0x010101A8
+ANDROID_TOP_LEFT_RADIUS = 0x010101A9
+ANDROID_TOP_RIGHT_RADIUS = 0x010101AA
+ANDROID_BOTTOM_LEFT_RADIUS = 0x010101AB
+ANDROID_BOTTOM_RIGHT_RADIUS = 0x010101AC
+
+
+def card_corner_edits(top, bottom, single):
+    """The corner edits of one of SettingsLib's group backgrounds: a whole-card one names one
+    radius, the others the four corners."""
+    if single:
+        return [("corners", ANDROID_RADIUS, DESIGN_CORNER_DP if top else 0)]
+    top_dp, bottom_dp = (DESIGN_CORNER_DP if top else 0), (DESIGN_CORNER_DP if bottom else 0)
+    return [("corners", ANDROID_TOP_LEFT_RADIUS, top_dp), ("corners", ANDROID_TOP_RIGHT_RADIUS, top_dp),
+            ("corners", ANDROID_BOTTOM_LEFT_RADIUS, bottom_dp), ("corners", ANDROID_BOTTOM_RIGHT_RADIUS, bottom_dp)]
+
+
+# The center and single backgrounds name one radius for all four corners; the top and bottom
+# ones name each corner.
+PERMISSION_CONTROLLER_CARDS = {
+    f"res/drawable-v36/{name}.xml": card_corner_edits(top, bottom, single=name in (
+        "settingslib_round_background", "settingslib_round_background_center"))
+    for name, (top, bottom) in SETTINGS_CARDS.items()
+}
+
 SYSTEM_EXT_FS_CONFIG = "META/system_ext_filesystem_config.txt"
 AGENT_FS_CONFIG = [
     "system_ext/priv-app/DsaAgent 0 0 755 capabilities=0x0",
@@ -2772,7 +3697,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None, framework=None):
+           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -2786,7 +3711,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
     emulated cameras when `camera` names it, and the default ARM translation package's system
     image when `arm_translation` names the package's folder, and the patched framework's files
-    in place of the build's own when `framework` maps their target_files names to their bytes."""
+    in place of the build's own when `framework` maps their target_files names to their bytes,
+    and the other system screen overlays (DESIGN_OVERLAYS) that `overlays` maps from their file
+    names to their APKs."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     default_translator = (Path(arm_translation) / ARM_TRANSLATION_IMAGE).read_bytes() if arm_translation else None
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -2796,6 +3723,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
     settings_overlay_payload = Path(settings_overlay).read_bytes() if settings_overlay else None
+    design_payloads = {name: Path(apk).read_bytes() for name, apk in (overlays or {}).items()}
     has_hwcomposer = hwcomposer_payload is not None
     power_payloads = None
     if power_hal is not None:
@@ -2841,7 +3769,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     has_camera = camera_payloads is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
-        overlay_payload, settings_overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
+        overlay_payload, settings_overlay_payload, *design_payloads.values(),
+        *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
         audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
         *(camera_payloads or {}).values(), *(framework or {}).values(),
     ])
@@ -3034,8 +3963,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
                         if not any(f'name="{a}.apk"' in line.decode()
-                                   for a in REMOVED_APPS + ["DsaAgent", "DsaFrameworkOverlay",
-                                                    "DsaSettingsOverlay"])
+                                   for a in REMOVED_APPS + ["DsaAgent"]
+                                   + [Path(overlay).stem for overlay in SYSTEM_OVERLAY_FILES])
                     )
                     if agent_payload is not None:
                         data += AGENT_APKCERTS.encode() + b"\n"
@@ -3043,6 +3972,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                         data += FRAMEWORK_OVERLAY_APKCERTS.encode() + b"\n"
                     if settings_overlay_payload is not None:
                         data += SETTINGS_OVERLAY_APKCERTS.encode() + b"\n"
+                    for overlay_name in design_payloads:
+                        data += overlay_apkcerts(overlay_name).encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
@@ -3068,6 +3999,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                         if settings_overlay_payload is not None:
                             text = add_filesystem_config(text, SETTINGS_OVERLAY_FS_CONFIG)
+                        for overlay_name in design_payloads:
+                            text = add_filesystem_config(text, overlay_fs_config(overlay_name))
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
@@ -3136,6 +4069,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(FRAMEWORK_OVERLAY_APK, overlay_payload)
         if settings_overlay_payload is not None:
             zout.writestr(SETTINGS_OVERLAY_APK, settings_overlay_payload)
+        for overlay_name, payload in design_payloads.items():
+            zout.writestr(f"VENDOR/overlay/{overlay_name}", payload)
         if agent_payload is not None:
             zout.writestr(AGENT_APK, agent_payload)
             zout.writestr(AGENT_PERMISSIONS, AGENT_PERMISSIONS_SOURCE.read_bytes())
@@ -3710,7 +4645,7 @@ def edit_apex_apks(data, name, edit, otatools, work):
 
 def edit_permission_apex(data, name, otatools, work):
     """The permission APEX with PermissionController's lists edited (see
-    PERMISSION_CONTROLLER_DIMENSIONS). Without otatools nothing can pack it again, and it is
+    permission_controller_edits). Without otatools nothing can pack it again, and it is
     left as it is."""
     if otatools is None:
         print(f"not editing {name}: there is no otatools to pack it again", flush=True)
@@ -3724,7 +4659,7 @@ def edit_permission_apex(data, name, otatools, work):
     return edit_apex_apks(data, name, edit, otatools, work)
 
 
-def apk_edits_left(apk, code=None, controllers=None, dimensions=None):
+def apk_edits_left(apk, code=None, controllers=None, dimensions=None, theme_attributes=None):
     """What an APK still has of what edit_apk takes out or changes, given the same edits: the
     methods, controllers and compiled XML files edit_apk would change. An empty list means
     the APK has every edit (or nothing they apply to)."""
@@ -3747,6 +4682,10 @@ def apk_edits_left(apk, code=None, controllers=None, dimensions=None):
             if xml in files and set_xml_dimensions(z.read(xml), edits)[1]:
                 left.append(f"{xml}: " + ", ".join(f"{element} {attribute:#x} not {dp} dp"
                                                    for element, attribute, dp in edits))
+        for xml, edits in (theme_attributes or {}).items():
+            if xml in files and set_xml_theme_attributes(z.read(xml), edits)[1]:
+                left.append(f"{xml}: " + ", ".join(f"{element} {attribute} not ?attr/{attribute}"
+                                                   for element, attribute in edits))
     return left
 
 
@@ -3763,10 +4702,11 @@ def permission_controller_problems(signed, otatools, work, env):
     apks = sorted(payload.rglob(PERMISSION_CONTROLLER_APK))
     problems = [] if apks else [f"{found[0]} has no {PERMISSION_CONTROLLER_APK}"]
     for apk in apks:
-        left = apk_edits_left(apk.read_bytes(), dimensions=PERMISSION_CONTROLLER_DIMENSIONS)
+        left = apk_edits_left(apk.read_bytes(), dimensions=permission_controller_edits())
         if left:
             problems.append(f"{found[0]}:{apk.relative_to(payload).as_posix()} still has {'; '.join(left)}, "
-                            "so the last row of its lists sits on the window's edge")
+                            "so the last row of its lists sits on the window's edge, or its cards keep "
+                            "corners of their own")
     shutil.rmtree(folder, ignore_errors=True)
     return problems
 
@@ -4102,8 +5042,9 @@ def main():
                         help="the guest agent's APK (DsaAgent), unsigned or signed with any key; "
                         "the image signs it with the platform key")
     parser.add_argument("--aapt2", type=Path,
-                        help="aapt2 from the Android SDK's build-tools, which builds the framework overlay; "
-                             "found under ANDROID_HOME when not given, and without it the image has no overlay")
+                        help="aapt2 from the Android SDK's build-tools, which builds the system screen "
+                             "overlays; found under ANDROID_HOME when not given, and without it the image has "
+                             "no overlay")
     parser.add_argument("--graphics-dir", type=Path,
                         help="a directory containing guest graphics libraries (vulkan.ranchu.so, libOpenglSystemCommon.so)")
     parser.add_argument("--arm-translation", type=Path,
@@ -4156,16 +5097,18 @@ def main():
 
     framework_overlay = None
     settings_overlay = None
+    design_overlays = None
     aapt2 = args.aapt2 or find_aapt2()
     if aapt2:
         framework_res = work / "framework-res.apk"
         with zipfile.ZipFile(target_files) as z:
-            framework_res.write_bytes(z.read("SYSTEM/framework/framework-res.apk"))
+            framework_res.write_bytes(z.read(FRAMEWORK_RES))
             home_padding = SETTINGS_APP in z.namelist() and settings_has_home_padding(z.read(SETTINGS_APP))
-        framework_overlay = build_framework_overlay(aapt2, framework_res, work)
-        settings_overlay = build_settings_overlay(aapt2, framework_res, work, home_padding)
+            tables = system_overlay_targets(z, otatools, work, env)
+        framework_overlay, settings_overlay, design_overlays = build_system_overlays(
+            aapt2, framework_res, work, tables, home_padding)
     else:
-        print("no aapt2, so the image has neither the framework overlay nor the Settings overlay", flush=True)
+        print("no aapt2, so the image has none of the system screen overlays", flush=True)
 
     modified = work / "modified.zip"
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
@@ -4173,7 +5116,7 @@ def main():
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
            sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
-           framework=framework_payloads)
+           framework=framework_payloads, overlays=design_overlays)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
