@@ -1916,6 +1916,41 @@ mod real_input {
         }
     }
 
+    /// As [`window_on_top`], and then the foreground window as well, without exception.
+    /// [`window_on_top`] settles for a task window that is under the contacts but not in
+    /// front after a few tries, which input tests can live with. A test of what happens while
+    /// a task window is in front cannot: on the runners the shell's search pane can hold the
+    /// foreground without covering the contacts. A shell window that keeps the foreground is
+    /// closed with Escape and then ended, as in [`bring_to_front`].
+    fn window_in_front(running: &Running, points: &[(i32, i32)]) -> (HWND, POINT) {
+        let (hwnd, origin) = window_on_top(running, points);
+        let deadline = Instant::now() + WAIT;
+        let mut tries = 0u32;
+        loop {
+            let foreground = unsafe { GetForegroundWindow() };
+            let root = if foreground.is_null() {
+                foreground
+            } else {
+                unsafe { GetAncestor(foreground, GA_ROOT) }
+            };
+            if foreground == hwnd || root == hwnd {
+                return (hwnd, origin);
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out bringing the task window {} to the front; the foreground window is {}",
+                describe_window(hwnd),
+                describe_window(foreground)
+            );
+            tries += 1;
+            // window_on_top has tried three times already, so a shell window that holds the
+            // foreground now is ended unless Escape closes it.
+            let holder = (!root.is_null()).then_some(root);
+            bring_to_front(hwnd, holder, tries + 2);
+            thread::sleep(Duration::from_millis(500));
+        }
+    }
+
     /// The shell's programs whose windows open over every other window: the Start menu,
     /// search, the notification and quick settings panes, and WWAHost, in which Windows
     /// shows its full-screen first-run pages ("Let's finish setting up your device"). On
@@ -2501,7 +2536,9 @@ mod real_input {
             .publish(TaskEvent::Updated(task(7, "Paint", 800, 600)));
         let open = windows_of(&running, 1);
         let (width, height) = client_size(open[0].hwnd);
-        let (task_window, _) = window_on_top(&running, &[(width / 2, height * 3 / 4)]);
+        // The task window really is the foreground window before anything is asserted: on
+        // the runners the shell's search pane can keep the foreground.
+        let (task_window, _) = window_in_front(&running, &[(width / 2, height * 3 / 4)]);
         wait_for_gestures(
             "the gestures to go off with the task window in front",
             |now| now == 0,
@@ -2538,11 +2575,22 @@ mod real_input {
             |now| now == original,
         );
         eprintln!("touch gestures: back to {back} with another window in front");
-        assert!(!record.exists(), "nothing is kept once the value is back");
+        // The window manager puts the value back first and removes the record after it, so
+        // a crash in between leaves a record that the next start puts back again. The
+        // record may still be there for a moment after the value reads back.
+        let deadline = Instant::now() + WAIT;
+        while record.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "nothing is kept once the value is back, yet {} still exists",
+                record.display()
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
 
         // In front again, then the window manager stops: the value is back.
         unsafe { DestroyWindow(other) };
-        window_on_top(&running, &[(width / 2, height * 3 / 4)]);
+        window_in_front(&running, &[(width / 2, height * 3 / 4)]);
         wait_for_gestures("the gestures to go off again", |now| now == 0);
         drop(client);
         drop(running);
