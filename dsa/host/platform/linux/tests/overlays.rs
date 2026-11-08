@@ -8,13 +8,24 @@
 //! latter every boot refused both mounts ("avc: denied { relabelfrom } ... tclass=filesystem"):
 //! Android started with no translator and no Google Play, and nothing but the log said so.
 //!
+//! Once laid over, the images are read by every program. statfs on an overlay is checked
+//! against the superblock of its top lower layer, the image's, so while that superblock
+//! carried the files' type every program but init was refused it, and bpfloader's refusal
+//! rebooted Android 6.4 s into every boot ("avc: denied { getattr } ... scontext=u:r:bpfloader:s0
+//! tcontext=u:object_r:system_lib_file:s0 tclass=filesystem"). And an overlay mounted nosuid
+//! made the kernel refuse init's domain change into every service in it ("avc: denied
+//! { nosuid_transition }"), vold among them.
+//!
 //! The service boots the image, which carries its default translator: the package must be
 //! mounted and laid over `/system`, binfmt_misc mounted with the package's rules in place, and
 //! the bridge library and the ARM64 ABI there. Then a small Google apps build, laid out as
 //! LiteGapps publishes one, is installed through the local API from a mirror in the test's
 //! folder, and Android starts again: the image must be mounted and laid over `/product` and
-//! `/system_ext`, with the translator still in place. Across both boots, the guest log must
-//! show no init command of either script failing and no denial of init's mounts.
+//! `/system_ext`, with the translator still in place. Across both boots, the guest log and the
+//! Android console log must show no init command of either script failing, no denial of init's
+//! mounts, no program of any domain refused filesystem getattr on an image's superblock, and no
+//! service refused its domain change from a nosuid overlay. A boot that never gets far enough to
+//! be checked fails with those refusals in its message.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
@@ -61,9 +72,17 @@ const GAPPS_FILES: &[&str] = &[
     "/product/priv-app/Phonesky/Phonesky.apk",
     "/system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk",
 ];
-/// The types of an erofs image's superblock while init mounts it with `context=`: the
-/// filesystem's own, and the ones the images are labelled with.
-const OVERLAY_TYPES: &[&str] = &["labeledfs", "system_lib_file", "system_file"];
+/// The types of an erofs image's superblock while init mounts it and lays it over: the
+/// filesystem's own (an overlay's own superblock has it too), the ones init gives the images
+/// with `fscontext=`, and the file types they are labelled with, which a superblock carried
+/// while the mounts named `context=` alone.
+const OVERLAY_TYPES: &[&str] = &[
+    "labeledfs",
+    "dsa_arm_translation_fs",
+    "dsa_gapps_fs",
+    "system_lib_file",
+    "system_file",
+];
 /// The API levels the mirror carries a build for, with the Android version LiteGapps names.
 const MIRROR_SDKS: &[(u32, &str)] = &[(36, "16.0"), (37, "17.0")];
 /// The whole test, both boots included, stays under fourteen minutes.
@@ -82,19 +101,45 @@ fn scratch() -> PathBuf {
     dir
 }
 
-/// Fails the test with what the service printed and the guest log's last lines.
+/// Fails the test with what the service printed, what SELinux refused through the overlays,
+/// and the guest log's last lines. A boot that the refusals end early (bpfloader's reboots
+/// Android before the guest log has a line) fails here, so its message names them.
 fn fail(why: String, service: &Service, log: &Mutex<Vec<String>>) -> ! {
     // The lock is let go before the panic, so the thread that reads the guest log is not
     // left with a poisoned lock and does not panic on top of this failure.
-    let tail = {
+    let (tail, whole) = {
         let log = lock(log);
-        let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
-        log[log.len().saturating_sub(200)..].join("\n")
+        let whole = log.join("\n");
+        let _ = std::fs::write(service.log.with_file_name("guest.log"), &whole);
+        (log[log.len().saturating_sub(200)..].join("\n"), whole)
     };
+    let mut refusals = Vec::new();
+    refusal_problems(&whole, "guest log", &mut refusals);
+    refusal_problems(&console_logs(), "console log", &mut refusals);
+    refusals.dedup();
     panic!(
-        "{why}\n--- the service's output ---\n{}\n--- the guest log's last lines ---\n{tail}",
+        "{why}\n--- what SELinux refused through the overlays ---\n{}\n--- the service's output ---\n{}\n--- the guest log's last lines ---\n{tail}",
+        refusals.join("\n"),
         service.log(),
     )
+}
+
+/// The Android console logs of the user this test runs as, as the service keeps them for the
+/// user's diagnostics (the current one and the one before it): the kernel's and init's
+/// messages from the start of each boot, which the guest log has only once Android is far
+/// enough up to send it.
+fn console_logs() -> String {
+    // The service acts for the user whose socket connection reaches it: this test's.
+    // SAFETY: no preconditions.
+    let uid = unsafe { libc::getuid() };
+    let mut files = dsa_host_linux::service::host_logs_of(&format!("uid:{uid}"));
+    // The older log first.
+    files.reverse();
+    files
+        .iter()
+        .filter_map(|file| std::fs::read_to_string(&file.path).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn client(socket: &Path, wait: Duration) -> HostApiClient {
@@ -250,7 +295,9 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
 }
 
 /// What is wrong with the mount table `table` for an erofs image mounted at `point` and laid
-/// over each of `over` with overlayfs, the image's folder as the upper of the lower layers.
+/// over each of `over` with overlayfs, the image's folder as the upper of the lower layers. An
+/// overlay must not be nosuid: the folders it covers are not, and on a nosuid mount the kernel
+/// refuses init's domain change into each service it starts from there.
 fn overlay_problems(table: &str, point: &str, over: &[&str]) -> Vec<String> {
     let table = mounts(table);
     let mut problems = Vec::new();
@@ -259,7 +306,7 @@ fn overlay_problems(table: &str, point: &str, over: &[&str]) -> Vec<String> {
     }
     for folder in over {
         let layer = format!("{point}{folder}");
-        let laid = table.iter().any(|m| {
+        let laid = table.iter().find(|m| {
             m.point == *folder
                 && m.kind == "overlay"
                 && m.options.split(',').any(|option| {
@@ -268,8 +315,12 @@ fn overlay_problems(table: &str, point: &str, over: &[&str]) -> Vec<String> {
                         .is_some_and(|dirs| dirs.split(':').next() == Some(layer.as_str()))
                 })
         });
-        if !laid {
-            problems.push(format!("{layer} is not laid over {folder}"));
+        match laid {
+            None => problems.push(format!("{layer} is not laid over {folder}")),
+            Some(m) if m.options.split(',').any(|option| option == "nosuid") => problems.push(format!(
+                "{layer} is laid over {folder} nosuid, so init cannot start the services in {folder} in their own domains"
+            )),
+            Some(_) => {}
         }
     }
     problems
@@ -310,6 +361,61 @@ fn mount_denials(log: &str) -> Vec<&str> {
         .collect()
 }
 
+/// The permissions an audit line of SELinux names between its braces.
+fn permissions(line: &str) -> Vec<&str> {
+    let Some(start) = line.find('{') else {
+        return Vec::new();
+    };
+    let rest = &line[start + 1..];
+    rest[..rest.find('}').unwrap_or(rest.len())]
+        .split_whitespace()
+        .collect()
+}
+
+/// The lines of `log` that record SELinux refusing a program of any domain filesystem getattr
+/// on an overlay image's superblock. statfs on an overlay is checked against the superblock of
+/// its top lower layer, the image's, so such a refusal fails every program that asks how full
+/// `/system/bin`, `/product` or `/system_ext` is, and bpfloader's failure reboots Android.
+fn statfs_denials(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("avc:") && line.contains("denied"))
+        .filter(|line| line.contains("tclass=filesystem"))
+        .filter(|line| permissions(line).contains(&"getattr"))
+        .filter(|line| {
+            OVERLAY_TYPES
+                .iter()
+                .any(|kind| line.contains(&format!("tcontext=u:object_r:{kind}:")))
+        })
+        .collect()
+}
+
+/// The lines of `log` that record SELinux refusing init a domain change on exec because the
+/// program's mount is nosuid: what an overlay laid over a folder of services with nosuid does.
+fn nosuid_denials(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("avc:") && line.contains("denied"))
+        .filter(|line| line.contains("scontext=u:r:init:s0"))
+        .filter(|line| permissions(line).contains(&"nosuid_transition"))
+        .collect()
+}
+
+/// Adds what `log` (named `from` in each line) says SELinux refused programs through the
+/// overlays to `problems`.
+fn refusal_problems(log: &str, from: &str, problems: &mut Vec<String>) {
+    for line in statfs_denials(log) {
+        problems.push(format!(
+            "{from}: SELinux refused a program statfs through an overlay: {}",
+            line.trim()
+        ));
+    }
+    for line in nosuid_denials(log) {
+        problems.push(format!(
+            "{from}: SELinux refused init a service's domain from a nosuid mount: {}",
+            line.trim()
+        ));
+    }
+}
+
 /// Writes a mirror of LiteGapps' project into `mirror`, laid out as `file:` addresses read
 /// it: for each API level of [MIRROR_SDKS], the feed of its folder and one small Core build
 /// for `arch`, made as the host's own tests make one.
@@ -339,12 +445,21 @@ fn write_mirror(mirror: &Path, arch: &str) -> std::io::Result<()> {
 fn fr25_a_translation_image_that_is_not_laid_over_is_found_in_the_mount_table() {
     let good = "/dev/block/dm-0 / erofs ro,seclabel,relatime 0 0\n\
                 /dev/block/loop8 /mnt/dsa-arm-translation erofs ro,seclabel,nosuid,nodev,relatime 0 0\n\
-                overlay /system/lib64 overlay ro,seclabel,nosuid,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64 0 0\n\
-                overlay /system/bin overlay ro,seclabel,nosuid,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin 0 0\n\
-                overlay /system/etc overlay ro,seclabel,nosuid,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc 0 0\n\
+                overlay /system/lib64 overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64 0 0\n\
+                overlay /system/bin overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin 0 0\n\
+                overlay /system/etc overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc 0 0\n\
                 binfmt_misc /proc/sys/fs/binfmt_misc binfmt_misc rw,nosuid,nodev,noexec,relatime 0 0\n";
     assert!(overlay_problems(good, TRANSLATION_POINT, TRANSLATION_FOLDERS).is_empty());
     assert!(binfmt_mounted(good));
+
+    // What develop d69b9ff2 laid over: nosuid, which kept init from starting vold and apexd.
+    let nosuid = good.replace(
+        "ro,seclabel,nodev,relatime,lowerdir=",
+        "ro,seclabel,nosuid,nodev,relatime,lowerdir=",
+    );
+    let problems = overlay_problems(&nosuid, TRANSLATION_POINT, TRANSLATION_FOLDERS);
+    assert_eq!(problems.len(), 3, "{problems:?}");
+    assert!(problems.iter().all(|problem| problem.contains("nosuid")));
 
     // What every boot of 0.1.9 had: the image refused, so nothing was laid over.
     let refused = "/dev/block/dm-0 / erofs ro,seclabel,relatime 0 0\n";
@@ -392,10 +507,49 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(mount_denials(log).len(), 1);
 
     let good = "/dev/block/loop9 /mnt/dsa-gapps erofs ro,seclabel,nosuid,nodev,relatime 0 0\n\
-                overlay /product overlay ro,seclabel,nosuid,nodev,relatime,lowerdir=/mnt/dsa-gapps/product:/product 0 0\n\
-                overlay /system_ext overlay ro,seclabel,nosuid,nodev,relatime,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext 0 0\n";
+                overlay /product overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-gapps/product:/product 0 0\n\
+                overlay /system_ext overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext 0 0\n";
     assert!(overlay_problems(good, GAPPS_POINT, GAPPS_PARTITIONS).is_empty());
     assert_eq!(overlay_problems("", GAPPS_POINT, GAPPS_PARTITIONS).len(), 3);
+    let nosuid = good.replace(
+        "ro,seclabel,nodev,relatime,lowerdir=",
+        "ro,seclabel,nosuid,nodev,relatime,lowerdir=",
+    );
+    assert_eq!(
+        overlay_problems(&nosuid, GAPPS_POINT, GAPPS_PARTITIONS).len(),
+        2
+    );
+}
+
+#[test]
+fn fr25_fr32_a_program_refused_statfs_through_an_overlay_is_found_in_the_log() {
+    // What develop d69b9ff2's console logged 6.4 s into every boot with the default translator,
+    // before bpfloader's failure rebooted Android.
+    let log = "[    6.428340] type=1400 audit(1794172804.484:4): avc:  denied  { nosuid_transition } for  comm=\"init\" scontext=u:r:init:s0 tcontext=u:r:recovery_persist:s0 tclass=process2 permissive=0\n\
+               [    6.428340] type=1400 audit(1794172804.484:6): avc:  denied  { execute_no_trans } for  comm=\"init\" path=\"/system/bin/recovery-persist\" dev=\"overlay\" ino=18054423 scontext=u:r:init:s0 tcontext=u:object_r:recovery_persist_exec:s0 tclass=file permissive=0\n\
+               [    6.440341] type=1400 audit(1794172804.500:7): avc:  denied  { getattr } for  comm=\"rpmb_dev.test.s\" name=\"/\" dev=\"loop76\" ino=36 scontext=u:r:rpmb_dev_system:s0 tcontext=u:object_r:system_lib_file:s0 tclass=filesystem permissive=0\n\
+               [    6.460342] type=1400 audit(1794172804.520:9): avc:  denied  { getattr } for  comm=\"netbpfload\" name=\"/\" dev=\"loop76\" ino=36 scontext=u:r:bpfloader:s0 tcontext=u:object_r:system_lib_file:s0 tclass=filesystem permissive=0\n\
+               [    6.460342] init: Service bpfloader has 'reboot_on_failure' option and failed, shutting down system.\n\
+               [    6.524346] type=1400 audit(1794172804.584:14): avc:  denied  { nosuid_transition } for  comm=\"init\" scontext=u:r:init:s0 tcontext=u:r:vdc:s0 tclass=process2 permissive=0\n\
+               11-08 21:00:09.100   600   600 I auditd  : avc:  denied  { read } for  comm=\"uiautomator\" scontext=u:r:shell:s0 tcontext=u:object_r:qemu_sf_lcd_density_prop:s0 tclass=file permissive=0\n";
+    let statfs = statfs_denials(log);
+    assert_eq!(statfs.len(), 2, "{statfs:?}");
+    assert!(statfs[1].contains("scontext=u:r:bpfloader:s0"));
+    assert_eq!(nosuid_denials(log).len(), 2);
+    // Neither is init's, so the mount checks alone missed them.
+    assert!(mount_denials(log).is_empty());
+    let mut problems = Vec::new();
+    refusal_problems(log, "console log", &mut problems);
+    assert_eq!(problems.len(), 4, "{problems:?}");
+
+    // The same refusal against the superblock types the images have now, from any domain.
+    for kind in ["dsa_arm_translation_fs", "dsa_gapps_fs"] {
+        let line = format!("avc:  denied  {{ getattr }} for  comm=\"df\" name=\"/\" dev=\"loop9\" scontext=u:r:shell:s0 tcontext=u:object_r:{kind}:s0 tclass=filesystem permissive=0");
+        assert_eq!(statfs_denials(&line).len(), 1, "{kind}");
+    }
+    // A getattr on a file of the image is not a statfs.
+    let file = "avc:  denied  { getattr } for  comm=\"ls\" path=\"/system/bin/ls\" scontext=u:r:shell:s0 tcontext=u:object_r:system_file:s0 tclass=file permissive=0";
+    assert!(statfs_denials(file).is_empty());
 }
 
 #[test]
@@ -464,6 +618,7 @@ fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     for line in mount_denials(&log) {
         problems.push(format!("{boot}: SELinux refused init: {line}"));
     }
+    refusal_problems(&log, boot, problems);
 }
 
 #[test]
@@ -706,6 +861,11 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     for line in mount_denials(&whole) {
         problems.push(format!("SELinux refused init: {line}"));
     }
+    refusal_problems(&whole, "guest log", &mut problems);
+    // The console logs of both boots, which hold what the kernel refused before logd ran.
+    let console = console_logs();
+    let _ = std::fs::write(dir.join("android-console.txt"), &console);
+    refusal_problems(&console, "console log", &mut problems);
 
     if !problems.is_empty() {
         problems.dedup();
