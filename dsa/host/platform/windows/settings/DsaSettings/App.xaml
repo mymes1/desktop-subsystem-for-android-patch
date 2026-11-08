@@ -30,7 +30,7 @@
             <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Malgun Gothic</FontFamily>
             <FontFamily x:Key="StrongTextFont">Segoe UI Variable Text Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
             <FontFamily x:Key="StrongDisplayFont">Segoe UI Variable Display Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
-            <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="CardCornerRadius">4</CornerRadius>
 
             <!-- The page layout of the Windows Settings app and the WinUI Gallery: the title
                  stays above the page while the page scrolls under it, both 56 px from the edges
