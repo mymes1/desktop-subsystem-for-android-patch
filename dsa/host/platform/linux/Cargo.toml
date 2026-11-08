@@ -71,3 +71,5 @@ libloading = "0.8"
 
 [dev-dependencies]
 dsa-transport = { workspace = true, features = ["conformance"] }
+# The small Google apps builds the overlay boot check installs from a mirror.
+dsa-host-core = { workspace = true, features = ["conformance"] }
