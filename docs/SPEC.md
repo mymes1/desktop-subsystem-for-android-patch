@@ -268,7 +268,7 @@ INTENT D23을 따른다. 모든 운영체제가 같은 DSA 상징(모양과 색)
   - 컬러 아이콘은 아래 두께(#08402f)가 있는 초록 판(#2fd37c) 위에 흰 제목 표시줄과 흰 안테나, 짙은 몸체의 창이다. symbolic 아이콘은 같은 창 모양을 한 색으로 그리고 안쪽 판을 비운다.
   - `hicolor/scalable/apps/`에 컬러 SVG, `hicolor/symbolic/apps/`에 `-symbolic` SVG를 둔다.
   - 쓰는 곳: 앱 그리드와 `.desktop` 항목, 패널 표시기(symbolic, 패널 색을 따른다), 소프트웨어 센터(AppStream 메타데이터의 아이콘).
-- 딸린 앱(설정, APK 설치 관리자, 파일)은 운영체제마다 같은 형식과 크기로, 공통 상징에 작은 배지를 붙인 아이콘을 가진다.
+- 딸린 앱(설정, APK 설치 관리자, 파일)은 운영체제마다 같은 형식과 크기의 아이콘을 가진다. 설정과 파일은 배지 없는 공통 상징이고, APK 설치 관리자는 열린 상자 아이콘이다. 어떤 아이콘에도 배지를 붙이지 않는다.
 - 안드로이드 로봇(Bugdroid)은 상징으로 쓰지 않는다. 안드로이드 초록색이나 로봇을 쓰면 Google 브랜드 가이드라인의 조건을 지키고, 그것을 싣는 곳(정보 화면, 서드파티 고지)에 "The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License." 문구를 둔다. 상표 표기는 NFR-6을 따른다.
 - 수용 기준: CI 검사가 배포하는 아이콘 파일이 모두 있고, 각 파일이 위에서 정한 크기를 모두 담는지 확인한다(`.ico`의 8개 크기, `.icns`의 모든 크기, 컬러 SVG와 symbolic SVG, 알림 영역의 밝은 것과 어두운 것, 딸린 앱마다 같은 목록). 하나라도 빠지면 실패한다.
 - 수용 기준: 실제 기기에서 각 운영체제의 쓰는 곳(Windows의 시작 메뉴, 작업 표시줄, 알림 영역, 설치 화면과 설치된 앱 목록, macOS의 Dock, 메뉴 막대, pkg와 dmg, Linux의 앱 그리드, 패널, 소프트웨어 센터)에 아이콘이 보이고, 밝은 테마와 어두운 테마에서 알아볼 수 있다. (수동 확인)
