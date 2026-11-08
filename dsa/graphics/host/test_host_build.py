@@ -208,6 +208,18 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+            if (pendingGarbage.timepoint < old && !IsDone(pendingGarbage.waitable)) {", patch)
         self.assertIn("+                    now - pendingGarbage.timepoint);", patch)
 
+    def test_nfr5_a_shared_color_buffer_opened_before_it_is_made_is_not_an_error(self):
+        # Every guest process opens a gralloc buffer's shared ColorBuffer (top bit set) and
+        # creates it when the open fails, so the v0.1.9 log was full of "openColorBuffer cb
+        # handle -2147483645 not found" errors that were not errors.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0017", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0017-open-a-shared-color-buffer-without-an-error-when-it-is-new.patch").read_text(encoding="utf-8")
+        self.assertIn("+            if (!(p_colorbuffer & 0x80000000u)) {", patch)
+        header = (HERE.parent / "include" / "dsa_shared_color_buffer.h").read_text(encoding="utf-8")
+        self.assertIn("#define DSA_SHARED_COLOR_BUFFER_BIT 0x80000000u", header)
+
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration
         # the loader hides MoltenVK: creating the instance failed with
