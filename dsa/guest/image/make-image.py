@@ -4260,6 +4260,49 @@ def image_spec(images, major, arch=DEFAULT_ARCH):
     raise ValueError(f"inputs.json has no image for Android {major} on {arch}")
 
 
+# An image's build number (image.json "build") is its AOSP build number times 100 plus its
+# revision, so a host orders two images of one build by revision, and any image of a newer
+# build after them. A revision of 100 would read as the next build.
+MAX_REVISION = 99
+
+
+def version_of(spec, revision):
+    """The version that names the image of the inputs.json entry `spec` at `revision`:
+    "17.0.0-16373615-10" for "17.0.0-16373615-9", "17.0.0-16373615-10-arm64" for an arm64 one."""
+    marker = f"-{spec['build_id']}-{spec.get('revision', 1)}"
+    version = spec["version"]
+    at = version.find(marker)
+    rest = version[at + len(marker):] if at >= 0 else None
+    if rest is None or not (rest == "" or rest.startswith("-")):
+        raise ValueError(f"version {version} does not name build {spec['build_id']} "
+                         f"revision {spec.get('revision', 1)}")
+    return f"{version[:at]}-{spec['build_id']}-{revision}{rest}"
+
+
+def revised(spec, revision):
+    """The inputs.json entry `spec` as the image of `revision`, with the version that names it."""
+    if not 1 <= revision <= MAX_REVISION:
+        raise ValueError(f"revision {revision} is outside 1 to {MAX_REVISION}: the image's build "
+                         f"number is the AOSP build times 100 plus the revision")
+    if revision < spec.get("revision", 1):
+        raise ValueError(f"revision {revision} is lower than inputs.json's {spec.get('revision', 1)}")
+    return dict(spec, revision=revision, version=version_of(spec, revision))
+
+
+def next_revision(spec, tags):
+    """The revision a new image of `spec` gets, given the release tags already published: one
+    past the highest published image of the same build and architecture, and never below
+    inputs.json's revision. A published image is never replaced: a host that has it would not
+    see the new one as an update, and installs that checked its hashes would fail."""
+    published = {f"android-{version_of(spec, r)}": r for r in range(1, MAX_REVISION + 1)}
+    highest = max((published[tag.strip()] for tag in tags if tag.strip() in published), default=0)
+    revision = max(spec.get("revision", 1), highest + 1)
+    if revision > MAX_REVISION:
+        raise ValueError(f"build {spec['build_id']} has used every revision up to {MAX_REVISION}; "
+                         f"move inputs.json to a newer AOSP build")
+    return revision
+
+
 def kernel_name(arch):
     """The file name the guest kernel has in an image: bzImage on x86_64, Image on arm64."""
     return ARCHES[arch]["kernel"]
@@ -5029,7 +5072,14 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--major", type=int, required=True)
-    parser.add_argument("--keys", type=Path, required=True)
+    parser.add_argument("--keys", type=Path, help="the image signing keys (required to make an image)")
+    parser.add_argument("--revision", type=int,
+                        help="the image's revision, at least inputs.json's; the version that names "
+                             "the image follows it. The release workflow passes the next unpublished one")
+    parser.add_argument("--next-revision", action="store_true",
+                        help="print the revision the next image of --major and --arch gets, given "
+                             "the release tags already published, one per line on standard input, "
+                             "and make nothing")
     parser.add_argument("--inputs", type=Path, default=REPO / ".scratch/aosp-inputs")
     parser.add_argument("--out", type=Path, default=REPO / "dsa/target/image")
     parser.add_argument("--arch", choices=sorted(ARCHES), default=DEFAULT_ARCH,
@@ -5085,6 +5135,13 @@ def main():
         checked_arm_translation(args.arm_translation, args.arch)
 
     spec = image_spec(json.loads((HERE / "inputs.json").read_text())["images"], args.major, args.arch)
+    if args.next_revision:
+        print(next_revision(spec, sys.stdin.read().splitlines()))
+        return
+    if args.keys is None:
+        parser.error("--keys is required to make an image")
+    if args.revision is not None:
+        spec = revised(spec, args.revision)
     use_arch(args.arch)
     framework_payloads = framework_description = None
     if args.framework:

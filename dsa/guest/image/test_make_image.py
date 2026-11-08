@@ -3648,6 +3648,34 @@ class CompiledSystemAppTests(unittest.TestCase):
             problems = make_image.compiled_app_problems(self._image(apk, odex, vdex))
             self.assertTrue(any(words in p for p in problems), (words, problems))
 
+    def test_fr14_a_remade_image_gets_a_revision_no_release_has(self):
+        # The v0.1.9 image release rebuilt the images under 17.0.0-16373615-9 and replaced that
+        # release's files: a host that had -9 saw no update, and its hashes changed under it.
+        spec = {"version": "17.0.0-16373615-9", "build_id": "16373615", "revision": 9}
+        arm = dict(spec, version="17.0.0-16373615-9-arm64")
+        tags = ["android-17.0.0-16373615-9", "android-17.0.0-16373615-8",
+                "android-17.0.0-16373615-12-arm64", "android-16.0.0-15581820-30", "v0.1.9"]
+        self.assertEqual(make_image.next_revision(spec, tags), 10)
+        self.assertEqual(make_image.next_revision(arm, tags), 13)
+        # Nothing published yet: inputs.json's revision.
+        self.assertEqual(make_image.next_revision(spec, []), 9)
+        self.assertEqual(make_image.revised(spec, 10)["version"], "17.0.0-16373615-10")
+        self.assertEqual(make_image.revised(spec, 10)["revision"], 10)
+        self.assertEqual(make_image.revised(arm, 13)["version"], "17.0.0-16373615-13-arm64")
+        with self.assertRaises(ValueError):
+            make_image.revised(spec, 8)
+        # The build number is the AOSP build times 100 plus the revision, so 100 is refused.
+        with self.assertRaises(ValueError):
+            make_image.revised(spec, 100)
+        with self.assertRaises(ValueError):
+            make_image.next_revision(spec, ["android-17.0.0-16373615-99"])
+
+    def test_fr14_the_release_publishes_each_image_under_a_new_revision(self):
+        workflow = (Path(make_image.__file__).resolve().parents[3] / ".github/workflows/release-image.yml").read_text()
+        self.assertIn("make-image.py --major ${{ matrix.android }} --arch ${{ matrix.arch }} --next-revision", workflow)
+        self.assertIn("--revision ${{ steps.revision.outputs.revision }}", workflow)
+        self.assertNotIn('gh release upload "$tag"', workflow)
+
     def test_fr5_inputs_pin_the_build_dexpreopt_tools(self):
         inputs = json.loads((Path(make_image.__file__).parent / "inputs.json").read_text())
         for image in inputs["images"]:
