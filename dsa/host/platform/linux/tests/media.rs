@@ -26,11 +26,15 @@
 //! its folder (`/tmp/media-test-<pid>`) for the job to keep.
 #![cfg(target_os = "linux")]
 
+mod boot_check;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 
 use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
@@ -62,6 +66,14 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
 ];
 /// The whole test, boot included, stays under twelve minutes.
 const BUDGET: Duration = Duration::from_secs(690);
+/// How long past its budget the test may run before it stops everything it started and
+/// ends: inside the job step's 14 minutes, so the step never kills it with its VM still
+/// running.
+const OVERRUN: Duration = Duration::from_secs(60);
+/// How long one adb command may take. The probe's longest check plays a second of sound and
+/// encodes and decodes a second of video and audio with each decoder; a log dump of the
+/// whole boot takes seconds.
+const ADB_LIMIT: Duration = Duration::from_secs(240);
 
 fn scratch() -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
@@ -71,59 +83,20 @@ fn scratch() -> PathBuf {
     dir
 }
 
-/// A child process, stopped (SIGTERM, then SIGKILL) when dropped, so a failing test leaves no
-/// VM.
-struct Service {
-    child: Child,
-    log: PathBuf,
-}
-
-impl Service {
-    fn spawn(command: &mut Command, log: PathBuf) -> Service {
-        let out = std::fs::File::create(&log).unwrap();
-        let child = command
-            .stdin(Stdio::null())
-            .stdout(out.try_clone().unwrap())
-            .stderr(out)
-            .spawn()
-            .expect("starting a DSA program");
-        Service { child, log }
-    }
-
-    fn log(&self) -> String {
-        std::fs::read_to_string(&self.log).unwrap_or_default()
-    }
-}
-
-impl Drop for Service {
-    fn drop(&mut self) {
-        // SAFETY: kill with a child's own process ID and a constant signal.
-        unsafe {
-            libc::kill(self.child.id() as libc::pid_t, libc::SIGTERM);
-        }
-        let deadline = Instant::now() + Duration::from_secs(60);
-        while Instant::now() < deadline {
-            if let Ok(Some(_)) = self.child.try_wait() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
 /// Fails the test with what the service printed and the guest log's last lines.
 fn fail(why: String, service: &Service, log: &Mutex<Vec<String>>) -> ! {
-    let log = log.lock().unwrap();
-    let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
-    let tail = &log[log.len().saturating_sub(200)..];
+    // The lock is let go before the panic, so the thread that reads the guest log is not
+    // left with a poisoned lock and does not panic on top of this failure.
+    let tail = {
+        let log = lock(log);
+        let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
+        log[log.len().saturating_sub(200)..].join("\n")
+    };
     let devices =
         std::fs::read_to_string(service.log.with_file_name("devices.log")).unwrap_or_default();
     panic!(
-        "{why}\n--- the service's output ---\n{}\n--- the devices' output ---\n{devices}\n--- the guest log's last lines ---\n{}",
+        "{why}\n--- the service's output ---\n{}\n--- the devices' output ---\n{devices}\n--- the guest log's last lines ---\n{tail}",
         service.log(),
-        tail.join("\n")
     )
 }
 
@@ -150,23 +123,31 @@ struct Adb {
 }
 
 impl Adb {
+    /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most: a command that
+    /// hangs fails the check with what it was, instead of holding it until the job's timeout.
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
-        let out = Command::new(&self.program)
-            .arg("-s")
-            .arg(&self.serial)
-            .args(args)
-            .stdin(Stdio::null())
-            .output()
-            .map_err(|why| format!("running {}: {why}", self.program.display()))?;
-        if !out.status.success() {
-            return Err(format!(
+        let out = run_bounded(
+            Command::new(&self.program)
+                .arg("-s")
+                .arg(&self.serial)
+                .args(args),
+            ADB_LIMIT,
+            usize::MAX,
+        )?;
+        match out.status {
+            Some(status) if status.success() => Ok(out.stdout),
+            Some(_) => Err(format!(
                 "adb {} failed: {}{}",
                 args.join(" "),
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
-            ));
+            )),
+            None => Err(format!(
+                "adb {} did not finish within {} s and was stopped",
+                args.join(" "),
+                ADB_LIMIT.as_secs()
+            )),
         }
-        Ok(out.stdout)
     }
 
     fn shell(&self, command: &str) -> Result<String, String> {
@@ -177,12 +158,17 @@ impl Adb {
     /// Connects, and waits until the guest's shell answers.
     fn connect(&self, wait: Duration) -> Result<(), String> {
         let deadline = Instant::now() + wait;
-        let _ = Command::new(&self.program).arg("start-server").output();
+        let _ = run_bounded(
+            Command::new(&self.program).arg("start-server"),
+            ADB_LIMIT,
+            usize::MAX,
+        );
         loop {
-            let _ = Command::new(&self.program)
-                .arg("connect")
-                .arg(&self.serial)
-                .output();
+            let _ = run_bounded(
+                Command::new(&self.program).arg("connect").arg(&self.serial),
+                ADB_LIMIT,
+                usize::MAX,
+            );
             match self.shell("echo ready") {
                 Ok(out) if out.trim() == "ready" => return Ok(()),
                 Ok(out) if Instant::now() >= deadline => {
@@ -482,6 +468,7 @@ fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
         .unwrap_or_else(|| PathBuf::from("adb"));
     let started = Instant::now();
     let deadline = started + BUDGET;
+    let _watchdog = Watchdog::start("the media check", BUDGET + OVERRUN);
     let dir = scratch();
     let socket = dir.join("host.sock");
     let config = dir.join("dsa-hostd.json");
@@ -526,7 +513,7 @@ fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
             loop {
                 match reader.next(Duration::from_secs(5)) {
                     Ok(Some(batch)) => {
-                        let mut log = log.lock().unwrap();
+                        let mut log = lock(&log);
                         for entry in batch.entries {
                             log.push(entry.threadtime());
                         }
