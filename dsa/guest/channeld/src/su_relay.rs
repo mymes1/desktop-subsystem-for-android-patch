@@ -580,26 +580,29 @@ fn run_bridge(bridge: Arc<HelperBridge>, socket_path: PathBuf, start_wait: Durat
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
-        let Some(conn) = conn else {
-            let latest = bridge
-                .latest
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .clone();
-            let Some(config) = latest.filter(|c| c.enabled) else {
-                bridge.running.store(false, Ordering::Release);
-                return;
-            };
-            let packet = encode(Body::RootElevationConfig(config));
-            match connect_helper(&socket_path, &packet, start_wait) {
-                Ok(new_conn) => {
-                    *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) =
-                        Some(Arc::clone(&new_conn));
-                    new_conn
-                }
-                Err(_) => {
-                    std::thread::sleep(Duration::from_millis(200));
-                    continue;
+        let conn = match conn {
+            Some(conn) => conn,
+            None => {
+                let latest = bridge
+                    .latest
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let Some(config) = latest.filter(|c| c.enabled) else {
+                    bridge.running.store(false, Ordering::Release);
+                    return;
+                };
+                let packet = encode(Body::RootElevationConfig(config));
+                match connect_helper(&socket_path, &packet, start_wait) {
+                    Ok(new_conn) => {
+                        *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) =
+                            Some(Arc::clone(&new_conn));
+                        new_conn
+                    }
+                    Err(_) => {
+                        std::thread::sleep(Duration::from_millis(200));
+                        continue;
+                    }
                 }
             }
         };
@@ -690,58 +693,17 @@ impl GuardControl for HelperGuard {
     }
 }
 
-/// Sends `packet` as one packet on the seqpacket socket at `path`.
+/// Sends `packet` on the seqpacket socket at `path`, framed as the helper reads it
+/// ([`crate::su_packet::Packet`]).
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn send_packet(path: &std::path::Path, packet: &[u8]) -> std::io::Result<()> {
-    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-    use std::os::unix::ffi::OsStrExt;
-    let bytes = path.as_os_str().as_bytes();
-    // SAFETY: plain data, zero is its documented initial state.
-    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    if bytes.len() >= address.sun_path.len() {
-        return Err(std::io::Error::new(
+    let path = path.to_str().ok_or_else(|| {
+        std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "the helper's socket path is too long",
-        ));
-    }
-    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
-    for (to, from) in address.sun_path.iter_mut().zip(bytes) {
-        *to = *from as libc::c_char;
-    }
-    // SAFETY: a plain socket call; the result is checked before use.
-    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
-    if fd < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    // SAFETY: a descriptor just made and owned by nothing else.
-    let socket = unsafe { OwnedFd::from_raw_fd(fd) };
-    // SAFETY: the socket above and an address that outlives the call, with its own size.
-    let connected = unsafe {
-        libc::connect(
-            socket.as_raw_fd(),
-            (&address as *const libc::sockaddr_un).cast(),
-            std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t,
+            "the helper's socket path is not valid UTF-8",
         )
-    };
-    if connected != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    // SAFETY: the connected socket and a buffer that outlives the call.
-    let sent = unsafe {
-        libc::send(
-            socket.as_raw_fd(),
-            packet.as_ptr().cast(),
-            packet.len(),
-            libc::MSG_NOSIGNAL,
-        )
-    };
-    if sent < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    if sent as usize != packet.len() {
-        return Err(std::io::Error::other("the helper took part of the config"));
-    }
-    Ok(())
+    })?;
+    crate::su_packet::Packet::connect(path)?.send(packet)
 }
 
 /// Hosts without seqpacket sockets have no helper to reach.

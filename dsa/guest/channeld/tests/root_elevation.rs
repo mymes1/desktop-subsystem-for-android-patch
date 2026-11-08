@@ -308,7 +308,12 @@ fn fr35_the_helper_is_handed_the_config_with_the_apps_uids() {
     };
     applier.apply(&host);
     let packet = reader.join().unwrap();
-    match dsa_protocol::decode(&packet).unwrap().body {
+    // One frame as the helper reads it: the message's length, its offset, then the message.
+    assert!(packet.len() > 8, "the helper was sent {packet:?}");
+    let total = u32::from_be_bytes(packet[..4].try_into().unwrap()) as usize;
+    let offset = u32::from_be_bytes(packet[4..8].try_into().unwrap());
+    assert_eq!((total, offset), (packet.len() - 8, 0));
+    match dsa_protocol::decode(&packet[8..]).unwrap().body {
         Some(Body::RootElevationConfig(config)) => assert_eq!(config, resolved(true)),
         other => panic!("the helper was sent {other:?}"),
     }
