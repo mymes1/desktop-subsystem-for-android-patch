@@ -5178,6 +5178,74 @@ class ArmTranslationImageTests(unittest.TestCase):
                 sections[-1][1].append(line.strip())
         return sections
 
+    @staticmethod
+    def _allowed(policy):
+        """The (source, target, class, permission) quadruples the policy's allow rules grant."""
+        granted = set()
+        for source, target, kind, perms in re.findall(
+                r"\(allow\s+(\S+)\s+(\S+)\s+\((\S+)\s+\(([^()]*)\)\)\)", policy):
+            granted.update((source, target, kind, perm) for perm in perms.split())
+        return granted
+
+    def _context_mount_problems(self, rc_name, policy):
+        """What init lacks to make each erofs context= mount of the init script `rc_name`. The
+        kernel checks such a mount against the filesystem's own type (labeledfs, for erofs) and
+        against the type it names: relabelfrom labeledfs and relabelto the type for the
+        superblock; relabelfrom the type, and the type's associate on itself, for the root; and
+        then the mount itself against the type. A rule missing from that chain fails the mount
+        with "Permission denied" at boot."""
+        rc = (Path(make_image.__file__).with_name(rc_name)).read_text()
+        mounts = re.findall(r"^\s*mount erofs \S+ (\S+) .*context=u:object_r:([a-z0-9_]+):s0", rc, re.M)
+        self.assertTrue(mounts, rc_name)
+        granted = self._allowed(policy)
+        problems = []
+        for point, kind in mounts:
+            for rule in [("init", "labeledfs", "filesystem", "relabelfrom"),
+                         ("init", kind, "filesystem", "relabelto"),
+                         ("init", kind, "filesystem", "relabelfrom"),
+                         (kind, kind, "filesystem", "associate"),
+                         ("init", kind, "filesystem", "mount")]:
+                if rule not in granted:
+                    problems.append(f"{point}: no (allow {rule[0]} {rule[1]} ({rule[2]} ({rule[3]})))")
+        return problems
+
+    def test_fr25_init_may_mount_the_translation_images_labelled_as_system_libraries(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        self.assertEqual(self._context_mount_problems("dsa-arm-translation.rc", policy), [])
+        # What 0.1.9 had, which the kernel refused at every boot ("avc: denied { relabelfrom }
+        # ... tcontext=u:object_r:system_lib_file:s0 tclass=filesystem").
+        old = ("(allow init labeledfs (filesystem (mount relabelfrom)))\n"
+               "(allow init system_lib_file (filesystem (relabelto associate)))\n"
+               "(allow system_lib_file labeledfs (filesystem (associate)))\n")
+        self.assertNotEqual(self._context_mount_problems("dsa-arm-translation.rc", old), [])
+
+    def test_fr32_init_may_mount_the_google_apps_image_labelled_as_system_files(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        self.assertEqual(self._context_mount_problems("dsa-gapps.rc", policy), [])
+        old = ("(allow init labeledfs (filesystem (mount relabelfrom)))\n"
+               "(allow init system_file (filesystem (relabelto associate)))\n"
+               "(allow system_file labeledfs (filesystem (associate)))\n")
+        self.assertNotEqual(self._context_mount_problems("dsa-gapps.rc", old), [])
+
+    def test_fr25_fr32_the_mount_rules_stay_clear_of_the_platforms_neverallows(self):
+        # The platform's policy (Android 16 and 17) forbids relabelto on any fs_type that is not
+        # a contextmount_type, filesystem associate from an fs_type to a file type, and
+        # associate with proc. The images are labelled with file types, so none of those reach
+        # the rules here; a rule that broke one would stop the policy compiling at boot.
+        fs_types = {"labeledfs", "tmpfs", "rootfs", "proc", "binfmt_miscfs"}
+        for name in ("arm-translation.cil", "gapps.cil"):
+            text = (Path(make_image.__file__).parent / "sepolicy" / name).read_text()
+            for source, target, kind, perm in self._allowed(text):
+                if kind != "filesystem":
+                    continue
+                if perm == "relabelto":
+                    self.assertNotIn(target, fs_types, f"{name}: relabelto {target}")
+                if perm == "associate":
+                    self.assertNotIn(source, fs_types, f"{name}: {source} associate {target}")
+                    self.assertNotEqual(target, "proc", name)
+
     def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
@@ -5394,8 +5462,8 @@ class ArmTranslationImageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-gapps.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
-            self.assertIn("(allow init system_file (filesystem (relabelto associate)))", policy)
-            self.assertIn("(allow system_file labeledfs (filesystem (associate)))", policy)
+            self.assertIn("(allow init system_file (filesystem (mount relabelfrom relabelto)))", policy)
+            self.assertIn("(allow system_file system_file (filesystem (associate)))", policy)
 
     def test_fr32_x86_64_stays_the_first_abi_when_arm_translation_is_on(self):
         on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_text().splitlines()
