@@ -9373,6 +9373,227 @@
           }
         }
       }
+    },
+    "Backup_RestoreWarning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This installs the apps of the backup that Android does not have and replaces the data of every app in the backup with the backup's. What those apps saved since the backup is lost."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업에 있지만 Android에 없는 앱을 설치하고, 백업에 있는 모든 앱의 데이터를 백업의 데이터로 바꿉니다. 백업 이후 그 앱들이 저장한 내용은 사라집니다."
+          }
+        }
+      }
+    },
+    "Backup_Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알 수 없음"
+          }
+        }
+      }
+    },
+    "Backup_Never": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "없음"
+          }
+        }
+      }
+    },
+    "Backup_Contents": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} apps, {1}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개, {1}"
+          }
+        }
+      }
+    },
+    "Backup_UnavailableUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The DSA service did not say why."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 서비스가 이유를 알려 주지 않았습니다."
+          }
+        }
+      }
+    },
+    "Backup_BackingUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backing up the data of every app. This can take a while; Android waits for each app."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 앱의 데이터를 백업하는 중입니다. Android가 앱마다 기다리므로 시간이 걸릴 수 있습니다."
+          }
+        }
+      }
+    },
+    "Backup_Restoring": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring the apps and their data. This can take a while; Android waits for each app."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱과 앱 데이터를 복원하는 중입니다. Android가 앱마다 기다리므로 시간이 걸릴 수 있습니다."
+          }
+        }
+      }
+    },
+    "Backup_Done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backed up {0} apps."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개를 백업했습니다."
+          }
+        }
+      }
+    },
+    "Backup_DoneWithFailures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backed up {0} apps; {1} could not be backed up."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개를 백업했습니다. {1}개는 백업하지 못했습니다."
+          }
+        }
+      }
+    },
+    "Backup_Restored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored the data of {0} apps and installed {1} apps."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개의 데이터를 복원하고 앱 {1}개를 설치했습니다."
+          }
+        }
+      }
+    },
+    "Backup_RestoredWithFailures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored the data of {0} apps and installed {1} apps; {2} could not be restored."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개의 데이터를 복원하고 앱 {1}개를 설치했습니다. {2}개는 복원하지 못했습니다."
+          }
+        }
+      }
+    },
+    "Backup_KeyMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The DSA service has no recovery key for the backup yet."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 서비스에 아직 백업 복구 키가 없습니다."
+          }
+        }
+      }
+    },
+    "Backup_KeyImported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recovery key is kept. The backup folder is now read with it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키를 저장했습니다. 이제 이 키로 백업 폴더를 읽습니다."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
