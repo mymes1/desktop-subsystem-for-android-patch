@@ -1514,7 +1514,7 @@
     <value>Scaling on another monitor</value>
   </data>
   <data name="AppsDpiScaling.ToolTip" xml:space="preserve">
-    <value>Who scales this app when its window moves to a monitor of another scale. App: the app redraws at the new scale, and text stays sharp. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. No choice restarts the app.</value>
+    <value>Who scales this app when its window moves to a monitor of another scale. App: the app redraws at the new scale, and text stays sharp; an app that does not say it handles this would restart, so the system scales it instead. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. No choice restarts the app.</value>
   </data>
   <data name="Apps_DpiScaling_Auto" xml:space="preserve">
     <value>Scaling: automatic</value>
