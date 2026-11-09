@@ -198,10 +198,19 @@ change.
 
 The host shows each task 1:1 in its window, so a window's client size in host pixels is the
 task's size in guest pixels, and the task's density keeps the app the size it should be on
-the window's monitor (160 dpi at 100%, 320 at 200%). Android starts at the density of the
-user's main monitor, so a window that opens there asks for nothing. A task whose top activity
-does not say it handles a change of density is never asked for another one: its window shows
-it scaled instead, and its client size is the task's size at that scale.
+the window's monitor (96 dpi at 100%, 192 at 200%: a dp is 1/160 inch and a host pixel at
+100% 1/96 inch). Android starts at the density of the user's main monitor, so a window that
+opens there asks for nothing. A task whose top activity does not say it handles a change of
+density is never asked for another one: its window shows it scaled instead, and its client
+size is the task's size at that scale.
+
+Text keeps the size of the host's text. Android scales text by its font scale, apart from
+everything else, so the host's `SystemSettings` carries a font scale of 160/96 times the
+host's text size setting, which the agent writes to `Settings.System.FONT_SCALE`. A change of
+font scale makes Android restart every activity that does not say it handles one (its
+`configChanges` include `fontScale`), so while an app task is open whose top or root activity
+does not, the agent holds the new scale, logs which apps it waits for, and applies it as soon
+as none is open. The first scale after the agent connects applies before any app opens.
 
 `ResizeTask` asks for a size. The task keeps its top left corner and takes the size, cut
 down to the display and moved back inside it if it would cross an edge. If the task then

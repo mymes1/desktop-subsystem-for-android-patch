@@ -135,7 +135,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// A task's window moved to a monitor of another scale: asks the caller's Android to draw
-/// the task at `density_dpi` (160 at a scale of 100%).
+/// the task at `density_dpi` (96 at a scale of 100%, where a dp is 0.6 of a host pixel).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
     #[prost(int32, tag = "1")]
@@ -395,6 +395,27 @@ pub struct LocationFix {
     /// Milliseconds since the Unix epoch (UTC).
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
+}
+/// Turns the connection into the speech and spelling of the caller's Android: after the
+/// answer (Done), the service sends a LanguageServiceFrame for each request the Android's
+/// text-to-speech engine, speech recognition service or spell checker makes (ListSpeechVoices,
+/// SpeakText, StopSpeaking, StartRecognition, StopRecognition, CancelRecognition and
+/// CheckSpelling), and the client answers each with LanguageServiceFrame messages of its own
+/// (SpeechVoices, SpeechAudio, SpeechDone, RecognitionEvent and SpellingResult), which the
+/// service passes to the Android. The client runs the host's speech synthesis, speech
+/// recognition and spell checker in the user's session, where the user's voices, dictionaries
+/// and privacy settings are. Requests go to the first client still connected; when its
+/// connection ends, every request it had not finished fails in the Android. The connection
+/// lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ServeLanguageServices {}
+/// One message of control.proto (an encoded Envelope of dsa.control.v1), on a connection that
+/// serves speech and spelling. The service checks each one the client sends is an answer and
+/// passes it on unchanged, so the messages are defined once, where the Android reads them.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LanguageServiceFrame {
+    #[prost(bytes = "vec", tag = "1")]
+    pub control: ::prost::alloc::vec::Vec<u8>,
 }
 /// A notification of the caller's Android, on a connection that watches them
 /// (WatchNotifications). One with the key of an earlier one replaces it.
@@ -771,7 +792,7 @@ pub struct PlaceWidget {
     pub widget_id: i32,
     #[prost(message, optional, tag = "2")]
     pub placement: ::core::option::Option<WidgetPlacement>,
-    /// The window's size in its monitor's pixels, and the monitor's density (160 at a scale of
+    /// The window's size in its monitor's pixels, and Android's density for it (96 at a scale of
     /// 100%).
     #[prost(uint32, tag = "3")]
     pub width: u32,
@@ -1072,7 +1093,7 @@ pub struct Task {
     /// Whether the task has input focus in Android.
     #[prost(bool, tag = "5")]
     pub focused: bool,
-    /// The density the task's app draws at, in dots per inch (160 at a scale of 100%). 0 when
+    /// The density the task's app draws at, in dots per inch (96 at a scale of 100%). 0 when
     /// unknown.
     #[prost(uint32, tag = "6")]
     pub density_dpi: u32,
@@ -2224,6 +2245,11 @@ pub struct SystemSettings {
     /// The accent color as 0xAARRGGBB; 0 when there is none.
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
+    /// The size of text the user asked for, in percent of the default: Windows' text size
+    /// setting (100 to 225), or the desktop's text scaling factor. 0 when unknown, which counts
+    /// as 100.
+    #[prost(uint32, tag = "8")]
+    pub text_scale_percent: u32,
 }
 /// Turns the connection into the caller's game controllers: after the answer (Done), the client
 /// sends a GamepadEvent each time a controller is connected, disconnected or changes state, and
@@ -2351,7 +2377,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2497,6 +2523,8 @@ pub mod request {
         SetAppRoot(super::SetAppRoot),
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
+        #[prost(message, tag = "620")]
+        ServeLanguageServices(super::ServeLanguageServices),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2576,7 +2604,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2652,6 +2680,8 @@ pub mod envelope {
         GamepadEvent(super::GamepadEvent),
         #[prost(message, tag = "301")]
         GamepadRumble(super::GamepadRumble),
+        #[prost(message, tag = "620")]
+        LanguageServiceFrame(super::LanguageServiceFrame),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

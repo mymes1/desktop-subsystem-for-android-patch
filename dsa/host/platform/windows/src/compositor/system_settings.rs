@@ -1,5 +1,5 @@
 //! The user's Windows settings that their Android follows: the time zone, the display
-//! languages, the regional format, the app theme and the accent color.
+//! languages, the regional format, the app theme, the accent color and the text size.
 //!
 //! The service runs as the machine in session 0, and the languages, the regional format and
 //! the theme belong to the user, so the window manager, which runs in the user's session,
@@ -9,6 +9,11 @@
 //! `WM_DWMCOLORIZATIONCOLORCHANGED` for the accent color), and the settings are read again
 //! then. Windows names its time zones its own way ("Korea Standard Time"); the ICU that ships
 //! with Windows gives the IANA name Android uses ("Asia/Seoul").
+//!
+//! The text size (Settings > Accessibility > Text size, `UISettings.TextScaleFactor`) is the
+//! current user's `TextScaleFactor` under `Software\Microsoft\Accessibility`. Windows tells
+//! running apps of a change through WinRT, not with a broadcast every window hears, so that
+//! key is watched for changes too ([`TextSizeWatch`]).
 
 use std::cell::Cell;
 use std::sync::atomic::AtomicBool;
@@ -42,6 +47,21 @@ pub fn accent_from_dwm(value: u32) -> u32 {
     let green = (value >> 8) & 0xff;
     let blue = (value >> 16) & 0xff;
     0xff00_0000 | (red << 16) | (green << 8) | blue
+}
+
+/// The key under the current user's registry key that holds the text size.
+const ACCESSIBILITY_KEY: &str = "Software\\Microsoft\\Accessibility";
+
+/// The value there that is the text size, in percent.
+const TEXT_SCALE_FACTOR: &str = "TextScaleFactor";
+
+/// The text size in percent from `TextScaleFactor`, which Settings keeps between 100 and 225:
+/// 100 when it is not set, as Windows treats it, or holds anything else.
+pub fn text_scale_from_windows(value: Option<u32>) -> u32 {
+    match value {
+        Some(percent) if (100..=225).contains(&percent) => percent,
+        _ => 100,
+    }
 }
 
 /// The first day of the week from `LOCALE_IFIRSTDAYOFWEEK` ("0" is Monday through "6",
@@ -261,6 +281,66 @@ pub fn read() -> SystemSettings {
             .unwrap_or(0),
         dark_mode,
         accent_color,
+        text_scale_percent: text_scale_from_windows(user_dword(
+            ACCESSIBILITY_KEY,
+            TEXT_SCALE_FACTOR,
+        )),
+    }
+}
+
+/// A watch on the key that holds the text size: its event is signalled when a value under it
+/// is written. It belongs to the thread that armed it, as Windows ties the notification to
+/// that thread.
+pub struct TextSizeWatch {
+    key: windows_sys::Win32::System::Registry::HKEY,
+    event: windows_sys::Win32::Foundation::HANDLE,
+}
+
+impl TextSizeWatch {
+    /// Opens the key and arms the watch, or `None` when the key is not there (a text size
+    /// that was never changed is then read again every so often instead).
+    pub fn open() -> Option<TextSizeWatch> {
+        use windows_sys::Win32::System::Registry::{RegOpenKeyExW, HKEY_CURRENT_USER, KEY_NOTIFY};
+        use windows_sys::Win32::System::Threading::CreateEventW;
+        let path = wide(ACCESSIBILITY_KEY);
+        let mut key = std::ptr::null_mut();
+        // SAFETY: a null-terminated path and a key handle to fill.
+        let status =
+            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_NOTIFY, &mut key) };
+        if status != 0 || key.is_null() {
+            return None;
+        }
+        // SAFETY: an unnamed auto-reset event, not signalled.
+        let event = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
+        let watch = TextSizeWatch { key, event };
+        if event.is_null() || !watch.arm() {
+            return None;
+        }
+        Some(watch)
+    }
+
+    /// Asks Windows to signal the event at the next write under the key. A notification
+    /// fires once, so this is done again after each.
+    fn arm(&self) -> bool {
+        use windows_sys::Win32::System::Registry::{
+            RegNotifyChangeKeyValue, REG_NOTIFY_CHANGE_LAST_SET,
+        };
+        // SAFETY: the key and the event this watch owns, asynchronously.
+        unsafe {
+            RegNotifyChangeKeyValue(self.key, 0, REG_NOTIFY_CHANGE_LAST_SET, self.event, 1) == 0
+        }
+    }
+}
+
+impl Drop for TextSizeWatch {
+    fn drop(&mut self) {
+        // SAFETY: the key and the event this watch opened.
+        unsafe {
+            windows_sys::Win32::System::Registry::RegCloseKey(self.key);
+            if !self.event.is_null() {
+                windows_sys::Win32::Foundation::CloseHandle(self.event);
+            }
+        }
     }
 }
 
@@ -290,6 +370,7 @@ unsafe extern "system" fn window_proc(
 /// the thread that made it, which must also wait on it.
 pub struct WindowsSettings {
     window: HWND,
+    text_size: Option<TextSizeWatch>,
 }
 
 impl WindowsSettings {
@@ -328,7 +409,10 @@ impl WindowsSettings {
                 std::ptr::null(),
             )
         };
-        WindowsSettings { window }
+        WindowsSettings {
+            window,
+            text_size: TextSizeWatch::open(),
+        }
     }
 }
 
@@ -347,14 +431,37 @@ impl SystemSettingsSource for WindowsSettings {
     }
 
     fn wait_for_change(&mut self, timeout: Duration) -> bool {
+        use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::INFINITE;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             DispatchMessageW, MsgWaitForMultipleObjects, PeekMessageW, TranslateMessage, MSG,
             PM_REMOVE, QS_ALLINPUT,
         };
         let millis = u32::try_from(timeout.as_millis()).unwrap_or(INFINITE - 1);
-        // SAFETY: no handles, only this thread's messages.
-        unsafe { MsgWaitForMultipleObjects(0, std::ptr::null(), 0, millis, QS_ALLINPUT) };
+        let handles: Vec<_> = self.text_size.iter().map(|watch| watch.event).collect();
+        // SAFETY: the watch's event, if there is one, and this thread's messages.
+        let waited = unsafe {
+            MsgWaitForMultipleObjects(
+                handles.len() as u32,
+                if handles.is_empty() {
+                    std::ptr::null()
+                } else {
+                    handles.as_ptr()
+                },
+                0,
+                millis,
+                QS_ALLINPUT,
+            )
+        };
+        let text_size_changed = !handles.is_empty() && waited == WAIT_OBJECT_0;
+        if text_size_changed {
+            if let Some(watch) = &self.text_size {
+                if !watch.arm() {
+                    // Changes are still found when the settings are read again.
+                    self.text_size = None;
+                }
+            }
+        }
         // SAFETY: a message structure this thread owns, for its own messages.
         unsafe {
             let mut message: MSG = std::mem::zeroed();
@@ -363,7 +470,7 @@ impl SystemSettingsSource for WindowsSettings {
                 DispatchMessageW(&message);
             }
         }
-        CHANGED.with(|changed| changed.replace(false))
+        CHANGED.with(|changed| changed.replace(false)) || text_size_changed
     }
 }
 
@@ -397,6 +504,16 @@ mod tests {
         assert!(is_24_hour("HH:mm"));
         assert!(!is_24_hour("h:mm tt"));
         assert!(!is_24_hour("h 'H' mm"));
+    }
+
+    #[test]
+    fn fr4_the_text_size_is_read_as_windows_keeps_it() {
+        assert_eq!(text_scale_from_windows(None), 100, "never changed");
+        assert_eq!(text_scale_from_windows(Some(100)), 100);
+        assert_eq!(text_scale_from_windows(Some(150)), 150);
+        assert_eq!(text_scale_from_windows(Some(225)), 225);
+        assert_eq!(text_scale_from_windows(Some(0)), 100);
+        assert_eq!(text_scale_from_windows(Some(5000)), 100);
     }
 
     #[test]

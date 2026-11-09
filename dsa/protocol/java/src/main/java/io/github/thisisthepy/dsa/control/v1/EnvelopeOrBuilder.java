@@ -1690,5 +1690,137 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash();
 
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   * @return Whether the listSpeechVoices field is set.
+   */
+  boolean hasListSpeechVoices();
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   * @return The listSpeechVoices.
+   */
+  io.github.thisisthepy.dsa.control.v1.ListSpeechVoices getListSpeechVoices();
+
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   * @return Whether the speechVoices field is set.
+   */
+  boolean hasSpeechVoices();
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   * @return The speechVoices.
+   */
+  io.github.thisisthepy.dsa.control.v1.SpeechVoices getSpeechVoices();
+
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   * @return Whether the speakText field is set.
+   */
+  boolean hasSpeakText();
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   * @return The speakText.
+   */
+  io.github.thisisthepy.dsa.control.v1.SpeakText getSpeakText();
+
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   * @return Whether the speechAudio field is set.
+   */
+  boolean hasSpeechAudio();
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   * @return The speechAudio.
+   */
+  io.github.thisisthepy.dsa.control.v1.SpeechAudio getSpeechAudio();
+
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   * @return Whether the speechDone field is set.
+   */
+  boolean hasSpeechDone();
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   * @return The speechDone.
+   */
+  io.github.thisisthepy.dsa.control.v1.SpeechDone getSpeechDone();
+
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   * @return Whether the stopSpeaking field is set.
+   */
+  boolean hasStopSpeaking();
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   * @return The stopSpeaking.
+   */
+  io.github.thisisthepy.dsa.control.v1.StopSpeaking getStopSpeaking();
+
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   * @return Whether the startRecognition field is set.
+   */
+  boolean hasStartRecognition();
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   * @return The startRecognition.
+   */
+  io.github.thisisthepy.dsa.control.v1.StartRecognition getStartRecognition();
+
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   * @return Whether the stopRecognition field is set.
+   */
+  boolean hasStopRecognition();
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   * @return The stopRecognition.
+   */
+  io.github.thisisthepy.dsa.control.v1.StopRecognition getStopRecognition();
+
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   * @return Whether the cancelRecognition field is set.
+   */
+  boolean hasCancelRecognition();
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   * @return The cancelRecognition.
+   */
+  io.github.thisisthepy.dsa.control.v1.CancelRecognition getCancelRecognition();
+
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   * @return Whether the recognitionEvent field is set.
+   */
+  boolean hasRecognitionEvent();
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   * @return The recognitionEvent.
+   */
+  io.github.thisisthepy.dsa.control.v1.RecognitionEvent getRecognitionEvent();
+
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   * @return Whether the checkSpelling field is set.
+   */
+  boolean hasCheckSpelling();
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   * @return The checkSpelling.
+   */
+  io.github.thisisthepy.dsa.control.v1.CheckSpelling getCheckSpelling();
+
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   * @return Whether the spellingResult field is set.
+   */
+  boolean hasSpellingResult();
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   * @return The spellingResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.SpellingResult getSpellingResult();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

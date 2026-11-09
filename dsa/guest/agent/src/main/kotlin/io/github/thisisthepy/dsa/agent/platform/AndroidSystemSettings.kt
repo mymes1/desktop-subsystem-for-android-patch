@@ -43,6 +43,17 @@ class AndroidSystemSettings(private val context: Context) : SystemSettingsPort {
         Settings.System.putString(context.contentResolver, Settings.System.TIME_12_24, if (on) "24" else "12")
     }
 
+    override fun fontScale(): Float =
+        Settings.System.getFloat(context.contentResolver, Settings.System.FONT_SCALE, 1f)
+
+    /**
+     * The font scale Settings' font size writes. The activity task manager hears the setting
+     * change and gives every app the new scale in its configuration.
+     */
+    override fun setFontScale(scale: Float) {
+        Settings.System.putFloat(context.contentResolver, Settings.System.FONT_SCALE, scale)
+    }
+
     override fun setDarkMode(on: Boolean) {
         context.getSystemService(UiModeManager::class.java)
             .setNightMode(if (on) UiModeManager.MODE_NIGHT_YES else UiModeManager.MODE_NIGHT_NO)

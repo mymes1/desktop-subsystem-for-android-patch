@@ -18,6 +18,7 @@ import io.github.thisisthepy.dsa.agent.tasks.asksForFullScreen
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
 import io.github.thisisthepy.dsa.agent.tasks.handlesDensityChange
+import io.github.thisisthepy.dsa.agent.tasks.handlesFontScaleChange
 
 /**
  * The guest's running tasks, from the activity task manager.
@@ -96,7 +97,18 @@ class AndroidTaskSource(
             // (ActivityInfo.configChanges includes density): Android relaunches any other
             // activity whose density changes. False when the package manager does not know it.
             handlesDensityChange = top?.let { handlesDensityChange(it.configChanges) } ?: false,
+            // The same for a change of font scale, of the top activity and of the root one
+            // under it, which Android restarts too when the user goes back to it. False when
+            // the package manager does not know the top activity.
+            handlesFontScaleChange = top != null && handlesFontScaleChange(top.configChanges) &&
+                rootHandlesFontScale(info, root),
         )
+    }
+
+    /** Whether the task's root activity, when it is not its top one, handles a change of font scale. */
+    private fun rootHandlesFontScale(info: ActivityManager.RunningTaskInfo, root: ComponentName?): Boolean {
+        if (root == null || info.topActivity == null || root == info.topActivity) return true
+        return activityInfo(root)?.let { handlesFontScaleChange(it.configChanges) } ?: true
     }
 
     /**

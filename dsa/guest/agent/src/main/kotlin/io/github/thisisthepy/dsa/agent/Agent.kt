@@ -69,6 +69,7 @@ import io.github.thisisthepy.dsa.agent.tasks.LauncherApps
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskReporter
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
+import io.github.thisisthepy.dsa.agent.tasks.restartedByFontScale
 import io.github.thisisthepy.dsa.agent.trace.FrameStatsTrace
 import io.github.thisisthepy.dsa.agent.trace.InputTrace
 import io.github.thisisthepy.dsa.agent.trace.ResizeTrace
@@ -756,6 +757,9 @@ class Agent(
             return
         }
         for (task in running) trace.boundsRead(task.taskId, task.bounds.right - task.bounds.left, task.bounds.bottom - task.bounds.top)
+        // A font scale the host asked for waits while an app that would be restarted for it
+        // is open.
+        settingsSync.tasksRunning(restartedByFontScale(running))
         val arranging = System.nanoTime()
         val bounds = arranger.arrange(running.filter(reporter::reportable))
         trace.applied((System.nanoTime() - arranging) / 1_000_000.0)

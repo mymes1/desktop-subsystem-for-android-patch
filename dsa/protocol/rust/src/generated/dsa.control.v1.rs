@@ -210,7 +210,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// Host to guest: the task's window is on a monitor of another scale; the task's app draws
-/// at `density_dpi` (160 at a scale of 100%). The host sends the matching ResizeTask right
+/// at `density_dpi` (96 at a scale of 100%). The host sends the matching ResizeTask right
 /// after it, and the agent applies both together, so the app relays out once.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
@@ -1841,7 +1841,7 @@ pub struct RemoveWidget {
     pub widget_id: i32,
 }
 /// Host to guest: the size of the widget's host window. The agent draws the widget at `width`
-/// by `height` pixels at `density_dpi` (160 at a scale of 100%), and tells the widget's app
+/// by `height` pixels at `density_dpi` (96 at a scale of 100%), and tells the widget's app
 /// its size in dp, so a widget with layouts for several sizes picks the one that fits.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResizeWidget {
@@ -2407,7 +2407,7 @@ pub struct CameraError {
 /// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
 /// after the agent connects, when the host knows them, and on each change. Every field is sent
 /// each time. The user does not change these in the guest: the host's are the guest's.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SystemSettings {
     /// The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
     /// name it; the guest's then stays as it is.
@@ -2435,6 +2435,13 @@ pub struct SystemSettings {
     /// colors. 0 when the host has none.
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
+    /// The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+    /// of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+    /// a host pixel, and scales text separately from everything else, so this is 160/96 times
+    /// the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+    /// the guest's as it is.
+    #[prost(float, tag = "8")]
+    pub font_scale: f32,
 }
 /// Host to guest: the computer's name, which the agent makes the guest's device name: the name
 /// Settings shows, and the one Bluetooth and Wi-Fi Direct show other devices when the guest has
@@ -2512,12 +2519,204 @@ pub struct GamepadRumble {
     #[prost(uint32, tag = "4")]
     pub duration_ms: u32,
 }
+/// Guest to host: asks for the host's voices. The host answers with SpeechVoices.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListSpeechVoices {}
+/// One of the host's voices.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpeechVoice {
+    /// The host's name for the voice, which SpeakText gives back. Opaque to the guest.
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// The voice's name as the host shows it, such as "Microsoft Heami".
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// The voice's language as a BCP 47 tag, such as "ko-KR".
+    #[prost(string, tag = "3")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// A neural voice that sounds natural, such as Windows' natural voices.
+    #[prost(bool, tag = "4")]
+    pub natural: bool,
+    /// The voice needs the network to speak.
+    #[prost(bool, tag = "5")]
+    pub needs_network: bool,
+}
+/// Host to guest: the host's voices, in answer to ListSpeechVoices, and again whenever the
+/// host's speech service comes or goes. At most 512.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpeechVoices {
+    #[prost(message, repeated, tag = "1")]
+    pub voices: ::prost::alloc::vec::Vec<SpeechVoice>,
+    /// The voice the host speaks with when none is named; empty when it has none.
+    #[prost(string, tag = "2")]
+    pub default_voice_id: ::prost::alloc::string::String,
+    /// Whether the host can speak at all. False when it has no speech synthesis, or no session
+    /// of the user's is open to run it in.
+    #[prost(bool, tag = "3")]
+    pub available: bool,
+}
+/// Guest to host: speaks `text`. The host answers with SpeechAudio pieces, then SpeechDone.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpeakText {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// At most 4000 characters, as Android's TextToSpeech takes.
+    #[prost(string, tag = "2")]
+    pub text: ::prost::alloc::string::String,
+    /// The voice to speak with, from SpeechVoices; empty for the host's voice for the language.
+    #[prost(string, tag = "3")]
+    pub voice_id: ::prost::alloc::string::String,
+    /// The language to speak in as a BCP 47 tag; empty for the host's own.
+    #[prost(string, tag = "4")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// How fast and how high, where 1 is the voice's own. The host keeps them in the range its
+    /// voices can take.
+    #[prost(float, tag = "5")]
+    pub rate: f32,
+    #[prost(float, tag = "6")]
+    pub pitch: f32,
+}
+/// Host to guest: a piece of the spoken text's sound, as 16-bit signed little-endian PCM,
+/// channels interleaved, at most 64 KiB. Every piece of a request has the same format. A host
+/// whose speech service plays the sound itself and gives programs none sends no piece, only
+/// SpeechDone once the sound has played.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpeechAudio {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub sample_rate_hz: u32,
+    #[prost(uint32, tag = "3")]
+    pub channel_count: u32,
+    #[prost(bytes = "vec", tag = "4")]
+    pub pcm: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest: a SpeakText is over. No SpeechAudio of it follows.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpeechDone {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "SpeechOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host: stops a SpeakText. The host answers with SpeechDone (STOPPED), unless the
+/// request was already over.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopSpeaking {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Guest to host: listens to the host's microphone and recognises what is said. The host
+/// answers with RecognitionEvent messages until one of kind FINAL or ERROR. The guest sends it
+/// only for an app that holds Android's microphone permission; the host's own microphone
+/// privacy settings apply as well.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StartRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// The language to recognise as a BCP 47 tag; empty for the host's own.
+    #[prost(string, tag = "2")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// Whether the app wants what is recognised while the user still speaks (PARTIAL events).
+    #[prost(bool, tag = "3")]
+    pub partial_results: bool,
+    /// The most alternatives a FINAL event carries; 0 is 1.
+    #[prost(uint32, tag = "4")]
+    pub max_results: u32,
+    /// Whether the app prefers recognition that stays on the computer.
+    #[prost(bool, tag = "5")]
+    pub prefer_offline: bool,
+}
+/// Guest to host: the user has stopped speaking; the host stops listening and sends what it
+/// recognised as the FINAL event.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Guest to host: drops a recognition. The host stops listening and sends nothing more for it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Host to guest: what became of a StartRecognition so far.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecognitionEvent {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "RecognitionEventKind", tag = "2")]
+    pub kind: i32,
+    /// For PARTIAL, the text so far; for FINAL, the alternatives, best first.
+    #[prost(string, repeated, tag = "3")]
+    pub texts: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// For FINAL, how sure the host is of each alternative, from 0 to 1, in the same order;
+    /// empty when the host does not say.
+    #[prost(float, repeated, tag = "4")]
+    pub confidences: ::prost::alloc::vec::Vec<f32>,
+    /// For ERROR.
+    #[prost(enumeration = "RecognitionError", tag = "5")]
+    pub error: i32,
+    #[prost(string, tag = "6")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host: checks the spelling of each of `texts`, at most 64 of at most 4096
+/// characters each. The host answers with SpellingResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CheckSpelling {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// The language as a BCP 47 tag, such as "en-US".
+    #[prost(string, tag = "2")]
+    pub language_tag: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub texts: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The most suggestions for each mistake; 0 is 5.
+    #[prost(uint32, tag = "4")]
+    pub max_suggestions: u32,
+}
+/// A word the host's spell checker finds wrong.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpellingMistake {
+    /// Where the word is in its text, in UTF-16 code units, as Android counts.
+    #[prost(uint32, tag = "1")]
+    pub start: u32,
+    #[prost(uint32, tag = "2")]
+    pub length: u32,
+    /// What to write instead, best first. An empty suggestion means the word is to be deleted,
+    /// as a word written twice.
+    #[prost(string, repeated, tag = "3")]
+    pub suggestions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The host is sure of its first suggestion, as when it would correct the word itself.
+    #[prost(bool, tag = "4")]
+    pub recommended: bool,
+}
+/// The mistakes in one text, in order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpellingText {
+    #[prost(message, repeated, tag = "1")]
+    pub mistakes: ::prost::alloc::vec::Vec<SpellingMistake>,
+}
+/// Host to guest: the mistakes in each text of a CheckSpelling, one SpellingText each, in the
+/// same order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpellingResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(message, repeated, tag = "2")]
+    pub texts: ::prost::alloc::vec::Vec<SpellingText>,
+    /// False when the host has no spell checker for the language; `texts` is empty then.
+    #[prost(bool, tag = "3")]
+    pub supported: bool,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 411, 412, 413, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 411, 412, 413, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2831,6 +3030,30 @@ pub mod envelope {
         ReinstallResult(super::ReinstallResult),
         #[prost(message, tag = "382")]
         NativeLibraryCrash(super::NativeLibraryCrash),
+        #[prost(message, tag = "620")]
+        ListSpeechVoices(super::ListSpeechVoices),
+        #[prost(message, tag = "621")]
+        SpeechVoices(super::SpeechVoices),
+        #[prost(message, tag = "622")]
+        SpeakText(super::SpeakText),
+        #[prost(message, tag = "623")]
+        SpeechAudio(super::SpeechAudio),
+        #[prost(message, tag = "624")]
+        SpeechDone(super::SpeechDone),
+        #[prost(message, tag = "625")]
+        StopSpeaking(super::StopSpeaking),
+        #[prost(message, tag = "626")]
+        StartRecognition(super::StartRecognition),
+        #[prost(message, tag = "627")]
+        StopRecognition(super::StopRecognition),
+        #[prost(message, tag = "628")]
+        CancelRecognition(super::CancelRecognition),
+        #[prost(message, tag = "629")]
+        RecognitionEvent(super::RecognitionEvent),
+        #[prost(message, tag = "630")]
+        CheckSpelling(super::CheckSpelling),
+        #[prost(message, tag = "631")]
+        SpellingResult(super::SpellingResult),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -4033,6 +4256,154 @@ impl GamepadButton {
             "GAMEPAD_BUTTON_DPAD_DOWN" => Some(Self::DpadDown),
             "GAMEPAD_BUTTON_DPAD_LEFT" => Some(Self::DpadLeft),
             "GAMEPAD_BUTTON_DPAD_RIGHT" => Some(Self::DpadRight),
+            _ => None,
+        }
+    }
+}
+/// How a SpeakText ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SpeechOutcome {
+    Unspecified = 0,
+    /// Every piece of the sound was sent.
+    Done = 1,
+    /// StopSpeaking stopped it.
+    Stopped = 2,
+    /// The host has no voice for the language, or no speech synthesis.
+    Unavailable = 3,
+    /// The host's speech service failed; the message says why.
+    Failed = 4,
+}
+impl SpeechOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SPEECH_OUTCOME_UNSPECIFIED",
+            Self::Done => "SPEECH_OUTCOME_DONE",
+            Self::Stopped => "SPEECH_OUTCOME_STOPPED",
+            Self::Unavailable => "SPEECH_OUTCOME_UNAVAILABLE",
+            Self::Failed => "SPEECH_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SPEECH_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SPEECH_OUTCOME_DONE" => Some(Self::Done),
+            "SPEECH_OUTCOME_STOPPED" => Some(Self::Stopped),
+            "SPEECH_OUTCOME_UNAVAILABLE" => Some(Self::Unavailable),
+            "SPEECH_OUTCOME_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// What a RecognitionEvent says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RecognitionEventKind {
+    Unspecified = 0,
+    /// The host listens: the user may speak.
+    Ready = 1,
+    /// The host hears speech.
+    SpeechBegan = 2,
+    /// The speech has stopped.
+    SpeechEnded = 3,
+    /// What is recognised so far, while the user still speaks.
+    Partial = 4,
+    /// What was recognised, best first. The recognition is over.
+    Final = 5,
+    /// The recognition failed, for `error`. It is over.
+    Error = 6,
+}
+impl RecognitionEventKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "RECOGNITION_EVENT_KIND_UNSPECIFIED",
+            Self::Ready => "RECOGNITION_EVENT_KIND_READY",
+            Self::SpeechBegan => "RECOGNITION_EVENT_KIND_SPEECH_BEGAN",
+            Self::SpeechEnded => "RECOGNITION_EVENT_KIND_SPEECH_ENDED",
+            Self::Partial => "RECOGNITION_EVENT_KIND_PARTIAL",
+            Self::Final => "RECOGNITION_EVENT_KIND_FINAL",
+            Self::Error => "RECOGNITION_EVENT_KIND_ERROR",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RECOGNITION_EVENT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "RECOGNITION_EVENT_KIND_READY" => Some(Self::Ready),
+            "RECOGNITION_EVENT_KIND_SPEECH_BEGAN" => Some(Self::SpeechBegan),
+            "RECOGNITION_EVENT_KIND_SPEECH_ENDED" => Some(Self::SpeechEnded),
+            "RECOGNITION_EVENT_KIND_PARTIAL" => Some(Self::Partial),
+            "RECOGNITION_EVENT_KIND_FINAL" => Some(Self::Final),
+            "RECOGNITION_EVENT_KIND_ERROR" => Some(Self::Error),
+            _ => None,
+        }
+    }
+}
+/// Why a recognition failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RecognitionError {
+    Unspecified = 0,
+    /// Nothing that was said was recognised.
+    NoMatch = 1,
+    /// Nobody spoke before the host stopped waiting.
+    SpeechTimeout = 2,
+    /// The host's privacy settings keep DSA from the microphone, or from speech recognition.
+    Denied = 3,
+    /// The host has no microphone, or it could not be opened.
+    NoMicrophone = 4,
+    /// The host does not recognise the language.
+    LanguageUnsupported = 5,
+    /// The host has no speech recognition, or no session of the user's is open to run it in.
+    Unavailable = 6,
+    /// The host's recognition needs the network, which failed.
+    Network = 7,
+    /// The host is already recognising for another request.
+    Busy = 8,
+    /// Anything else; the message says what.
+    Other = 9,
+}
+impl RecognitionError {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "RECOGNITION_ERROR_UNSPECIFIED",
+            Self::NoMatch => "RECOGNITION_ERROR_NO_MATCH",
+            Self::SpeechTimeout => "RECOGNITION_ERROR_SPEECH_TIMEOUT",
+            Self::Denied => "RECOGNITION_ERROR_DENIED",
+            Self::NoMicrophone => "RECOGNITION_ERROR_NO_MICROPHONE",
+            Self::LanguageUnsupported => "RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED",
+            Self::Unavailable => "RECOGNITION_ERROR_UNAVAILABLE",
+            Self::Network => "RECOGNITION_ERROR_NETWORK",
+            Self::Busy => "RECOGNITION_ERROR_BUSY",
+            Self::Other => "RECOGNITION_ERROR_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RECOGNITION_ERROR_UNSPECIFIED" => Some(Self::Unspecified),
+            "RECOGNITION_ERROR_NO_MATCH" => Some(Self::NoMatch),
+            "RECOGNITION_ERROR_SPEECH_TIMEOUT" => Some(Self::SpeechTimeout),
+            "RECOGNITION_ERROR_DENIED" => Some(Self::Denied),
+            "RECOGNITION_ERROR_NO_MICROPHONE" => Some(Self::NoMicrophone),
+            "RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED" => Some(Self::LanguageUnsupported),
+            "RECOGNITION_ERROR_UNAVAILABLE" => Some(Self::Unavailable),
+            "RECOGNITION_ERROR_NETWORK" => Some(Self::Network),
+            "RECOGNITION_ERROR_BUSY" => Some(Self::Busy),
+            "RECOGNITION_ERROR_OTHER" => Some(Self::Other),
             _ => None,
         }
     }
