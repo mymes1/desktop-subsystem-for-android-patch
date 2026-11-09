@@ -114,6 +114,10 @@ UNNEEDED_APPS = [
     # Developer and demo apps.
     "Traceur",
     "EasterEgg",
+    # A text-to-speech engine of the guest's own, when a build has one: the agent's engine
+    # speaks with the host's voices and is the default, and an engine here would hold its
+    # voices in the guest's memory.
+    "PicoTts",
 ]
 
 REMOVED_APPS = SHELL_APPS + UNNEEDED_APPS

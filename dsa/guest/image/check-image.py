@@ -97,7 +97,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
             for reference in sorted(set(make_image.kernel_disk_names(z.read(name).decode(errors="replace")))):
                 problems.append(f"{name} names a disk by its probe order ({reference}), "
                                 "which changes when the host attaches another disk")
-    for app in ["Launcher3QuickStep", "SystemUI", "LatinIME", "CuttlefishService"]:
+    # LatinIME was also the guest's spell checker, and PicoTts would be a text-to-speech engine
+    # of its own: the agent's speech and spelling services, which answer with the host's, are
+    # the only ones.
+    for app in ["Launcher3QuickStep", "SystemUI", "LatinIME", "CuttlefishService", "PicoTts"]:
         if any(f"/{app}/" in n and n.endswith(".apk") for n in names):
             problems.append(f"{app} is still in the image")
     features_xml = "VENDOR/etc/permissions/dsa-unavailable-features.xml"
