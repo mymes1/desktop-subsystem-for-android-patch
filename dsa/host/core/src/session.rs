@@ -160,6 +160,9 @@ use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
 
+mod host_services;
+pub use host_services::RestoreOutcome;
+
 /// Where the session is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SessionState {
@@ -745,6 +748,8 @@ struct Shared {
     /// Who decides the su calls of the guest's apps, once the platform says, with a way to
     /// send each decision from the thread that waits for the administrator.
     root_approval: Mutex<Option<(Arc<RootApproval>, Sender<Command>)>>,
+    /// The backups, passkeys and KeyMint root key the platform serves the guest.
+    host_services: Mutex<host_services::HostServices>,
 }
 
 /// The root elevation settings as the guest is told them.
@@ -1344,6 +1349,7 @@ impl Session {
             device_name: Mutex::new(None),
             root_config: Mutex::new(RootElevationNow::default()),
             root_approval: Mutex::new(None),
+            host_services: Mutex::new(host_services::HostServices::default()),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -6071,6 +6077,28 @@ impl Worker {
                 self.shared.set_location(Wanted::from_control(&request))
             }
             Some(Body::SuRequest(request)) => self.su_request(request),
+            Some(
+                body @ (Body::BackupUpload(_)
+                | Body::BackupCommit(_)
+                | Body::BackupDiscard(_)
+                | Body::BackupClear(_)
+                | Body::BackupQuery(_)
+                | Body::BackupFetch(_)
+                | Body::BackupRunResult(_)
+                | Body::PasskeyRequest(_)),
+            ) => {
+                let (shared, commands) = (Arc::clone(&self.shared), self.own_commands.clone());
+                let reply = move |body| send_quietly(&shared, &commands, body);
+                if !self.shared.host_services_message(body, reply) {
+                    eprintln!("control channel: dropping a message no host service takes");
+                }
+            }
+            Some(Body::KeymintRootKeyRequest(_)) => {
+                eprintln!(
+                    "control channel: dropping a request for the KeyMint root key, which belongs \
+                     on the KeyMint port"
+                );
+            }
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::DisplayRefresh(_))
@@ -6152,7 +6180,14 @@ impl Worker {
             | Some(Body::DeviceName(_))
             | Some(Body::GamepadConnected(_))
             | Some(Body::GamepadDisconnected(_))
-            | Some(Body::GamepadState(_)) => {
+            | Some(Body::GamepadState(_))
+            | Some(Body::BackupAnswer(_))
+            | Some(Body::BackupContents(_))
+            | Some(Body::BackupFetchData(_))
+            | Some(Body::BackupRun(_))
+            | Some(Body::BackupRestore(_))
+            | Some(Body::PasskeyResponse(_))
+            | Some(Body::KeymintRootKey(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))
@@ -6226,6 +6261,8 @@ impl Worker {
         self.shared.publish_power(GuestPower::Stopped);
         // And its wish for the host's location, so the host's location service stops.
         self.shared.set_location(Wanted::NONE);
+        // And its backups, restores and passkey ceremonies under way.
+        self.shared.host_services_gone();
         self.shared.set_guest_memory(None);
         // A dump or diagnostics under way gets no more from this guest.
         self.shared
