@@ -426,8 +426,11 @@ class AndroidKernelConfigTests(unittest.TestCase):
         # x86_64 fragments, or skip the arm64 fragment.
         built = next((line[len("# Linux/"):].split()[0] for line in lines
                       if line.startswith("# Linux/")), None)
-        self.assertIn(built, ("x86", "arm64"), f"{merged} names no known architecture")
-        arch = "x86_64" if built == "x86" else built
+        # The header names the kernel's ARCH as make was given it: "x86" or "x86_64" for
+        # the x86_64 kernel, "arm64" for arm64. Map it to this repository's names.
+        known = {"x86": "x86_64", "x86_64": "x86_64", "arm64": "arm64"}
+        self.assertIn(built, known, f"{merged} names no known architecture")
+        arch = known[built]
         named = os.environ.get("DSA_KERNEL_ARCH")
         if named:
             self.assertEqual(arch, named, f"{merged} is a {built} configuration, not {named}")

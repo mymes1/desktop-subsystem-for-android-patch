@@ -175,8 +175,15 @@ public class TextInputStyleTests
         var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var box = page.Descendants(Ui + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbPortBox");
         var label = box.Parent!.Elements(Wpf + "TextBlock").Single();
-        Assert.Equal("{StaticResource CardTitle}", (string?)label.Attribute("Style"));
-        Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment"));
+        // The label is a text in the card's content, so it takes CardValue like every other one.
+        // CardValue is body text (the card title's size and weight, not a heading) and centres
+        // itself on the box beside it.
+        Assert.Equal("{StaticResource CardValue}", (string?)label.Attribute("Style"));
+        var value = Style("CardValue");
+        var title = Style("CardTitle");
+        Assert.Equal(Setter(title, "FontSize"), Setter(value, "FontSize"));
+        Assert.Equal(Setter(title, "FontWeight"), Setter(value, "FontWeight"));
+        Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment") ?? Setter(value, "VerticalAlignment"));
     }
 
     [Fact]
