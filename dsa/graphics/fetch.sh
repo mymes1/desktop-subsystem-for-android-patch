@@ -72,8 +72,9 @@ fi
 # host renderer that ended (the renderer restarted, or ended this guest's stream) reports a
 # lost device instead of ending the process, what the GPU drew into a buffer a CPU reads
 # is copied back from the host into the buffer's memory, Android's loader gets every core
-# command it looks up, whatever Vulkan version the app asked for, and the driver lists only
-# the device extensions its vkCreateDevice takes.
+# command it looks up, whatever Vulkan version the app asked for, the driver lists only
+# the device extensions its vkCreateDevice takes, and host-visible memory the guest keeps
+# in step with the host both ways is reported coherent.
 for patch in "$patch_dir"/guest/mesa/*.patch; do
     git -C "$mesa_dir" apply --recount --check "$patch"
     git -C "$mesa_dir" apply --recount "$patch"

@@ -1,0 +1,197 @@
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+@@ -1656,6 +1656,49 @@
+     }
+ }
+ 
++void ResourceTracker::readBackAfterWait(VkEncoder* enc, VkDevice device) {
++    if (!usingDirectMapping()) invalidateShadowedMemory(enc, device);
++}
++
++void ResourceTracker::readBackAfterFence(VkEncoder* enc, VkDevice device, VkFence fence) {
++    if (usingDirectMapping()) return;
++    // Only the first success after a submit reads back: an app that polls a signalled fence
++    // would otherwise copy every coherent allocation back at each poll.
++    uint64_t submits = 0;
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkFence.find(fence);
++        if (it == info_VkFence.end() || it->second.readBackSubmits == it->second.submits) {
++            return;
++        }
++        submits = it->second.submits;
++    }
++    invalidateShadowedMemory(enc, device);
++    // Only once the copies hold the writes: another thread that sees the fence signalled
++    // meanwhile reads back too rather than reading stale memory.
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto it = info_VkFence.find(fence);
++    if (it != info_VkFence.end() && it->second.readBackSubmits < submits) {
++        it->second.readBackSubmits = submits;
++    }
++}
++
++void ResourceTracker::readBackAfterSemaphoreValue(VkEncoder* enc, VkDevice device,
++                                                  VkSemaphore semaphore, uint64_t value) {
++    if (usingDirectMapping()) return;
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkSemaphore.find(semaphore);
++        if (it != info_VkSemaphore.end() && it->second.readBackValue >= value) return;
++    }
++    invalidateShadowedMemory(enc, device);
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto it = info_VkSemaphore.find(semaphore);
++    if (it != info_VkSemaphore.end() && it->second.readBackValue < value) {
++        it->second.readBackValue = value;
++    }
++}
++
+ void ResourceTracker::readBackForCpu(VkEncoder* enc, VkDevice device) {
+ #ifdef VK_USE_PLATFORM_ANDROID_KHR
+     std::vector<AHardwareBuffer*> buffers;
+@@ -5118,17 +5161,19 @@
+         auto& fenceInfo = fenceInfoIt->second;
+ 
+         if (fenceInfo.syncFd) {
+-            if (*fenceInfo.syncFd == -1) {
+-                return VK_SUCCESS;
+-            }
+-
+-            int syncFdSignaled = mSyncHelper->wait(*fenceInfo.syncFd, /*timeout=*/0) == 0;
+-            return syncFdSignaled ? VK_SUCCESS : VK_NOT_READY;
++            bool signaled = *fenceInfo.syncFd == -1 ||
++                            mSyncHelper->wait(*fenceInfo.syncFd, /*timeout=*/0) == 0;
++            if (!signaled) return VK_NOT_READY;
++            lock.unlock();
++            readBackAfterFence(enc, device, fence);
++            return VK_SUCCESS;
+         }
+     }
+ #endif
+ 
+-    return enc->vkGetFenceStatus(device, fence, /*doLock=*/true);
++    VkResult result = enc->vkGetFenceStatus(device, fence, /*doLock=*/true);
++    if (result == VK_SUCCESS) readBackAfterFence(enc, device, fence);
++    return result;
+ }
+ 
+ VkResult ResourceTracker::on_vkWaitForFences(void* context, VkResult, VkDevice device,
+@@ -6345,6 +6390,11 @@
+             std::lock_guard<std::recursive_mutex> lock(mLock);
+             auto queueIt = info_VkQueue.find(queue);
+             if (queueIt != info_VkQueue.end()) device = queueIt->second.device;
++            // The fence's next success reads back what this submit writes.
++            auto fenceIt = info_VkFence.find(fence);
++            if (fence != VK_NULL_HANDLE && fenceIt != info_VkFence.end()) {
++                fenceIt->second.submits++;
++            }
+         }
+         if (device != VK_NULL_HANDLE) {
+             flushShadowedMemory(static_cast<VkEncoder*>(context), device);
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+@@ -553,6 +553,14 @@
+     bool usingDirectMapping() const;
+     void flushShadowedMemory(VkEncoder* enc, VkDevice device);
+     void invalidateShadowedMemory(VkEncoder* enc, VkDevice device);
++    // What the device wrote into the guest's copies, read back once the app learns that its
++    // work finished, so the memory types the guest reports coherent are: after a wait for
++    // the device or for semaphores, after a fence's first success since its submit, and
++    // after a timeline semaphore's value moved on. Nothing with memory the host shares.
++    void readBackAfterWait(VkEncoder* enc, VkDevice device);
++    void readBackAfterFence(VkEncoder* enc, VkDevice device, VkFence fence);
++    void readBackAfterSemaphoreValue(VkEncoder* enc, VkDevice device, VkSemaphore semaphore,
++                                     uint64_t value);
+     // Copies what the GPU drew into the device's buffers a CPU reads back to their memory
+     // (dsa_cpu_readback.h), once the device's work is done.
+     void readBackForCpu(VkEncoder* enc, VkDevice device);
+@@ -838,6 +846,8 @@
+         zx_handle_t eventHandle = ZX_HANDLE_INVALID;
+         zx_koid_t eventKoid = ZX_KOID_INVALID;
+         std::optional<int> syncFd = {};
++        // The highest counter value the guest read back the device's writes for.
++        uint64_t readBackValue = 0;
+     };
+ 
+     struct VkDescriptorUpdateTemplate_Info {
+@@ -861,6 +871,10 @@
+     struct VkFence_Info {
+         VkDevice device;
+         bool external = false;
++        // How many submits signal the fence, and at how many of them the guest last read
++        // back the device's writes after the fence said it was signalled.
++        uint64_t submits = 0;
++        uint64_t readBackSubmits = 0;
+         VkExportFenceCreateInfo exportFenceCreateInfo;
+ #if defined(VK_USE_PLATFORM_ANDROID_KHR) || DETECT_OS_LINUX
+         // Note: -1 means already signaled.
+diff --git a/src/gfxstream/guest/vulkan_enc/func_table.cpp b/src/gfxstream/guest/vulkan_enc/func_table.cpp
+--- a/src/gfxstream/guest/vulkan_enc/func_table.cpp
++++ b/src/gfxstream/guest/vulkan_enc/func_table.cpp
+@@ -200,6 +200,10 @@
+         auto vkEnc = gfxstream::vk::ResourceTracker::getThreadLocalEncoder();
+         vkDeviceWaitIdle_VkResult_return =
+             vkEnc->vkDeviceWaitIdle(gfxstream_device->internal_object, true /* do lock */);
++        if (vkDeviceWaitIdle_VkResult_return == VK_SUCCESS) {
++            gfxstream::vk::ResourceTracker::get()->readBackAfterWait(
++                vkEnc, gfxstream_device->internal_object);
++        }
+     }
+     return vkDeviceWaitIdle_VkResult_return;
+ }
+@@ -2154,6 +2158,11 @@
+         vkGetSemaphoreCounterValue_VkResult_return = vkEnc->vkGetSemaphoreCounterValue(
+             gfxstream_device->internal_object, gfxstream_semaphore->internal_object, pValue,
+             true /* do lock */);
++        if (vkGetSemaphoreCounterValue_VkResult_return == VK_SUCCESS && pValue) {
++            gfxstream::vk::ResourceTracker::get()->readBackAfterSemaphoreValue(
++                vkEnc, gfxstream_device->internal_object, gfxstream_semaphore->internal_object,
++                *pValue);
++        }
+     }
+     return vkGetSemaphoreCounterValue_VkResult_return;
+ }
+@@ -2179,6 +2188,10 @@
+         vkWaitSemaphores_VkResult_return =
+             vkEnc->vkWaitSemaphores(gfxstream_device->internal_object, internal_pWaitInfo.data(),
+                                     timeout, true /* do lock */);
++        if (vkWaitSemaphores_VkResult_return == VK_SUCCESS) {
++            gfxstream::vk::ResourceTracker::get()->readBackAfterWait(
++                vkEnc, gfxstream_device->internal_object);
++        }
+     }
+     return vkWaitSemaphores_VkResult_return;
+ }
+diff --git a/src/gfxstream/guest/vulkan_enc/goldfish_vk_transform_guest.cpp b/src/gfxstream/guest/vulkan_enc/goldfish_vk_transform_guest.cpp
+--- a/src/gfxstream/guest/vulkan_enc/goldfish_vk_transform_guest.cpp
++++ b/src/gfxstream/guest/vulkan_enc/goldfish_vk_transform_guest.cpp
+@@ -402,6 +402,26 @@
+         transform_fromhost_VkMemoryType(resourceTracker,
+                                         (VkMemoryType*)(toTransform->memoryTypes + i));
+     }
++    // Without memory the guest and the host share, the host takes HOST_COHERENT off every
++    // memory type. The app would then see no type that is both host visible and coherent,
++    // which Vulkan requires of every device (the CTS fails it: "required property flags
++    // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT not found"),
++    // and an app that asks for such memory, as most do for uniform buffers, would find none
++    // and stop. The guest keeps its own copy of a type the host caches in step both ways:
++    // what the app wrote goes to the host at every submit, and what the device wrote comes
++    // back whenever the app learns that the device's work finished (a fence, a semaphore or
++    // a wait for the queue or the device). That is what coherence promises, so such a type
++    // is coherent again. A type the host does not cache is not read back, so it stays as the
++    // host said, and the app invalidates it itself.
++    if (resourceTracker && !resourceTracker->usingDirectMapping()) {
++        for (uint32_t i = 0; i < toTransform->memoryTypeCount && i < VK_MAX_MEMORY_TYPES; ++i) {
++            VkMemoryPropertyFlags& flags = toTransform->memoryTypes[i].propertyFlags;
++            if ((flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
++                (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
++                flags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
++            }
++        }
++    }
+     for (uint32_t i = 0; i < (uint32_t)VK_MAX_MEMORY_HEAPS; ++i) {
+         transform_fromhost_VkMemoryHeap(resourceTracker,
+                                         (VkMemoryHeap*)(toTransform->memoryHeaps + i));
