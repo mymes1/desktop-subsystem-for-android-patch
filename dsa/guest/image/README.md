@@ -189,8 +189,9 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   an x86_64 image carries for them: `system/lib64` onto `/system_ext/lib64`, on the linker
   search path where the zygote finds the bridge by name; `system/lib64/arm64` and
   `system/bin/arm64` onto the same paths; `system/bin` onto `/system/bin/dsa-arm-translation`,
-  where the binfmt_misc rules start the runners; and `system/etc/ld.config.arm64.txt` onto the
-  same path. Links lead `/system/etc/cpuinfo.arm64.txt` and `/system/etc/berberis` into the
+  where the binfmt_misc rules start the runners; and `system/etc/ld.config.arm64.txt` and
+  `system/lib64/libberberis_exec_region.so` onto the same paths. Berberis opens that library by
+  its absolute path, not by name, so without it every ARM app aborts as it starts. Links lead `/system/etc/cpuinfo.arm64.txt` and `/system/etc/berberis` into the
   mount. Nothing is laid over `/system/bin`, `/system/lib64` or `/system/etc`: a service run
   through an overlay is looked up with init's credentials, and bpfloader's start failed that
   way and rebooted Android. It then mounts binfmt_misc and registers the package's handlers.

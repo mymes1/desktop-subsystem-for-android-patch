@@ -5511,6 +5511,7 @@ class ArmTranslationImageTests(unittest.TestCase):
                     self.assertFalse([n for n in names if n.startswith(folder + "/") and n != folder + "/"],
                                      f"{folder} stays empty, so the package hides nothing")
                 self.assertEqual(archive.read("SYSTEM/etc/ld.config.arm64.txt"), b"")
+                self.assertEqual(archive.read("SYSTEM/lib64/libberberis_exec_region.so"), b"")
                 for name, target in make_image.ARM_TRANSLATION_LINKS.items():
                     self.assertTrue(stat.S_ISLNK(archive.getinfo(name).external_attr >> 16), name)
                     self.assertEqual(archive.read(name).decode(), target)
@@ -5544,13 +5545,54 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr25_a_build_with_files_where_the_package_goes_is_refused(self):
         for name in ["SYSTEM_EXT/lib64/libfoo.so", "SYSTEM/lib64/arm64/libc.so", "SYSTEM/bin/arm64/linker64",
-                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt"]:
+                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt",
+                     "SYSTEM/lib64/libberberis_exec_region.so"]:
             with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError, msg=name) as caught:
                 self._modify_for(Path(tmp), "x86_64", extra=[name]).close()
             self.assertIn(name.split("/")[0], str(caught.exception))
         # An arm64 build is not bound into, so its own files there stay.
         with tempfile.TemporaryDirectory() as tmp:
             self._modify_for(Path(tmp), "arm64", extra=["SYSTEM/lib64/arm64/libc.so"]).close()
+
+    def test_fr25_the_exec_region_library_is_bound_where_berberis_opens_it(self):
+        # Berberis opens its exec region library by this absolute path (runtime_primitives/
+        # exec_region_elf_backed.cc, kExecRegionLibraryPath), not by name. While the package's
+        # system/lib64 was bound onto /system_ext/lib64 alone, the path held nothing and every
+        # ARM app aborted as it started: "exec_region_elf_backed.cc:48: CHECK failed: 0 != 0".
+        opened = "/system/lib64/libberberis_exec_region.so"
+        self.assertEqual("/" + make_image.ARM_TRANSLATION_EXEC_REGION.lower(), opened)
+        self.assertIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.ARM_TRANSLATION_BOUND_FILES)
+        self.assertIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.arm_translation_reach_names())
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        sections = dict(self._sections(rc))
+        bind = f"mount none /mnt/dsa-arm-translation{opened} {opened} bind"
+        for value in ["on", "default"]:
+            section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
+            self.assertIn(bind, section, value)
+            # Bound before the binfmt_misc rules let any ARM64 program start.
+            self.assertLess(section.index(bind), section.index(
+                "mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid"), value)
+        # A bind, not a link: the linker checks the path it really opened against the system
+        # namespace, and a link's would be under /mnt.
+        self.assertNotIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.ARM_TRANSLATION_LINKS)
+        with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
+            info = archive.getinfo(make_image.ARM_TRANSLATION_EXEC_REGION)
+            self.assertFalse(stat.S_ISLNK(info.external_attr >> 16))
+            self.assertEqual(archive.read(make_image.ARM_TRANSLATION_EXEC_REGION), b"")
+            self.assertIn("system/lib64/libberberis_exec_region.so 0 0 644 capabilities=0x0",
+                          archive.read("META/filesystem_config.txt").decode())
+            files = {name: archive.read(name) for name in archive.namelist()}
+            infos = {name: archive.getinfo(name) for name in archive.namelist()}
+
+        def check(files):
+            return make_image.check_arm_translation_reach({"arch": "x86_64"}, list(files), files.__getitem__,
+                                                         infos.get)
+
+        self.assertEqual(check(files), [])
+        gone = {n: d for n, d in files.items() if n != make_image.ARM_TRANSLATION_EXEC_REGION}
+        self.assertTrue(any("every ARM app aborts" in problem for problem in check(gone)), check(gone))
+        filled = dict(files, **{make_image.ARM_TRANSLATION_EXEC_REGION: b"\x7fELF"})
+        self.assertTrue(any("not empty" in problem for problem in check(filled)), check(filled))
 
     def test_fr25_check_image_finds_a_place_of_the_package_missing_or_filled(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
@@ -5654,8 +5696,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             binds = []
             for folder, inside in make_image.ARM_TRANSLATION_FOLDERS.items():
                 binds.append(f"mount none /mnt/dsa-arm-translation/{inside} /{folder.lower()} bind")
-            config = make_image.ARM_TRANSLATION_LINKER_CONFIG
-            binds.append(f"mount none /mnt/dsa-arm-translation/{config.lower()} /{config.lower()} bind")
+            for name in make_image.ARM_TRANSLATION_BOUND_FILES:
+                binds.append(f"mount none /mnt/dsa-arm-translation/{name.lower()} /{name.lower()} bind")
             for bind in binds:
                 self.assertIn(bind, section)
                 self.assertGreater(section.index(bind), erofs, bind)
@@ -5681,6 +5723,7 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
             self.assertIn("(allow init system_file (dir (mounton)))", policy)
             self.assertIn("(allow init system_linker_config_file (file (mounton)))", policy)
+            self.assertIn("(allow init system_lib_file (file (mounton)))", policy)
             self.assertIn("(typeattributeset fs_type (dsa_arm_translation_fs))", policy)
             self.assertIn("(typeattributeset contextmount_type (dsa_arm_translation_fs))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
