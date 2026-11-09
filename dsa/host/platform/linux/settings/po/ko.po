@@ -1128,6 +1128,9 @@ msgstr "제거됨. Android를 다시 시작할 때까지 Google 앱이 남아 �
 msgid "Installed: {0}."
 msgstr "설치됨: {0}."
 
+msgid "{0} was installed by an older DSA and is no longer used, so Android starts without Google's apps. Install Google Play again."
+msgstr "{0}은(는) 이전 DSA가 설치해 더 이상 쓰이지 않으므로 Android가 Google 앱 없이 시작합니다. Google Play를 다시 설치하세요."
+
 msgid "Not installed."
 msgstr "설치되지 않음."
 

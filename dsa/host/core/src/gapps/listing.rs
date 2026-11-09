@@ -234,6 +234,8 @@ fn download_to(
         file: build.file.clone(),
         source: url.to_string(),
         md5,
+        // No image is made from it yet.
+        image_format: 0,
     })
 }
 

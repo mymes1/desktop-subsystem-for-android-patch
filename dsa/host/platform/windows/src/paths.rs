@@ -115,6 +115,11 @@ impl MachineRoot {
     pub fn tmp(&self) -> PathBuf {
         join(&self.0, &["tmp"])
     }
+    /// Where each user's installed Google apps package is kept, so a later DSA can make its
+    /// image again; `tmp` is cleared at every start of the service.
+    pub fn gapps(&self) -> PathBuf {
+        join(&self.0, &["gapps"])
+    }
     /// Where each user's disk was kept before it moved into their profile:
     /// `users\<SID>\data.vhdx`.
     pub fn old_user_disk(&self, sid: &str) -> PathBuf {

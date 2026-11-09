@@ -577,6 +577,9 @@
   <data name="Gapps_RemovedPending" xml:space="preserve">
     <value>제거됨: 다음에 Android를 시작하면 Google 앱이 사라집니다.</value>
   </data>
+  <data name="Gapps_ReinstallNeeded" xml:space="preserve">
+    <value>이전 DSA가 설치한 Android {1}({2})용 LiteGapps Core {0}은(는) 더 이상 쓰이지 않아 Android가 Google 앱 없이 시작합니다. Google Play를 다시 설치하세요.</value>
+  </data>
   <data name="Gapps_Source" xml:space="preserve">
     <value>LiteGapps에서 받음: {0}</value>
   </data>

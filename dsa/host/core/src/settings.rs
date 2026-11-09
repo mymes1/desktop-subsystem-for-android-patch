@@ -1411,6 +1411,7 @@ mod tests {
             file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
             source: "https://example.com/build.zip".into(),
             md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+            image_format: crate::gapps::IMAGE_FORMAT,
         };
         store.set_gapps("uid:1000", Some(&package)).unwrap();
         let again = FileSettings::new(&dir);

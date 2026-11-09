@@ -577,6 +577,9 @@
   <data name="Gapps_RemovedPending" xml:space="preserve">
     <value>Removed: Google's apps leave Android at its next start.</value>
   </data>
+  <data name="Gapps_ReinstallNeeded" xml:space="preserve">
+    <value>Made by an older DSA: LiteGapps Core {0} for Android {1} ({2}) is no longer used, and Android starts without Google's apps. Install Google Play again.</value>
+  </data>
   <data name="Gapps_Source" xml:space="preserve">
     <value>Downloaded from LiteGapps: {0}</value>
   </data>

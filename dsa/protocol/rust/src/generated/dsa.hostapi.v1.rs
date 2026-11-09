@@ -1866,6 +1866,10 @@ pub struct GappsPackage {
     /// The MD5 digest the file host published for it, which the download matched.
     #[prost(string, tag = "8")]
     pub md5: ::prost::alloc::string::String,
+    /// The format of the system image the service made from it; 0 for an image made by a
+    /// service from before formats were recorded.
+    #[prost(uint32, tag = "9")]
+    pub image_format: u32,
 }
 /// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
 /// build for the Android version and architecture the running Android reports, downloads it,
@@ -1925,6 +1929,11 @@ pub struct Gapps {
     /// Android starts again.
     #[prost(bool, tag = "9")]
     pub restart_needed: bool,
+    /// The installed package's image was made by an older DSA, which this one no longer lays
+    /// over the system, and the downloaded package is not kept to make it again: Android starts
+    /// without Google's apps until the user installs Google Play again.
+    #[prost(bool, tag = "10")]
+    pub reinstall_needed: bool,
 }
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

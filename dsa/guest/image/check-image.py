@@ -423,6 +423,12 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
             problems.append("dsa-gapps.rc never lays the Google apps over the system")
         # Each folder the Google apps are laid over is in the system, so its overlay mounts.
         problems += make_image.gapps_folder_problems(names)
+    if "SYSTEM/etc/dsa/gapps-on.prop" in names:
+        on = [line.strip() for line in
+              z.read("SYSTEM/etc/dsa/gapps-on.prop").decode(errors="replace").splitlines()]
+        if make_image.GAPPS_PRIVAPP_LOG not in on:
+            problems.append("gapps-on.prop does not set " + make_image.GAPPS_PRIVAPP_LOG + ", so a "
+                            "privileged permission LiteGapps' lists miss stops Android at every boot")
     if "SYSTEM/etc/dsa/gapps-off.prop" in names:
         off = [line for line in z.read("SYSTEM/etc/dsa/gapps-off.prop").decode(errors="replace").splitlines()
                if line.strip() and not line.startswith("#")]

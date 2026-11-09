@@ -3159,6 +3159,55 @@ fn fr32_dsa_installs_reports_and_removes_google_play() {
 }
 
 #[test]
+fn fr32_dsa_gapps_remove_works_while_android_is_stopped_and_starts_nothing() {
+    // An Android that Google's apps keep from starting is exactly when they must go.
+    use dsa_host_core::gapps::GappsPackage;
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::{MemorySettings, SettingsStore};
+    let ((listener, _, user), endpoint) = local_pair();
+    let store = Arc::new(MemorySettings::default());
+    // What 0.2.0 recorded, from an image this DSA no longer lays over.
+    let old = GappsPackage {
+        variant: "core".into(),
+        version: "20261001".into(),
+        android_version: "17.0".into(),
+        sdk: 37,
+        arch: "x86_64".into(),
+        file: "LiteGapps-core-x86_64-17.0-20261001-official.zip".into(),
+        source: "https://example.com/x.zip".into(),
+        md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+        image_format: 0,
+    };
+    store.set_gapps(&user, Some(&old)).unwrap();
+    let androids = Arc::new(FakeAndroids::default());
+    let work = std::env::temp_dir().join(format!("dsa-cli-gapps-stopped-{}", std::process::id()));
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), ServiceFacts::default())
+        .with_gapps(dsa_host_core::gapps::Source::new(
+            Arc::new(FakeLiteGapps(Default::default())),
+            work,
+        ));
+    let _service = RunningService::start_service(listener, service);
+
+    let status = json_of(&dsa(&endpoint, "gapps --json"));
+    assert_eq!(status["reinstall_needed"], true);
+    assert_eq!(status["package"]["image_format"], 0);
+    let text = stdout(&dsa(&endpoint, "gapps status"));
+    assert!(text.contains("Install Google Play again"), "{text}");
+    assert!(!text.contains("Restart Android"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "gapps remove --json"));
+    assert!(removed["package"].is_null());
+    assert!(removed["android"].is_null(), "Android was not started");
+    assert_eq!(removed["reinstall_needed"], false);
+    assert_eq!(store.gapps(&user).unwrap(), None);
+    let state = json_of(&dsa(&endpoint, "status --json"));
+    assert_eq!(state["state"], "Stopped", "{state}");
+    let text = stdout(&dsa(&endpoint, "gapps remove"));
+    assert!(text.contains("from its next start"), "{text}");
+}
+
+#[test]
 fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
     use dsa_cli::Change;
     let parse = |line: &str| {
