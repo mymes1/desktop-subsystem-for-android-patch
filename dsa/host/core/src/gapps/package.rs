@@ -11,8 +11,11 @@
 //! ```
 //!
 //! What goes into the image are the files under `product/` and `system_ext/` that are apps
-//! (`app`, `priv-app`), permission lists and system configuration (`etc`) or framework files
-//! (`framework`); nothing else in the build is taken. The privileged permission lists stay in
+//! (`app`, `priv-app`), permission lists, system configuration, default permissions and
+//! preferred apps (`etc/permissions`, `etc/sysconfig`, `etc/default-permissions`,
+//! `etc/preferred-apps`) or framework files (`framework`); nothing else in the build is taken.
+//! The guest lays each of those folders over its own, so the image holds all of them, empty
+//! where the build has nothing ([`overlaid_folders`]). The privileged permission lists stay in
 //! the same partition as the apps they name, since Android reads a partition's lists only for
 //! that partition's apps. The setup wizards are left out: the host is the shell, and a setup
 //! wizard would take over as the home screen. Every path is checked before anything is used:
@@ -32,6 +35,34 @@ use crate::erofs::Stream;
 pub const PARTITIONS: [&str; 2] = ["product", "system_ext"];
 /// The folders of those partitions it takes files from.
 pub const FOLDERS: [&str; 4] = ["app", "priv-app", "etc", "framework"];
+/// The folders of each partition's `etc` it takes files from: the privileged permission lists,
+/// the system configuration, the default permissions and the preferred apps, which the package
+/// manager reads from there for that partition's apps.
+pub const ETC_FOLDERS: [&str; 4] = [
+    "permissions",
+    "sysconfig",
+    "default-permissions",
+    "preferred-apps",
+];
+
+/// The folders of each partition the guest lays the image over, one overlay each, never the
+/// partition's root: the image holds every one, empty where the build has nothing, so each
+/// overlay finds its layer.
+pub fn overlaid_folders() -> Vec<String> {
+    let mut folders = Vec::new();
+    for partition in PARTITIONS {
+        for folder in FOLDERS {
+            if folder == "etc" {
+                for inner in ETC_FOLDERS {
+                    folders.push(format!("{partition}/etc/{inner}"));
+                }
+            } else {
+                folders.push(format!("{partition}/{folder}"));
+            }
+        }
+    }
+    folders
+}
 /// The add-ons of the Core build left out: the setup wizards and the restore step they run.
 pub const LEFT_OUT: [&str; 3] = ["SetupWizard", "PixelSetupWizard", "GoogleRestore"];
 /// The apps a Core build must hold: Google Play services and the Play Store.
@@ -97,6 +128,11 @@ pub fn image_path(rest: &str) -> Option<String> {
     let folder = parts.next()?;
     let name = parts.next()?;
     if !PARTITIONS.contains(&partition) || !FOLDERS.contains(&folder) || name.is_empty() {
+        return None;
+    }
+    // In etc, only the folders the guest lays over: a file elsewhere there would never be seen.
+    let deeper = parts.next().is_some_and(|part| !part.is_empty());
+    if folder == "etc" && (!ETC_FOLDERS.contains(&name) || !deeper) {
         return None;
     }
     crate::erofs::split_path(rest).ok()?;
@@ -294,8 +330,8 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
     let out =
         File::create(image).map_err(|e| format!("{} cannot be written: {e}", image.display()))?;
     let mut builder = Stream::new(BufWriter::new(out))?;
-    for partition in PARTITIONS {
-        builder.add_dir(partition)?;
+    for folder in overlaid_folders() {
+        builder.add_dir(&folder)?;
     }
     let tar_entry = archive
         .entry("files/files.tar.xz")
@@ -675,5 +711,33 @@ mod tests {
         assert_eq!(image_path("product/lib64/libx.so"), None);
         assert_eq!(image_path("vendor/etc/a.xml"), None);
         assert_eq!(image_path("product/etc"), None);
+        // In etc, only the folders the guest lays over.
+        assert_eq!(
+            image_path("product/etc/default-permissions/google.xml").as_deref(),
+            Some("product/etc/default-permissions/google.xml")
+        );
+        assert_eq!(image_path("product/etc/google.xml"), None);
+        assert_eq!(image_path("product/etc/security/fsverity/x.der"), None);
+        assert_eq!(image_path("system_ext/etc/permissions"), None);
+    }
+
+    #[test]
+    fn fr32_the_image_holds_every_folder_the_guest_lays_over() {
+        // The guest lays each of these over the same folder of its system with an overlay,
+        // which fails when the image lacks it, so each is there even when the build has
+        // nothing for it.
+        let (_, image) = make(&sample(), &X86_36, "folders").unwrap();
+        let folders: Vec<String> = read::items(&image)
+            .into_iter()
+            .filter(|item| item.mode & 0o170_000 == 0o040_000)
+            .map(|item| item.path)
+            .collect();
+        let overlaid = overlaid_folders();
+        assert_eq!(overlaid.len(), 14);
+        for folder in &overlaid {
+            assert!(folders.contains(folder), "{folder} is not in {folders:?}");
+        }
+        assert!(overlaid.contains(&"system_ext/etc/preferred-apps".to_string()));
+        assert!(!overlaid.iter().any(|folder| folder == "product/etc"));
     }
 }
