@@ -1071,6 +1071,7 @@ jobs:
             logs: |
               .scratch/root-*/*.log
               .scratch/root-*/*.txt
+              ~/.local/share/dsa/logs/android-console.log*
           - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
             test: graphics
             timeout: 28
