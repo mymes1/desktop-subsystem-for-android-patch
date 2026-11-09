@@ -466,6 +466,36 @@ fn handle(message: ToHost) {
             }
         }),
         ToHost::AppMenu { new_window } => menu_bar::set_new_window(new_window),
+        ToHost::AppIcon { icon_png, .. } => set_dock_icon(&icon_png),
+    }
+}
+
+/// Shows `png` as the app's icon in the Dock and the app switcher at once, when the guest
+/// gives a new one while the app's windows are open. The bundle's own icon takes it the next
+/// time the bundle is made.
+fn set_dock_icon(png: &[u8]) {
+    use objc2::rc::{Allocated, Retained};
+    let Ok(data) = crate::objc::ns_data(png) else {
+        return;
+    };
+    // SAFETY: AppKit calls on the main thread, where the window host handles its messages,
+    // on objects that live through them.
+    unsafe {
+        let Ok(image_class) = class(c"NSImage") else {
+            return;
+        };
+        let image: Allocated<AnyObject> = msg_send![image_class, alloc];
+        let image: Option<Retained<AnyObject>> = msg_send![image, initWithData: &*data];
+        let Some(image) = image else {
+            return;
+        };
+        let Ok(app_class) = class(c"NSApplication") else {
+            return;
+        };
+        let app: *mut AnyObject = msg_send![app_class, sharedApplication];
+        if !app.is_null() {
+            let _: () = msg_send![app, setApplicationIconImage: &*image];
+        }
     }
 }
 

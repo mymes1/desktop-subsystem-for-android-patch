@@ -16,7 +16,15 @@
 //! decoder the guest lists for each type, so a host that offers its GPU's decoder has that one
 //! checked as well.
 //!
-//! The test also reads the guest's log for a denial of a media service's shared memory.
+//! The test serves the guest's video port itself, with a host decoder whose pictures are the
+//! probe's colour bars in a padded surface ([`PatternDecoders`]), so the guest lists DSA's
+//! decoders as it does on a host with a GPU decoder. The probe's video check then decodes
+//! clips at 426x240 and 360x640 with those and the guest's own decoders, to buffers and to
+//! surfaces on screen, and fails on green or wrong colours, on pictures that stop reaching the
+//! screen when a player or a feed of short videos changes surface, and on a sound that stops.
+//!
+//! The test also reads the guest's log for a denial of a media service's shared memory, and
+//! for the codec HAL losing a picture because its surface gave it no buffer.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test,
@@ -32,6 +40,7 @@ use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -40,6 +49,11 @@ use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::session::SessionState;
+use dsa_host_core::video::{
+    Codec, CodecSupport, Packet, Picture, VideoDecoder, VideoDecoders, VIDEO_PORT,
+};
+use dsa_host_core::video_layout::SurfaceFormat;
+use dsa_host_linux::devices::relay::{device_socket, DeviceSocketListener};
 use dsa_host_unix::socket::UnixLocalConnector;
 
 const PROBE_PACKAGE: &str = "io.github.thisisthepy.dsa.mediaprobe";
@@ -66,19 +80,20 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
     // The codec services' buffer pool queues.
     "dsa_codec2_tmpfs",
 ];
-/// The media check, boot included, stays under twelve minutes.
-const MEDIA_BUDGET: Duration = Duration::from_secs(690);
+/// The media check, boot included, stays under fifteen minutes: the video check decodes
+/// four clips with each decoder three ways.
+const MEDIA_BUDGET: Duration = Duration::from_secs(900);
 /// The root check boots three times (as it starts, then with root elevation on and off), so
 /// it stays under twenty-one minutes.
 const ROOT_BUDGET: Duration = Duration::from_secs(1260);
 /// How long past its budget a check may run before it stops everything it started and ends:
-/// inside its job step's limit (14 minutes for media, 23 for root), so the step never kills
+/// inside its job step's limit (18 minutes for media, 23 for root), so the step never kills
 /// it with its VM still running.
 const OVERRUN: Duration = Duration::from_secs(60);
-/// How long one adb command may take. The probe's longest check plays a second of sound and
-/// encodes and decodes a second of video and audio with each decoder; a log dump of the
-/// whole boot takes seconds.
-const ADB_LIMIT: Duration = Duration::from_secs(240);
+/// How long one adb command may take. The probe's longest check, the video check, encodes
+/// four clips and decodes each with every decoder to buffers, to a surface and as a feed; a
+/// log dump of the whole boot takes seconds.
+const ADB_LIMIT: Duration = Duration::from_secs(420);
 
 fn scratch(kind: &str) -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
@@ -524,6 +539,467 @@ fn decode_problems(results: &BTreeMap<String, String>) -> Vec<String> {
     problems
 }
 
+/// The bars the probe's video clips show, left to right, as Y, Cb, Cr: grey, red, yellow,
+/// blue. The probe (`VideoCheck.BARS`) encodes the same ones.
+const BARS: [[u8; 3]; 4] = [
+    [180, 128, 128],
+    [81, 90, 240],
+    [210, 16, 146],
+    [41, 240, 110],
+];
+
+/// The probe's video clips, and the guest's own decoder for each format.
+const CLIPS: &[(&str, &str)] = &[
+    ("avc_426x240", "c2.android.avc.decoder"),
+    ("avc_360x640", "c2.android.avc.decoder"),
+    ("vp9_426x240", "c2.android.vp9.decoder"),
+    ("vp9_360x640", "c2.android.vp9.decoder"),
+];
+
+/// The host decoder each clip's format has here: the boot check's own (see
+/// [`PatternDecoders`]), which the guest lists as `c2.dsa.<format>.decoder`.
+fn host_decoder(clip: &str) -> &'static str {
+    if clip.starts_with("vp9") {
+        "c2.dsa.vp9.decoder"
+    } else {
+        "c2.dsa.avc.decoder"
+    }
+}
+
+/// The boot check's host decoder: CI's host has no GPU decoder, so this stands in for one on
+/// the video port. Whatever a packet holds, its picture is the probe's colour bars at the
+/// size the guest opened the stream with, put in a surface padded the way GPU decoders pad
+/// theirs (the coded size rounded up to 16, the surface taller still, its padding zero and
+/// its chroma plane after the surface's rows) and copied out with the rules every host's
+/// decoder uses. So the check covers the whole path a host decoder's picture takes: the plane
+/// offset and visible size on the host, the video port, and the guest's buffer, crop and
+/// surface.
+struct PatternDecoders;
+
+struct PatternDecoder {
+    surface: Vec<u8>,
+    pitch: usize,
+    chroma_row: usize,
+    width: u32,
+    height: u32,
+}
+
+/// The bars at `width` by `height` in a padded NV12 surface: its pitch and the row its chroma
+/// plane starts at.
+fn pattern_surface(width: u32, height: u32) -> (Vec<u8>, usize, usize) {
+    let (w, h) = (width as usize, height as usize);
+    let coded = (w.div_ceil(16) * 16, h.div_ceil(16) * 16);
+    let pitch = coded.0.div_ceil(64) * 64 + 64;
+    // A driver's surface for the largest picture it expects: taller than the coded size.
+    let rows = coded.1.div_ceil(64) * 64 + 64;
+    let chroma_row = dsa_host_core::video_layout::chroma_start_row(Some(rows), coded.1, h);
+    let mut surface = vec![0u8; pitch * (rows + rows.div_ceil(2))];
+    let bar = |x: usize| (x * 4 / w).min(3);
+    for y in 0..h {
+        for x in 0..w {
+            surface[y * pitch + x] = BARS[bar(x)][0];
+        }
+    }
+    for y in 0..h.div_ceil(2) {
+        for x in 0..w.div_ceil(2) {
+            let at = (chroma_row + y) * pitch + 2 * x;
+            surface[at] = BARS[bar(2 * x)][1];
+            surface[at + 1] = BARS[bar(2 * x)][2];
+        }
+    }
+    (surface, pitch, chroma_row)
+}
+
+impl VideoDecoders for PatternDecoders {
+    fn capabilities(&self) -> Vec<CodecSupport> {
+        [Codec::H264, Codec::Vp9]
+            .into_iter()
+            .map(|codec| CodecSupport {
+                codec,
+                max_width: 4096,
+                max_height: 2304,
+            })
+            .collect()
+    }
+
+    fn open(&self, _: Codec, width: u32, height: u32) -> Result<Box<dyn VideoDecoder>, String> {
+        if width == 0 || height == 0 {
+            return Err(format!("the guest opened a stream of {width}x{height}"));
+        }
+        let (surface, pitch, chroma_row) = pattern_surface(width, height);
+        Ok(Box::new(PatternDecoder {
+            surface,
+            pitch,
+            chroma_row,
+            width,
+            height,
+        }))
+    }
+}
+
+impl VideoDecoder for PatternDecoder {
+    fn decode(&mut self, packet: Packet) -> Result<Vec<Picture>, String> {
+        if packet.codec_config {
+            return Ok(Vec::new());
+        }
+        dsa_host_core::video_layout::picture_from_surface(
+            packet.id,
+            &self.surface,
+            SurfaceFormat::Nv12,
+            self.pitch,
+            self.chroma_row,
+            self.width,
+            self.height,
+        )
+        .map(|picture| vec![picture])
+        .ok_or_else(|| "the pattern does not fit its surface".into())
+    }
+
+    fn drain(&mut self) -> Result<Vec<Picture>, String> {
+        Ok(Vec::new())
+    }
+
+    fn flush(&mut self) {}
+}
+
+/// Serves the video port with [`PatternDecoders`] on the socket the service relays the guest's
+/// video port to, until `stop`. Its log lines go to `log`.
+fn serve_pattern_video(
+    stop: Arc<AtomicBool>,
+    log: Arc<Mutex<Vec<String>>>,
+) -> Result<std::thread::JoinHandle<()>, String> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .ok_or("XDG_RUNTIME_DIR names no runtime folder for the video port's socket")?;
+    let path = device_socket(&runtime, VIDEO_PORT);
+    let listener = DeviceSocketListener::bind(&path)
+        .map_err(|e| format!("{} cannot be opened: {e}", path.display()))?;
+    let decoders: Arc<dyn VideoDecoders> = Arc::new(PatternDecoders);
+    let line: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |text: &str| {
+        lock(&log).push(text.to_string());
+    });
+    std::thread::Builder::new()
+        .name("pattern-video".into())
+        .spawn(move || {
+            dsa_host_core::video::serve(
+                Box::new(listener),
+                decoders,
+                "media-test pattern-video".into(),
+                stop,
+                line,
+            )
+        })
+        .map_err(|e| format!("the video port's thread did not start: {e}"))
+}
+
+/// The guest's codec HAL logging that a picture had no buffer or did not fit one.
+fn codec_buffer_errors(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("dsa-codec2"))
+        .filter(|line| {
+            line.contains("gave no")
+                || line.contains("did not fit")
+                || line.contains("cannot write")
+        })
+        .collect()
+}
+
+/// The first Codec 2.0 component name (`c2.<vendor>.<name>`) a log line mentions.
+fn component_in(line: &str) -> Option<&str> {
+    let mut from = 0;
+    while let Some(at) = line[from..].find("c2.") {
+        let start = from + at;
+        let before = line[..start].chars().next_back();
+        let name: &str = {
+            let rest = &line[start..];
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_'))
+                .unwrap_or(rest.len());
+            rest[..end].trim_end_matches('.')
+        };
+        if !before.is_some_and(|c| c.is_ascii_alphanumeric()) && name.matches('.').count() >= 2 {
+            return Some(name);
+        }
+        from = start + 3;
+    }
+    None
+}
+
+/// The framework's "config failed => CORRUPTED" lines for one of DSA's decoders: a configure
+/// the component's interface refused as corrupted rather than as a bad value or an unknown
+/// parameter. The line names no component, so each is put down to the last component its
+/// process named before it (the probe and an app create their decoders one at a time). The
+/// platform's own decoders answer the same for a surface's pixel format, so theirs are not
+/// counted.
+fn dsa_config_corrupted(log: &str) -> Vec<&str> {
+    let mut last: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut found = Vec::new();
+    for line in log.lines() {
+        // threadtime: date, time, pid, tid, level, tag: message
+        let Some(pid) = line.split_whitespace().nth(2) else {
+            continue;
+        };
+        if line.contains("config failed => CORRUPTED") {
+            if last
+                .get(pid)
+                .is_some_and(|name| name.starts_with("c2.dsa."))
+            {
+                found.push(line);
+            }
+            continue;
+        }
+        if let Some(name) = component_in(line) {
+            last.insert(pid, name);
+        }
+    }
+    found
+}
+
+/// What is wrong with the probe's video results (see `VideoCheck`): each clip must be encoded
+/// and decoded by the guest's own decoder and the host's; every decoder's pictures must keep
+/// the bars' colours to the edges, in buffers and on screen; pictures must reach both
+/// surfaces of a player that moves between them, while its sound plays; and a feed's second
+/// clip must show its first picture within seconds.
+fn video_problems(results: &BTreeMap<String, String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (clip, software) in CLIPS {
+        let key = format!("video.{clip}");
+        if let Some(error) = results.get(&format!("{key}.encode_error")) {
+            problems.push(format!("{clip}: the encoder failed: {error}"));
+            continue;
+        }
+        let units = match number(results, &format!("{key}.units")) {
+            Ok(units) if units > 0 => units,
+            Ok(_) => {
+                problems.push(format!("{clip}: the encoder gave no pictures"));
+                continue;
+            }
+            Err(why) => {
+                problems.push(why);
+                continue;
+            }
+        };
+        let Some(decoders) = results.get(&format!("{key}.decoders")) else {
+            problems.push(format!("{clip}: the probe decoded nothing"));
+            continue;
+        };
+        let decoders: Vec<&str> = decoders.split(',').filter(|n| !n.is_empty()).collect();
+        for wanted in [*software, host_decoder(clip)] {
+            if !decoders.contains(&wanted) {
+                problems.push(format!(
+                    "{clip}: the guest lists no {wanted} among its decoders ({decoders:?})"
+                ));
+            }
+        }
+        for decoder in decoders {
+            let at = format!("{key}.{decoder}");
+            let mut check = |what: &str, found: Result<(), String>| {
+                if let Err(why) = found {
+                    problems.push(format!("{clip}, {decoder}, {what}: {why}"));
+                }
+            };
+            for way in ["buffer", "surface", "shorts"] {
+                if let Some(error) = results.get(&format!("{at}.{way}.error")) {
+                    check(way, Err(format!("failed: {error}")));
+                    continue;
+                }
+                let colour = results
+                    .get(&format!("{at}.{way}.colour"))
+                    .map(String::as_str);
+                if colour != Some("ok") {
+                    check(
+                        way,
+                        Err(format!("colours: {}", colour.unwrap_or("not reported"))),
+                    );
+                }
+            }
+            let at_least = |key: &str, wanted: i64| -> Result<(), String> {
+                match number(results, key) {
+                    Ok(n) if n >= wanted => Ok(()),
+                    Ok(n) => Err(format!("{key} is {n}, below {wanted}")),
+                    Err(why) => Err(why),
+                }
+            };
+            if !results.contains_key(&format!("{at}.buffer.error")) {
+                check(
+                    "buffer",
+                    at_least(&format!("{at}.buffer.out"), (units + 1) / 2),
+                );
+            }
+            if !results.contains_key(&format!("{at}.surface.error")) {
+                check(
+                    "surface",
+                    at_least(&format!("{at}.surface.rendered"), (units + 1) / 2),
+                );
+                // Pictures reached the screen on the first surface and kept coming on the
+                // second: a decoder whose surface gives it no buffer shows none.
+                check("surface", at_least(&format!("{at}.surface.presented"), 2));
+                check("surface", at_least(&format!("{at}.surface.after_swap"), 1));
+                check(
+                    "surface",
+                    at_least(&format!("{at}.surface.audio"), TONE_FRAMES / 4),
+                );
+            }
+            if !results.contains_key(&format!("{at}.shorts.error")) {
+                check("shorts", at_least(&format!("{at}.shorts.first"), 1));
+                check("shorts", at_least(&format!("{at}.shorts.second"), 1));
+                match number(results, &format!("{at}.shorts.first_frame_ms")) {
+                    Ok(ms) if (0..=3000).contains(&ms) => {}
+                    Ok(ms) => check(
+                        "shorts",
+                        Err(format!("the second clip's first picture took {ms} ms")),
+                    ),
+                    Err(why) => check("shorts", Err(why)),
+                }
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn fr26_the_pattern_decoders_pictures_are_the_bars_out_of_a_padded_surface() {
+    for (width, height) in [(426u32, 240u32), (360, 640), (425, 239)] {
+        let mut decoder = PatternDecoders.open(Codec::H264, width, height).unwrap();
+        let pictures = decoder
+            .decode(Packet {
+                id: 7,
+                data: vec![0, 0, 0, 1, 0x65],
+                codec_config: false,
+                timestamp_us: 0,
+            })
+            .unwrap();
+        assert_eq!(pictures.len(), 1);
+        let picture = &pictures[0];
+        assert_eq!(
+            (picture.id, picture.width, picture.height),
+            (7, width, height)
+        );
+        let stride = picture.stride as usize;
+        let (w, h) = (width as usize, height as usize);
+        // The right edge and the bottom row hold the last bar, chroma included: nothing of
+        // the zero padding comes along.
+        assert_eq!(picture.nv12[(h - 1) * stride + w - 1], BARS[3][0]);
+        let chroma = &picture.nv12[stride * h..];
+        let last = (h.div_ceil(2) - 1) * stride + 2 * (w.div_ceil(2) - 1);
+        assert_eq!(&chroma[last..last + 2], &BARS[3][1..]);
+        assert!(chroma.chunks(2).all(|pair| pair != [0, 0]), "chroma lost");
+    }
+    let mut decoder = PatternDecoders.open(Codec::Vp9, 426, 240).unwrap();
+    let config = Packet {
+        id: 1,
+        data: vec![1],
+        codec_config: true,
+        timestamp_us: 0,
+    };
+    assert!(decoder.decode(config).unwrap().is_empty());
+}
+
+fn video_results() -> BTreeMap<String, String> {
+    let mut results = BTreeMap::new();
+    for (clip, software) in CLIPS {
+        let key = format!("video.{clip}");
+        results.insert(format!("{key}.units"), "30".into());
+        results.insert(
+            format!("{key}.decoders"),
+            format!("{},{software}", host_decoder(clip)),
+        );
+        for decoder in [host_decoder(clip), *software] {
+            let at = format!("{key}.{decoder}");
+            for (k, v) in [
+                ("buffer.out", "30"),
+                ("buffer.colour", "ok"),
+                ("surface.rendered", "30"),
+                ("surface.presented", "30"),
+                ("surface.after_swap", "15"),
+                ("surface.colour", "ok"),
+                ("surface.audio", "48000"),
+                ("shorts.first", "30"),
+                ("shorts.second", "30"),
+                ("shorts.first_frame_ms", "40"),
+                ("shorts.colour", "ok"),
+            ] {
+                results.insert(format!("{at}.{k}"), v.to_string());
+            }
+        }
+    }
+    results
+}
+
+#[test]
+fn fr26_green_pictures_and_a_stalled_surface_fail_the_video_check() {
+    let good = video_results();
+    assert!(
+        video_problems(&good).is_empty(),
+        "{:?}",
+        video_problems(&good)
+    );
+    let at = "video.vp9_426x240.c2.dsa.vp9.decoder";
+
+    // A picture whose chroma was lost.
+    let mut green = good.clone();
+    green.insert(
+        format!("{at}.buffer.colour"),
+        "no chroma (green) at 425,120: Y41 Cb0 Cr0".into(),
+    );
+    let problems = video_problems(&green);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("green"));
+
+    // What YouTube showed: the surface gave the decoder no buffer, so nothing reached the
+    // screen, and a feed never started its second clip.
+    let mut stalled = good.clone();
+    stalled.insert(format!("{at}.surface.presented"), "0".into());
+    stalled.insert(format!("{at}.surface.after_swap"), "0".into());
+    stalled.insert(format!("{at}.shorts.second"), "0".into());
+    stalled.insert(format!("{at}.shorts.first_frame_ms"), "-1".into());
+    assert_eq!(
+        video_problems(&stalled).len(),
+        4,
+        "{:?}",
+        video_problems(&stalled)
+    );
+
+    // The sound stopped while the video played.
+    let mut silent = good.clone();
+    silent.insert(format!("{at}.surface.audio"), "0".into());
+    assert_eq!(video_problems(&silent).len(), 1);
+
+    // A host whose decoder the guest does not list.
+    let mut unlisted = good.clone();
+    unlisted.insert(
+        "video.avc_360x640.decoders".into(),
+        "c2.android.avc.decoder".into(),
+    );
+    assert_eq!(video_problems(&unlisted).len(), 1);
+
+    // The error the HAL logged on every picture.
+    let log = "11-10 05:00:00.000  612  640 E dsa-codec2: c2.dsa.vp9.decoder: the surface gave no 426x240 buffer (1 in a row): Status(-8, EX_SERVICE_SPECIFIC): '14: '\n\
+               11-10 05:00:00.010  612  640 I dsa-codec2: c2.dsa.vp9.decoder: decoding 426x240 on the host's GPU\n";
+    assert_eq!(codec_buffer_errors(log).len(), 1);
+}
+
+#[test]
+fn fr26_a_dsa_decoders_configure_refused_as_corrupted_fails_the_media_check() {
+    // What a surface-mode configure logged before the pixel format was settable.
+    let log = "11-10 05:00:00.000   738   790 D CCodec  : allocate(c2.dsa.avc.decoder)\n\
+               11-10 05:00:00.010   738   790 D CCodecConfig: config failed => CORRUPTED\n\
+               11-10 05:00:00.020   738   790 D CCodecConfig: query failed after returning 11 values (BAD_INDEX)\n\
+               11-10 05:00:01.000  4650  4670 D CCodec  : allocate(c2.android.avc.decoder)\n\
+               11-10 05:00:01.010  4650  4670 D CCodecConfig: config failed => CORRUPTED\n\
+               11-10 05:00:01.020   738   790 I MediaCodec: loading /vendor/etc/media_codecs_c2.xml\n";
+    let found = dsa_config_corrupted(log);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains(" 738 "));
+    assert_eq!(
+        component_in("[c2.dsa.vp9.decoder] setting surface generation"),
+        Some("c2.dsa.vp9.decoder")
+    );
+    assert_eq!(component_in("loading media_codecs_c2.xml"), None);
+    assert_eq!(component_in("libc2.dsa.so"), None);
+}
+
 #[test]
 fn pr4_the_probes_results_are_read_from_the_instrumentation_output() {
     let out = "INSTRUMENTATION_RESULT: audio.stream.state=1\r\n\
@@ -696,6 +1172,18 @@ fn boot_check(check_media: bool, check_root: bool) {
         "test_root_approver": approver,
     });
     std::fs::write(&config, settings.to_string()).unwrap();
+    // The host decoder the guest's codec store finds when it starts, so it must be up before
+    // the guest boots.
+    let video_stop = Arc::new(AtomicBool::new(false));
+    let video_log: Arc<Mutex<Vec<String>>> = Arc::default();
+    let pattern_video = if check_media {
+        Some(serve_pattern_video(
+            Arc::clone(&video_stop),
+            Arc::clone(&video_log),
+        ))
+    } else {
+        None
+    };
     let service = Service::spawn(
         Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
             .arg("--config")
@@ -846,12 +1334,32 @@ fn boot_check(check_media: bool, check_root: bool) {
             }
             Err(why) => problems.push(why),
         }
+        match &pattern_video {
+            Some(Ok(_)) => match adb.probe(&dir, "video") {
+                Ok(results) => {
+                    eprintln!("video: {results:?}");
+                    problems.extend(video_problems(&results));
+                }
+                Err(why) => problems.push(why),
+            },
+            Some(Err(why)) => problems.push(format!("the boot check's host decoder: {why}")),
+            None => {}
+        }
+        let _ = std::fs::write(dir.join("video.log"), lock(&video_log).join("\n"));
         // Every denial since the boot, from the guest's own log, where logd keeps the kernel's
         // audit messages.
         let guest_log = adb.shell("logcat -d -b all").unwrap_or_default();
         let _ = std::fs::write(dir.join("logcat.txt"), &guest_log);
         for line in denials(&guest_log, SHARED_MEMORY_TYPES) {
             problems.push(format!("SELinux refused shared memory: {line}"));
+        }
+        for line in codec_buffer_errors(&guest_log) {
+            problems.push(format!("the codec HAL lost a picture: {line}"));
+        }
+        for line in dsa_config_corrupted(&guest_log) {
+            problems.push(format!(
+                "a DSA decoder's configure was refused as corrupted: {line}"
+            ));
         }
     }
     if check_root {
@@ -860,6 +1368,7 @@ fn boot_check(check_media: bool, check_root: bool) {
         }
     }
 
+    video_stop.store(true, Ordering::Relaxed);
     if !problems.is_empty() {
         fail(problems.join("\n"), &service, &log);
     }

@@ -1170,6 +1170,7 @@ impl Manager {
                         }
                         ToHost::Retitle { .. }
                         | ToHost::AppMenu { .. }
+                        | ToHost::AppIcon { .. }
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
                         | ToHost::ImeCursor { .. }

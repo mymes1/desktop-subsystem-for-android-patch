@@ -129,6 +129,7 @@ fn nfr2_memory_growth_sets_the_virtio_mem_request() {
     };
     assert_eq!(mb, 4096);
     launcher.set_memory_mb(mb).unwrap();
+    growth.applied();
     // The first calm report after the growth settles gives it back at once, to the base:
     // nothing of the region is requested any more.
     let calm = start + Duration::from_secs(5);

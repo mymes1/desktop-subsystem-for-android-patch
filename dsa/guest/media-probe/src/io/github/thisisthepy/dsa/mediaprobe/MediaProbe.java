@@ -45,26 +45,31 @@ import java.util.List;
  * app reads. A codec's input buffers are memory the framework allocates in the app's process,
  * the way the device's codec store says to: when the store could not say, every start() failed
  * with NO_MEMORY.
+ *
+ * The "video" check ({@link VideoCheck}) decodes clips of colour bars at sizes that are not a
+ * multiple of 16 or 64 to buffers and to surfaces on screen, swapping surfaces as players and
+ * feeds of short videos do, and checks the pictures' colours and that they keep reaching the
+ * screen.
  */
 public final class MediaProbe extends Instrumentation {
-    private static final String TAG = "DsaMediaProbe";
-    private static final int RATE = 48_000;
-    private static final int CHANNELS = 2;
+    static final String TAG = "DsaMediaProbe";
+    static final int RATE = 48_000;
+    static final int CHANNELS = 2;
     private static final int FRAME_BYTES = 2 * CHANNELS;
 
     private static final String AVC = MediaFormat.MIMETYPE_VIDEO_AVC;
     private static final String AAC = MediaFormat.MIMETYPE_AUDIO_AAC;
     private static final int WIDTH = 320;
     private static final int HEIGHT = 240;
-    private static final int FRAME_RATE = 30;
+    static final int FRAME_RATE = 30;
     /** How long one codec may take over a second of media. */
-    private static final long CODEC_WAIT_MS = 20_000;
-    private static final long DEQUEUE_US = 10_000;
+    static final long CODEC_WAIT_MS = 20_000;
+    static final long DEQUEUE_US = 10_000;
 
     private String check = "audio";
 
     /** One access unit an encoder produced. */
-    private static final class Unit {
+    static final class Unit {
         final byte[] data;
         final long timeUs;
 
@@ -75,7 +80,7 @@ public final class MediaProbe extends Instrumentation {
     }
 
     /** An encoded stream: its codec configuration and its access units. */
-    private static final class Stream {
+    static final class Stream {
         byte[] config;
         final List<Unit> units = new ArrayList<>();
     }
@@ -97,6 +102,8 @@ public final class MediaProbe extends Instrumentation {
                 audio(results);
             } else if (check.equals("decode")) {
                 decode(results);
+            } else if (check.equals("video")) {
+                new VideoCheck(this).run(results);
             } else if (check.equals("root_absent")) {
                 rootAbsent(results);
             } else if (check.equals("root_visible")) {
@@ -166,7 +173,7 @@ public final class MediaProbe extends Instrumentation {
     }
 
     /** One second of a 440 Hz tone, 16-bit stereo at 48 kHz. */
-    private static short[] tone() {
+    static short[] tone() {
         short[] pcm = new short[RATE * CHANNELS];
         for (int i = 0; i < RATE; i++) {
             short sample = (short) (Math.sin(2 * Math.PI * 440 * i / RATE) * 8000);
@@ -176,7 +183,7 @@ public final class MediaProbe extends Instrumentation {
         return pcm;
     }
 
-    private static AudioTrack track(int mode, int bytes) {
+    static AudioTrack track(int mode, int bytes) {
         return new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -256,7 +263,7 @@ public final class MediaProbe extends Instrumentation {
     }
 
     /** Takes what an encoder has finished, until its end of stream; true once it ended. */
-    private static boolean drainEncoder(MediaCodec codec, Stream stream) {
+    static boolean drainEncoder(MediaCodec codec, Stream stream) {
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         while (true) {
             int index = codec.dequeueOutputBuffer(info, DEQUEUE_US);
@@ -297,7 +304,7 @@ public final class MediaProbe extends Instrumentation {
         }
     }
 
-    private static String encoderFor(MediaFormat format) throws IOException {
+    static String encoderFor(MediaFormat format) throws IOException {
         String name = new MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(format);
         if (name == null) {
             throw new IOException("no encoder for " + format);
@@ -400,7 +407,7 @@ public final class MediaProbe extends Instrumentation {
     }
 
     /** The decoders the device lists for a type, aliases left out. */
-    private static List<String> decodersFor(String type) {
+    static List<String> decodersFor(String type) {
         List<String> names = new ArrayList<>();
         for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
             if (info.isEncoder() || info.isAlias()) {

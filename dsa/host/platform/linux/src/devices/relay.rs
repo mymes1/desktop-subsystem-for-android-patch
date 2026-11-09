@@ -1,5 +1,5 @@
-//! The guest's device ports (sound, cameras, sensors), carried from each user's VM to that
-//! user's own device lender.
+//! The guest's device ports (sound, cameras, sensors, video decoding), carried from each
+//! user's VM to that user's own device lender.
 //!
 //! Every VM reaches the host on the same vsock ports, and only one program can listen on a
 //! port, so the service listens and tells the VMs apart by the CID the kernel stamps on each
@@ -22,11 +22,19 @@ use dsa_transport::stream::StreamSocket;
 use dsa_transport::TransportError;
 
 /// The ports the service relays to each user's device lender.
-pub const RELAYED_PORTS: [u32; 3] = [
+pub const RELAYED_PORTS: [u32; 4] = [
     dsa_host_core::audio::AUDIO_PORT,
     dsa_host_core::camera::CAMERA_PORT,
     dsa_host_core::sensors::SENSOR_PORT,
+    dsa_host_core::video::VIDEO_PORT,
 ];
+
+/// Ports whose lender may rightly be absent, so a guest that finds none is not worth a
+/// warning. The video port: a host decodes the guest's video on its GPU only when it has a
+/// decoder for it, and the guest's own software decoders play everything otherwise. With
+/// nothing serving the port the guest's codec store hears of no host decoder, as before the
+/// port was relayed; the image's boot check serves it with a decoder of its own.
+pub const OPTIONAL_PORTS: [u32; 1] = [dsa_host_core::video::VIDEO_PORT];
 
 /// The folder of a user's device sockets, below their runtime folder.
 pub fn socket_dir(runtime_dir: &Path) -> PathBuf {
@@ -81,7 +89,7 @@ pub fn relay(
                         lender
                     }
                     Err(why) => {
-                        if !warned {
+                        if !warned && !OPTIONAL_PORTS.contains(&port) {
                             eprintln!(
                                 "{user}: vsock port {port}: the user's device lender \
                                  (dsa-devices) is not running: {why}"
@@ -126,6 +134,18 @@ pub fn relay(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fr26_the_video_port_reaches_the_users_lender_and_may_have_none() {
+        let video = dsa_host_core::video::VIDEO_PORT;
+        assert!(RELAYED_PORTS.contains(&video));
+        assert!(OPTIONAL_PORTS.contains(&video));
+        assert!(!OPTIONAL_PORTS.contains(&dsa_host_core::audio::AUDIO_PORT));
+        assert_eq!(
+            device_socket(&user_runtime_dir(1000), video),
+            PathBuf::from("/run/user/1000/dsa/devices/5569.sock")
+        );
+    }
 
     #[test]
     fn fr26_each_users_device_ports_go_to_their_own_runtime_folder() {

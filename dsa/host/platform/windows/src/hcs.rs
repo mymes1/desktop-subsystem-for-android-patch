@@ -275,6 +275,10 @@ pub struct ComputeSystem {
 
 // SAFETY: HCS handles may be used from any thread.
 unsafe impl Send for ComputeSystem {}
+// SAFETY: every method takes `&self` and makes its own HCS operation, and HCS takes calls on
+// one compute system from several threads at once; the exit signal is a mutex and a condvar.
+// The memory resize runs on a thread of its own beside the session's calls.
+unsafe impl Sync for ComputeSystem {}
 
 impl ComputeSystem {
     /// Creates (but does not start) the compute system `id` from an HCS JSON document.

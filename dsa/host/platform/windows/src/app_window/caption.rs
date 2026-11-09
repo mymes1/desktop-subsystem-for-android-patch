@@ -622,11 +622,16 @@ impl CaptionWindow {
     fn icon_pixels(&self, side: u32) -> Option<Vec<u8>> {
         let mut cache = self.icon.borrow_mut();
         if cache.as_ref().map(|(at, _)| *at) != Some(side) {
-            let pixels = super::splash::caption_icon_pixels(side).or_else(|| {
-                super::splash::icon_pixels(self.icon_id, side)
-                    .filter(|(_, size)| *size == (side, side))
-                    .map(|(pixels, _)| pixels)
-            });
+            // The icon the window manager sent since the program started comes first.
+            let live = super::live_icon::current()
+                .and_then(|icon| super::live_icon::premultiplied(icon.caption_png(), side));
+            let pixels = live
+                .or_else(|| super::splash::caption_icon_pixels(side))
+                .or_else(|| {
+                    super::splash::icon_pixels(self.icon_id, side)
+                        .filter(|(_, size)| *size == (side, side))
+                        .map(|(pixels, _)| pixels)
+                });
             *cache = Some((side, pixels));
         }
         cache.as_ref().and_then(|(_, pixels)| pixels.clone())
