@@ -18,6 +18,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `dsa-console.rc` | Quiets the serial console once boot completes, so it carries only the kernel's early boot and a panic |
 | `unavailable-features.xml` | Hardware features the VM lacks, withdrawn from the system |
 | `dsa-channeld.rc` | The service that runs the control channel daemon, and the trigger that drops the guest's caches when it asks |
+| `dsa-keymint-key.rc` | Makes the tmpfs folder for KeyMint's root key and starts the daemon's mode that fetches it from the host, on init |
 | `dsa-memory.rc` | Turns on the zram swap and tunes the kernel for it |
 | `dsa-display.rc` | Starts SurfaceFlinger, and so every app, at the density the boot names (the user's main monitor's) |
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
@@ -295,6 +296,19 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
 - The agent (`dsa/guest/agent/`) is added as a privileged app in
   `/system_ext/priv-app/DsaAgent/`, with its privileged permission list, and is signed with
   the platform key. It tells the host about each app task, so each gets its own window.
+  `sysconfig-dsa-agent.xml` goes with it to `/system_ext/etc/sysconfig/`: Android's backup
+  manager uses a backup transport only when a sysconfig file lists it, and the agent's keeps
+  app data in the host's backup folder.
+- KeyMint's root key comes from the host, which keeps it sealed by the user's credential store,
+  so a copy of the guest's disk opens none of Android's keys. `dsa-keymint-key.rc` makes the
+  tmpfs folder `/dev/dsa_keymint` (mode 0700, owned by `nobody`, KeyMint's user) on init and
+  starts `dsa-channeld --keymint-key` (`dsa-channeld.rc`), a oneshot that runs as `nobody` in
+  its own domain. It asks the host on vsock port 5604, past the control channel's handshake,
+  and writes `root_key` there: `key <hex>`, or `none <reason>` when the host has none or cannot
+  be reached within 25 seconds. The key never reaches the user's disk. `channeld.cil` labels the
+  folder `dsa_keymint_key_file`, which only that domain writes and only KeyMint
+  (`hal_keymint_server`) reads; `check-image.py` refuses an image that lets any other domain
+  read it.
 - The published kernel modules are dropped. They belong to Google's kernel; DSA boots its
   own kernel with the drivers built in.
 - `fstab.dsa` replaces the mount table. Every partition is found by its name
