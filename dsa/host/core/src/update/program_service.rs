@@ -52,7 +52,9 @@ use crate::apk::{InstallOutcome, InstallPart, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::background::{BackgroundApp, BackgroundWatch, MediaSession};
 use crate::host_api::InstallError;
-use crate::host_api::{ProgramUpdate, UpdateProgram, UserAndroid, UserAndroids};
+use crate::host_api::{
+    ProgramPhase, ProgramProgress, ProgramUpdate, UpdateProgram, UserAndroid, UserAndroids,
+};
 use crate::ime::ImeEvent;
 use crate::input::PointerEvent;
 use crate::keys::KeyEvent;
@@ -241,9 +243,34 @@ pub enum CheckOutcome {
 pub struct ProgramStatus {
     pub notices: UpdateNotices,
     installing: Mutex<Option<String>>,
+    /// How far the update under way, or the last one, has got.
+    progress: Mutex<Option<ProgramProgress>>,
 }
 
 impl ProgramStatus {
+    /// Where an update of DSA stands: under way, just installed, or failed. `None` when no
+    /// update has run since the service started.
+    pub fn progress(&self) -> Option<ProgramProgress> {
+        self.progress
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+    fn set_progress(&self, phase: ProgramPhase, version: &str) {
+        *self.progress.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some(ProgramProgress::new(phase, version));
+    }
+    fn clear_progress(&self) {
+        *self.progress.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+    /// Clears the progress only while it still says `phase`, so a later phase another thread
+    /// has set meanwhile stays.
+    fn clear_progress_if(&self, phase: ProgramPhase) {
+        let mut progress = self.progress.lock().unwrap_or_else(|e| e.into_inner());
+        if progress.as_ref().is_some_and(|p| p.phase == phase) {
+            *progress = None;
+        }
+    }
     /// The version setup is installing, while it runs.
     pub fn installing(&self) -> Option<String> {
         self.installing
@@ -509,6 +536,7 @@ impl ProgramUpdates {
     /// Tells the users that installing `version` failed, because of `detail`: in words, and
     /// on every user's desktop.
     fn tell_failure(&self, version: &str, detail: &str) {
+        self.status.set_progress(ProgramPhase::Failed, version);
         self.tell(self.failure_notice(version, detail));
         self.status
             .notices
@@ -540,9 +568,12 @@ impl ProgramUpdates {
                     pending.version
                 ));
                 self.status.set_installing(Some(pending.version.clone()));
+                self.status
+                    .set_progress(ProgramPhase::Installing, &pending.version);
                 let log = pending.log.clone().unwrap_or_default();
                 if let Err(error) = self.watch_in_background(setup, &pending.version, &log) {
                     self.status.set_installing(None);
+                    self.status.clear_progress();
                     self.log(&error.to_string());
                 }
                 return Ok(());
@@ -579,6 +610,8 @@ impl ProgramUpdates {
 
     /// Tells the users that the version running now is the one an update installed.
     fn tell_applied(&self) {
+        self.status
+            .set_progress(ProgramPhase::Applied, &self.settings.running);
         self.tell(format!("DSA was updated to {}", self.settings.running));
         self.status.notices.raise(UpdateAlert::new(
             Subject::Program,
@@ -600,6 +633,7 @@ impl ProgramUpdates {
         if !restart_into_files(&self.settings.running, on_disk.as_deref(), installing) {
             return false;
         }
+        let new_version = on_disk.clone().unwrap_or_default();
         self.log(&format!(
             "the program files are DSA {}, newer than this service (DSA {}): setup replaced \
              them while it ran; restarting into them",
@@ -607,7 +641,10 @@ impl ProgramUpdates {
             self.settings.running
         ));
         self.restarting.store(true, Ordering::Relaxed);
+        self.status
+            .set_progress(ProgramPhase::Restarting, &new_version);
         if let Err(why) = self.installer.restart_into_installed() {
+            self.status.clear_progress_if(ProgramPhase::Restarting);
             self.log(&format!(
                 "restarting the service failed: {why}; restart the DSA service or the computer"
             ));
@@ -757,7 +794,11 @@ impl ProgramUpdates {
                 return Ok(CheckOutcome::AlreadyDownloaded(version));
             }
         }
-        let pending = self.download(&list, &offered, from)?;
+        self.status
+            .set_progress(ProgramPhase::Downloading, &list.version);
+        let downloaded = self.download(&list, &offered, from);
+        self.status.clear_progress_if(ProgramPhase::Downloading);
+        let pending = downloaded?;
         state.pending = Some(pending);
         self.write_state(&state)?;
         self.remove_downloads(Some(&list.version));
@@ -928,9 +969,12 @@ impl ProgramUpdates {
             },
         };
         self.status.set_installing(Some(pending.version.clone()));
+        self.status
+            .set_progress(ProgramPhase::StoppingAndroid, &pending.version);
         let not_stopped = self.androids.stop_all(self.settings.stop_timeout);
         if !not_stopped.is_empty() {
             self.status.set_installing(None);
+            self.status.clear_progress();
             return Err(ProgramError::Refused(format!(
                 "these users' Android did not stop in time: {}",
                 not_stopped
@@ -977,6 +1021,8 @@ impl ProgramUpdates {
         pending.log = Some(log.clone());
         state.pending = Some(pending.clone());
         self.write_state(&state)?;
+        self.status
+            .set_progress(ProgramPhase::Installing, &pending.version);
         self.tell(format!(
             "installing DSA {}; the service restarts when it is done",
             pending.version
@@ -1036,6 +1082,7 @@ impl ProgramUpdates {
                 // The record stays as it is, installing, so the new service reports the
                 // update once it runs.
                 self.restarting.store(true, Ordering::Relaxed);
+                self.status.set_progress(ProgramPhase::Restarting, version);
                 match self.installer.restart_into_installed() {
                     Ok(()) => return,
                     Err(why) => format!(
@@ -1152,6 +1199,9 @@ impl UserAndroid for WithProgramStatus {
     }
     fn stop(&self) {
         self.android.stop();
+    }
+    fn program_update(&self) -> Option<ProgramProgress> {
+        self.status.progress()
     }
     fn update_notice(&self) -> Option<String> {
         let notices: Vec<String> = [self.android.update_notice(), self.status.notices.get()]

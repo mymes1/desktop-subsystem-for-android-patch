@@ -46,6 +46,7 @@
 //! The caller's Android reads the task's tree only while such a connection is open.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, TryRecvError};
@@ -144,6 +145,10 @@ pub trait UserAndroid: Send + Sync {
     fn stop(&self);
     /// News about the Android image for the user, if there is any.
     fn update_notice(&self) -> Option<String> {
+        None
+    }
+    /// Where an update of DSA itself stands, when this service updates DSA.
+    fn program_update(&self) -> Option<ProgramProgress> {
         None
     }
     /// The update alerts `user`'s desktop has not shown yet: for the Android image and for
@@ -943,6 +948,123 @@ pub struct ProgramUpdate {
     pub installing: Option<String>,
     /// What happens next, in words for the user.
     pub detail: String,
+}
+
+/// How far an update of DSA itself has got.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProgramPhase {
+    /// The new version's setup file is being downloaded.
+    Downloading,
+    /// Every user's Android is being stopped so setup can run.
+    StoppingAndroid,
+    /// Setup is installing the new version; it stops the service and starts the new one.
+    Installing,
+    /// Setup has installed the new version and the service is restarting into it.
+    Restarting,
+    /// The service is the version an update has just installed.
+    Applied,
+    /// The update failed and the version before it is still installed.
+    Failed,
+}
+
+impl ProgramPhase {
+    /// The phase's name as `dsa status --json` writes it, such as `stopping_android`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ProgramPhase::Downloading => "downloading",
+            ProgramPhase::StoppingAndroid => "stopping_android",
+            ProgramPhase::Installing => "installing",
+            ProgramPhase::Restarting => "restarting",
+            ProgramPhase::Applied => "applied",
+            ProgramPhase::Failed => "failed",
+        }
+    }
+
+    /// Whether the update is still under way, so the user should leave DSA alone.
+    pub fn in_progress(self) -> bool {
+        !matches!(self, ProgramPhase::Applied | ProgramPhase::Failed)
+    }
+
+    fn to_wire(self) -> types::ProgramUpdatePhase {
+        match self {
+            ProgramPhase::Downloading => types::ProgramUpdatePhase::Downloading,
+            ProgramPhase::StoppingAndroid => types::ProgramUpdatePhase::StoppingAndroid,
+            ProgramPhase::Installing => types::ProgramUpdatePhase::Installing,
+            ProgramPhase::Restarting => types::ProgramUpdatePhase::Restarting,
+            ProgramPhase::Applied => types::ProgramUpdatePhase::Applied,
+            ProgramPhase::Failed => types::ProgramUpdatePhase::Failed,
+        }
+    }
+
+    fn from_wire(phase: i32) -> Option<ProgramPhase> {
+        Some(match types::ProgramUpdatePhase::try_from(phase).ok()? {
+            types::ProgramUpdatePhase::Downloading => ProgramPhase::Downloading,
+            types::ProgramUpdatePhase::StoppingAndroid => ProgramPhase::StoppingAndroid,
+            types::ProgramUpdatePhase::Installing => ProgramPhase::Installing,
+            types::ProgramUpdatePhase::Restarting => ProgramPhase::Restarting,
+            types::ProgramUpdatePhase::Applied => ProgramPhase::Applied,
+            types::ProgramUpdatePhase::Failed => ProgramPhase::Failed,
+            types::ProgramUpdatePhase::Unspecified => return None,
+        })
+    }
+}
+
+/// Where an update of DSA itself stands.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProgramProgress {
+    pub phase: ProgramPhase,
+    /// The version being installed, or the one installed or that failed.
+    pub version: String,
+}
+
+impl ProgramProgress {
+    pub fn new(phase: ProgramPhase, version: impl Into<String>) -> ProgramProgress {
+        ProgramProgress {
+            phase,
+            version: version.into(),
+        }
+    }
+
+    fn to_wire(&self) -> types::ProgramUpdateProgress {
+        types::ProgramUpdateProgress {
+            phase: self.phase.to_wire() as i32,
+            version: self.version.clone(),
+        }
+    }
+
+    fn from_wire(progress: &types::ProgramUpdateProgress) -> Option<ProgramProgress> {
+        Some(ProgramProgress {
+            phase: ProgramPhase::from_wire(progress.phase)?,
+            version: progress.version.clone(),
+        })
+    }
+}
+
+impl fmt::Display for ProgramProgress {
+    /// What the update is doing, in words for the user.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let version = &self.version;
+        match self.phase {
+            ProgramPhase::Downloading => write!(f, "downloading DSA {version}"),
+            ProgramPhase::StoppingAndroid => write!(
+                f,
+                "stopping Android to install DSA {version}; do not close DSA or start Android \
+                 apps until the update is done"
+            ),
+            ProgramPhase::Installing => write!(
+                f,
+                "installing DSA {version}; do not close DSA or start Android apps until the \
+                 update is done"
+            ),
+            ProgramPhase::Restarting => write!(
+                f,
+                "DSA is restarting to finish the update to {version}; do not close DSA or \
+                 start Android apps until it is done"
+            ),
+            ProgramPhase::Applied => write!(f, "updated to DSA {version}"),
+            ProgramPhase::Failed => write!(f, "updating to DSA {version} failed"),
+        }
+    }
 }
 
 /// Updates DSA itself when a user asks (`dsa update`).
@@ -5406,6 +5528,7 @@ fn status(android: &dyn UserAndroid) -> response::Body {
         last_reason: android.last_reason().unwrap_or_default(),
         update_notice: android.update_notice().unwrap_or_default(),
         problem: android.problem().unwrap_or_default(),
+        program_update: android.program_update().map(|progress| progress.to_wire()),
     })
 }
 
@@ -5418,6 +5541,8 @@ pub struct Status {
     pub update_notice: Option<String>,
     /// What keeps it from being ready, and what to do, while something does.
     pub problem: Option<String>,
+    /// Where an update of DSA itself stands, when one is under way or has just ended.
+    pub program_update: Option<ProgramProgress>,
 }
 
 /// The tasks of the caller's Android as the service reported them.
@@ -6802,6 +6927,10 @@ impl HostApiClient {
                 last_reason: Some(status.last_reason).filter(|reason| !reason.is_empty()),
                 update_notice: Some(status.update_notice).filter(|notice| !notice.is_empty()),
                 problem: Some(status.problem).filter(|problem| !problem.is_empty()),
+                program_update: status
+                    .program_update
+                    .as_ref()
+                    .and_then(ProgramProgress::from_wire),
             }),
             _ => Err(ClientError::Malformed("expected a status".into())),
         }
