@@ -420,8 +420,17 @@ class AndroidKernelConfigTests(unittest.TestCase):
         merged = os.environ.get("DSA_KERNEL_MERGED_CONFIG")
         if not merged:
             self.skipTest("DSA_KERNEL_MERGED_CONFIG names no merged configuration")
-        arch = os.environ.get("DSA_KERNEL_ARCH", "x86_64")
         lines = Path(merged).read_text().splitlines()
+        # The architecture comes from the merged file's own header ("# Linux/arm64 ..."), so
+        # a run that forgets to name it cannot check an arm64 configuration against the
+        # x86_64 fragments, or skip the arm64 fragment.
+        built = next((line[len("# Linux/"):].split()[0] for line in lines
+                      if line.startswith("# Linux/")), None)
+        self.assertIn(built, ("x86", "arm64"), f"{merged} names no known architecture")
+        arch = "x86_64" if built == "x86" else built
+        named = os.environ.get("DSA_KERNEL_ARCH")
+        if named:
+            self.assertEqual(arch, named, f"{merged} is a {built} configuration, not {named}")
         fragments = [CONFIG] + ([ARM64_CONFIG] if arch == "arm64" else []) + [VIRTIO_CONFIG]
         for fragment in fragments:
             for line in fragment_lines(fragment):

@@ -63,6 +63,8 @@ runs:
     - name: Test the merged configuration
       if: inputs.check-config == 'true'
       shell: bash
+      env:
+        DSA_KERNEL_ARCH: ${{ inputs.arch }}
       run: |
         DSA_KERNEL_MERGED_CONFIG="$(ls "${{ inputs.out }}"/config-*)" \
           python3 dsa/kernel/test_android_config.py
