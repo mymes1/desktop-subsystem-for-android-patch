@@ -1123,6 +1123,9 @@
   <data name="ApkWindow_AbiWarning" xml:space="preserve">
     <value>This app has code only for {0} processors, not for this PC's. Android runs it only with an ARM translation package, and may refuse to install it.</value>
   </data>
+  <data name="ApkWindow_Abi32Warning" xml:space="preserve">
+    <value>This app has code only for {0} processors. The ARM translator runs only 64-bit ARM (arm64-v8a) code, so Android may refuse to install it or it may not start.</value>
+  </data>
   <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
     <value>{0} is installed, but it did not open. {1}</value>
   </data>
