@@ -21,6 +21,12 @@ function New-MemoryFixture([string]$Dir, [string]$RealDsa) {
             buffers_kb = 20480; cached_kb = 512000; anon_pages_kb = 409600; shmem_kb = 8192
             slab_reclaimable_kb = 40960; swap_total_kb = 1048576; swap_free_kb = 1000000
             zram_original_kb = 49152; zram_used_kb = 12288; total_pss_kb = 614400
+            swap_pss_kb = 40960
+            apps = [ordered]@{ resident_kb = 573440; compressed_kb = 10240; swapped_out_kb = 40960; total_kb = 583680 }
+            google_play = [ordered]@{
+                processes = 2; pss_kb = 81920; swap_pss_kb = 32768
+                resident_kb = 49152; compressed_kb = 8192; swapped_out_kb = 32768; total_kb = 57344
+            }
             kernel = [ordered]@{
                 slab_unreclaimable_kb = 61440; kernel_stack_kb = 12288; page_tables_kb = 18432
                 vmalloc_used_kb = 24576; percpu_kb = 2048; cma_total_kb = 0; hugetlb_kb = 0
@@ -28,9 +34,10 @@ function New-MemoryFixture([string]$Dir, [string]$RealDsa) {
             }
             age_seconds = 2
             top_processes = @(
-                [ordered]@{ pid = 612; name = 'system_server'; pss_kb = 184320; swap_pss_kb = 0 }
-                [ordered]@{ pid = 1840; name = 'com.example.notes'; pss_kb = 92160; swap_pss_kb = 0 }
-                [ordered]@{ pid = 455; name = 'surfaceflinger'; pss_kb = 30720; swap_pss_kb = 0 }
+                [ordered]@{ pid = 612; name = 'system_server'; pss_kb = 184320; swap_pss_kb = 0; google_play = $false; resident_kb = 184320; compressed_kb = 0 }
+                [ordered]@{ pid = 1840; name = 'com.example.notes'; pss_kb = 92160; swap_pss_kb = 0; google_play = $false; resident_kb = 92160; compressed_kb = 0 }
+                [ordered]@{ pid = 2210; name = 'com.google.android.gms'; pss_kb = 61440; swap_pss_kb = 24576; google_play = $true; resident_kb = 36864; compressed_kb = 6144 }
+                [ordered]@{ pid = 455; name = 'surfaceflinger'; pss_kb = 30720; swap_pss_kb = 0; google_play = $false; resident_kb = 30720; compressed_kb = 0 }
             )
         }
     }

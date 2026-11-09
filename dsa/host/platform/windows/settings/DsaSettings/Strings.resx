@@ -242,7 +242,7 @@
     <value>Apps and system</value>
   </data>
   <data name="Memory_AppsDetail" xml:space="preserve">
-    <value>The apps and the system server, counted by their share (PSS).</value>
+    <value>{0} in memory, {1} compressed</value>
   </data>
   <data name="Memory_Cache" xml:space="preserve">
     <value>Cache</value>
@@ -270,6 +270,18 @@
   </data>
   <data name="Memory_GuestProcessDetail" xml:space="preserve">
     <value>Process {0}</value>
+  </data>
+  <data name="Memory_GuestProcessGooglePlay" xml:space="preserve">
+    <value>Process {0}, Google Play services</value>
+  </data>
+  <data name="Memory_GooglePlay" xml:space="preserve">
+    <value>Google Play services</value>
+  </data>
+  <data name="Memory_GooglePlayDetail" xml:space="preserve">
+    <value>The Google apps you installed, {0} processes: {1}</value>
+  </data>
+  <data name="Memory_Unknown" xml:space="preserve">
+    <value>unknown</value>
   </data>
   <data name="DisplayTitle.Text" xml:space="preserve">
     <value>Display &amp; GPU</value>

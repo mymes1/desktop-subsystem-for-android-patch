@@ -38,6 +38,9 @@ internal sealed class KeyText : ITextSource
         "Memory_ProcessDetail" => "pid {0}, {1} private",
         "Memory_ZramDetail" => "{0} stored",
         "Memory_GuestProcessDetail" => "pid {0}",
+        "Memory_GuestProcessGooglePlay" => "pid {0}, play",
+        "Memory_AppsDetail" => "{0} in memory, {1} compressed",
+        "Memory_GooglePlayDetail" => "{0} processes: {1}",
         "Install_Installed" => "installed {0} as {1}",
         "Install_Refused" => "refused {0}: {1} [{2}]",
         "Install_NotSent" => "not sent {0}: {1}",
@@ -474,6 +477,49 @@ public class ViewModelTests
         Assert.Equal("500.0 MB", vm.GuestRows.Single(r => r.Label == "Memory_Apps").Size);
         Assert.Equal("200.0 MB", vm.GuestRows.Single(r => r.Label == "Memory_Cache").Size);
         Assert.Equal("system_server", vm.GuestProcessRows.Single().Label);
+    }
+
+    [Fact]
+    public async Task Nfr2_memory_page_counts_zram_compressed_and_google_play_services_apart()
+    {
+        const string report =
+            "{\"guest\":{\"mem_total_kb\":4194304,\"mem_free_kb\":1048576,\"mem_available_kb\":3145728," +
+            "\"zram_original_kb\":307200,\"zram_used_kb\":102400,\"total_pss_kb\":512000,\"swap_pss_kb\":307200," +
+            "\"apps\":{\"resident_kb\":204800,\"compressed_kb\":102400,\"swapped_out_kb\":307200,\"total_kb\":307200}," +
+            "\"google_play\":{\"processes\":2,\"pss_kb\":138240,\"swap_pss_kb\":125952,\"resident_kb\":12288," +
+            "\"compressed_kb\":41984,\"swapped_out_kb\":125952,\"total_kb\":54272}," +
+            "\"age_seconds\":12,\"top_processes\":[{\"pid\":700,\"name\":\"com.google.android.gms\",\"pss_kb\":82944," +
+            "\"swap_pss_kb\":76800,\"google_play\":true,\"resident_kb\":6144,\"compressed_kb\":25600}," +
+            "{\"pid\":42,\"name\":\"system_server\",\"pss_kb\":153600,\"swap_pss_kb\":0,\"google_play\":false," +
+            "\"resident_kb\":153600,\"compressed_kb\":0}]},\"host\":[],\"host_total_kb\":0}";
+        var cli = new FakeCli().Answer("memory --json", report);
+        var vm = new MemoryViewModel(new DsaService(cli), new KeyText());
+        await vm.RefreshAsync();
+        var apps = vm.GuestRows.Single(r => r.Label == "Memory_Apps");
+        Assert.Equal("300.0 MB", apps.Size);
+        Assert.Equal("200.0 MB in memory, 100.0 MB compressed", apps.Detail);
+        Assert.Equal("Memory_GooglePlay", vm.GuestRows[1].Label);
+        Assert.Equal("53.0 MB", vm.GuestRows[1].Size);
+        Assert.Equal("2 processes: 12.0 MB in memory, 41.0 MB compressed", vm.GuestRows[1].Detail);
+        Assert.Equal("31.0 MB", vm.GuestProcessRows[0].Size);
+        Assert.Equal("pid 700, play", vm.GuestProcessRows[0].Detail);
+        Assert.Equal("pid 42", vm.GuestProcessRows[1].Detail);
+    }
+
+    [Fact]
+    public async Task Nfr2_memory_page_says_when_zram_compression_is_unknown_and_google_play_does_not_run()
+    {
+        const string report =
+            "{\"guest\":{\"mem_total_kb\":4194304,\"total_pss_kb\":204800,\"swap_pss_kb\":102400," +
+            "\"apps\":{\"resident_kb\":102400,\"compressed_kb\":null,\"swapped_out_kb\":102400,\"total_kb\":102400}," +
+            "\"google_play\":null,\"age_seconds\":1,\"top_processes\":[]},\"host\":[],\"host_total_kb\":0}";
+        var cli = new FakeCli().Answer("memory --json", report);
+        var vm = new MemoryViewModel(new DsaService(cli), new KeyText());
+        await vm.RefreshAsync();
+        var apps = vm.GuestRows.Single(r => r.Label == "Memory_Apps");
+        Assert.Equal("100.0 MB", apps.Size);
+        Assert.Equal("100.0 MB in memory, Memory_Unknown compressed", apps.Detail);
+        Assert.DoesNotContain(vm.GuestRows, r => r.Label == "Memory_GooglePlay");
     }
 
     [Fact]
