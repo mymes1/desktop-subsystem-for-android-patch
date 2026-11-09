@@ -84,7 +84,7 @@
 (allow dsa_channeld dsa_root_elevation_prop (file (read open getattr map)))
 
 ; The kernel's su guard, /sys/kernel/security/dsa_su/control on securityfs, which init mounts
-; (dsa-channeld.rc). The file takes the su paths to hide and the uids that may see them.
+; during early boot. The file takes the su paths to hide and the uids that may see them.
 ; init writes it once at boot, so su is hidden from every app before any app starts; after
 ; that only the helper may change it. The kernel also asks the writer to be root, which keeps
 ; it from the daemon, which runs as system.

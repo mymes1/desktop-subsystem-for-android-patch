@@ -2770,6 +2770,7 @@ TRACE_RC = "SYSTEM/etc/init/dsa-trace.rc"
 # Quiets the serial console once boot completes, so it carries only the kernel's early boot and
 # a panic. A system script, because only init itself may write the kernel's printk levels.
 CONSOLE_RC = "SYSTEM/etc/init/dsa-console.rc"
+SU_GUARD_RC = "SYSTEM/etc/init/dsa-su-guard.rc"
 SYSTEM_FS_CONFIG = "META/filesystem_config.txt"
 TRACE_FS_CONFIG = [
     "system/etc/init/dsa-trace.rc 0 0 644 capabilities=0x0",
@@ -3963,13 +3964,14 @@ def root_elevation_problems(names, read):
         ("seclabel u:r:dsa_su:s0", "the elevation helper does not run in its own domain"),
         ("socket dsa_su stream 0666 root root", "su has no socket to reach the helper on"),
         ("socket dsa_su_relay seqpacket 0660 root system", "dsa-channeld has no socket to reach the helper on"),
-        ("mount securityfs securityfs /sys/kernel/security nodev noexec nosuid",
-         "the su guard's control file is not there to write"),
-        ('write /sys/kernel/security/dsa_su/control "path /system/bin/su"', "su is not hidden at boot"),
-        ("write /sys/kernel/security/dsa_su/control enable", "su is not hidden at boot"),
     ]:
         if line not in rc.splitlines() and f"    {line}" not in rc.splitlines():
             problems.append(f"{CHANNELD_RC} lacks \"{line}\", so {why}")
+    guard = read(SU_GUARD_RC).decode() if SU_GUARD_RC in names else ""
+    for line in ['write /sys/kernel/security/dsa_su/control "path /system/bin/su"',
+                 "write /sys/kernel/security/dsa_su/control enable"]:
+        if f"    {line}" not in guard.splitlines():
+            problems.append(f"{SU_GUARD_RC} lacks \"{line}\", so su is not hidden at boot")
     contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
                 if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
     for _, context in SU_SOCKET_CONTEXTS:
@@ -4509,6 +4511,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG
+                                                 + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0"]
+                                                    if channeld_payload is not None else [])
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
                                                     if su_payload is not None else [])
                                                  + added_fs_config.get(name, [])).encode()
@@ -4592,6 +4596,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if channeld_payload is not None:
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
+            zout.writestr(SU_GUARD_RC, (HERE / "dsa-su-guard.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
         if su_payload is not None:
             zout.writestr(SU_CLIENT_BINARY, su_payload)

@@ -6043,6 +6043,7 @@ class RootElevationImageTests(unittest.TestCase):
             archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", plat_file_contexts)
             archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
             archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
             archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
         daemon = None
         client = None
@@ -6137,20 +6138,28 @@ class RootElevationImageTests(unittest.TestCase):
     def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
         # The guard does nothing until something writes it, and the helper runs only while root
         # elevation is on. init hides every su the image can have on its own, before zygote
-        # starts and after the system scripts have laid the ARM translation overlay over
-        # /system/bin, so the guard watches the inode apps look up.
-        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        # starts. A system script runs the writes as init, not vendor_init.
+        rc = (self.HERE / "dsa-su-guard.rc").read_text()
         start = rc.index("on post-fs-data\n")
         block = rc[start:rc.index("\n\n", start)].splitlines()
-        self.assertEqual(block[1].strip(), "mount securityfs securityfs /sys/kernel/security nodev noexec nosuid")
         system_paths = [path for path in self._relay_paths() if path.startswith("/system/")]
         self.assertTrue(system_paths)
-        writes = [line.strip() for line in block[2:]]
+        writes = [line.strip() for line in block[1:]]
         for path in system_paths:
             self.assertIn(f'write /sys/kernel/security/dsa_su/control "path {path}"', writes)
         # Enabled last: with no uid allowed, every task gets ENOENT for the watched paths.
         self.assertEqual(writes[-1], "write /sys/kernel/security/dsa_su/control enable")
         self.assertNotIn("allow", " ".join(writes))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("SYSTEM/etc/init/dsa-su-guard.rc").decode(), rc)
+            self.assertNotIn("/sys/kernel/security/dsa_su/control",
+                             archive.read(make_image.CHANNELD_RC).decode())
+            files = {name: archive.read(name) for name in archive.namelist()}
+            self.assertIn("system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
+                          files[make_image.SYSTEM_FS_CONFIG].decode().splitlines())
+            del files[make_image.SU_GUARD_RC]
+            self.assertTrue(any("su is not hidden at boot" in problem for problem in
+                                make_image.root_elevation_problems(list(files), files.__getitem__)))
 
     def test_fr35_the_helper_runs_only_while_root_elevation_is_on(self):
         rc = (self.HERE / "dsa-channeld.rc").read_text()
@@ -6243,7 +6252,9 @@ class RootElevationImageTests(unittest.TestCase):
         files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
         del files["SYSTEM/bin/su"]
         rc = files[make_image.CHANNELD_RC].decode()
-        files[make_image.CHANNELD_RC] = rc.replace("    seclabel u:r:dsa_su:s0\n", "").encode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_su:s0"
+        ).encode()
         problems = make_image.root_elevation_problems(list(files), files.__getitem__)
         expected = [
             "SYSTEM/bin/su is missing",
