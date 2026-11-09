@@ -439,7 +439,7 @@ mod tests {
                 right: 400,
                 bottom: 600,
             },
-            density_dpi: 320,
+            density_dpi: 192,
             ..Task::default()
         }
     }

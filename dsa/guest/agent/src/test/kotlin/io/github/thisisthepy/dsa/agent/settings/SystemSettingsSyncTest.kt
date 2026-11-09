@@ -33,7 +33,17 @@ class SystemSettingsSyncTest {
             calls += "accent %08X".format(argb)
             accentPalette = palette
         }
+
+        override fun fontScale(): Float = fontScale
+
+        override fun setFontScale(scale: Float) {
+            calls += String.format(java.util.Locale.ROOT, "font scale %.3f", scale)
+            fontScale = scale
+        }
     }
+
+    /** The guest's font scale, as Android starts with it. */
+    private var fontScale = 1f
     private val log = RecordingLog()
     private val sync = SystemSettingsSync(port, log)
 
@@ -98,6 +108,92 @@ class SystemSettingsSyncTest {
         sync.handle(seoul())
         assertEquals(listOf("dark true"), calls)
         assertTrue(log.lines.any { it.startsWith("warn: could not follow the host's time zone") })
+    }
+
+    /** The host's settings with a font scale for a Windows text size of [percent]. */
+    private fun textSize(percent: Int): ByteArray {
+        val envelope = Envelope.parseFrom(seoul())
+        val settings = envelope.systemSettings.toBuilder().setFontScale(160f / 96f * percent / 100f)
+        return envelope.toBuilder().setSystemSettings(settings).build().toByteArray()
+    }
+
+    @Test
+    fun fr4_text_follows_the_windows_text_size() {
+        // Android starts: the tasks are read, and none is open yet.
+        sync.tasksRunning(emptyList())
+        sync.handle(textSize(100))
+        assertTrue(calls.contains("font scale 1.667"))
+        assertEquals(160f / 96f, fontScale, 0.001f)
+
+        // An app that handles a change of font scale itself is open: the new size applies at
+        // once, and Android redraws it without a restart.
+        calls.clear()
+        sync.tasksRunning(emptyList())
+        sync.handle(textSize(150))
+        assertEquals(listOf("font scale 2.500"), calls)
+        assertFalse(sync.holdsFontScale)
+
+        // An app that would be restarted for it is open: the size waits, and nothing restarts.
+        calls.clear()
+        sync.tasksRunning(listOf("com.example.notes"))
+        sync.handle(textSize(125))
+        assertTrue(calls.isEmpty())
+        assertTrue(sync.holdsFontScale)
+        assertEquals(2.5f, fontScale, 0.001f)
+        assertTrue(log.lines.any { it.contains("while com.example.notes is open") })
+        // Other settings still apply meanwhile.
+        sync.handle(
+            Envelope.parseFrom(textSize(125)).toBuilder()
+                .setSystemSettings(Envelope.parseFrom(textSize(125)).systemSettings.toBuilder().setDarkMode(false))
+                .build().toByteArray(),
+        )
+        assertEquals(listOf("dark false"), calls)
+        // The app closes: the size the host asked for last applies.
+        calls.clear()
+        sync.tasksRunning(emptyList())
+        assertEquals(listOf("font scale 2.083"), calls)
+        assertFalse(sync.holdsFontScale)
+
+        // The same size again changes nothing.
+        calls.clear()
+        sync.connected()
+        sync.handle(textSize(125))
+        assertFalse(calls.any { it.startsWith("font scale") })
+    }
+
+    @Test
+    fun fr4_a_font_scale_waits_until_the_tasks_are_read() {
+        sync.handle(textSize(100))
+        assertTrue(sync.holdsFontScale)
+        assertFalse(calls.any { it.startsWith("font scale") })
+        sync.tasksRunning(emptyList())
+        assertTrue(calls.contains("font scale 1.667"))
+        // An older host sends no font scale: the guest's stays as it is.
+        calls.clear()
+        val older = SystemSettingsSync(port, log)
+        older.tasksRunning(emptyList())
+        older.handle(seoul())
+        assertFalse(calls.any { it.startsWith("font scale") })
+    }
+
+    @Test
+    fun fr4_an_app_that_handles_a_change_of_font_scale_is_not_restarted_by_one() {
+        val notes = io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot(
+            taskId = 3,
+            kind = io.github.thisisthepy.dsa.agent.tasks.TaskKind.APP,
+            packageName = "com.example.notes",
+            label = "Notes",
+            bounds = io.github.thisisthepy.dsa.agent.tasks.TaskBounds.EMPTY,
+            focused = true,
+        )
+        val handles = notes.copy(taskId = 4, packageName = "com.example.reader", handlesFontScaleChange = true)
+        val home = notes.copy(taskId = 5, kind = io.github.thisisthepy.dsa.agent.tasks.TaskKind.OTHER)
+        assertEquals(
+            listOf("com.example.notes"),
+            io.github.thisisthepy.dsa.agent.tasks.restartedByFontScale(listOf(notes, handles, home)),
+        )
+        assertTrue(io.github.thisisthepy.dsa.agent.tasks.handlesFontScaleChange(0x40000000 or 0x1000))
+        assertFalse(io.github.thisisthepy.dsa.agent.tasks.handlesFontScaleChange(0x1000))
     }
 
     @Test

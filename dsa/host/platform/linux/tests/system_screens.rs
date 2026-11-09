@@ -314,11 +314,11 @@ impl Adb {
     }
 }
 
-/// The density a task's app draws at, in dpi: the one Android reports, or 160 (a scale of
+/// The density a task's app draws at, in dpi: the one Android reports, or 96 (a scale of
 /// 100%) when it reports none.
 fn drawing_dpi(density_dpi: u32) -> u32 {
     if density_dpi == 0 {
-        160
+        96
     } else {
         density_dpi
     }
@@ -514,14 +514,14 @@ fn fr34_the_dump_parser_reads_nodes_their_parents_and_bounds() {
 
 #[test]
 fn fr34_a_window_s_height_in_dp_is_read_at_the_density_its_app_draws_at() {
-    // 692 pixels are under 600 dp at the display's 213 dpi, but not at the 160 dpi the
+    // 692 pixels are under 600 dp at the display's 213 dpi, but not at the 96 dpi the
     // window manager gives a task on a monitor at a scale of 100%: there the large title
     // rightly opens expanded.
     assert_eq!(dp_at(692, drawing_dpi(213)), 519);
-    assert_eq!(dp_at(692, drawing_dpi(160)), 692);
-    assert_eq!(px_at(SHORT_DP, drawing_dpi(160)), SHORT_DP);
+    assert_eq!(dp_at(692, drawing_dpi(96)), 1153);
+    assert_eq!(px_at(SHORT_DP, drawing_dpi(96)), 312);
     // A task whose density is not known draws at a scale of 100%.
-    assert_eq!(drawing_dpi(0), 160);
+    assert_eq!(drawing_dpi(0), 96);
 }
 
 #[test]
@@ -537,8 +537,8 @@ fn fr34_a_window_sized_before_its_density_changed_is_sized_and_opened_again() {
     );
     assert_eq!(sizing.step(639, 1065, 213), Step::Wait);
     assert_eq!(sizing.step(639, 692, 213), Step::Open);
-    // The window manager then sets the monitor's 160 dpi: the window is 692 dp tall, and the
-    // page opened in it is not the short window's.
+    // The window manager then sets a monitor's 160 dpi (a scale of 167%): the window is
+    // 692 dp tall, and the page opened in it is not the short window's.
     assert_eq!(
         sizing.step(639, 692, 160),
         Step::Resize {
