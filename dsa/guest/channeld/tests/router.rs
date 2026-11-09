@@ -706,3 +706,36 @@ fn fr30_the_hosts_controllers_stop_at_the_daemon_and_the_system_settings_reach_t
     assert_eq!(pads.0.lock().unwrap().len(), 1);
     assert_eq!(agent.frames(), vec![settings]);
 }
+
+#[test]
+fn fr36_only_the_agent_sends_backups_and_passkey_requests() {
+    use dsa_protocol::control::{BackupUpload, KeyMintRootKeyRequest, PasskeyRequest};
+    let (router, host) = router();
+    let passkey = frame(Body::PasskeyRequest(PasskeyRequest {
+        request_id: 1,
+        package: "org.example.bank".into(),
+        ..PasskeyRequest::default()
+    }));
+    let upload = frame(Body::BackupUpload(BackupUpload {
+        request_id: 2,
+        offset: 0,
+        data: vec![1, 2, 3],
+    }));
+    assert!(matches!(
+        router.from_guest(COMPOSER, passkey.clone()),
+        Err(SendError::NotAllowed(_))
+    ));
+    assert!(matches!(
+        router.from_guest(COMPOSER, upload.clone()),
+        Err(SendError::NotAllowed(_))
+    ));
+    assert!(host.try_recv().is_err(), "nothing reached the host");
+    router.from_guest(AGENT, passkey.clone()).unwrap();
+    router.from_guest(AGENT, upload.clone()).unwrap();
+    assert_eq!(host.try_recv().unwrap(), passkey);
+    assert_eq!(host.try_recv().unwrap(), upload);
+    // KeyMint's root key is never asked for on the control channel, even by the agent.
+    let keymint = frame(Body::KeymintRootKeyRequest(KeyMintRootKeyRequest {}));
+    assert!(router.from_guest(AGENT, keymint).is_err());
+    assert!(host.try_recv().is_err());
+}
