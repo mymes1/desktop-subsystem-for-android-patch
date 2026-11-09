@@ -1,0 +1,76 @@
+diff --git a/src/gfxstream/guest/android/GrallocMinigbm.cpp b/src/gfxstream/guest/android/GrallocMinigbm.cpp
+--- a/src/gfxstream/guest/android/GrallocMinigbm.cpp
++++ b/src/gfxstream/guest/android/GrallocMinigbm.cpp
+@@ -221,6 +221,49 @@
+            dsa::readbackFormat(cros_handle->format, &format);
+ }
+ 
++// Writes the host's drawing over the buffer through a gralloc CPU lock, the mapping screencap
++// and an ImageReader read the buffer through. The buffer's dma-buf could not be mapped in
++// SurfaceFlinger ("cannot map buffer 18 to write the GPU's drawing into it: Invalid
++// argument", image test run 42562909966), so every screencap stayed blank, while screencap's
++// own lock of the same buffer worked and read zeros. 0 when it wrote the drawing.
++static int writeThroughGralloc(cros_gralloc_handle const* cros_handle,
++                               const native_handle_t* handle, const dsa::ReadbackFormat& format,
++                               const std::vector<uint8_t>& pixels) {
++    // The buffer as it was allocated: the mapper checks a description against the handle.
++    AHardwareBuffer_Desc desc = {};
++    desc.width = cros_handle->width;
++    desc.height = cros_handle->height;
++    desc.layers = 1;
++    desc.format = static_cast<uint32_t>(cros_handle->droid_format);
++    desc.usage = static_cast<uint64_t>(cros_handle->usage);
++    desc.stride = cros_handle->pixel_stride;
++    AHardwareBuffer* ahb = nullptr;
++    // A clone of the handle, imported for this process; the caller's handle stays its own.
++    int result = AHardwareBuffer_createFromHandle(
++        &desc, handle, AHARDWAREBUFFER_CREATE_FROM_HANDLE_METHOD_CLONE, &ahb);
++    if (result != 0 || !ahb) {
++        return result != 0 ? result : -EINVAL;
++    }
++    void* mapped = nullptr;
++    result = AHardwareBuffer_lock(ahb, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &mapped);
++    if (result == 0 && mapped) {
++        // The lock maps the first plane from its offset, at the stride the handle carries.
++        const size_t stride = cros_handle->strides[0];
++        const bool copied = dsa::copyReadbackRows(
++            pixels.data(), pixels.size(), format, cros_handle->width, cros_handle->height,
++            static_cast<uint8_t*>(mapped), stride, stride * cros_handle->height);
++        // Unlocked without a fence: the writes are in the buffer when this returns.
++        AHardwareBuffer_unlock(ahb, nullptr);
++        if (!copied) {
++            result = -EINVAL;
++        }
++    } else if (result == 0) {
++        result = -EINVAL;
++    }
++    AHardwareBuffer_release(ahb);
++    return result;
++}
++
+ int MinigbmGralloc::readBackForCpu(const native_handle_t* handle) {
+     if (!wantsCpuReadback(handle)) {
+         return -EINVAL;
+@@ -246,6 +289,11 @@
+                              static_cast<GLint>(height), format.glFormat, format.glType,
+                              pixels.data());
+ 
++    const int locked = writeThroughGralloc(cros_handle, handle, format, pixels);
++    if (locked == 0) {
++        return 0;
++    }
++    // A gralloc that cannot lock the buffer here: its dma-buf, mapped directly.
+     const int fd = cros_handle->fds[0];
+     const size_t offset = cros_handle->offsets[0];
+     const size_t stride = cros_handle->strides[0];
+@@ -255,8 +303,8 @@
+     void* mapped = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+     if (mapped == MAP_FAILED) {
+         const int error = errno;
+-        mesa_loge("%s: cannot map buffer %u to write the GPU's drawing into it: %s", __func__,
+-                  cros_handle->id, strerror(error));
++        mesa_loge("%s: cannot lock buffer %u (%d) or map it (%s) to write the GPU's drawing "
++                  "into it", __func__, cros_handle->id, locked, strerror(error));
+         return -error;
+     }
+     // A CPU that maps the buffer next sees these writes, whatever caches lie between.
