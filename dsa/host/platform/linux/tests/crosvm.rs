@@ -53,6 +53,7 @@ fn launcher(
             page_reporting_order: 9,
             data_disk: dir.join("data.img"),
             pstore_disk: Some(dir.join("pstore.img")),
+            addon_disk: None,
             run_dir: dir.join("run"),
             console_log: dir.join("console.log"),
             grow_memory: true,
