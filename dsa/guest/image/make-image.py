@@ -3271,6 +3271,51 @@ def check_framework(manifest, names, read):
     return problems
 
 
+# The user's add-on disk: a read-only disk the host builds and attaches, whose one partition
+# (dsa_addons) is an erofs file system holding the add-on images the user installed as plain
+# files. The host puts androidboot.dsa.addon_disk=on in the boot's bootconfig only while it
+# attaches the disk; the script then mounts it at /mnt/dsa-addons before post-fs-data, where
+# the Google Play and ARM translation scripts mount each image from it.
+ADDONS_RC = "SYSTEM/etc/init/dsa-addons.rc"
+ADDONS_FS_CONFIG = ["system/etc/init/dsa-addons.rc 0 0 644 capabilities=0x0"]
+ADDONS_TRIGGER = "on post-fs && property:ro.boot.dsa.addon_disk=on"
+ADDONS_MOUNT = ("mount erofs /dev/block/by-name/dsa_addons /mnt/dsa-addons ro nodev nosuid noexec "
+                "fscontext=u:object_r:dsa_addons_fs:s0,context=u:object_r:system_file:s0")
+# Where each add-on's image is on the mounted disk, and the script that mounts it.
+ADDON_IMAGES = {
+    "dsa-gapps.rc": "/mnt/dsa-addons/gapps.img",
+    "dsa-arm-translation.rc": "/mnt/dsa-addons/arm-translation.img",
+}
+
+
+def addon_disk_problems(names, read):
+    """The problems with how an image mounts the user's add-on disk, given the names in its
+    target files and a function that reads one: the script is there, mounts the disk read only
+    and only when the host says it attached one, before post-fs-data, and the Google Play and ARM
+    translation scripts mount each image from it."""
+    if ADDONS_RC not in names:
+        return [f"{ADDONS_RC} is missing, so the add-ons a user installs are never mounted"]
+    problems = []
+    rc = read(ADDONS_RC).decode(errors="replace")
+    trigger = None
+    mounts = []
+    for line in rc.splitlines():
+        if line.startswith("on "):
+            trigger = line.strip()
+        elif line.strip().startswith("mount "):
+            mounts.append((trigger, line.strip()))
+    if mounts != [(ADDONS_TRIGGER, ADDONS_MOUNT)]:
+        problems.append("dsa-addons.rc does not mount the add-on disk alone, read only and labelled as "
+                        f"system files, at post-fs once the host says it attached one ({ADDONS_MOUNT}), "
+                        "so the add-on images are not there when post-fs-data mounts them")
+    for rc_name, image in ADDON_IMAGES.items():
+        path = f"SYSTEM/etc/init/{rc_name}"
+        if path in names and f"mount erofs {image} " not in read(path).decode(errors="replace"):
+            problems.append(f"{rc_name} never mounts {image}, so that add-on is not taken from the "
+                            "add-on disk")
+    return problems
+
+
 # Google Play, for a user who installs it (`dsa gapps install`). The host puts
 # androidboot.dsa.gapps=on in the boot's bootconfig only while the user has a Google apps image
 # installed. The init script then lays the image over /product and /system_ext before the
@@ -3981,6 +4026,7 @@ ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
+ADDONS_POLICY = HERE / "sepolicy/addons.cil"
 GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 SU_POLICY = HERE / "sepolicy/su.cil"
 
@@ -4444,6 +4490,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             # init laying a user's Google apps over /product and /system_ext.
             plat_patched += "\n" + GAPPS_POLICY.read_text()
+            # init mounting the user's add-on disk, which those images are on.
+            plat_patched += "\n" + ADDONS_POLICY.read_text()
             if framework is not None:
                 # SurfaceFlinger telling the apps about a GPU reset.
                 plat_patched += "\n" + GPU_RESET_POLICY.read_text()
@@ -4628,7 +4676,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
-                                                 + GAPPS_FS_CONFIG
+                                                 + GAPPS_FS_CONFIG + ADDONS_FS_CONFIG
                                                  + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
                                                      "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
@@ -4700,6 +4748,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, target in ARM_TRANSLATION_LINKS.items():
                 zout.writestr(link_entry(name), target.encode())
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
+        zout.writestr(ADDONS_RC, (HERE / "dsa-addons.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
         zout.writestr(GAPPS_COMPILE_SCRIPT, (HERE / "gapps-compile.sh").read_bytes())

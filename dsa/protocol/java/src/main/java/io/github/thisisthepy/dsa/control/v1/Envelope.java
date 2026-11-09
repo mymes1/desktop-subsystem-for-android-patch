@@ -57,13 +57,9 @@ public  final class Envelope extends
     DISPLAY_REFRESH(407),
     POWER_HINT(110),
     DEVELOPER_MODE(140),
-    ARM_TRANSLATION_INSTALL(150),
-    ARM_TRANSLATION_CHUNK(151),
     ARM_TRANSLATION_REMOVE(152),
     ARM_TRANSLATION_QUERY(153),
     ARM_TRANSLATION_STATE(154),
-    GAPPS_INSTALL(400),
-    GAPPS_CHUNK(401),
     GAPPS_REMOVE(402),
     GAPPS_QUERY(403),
     GAPPS_STATE(404),
@@ -72,6 +68,8 @@ public  final class Envelope extends
     ROOT_ELEVATION_CONFIG(411),
     SU_REQUEST(412),
     SU_DECISION(413),
+    ADDON_IMAGE_READ(414),
+    ADDON_IMAGE_PART(415),
     DEVICE_IDLE(42),
     HOST_MEMORY(43),
     HOST_SLEEP(44),
@@ -237,13 +235,9 @@ public  final class Envelope extends
         case 407: return DISPLAY_REFRESH;
         case 110: return POWER_HINT;
         case 140: return DEVELOPER_MODE;
-        case 150: return ARM_TRANSLATION_INSTALL;
-        case 151: return ARM_TRANSLATION_CHUNK;
         case 152: return ARM_TRANSLATION_REMOVE;
         case 153: return ARM_TRANSLATION_QUERY;
         case 154: return ARM_TRANSLATION_STATE;
-        case 400: return GAPPS_INSTALL;
-        case 401: return GAPPS_CHUNK;
         case 402: return GAPPS_REMOVE;
         case 403: return GAPPS_QUERY;
         case 404: return GAPPS_STATE;
@@ -252,6 +246,8 @@ public  final class Envelope extends
         case 411: return ROOT_ELEVATION_CONFIG;
         case 412: return SU_REQUEST;
         case 413: return SU_DECISION;
+        case 414: return ADDON_IMAGE_READ;
+        case 415: return ADDON_IMAGE_PART;
         case 42: return DEVICE_IDLE;
         case 43: return HOST_MEMORY;
         case 44: return HOST_SLEEP;
@@ -2236,106 +2232,6 @@ public  final class Envelope extends
     }
   }
 
-  public static final int ARM_TRANSLATION_INSTALL_FIELD_NUMBER = 150;
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   */
-  @java.lang.Override
-  public boolean hasArmTranslationInstall() {
-    return bodyCase_ == 150;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall getArmTranslationInstall() {
-    if (bodyCase_ == 150) {
-       return (io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   */
-  private void setArmTranslationInstall(io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 150;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   */
-  private void mergeArmTranslationInstall(io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall value) {
-    value.getClass();
-  if (bodyCase_ == 150 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall.newBuilder((io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 150;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   */
-  private void clearArmTranslationInstall() {
-    if (bodyCase_ == 150) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int ARM_TRANSLATION_CHUNK_FIELD_NUMBER = 151;
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   */
-  @java.lang.Override
-  public boolean hasArmTranslationChunk() {
-    return bodyCase_ == 151;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk getArmTranslationChunk() {
-    if (bodyCase_ == 151) {
-       return (io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   */
-  private void setArmTranslationChunk(io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 151;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   */
-  private void mergeArmTranslationChunk(io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk value) {
-    value.getClass();
-  if (bodyCase_ == 151 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk.newBuilder((io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 151;
-  }
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   */
-  private void clearArmTranslationChunk() {
-    if (bodyCase_ == 151) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
   public static final int ARM_TRANSLATION_REMOVE_FIELD_NUMBER = 152;
   /**
    * <code>.dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;</code>
@@ -2481,106 +2377,6 @@ public  final class Envelope extends
    */
   private void clearArmTranslationState() {
     if (bodyCase_ == 154) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int GAPPS_INSTALL_FIELD_NUMBER = 400;
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   */
-  @java.lang.Override
-  public boolean hasGappsInstall() {
-    return bodyCase_ == 400;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.GappsInstall getGappsInstall() {
-    if (bodyCase_ == 400) {
-       return (io.github.thisisthepy.dsa.control.v1.GappsInstall) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.GappsInstall.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   */
-  private void setGappsInstall(io.github.thisisthepy.dsa.control.v1.GappsInstall value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 400;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   */
-  private void mergeGappsInstall(io.github.thisisthepy.dsa.control.v1.GappsInstall value) {
-    value.getClass();
-  if (bodyCase_ == 400 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.GappsInstall.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.GappsInstall.newBuilder((io.github.thisisthepy.dsa.control.v1.GappsInstall) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 400;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   */
-  private void clearGappsInstall() {
-    if (bodyCase_ == 400) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int GAPPS_CHUNK_FIELD_NUMBER = 401;
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   */
-  @java.lang.Override
-  public boolean hasGappsChunk() {
-    return bodyCase_ == 401;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.GappsChunk getGappsChunk() {
-    if (bodyCase_ == 401) {
-       return (io.github.thisisthepy.dsa.control.v1.GappsChunk) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.GappsChunk.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   */
-  private void setGappsChunk(io.github.thisisthepy.dsa.control.v1.GappsChunk value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 401;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   */
-  private void mergeGappsChunk(io.github.thisisthepy.dsa.control.v1.GappsChunk value) {
-    value.getClass();
-  if (bodyCase_ == 401 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.GappsChunk.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.GappsChunk.newBuilder((io.github.thisisthepy.dsa.control.v1.GappsChunk) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 401;
-  }
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   */
-  private void clearGappsChunk() {
-    if (bodyCase_ == 401) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -2981,6 +2777,106 @@ public  final class Envelope extends
    */
   private void clearSuDecision() {
     if (bodyCase_ == 413) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ADDON_IMAGE_READ_FIELD_NUMBER = 414;
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   */
+  @java.lang.Override
+  public boolean hasAddonImageRead() {
+    return bodyCase_ == 414;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AddonImageRead getAddonImageRead() {
+    if (bodyCase_ == 414) {
+       return (io.github.thisisthepy.dsa.control.v1.AddonImageRead) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AddonImageRead.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   */
+  private void setAddonImageRead(io.github.thisisthepy.dsa.control.v1.AddonImageRead value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 414;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   */
+  private void mergeAddonImageRead(io.github.thisisthepy.dsa.control.v1.AddonImageRead value) {
+    value.getClass();
+  if (bodyCase_ == 414 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AddonImageRead.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AddonImageRead.newBuilder((io.github.thisisthepy.dsa.control.v1.AddonImageRead) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 414;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   */
+  private void clearAddonImageRead() {
+    if (bodyCase_ == 414) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ADDON_IMAGE_PART_FIELD_NUMBER = 415;
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   */
+  @java.lang.Override
+  public boolean hasAddonImagePart() {
+    return bodyCase_ == 415;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AddonImagePart getAddonImagePart() {
+    if (bodyCase_ == 415) {
+       return (io.github.thisisthepy.dsa.control.v1.AddonImagePart) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AddonImagePart.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   */
+  private void setAddonImagePart(io.github.thisisthepy.dsa.control.v1.AddonImagePart value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 415;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   */
+  private void mergeAddonImagePart(io.github.thisisthepy.dsa.control.v1.AddonImagePart value) {
+    value.getClass();
+  if (bodyCase_ == 415 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AddonImagePart.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AddonImagePart.newBuilder((io.github.thisisthepy.dsa.control.v1.AddonImagePart) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 415;
+  }
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   */
+  private void clearAddonImagePart() {
+    if (bodyCase_ == 415) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -10524,102 +10420,6 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    @java.lang.Override
-    public boolean hasArmTranslationInstall() {
-      return instance.hasArmTranslationInstall();
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall getArmTranslationInstall() {
-      return instance.getArmTranslationInstall();
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    public Builder setArmTranslationInstall(io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall value) {
-      copyOnWrite();
-      instance.setArmTranslationInstall(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    public Builder setArmTranslationInstall(
-        io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall.Builder builderForValue) {
-      copyOnWrite();
-      instance.setArmTranslationInstall(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    public Builder mergeArmTranslationInstall(io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall value) {
-      copyOnWrite();
-      instance.mergeArmTranslationInstall(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-     */
-    public Builder clearArmTranslationInstall() {
-      copyOnWrite();
-      instance.clearArmTranslationInstall();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    @java.lang.Override
-    public boolean hasArmTranslationChunk() {
-      return instance.hasArmTranslationChunk();
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk getArmTranslationChunk() {
-      return instance.getArmTranslationChunk();
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    public Builder setArmTranslationChunk(io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk value) {
-      copyOnWrite();
-      instance.setArmTranslationChunk(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    public Builder setArmTranslationChunk(
-        io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk.Builder builderForValue) {
-      copyOnWrite();
-      instance.setArmTranslationChunk(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    public Builder mergeArmTranslationChunk(io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk value) {
-      copyOnWrite();
-      instance.mergeArmTranslationChunk(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-     */
-    public Builder clearArmTranslationChunk() {
-      copyOnWrite();
-      instance.clearArmTranslationChunk();
-      return this;
-    }
-
-    /**
      * <code>.dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;</code>
      */
     @java.lang.Override
@@ -10760,102 +10560,6 @@ public  final class Envelope extends
     public Builder clearArmTranslationState() {
       copyOnWrite();
       instance.clearArmTranslationState();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    @java.lang.Override
-    public boolean hasGappsInstall() {
-      return instance.hasGappsInstall();
-    }
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.GappsInstall getGappsInstall() {
-      return instance.getGappsInstall();
-    }
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    public Builder setGappsInstall(io.github.thisisthepy.dsa.control.v1.GappsInstall value) {
-      copyOnWrite();
-      instance.setGappsInstall(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    public Builder setGappsInstall(
-        io.github.thisisthepy.dsa.control.v1.GappsInstall.Builder builderForValue) {
-      copyOnWrite();
-      instance.setGappsInstall(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    public Builder mergeGappsInstall(io.github.thisisthepy.dsa.control.v1.GappsInstall value) {
-      copyOnWrite();
-      instance.mergeGappsInstall(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-     */
-    public Builder clearGappsInstall() {
-      copyOnWrite();
-      instance.clearGappsInstall();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    @java.lang.Override
-    public boolean hasGappsChunk() {
-      return instance.hasGappsChunk();
-    }
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.GappsChunk getGappsChunk() {
-      return instance.getGappsChunk();
-    }
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    public Builder setGappsChunk(io.github.thisisthepy.dsa.control.v1.GappsChunk value) {
-      copyOnWrite();
-      instance.setGappsChunk(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    public Builder setGappsChunk(
-        io.github.thisisthepy.dsa.control.v1.GappsChunk.Builder builderForValue) {
-      copyOnWrite();
-      instance.setGappsChunk(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    public Builder mergeGappsChunk(io.github.thisisthepy.dsa.control.v1.GappsChunk value) {
-      copyOnWrite();
-      instance.mergeGappsChunk(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-     */
-    public Builder clearGappsChunk() {
-      copyOnWrite();
-      instance.clearGappsChunk();
       return this;
     }
 
@@ -11240,6 +10944,102 @@ public  final class Envelope extends
     public Builder clearSuDecision() {
       copyOnWrite();
       instance.clearSuDecision();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    @java.lang.Override
+    public boolean hasAddonImageRead() {
+      return instance.hasAddonImageRead();
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AddonImageRead getAddonImageRead() {
+      return instance.getAddonImageRead();
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    public Builder setAddonImageRead(io.github.thisisthepy.dsa.control.v1.AddonImageRead value) {
+      copyOnWrite();
+      instance.setAddonImageRead(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    public Builder setAddonImageRead(
+        io.github.thisisthepy.dsa.control.v1.AddonImageRead.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAddonImageRead(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    public Builder mergeAddonImageRead(io.github.thisisthepy.dsa.control.v1.AddonImageRead value) {
+      copyOnWrite();
+      instance.mergeAddonImageRead(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+     */
+    public Builder clearAddonImageRead() {
+      copyOnWrite();
+      instance.clearAddonImageRead();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    @java.lang.Override
+    public boolean hasAddonImagePart() {
+      return instance.hasAddonImagePart();
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AddonImagePart getAddonImagePart() {
+      return instance.getAddonImagePart();
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    public Builder setAddonImagePart(io.github.thisisthepy.dsa.control.v1.AddonImagePart value) {
+      copyOnWrite();
+      instance.setAddonImagePart(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    public Builder setAddonImagePart(
+        io.github.thisisthepy.dsa.control.v1.AddonImagePart.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAddonImagePart(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    public Builder mergeAddonImagePart(io.github.thisisthepy.dsa.control.v1.AddonImagePart value) {
+      copyOnWrite();
+      instance.mergeAddonImagePart(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+     */
+    public Builder clearAddonImagePart() {
+      copyOnWrite();
+      instance.clearAddonImagePart();
       return this;
     }
 
@@ -16783,8 +16583,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
             io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.class,
-            io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall.class,
-            io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk.class,
             io.github.thisisthepy.dsa.control.v1.ArmTranslationRemove.class,
             io.github.thisisthepy.dsa.control.v1.ArmTranslationQuery.class,
             io.github.thisisthepy.dsa.control.v1.ArmTranslationState.class,
@@ -16824,8 +16622,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ReinstallResult.class,
             io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.class,
             io.github.thisisthepy.dsa.control.v1.DeviceName.class,
-            io.github.thisisthepy.dsa.control.v1.GappsInstall.class,
-            io.github.thisisthepy.dsa.control.v1.GappsChunk.class,
             io.github.thisisthepy.dsa.control.v1.GappsRemove.class,
             io.github.thisisthepy.dsa.control.v1.GappsQuery.class,
             io.github.thisisthepy.dsa.control.v1.GappsState.class,
@@ -16838,6 +16634,8 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.RootElevationConfig.class,
             io.github.thisisthepy.dsa.control.v1.SuRequest.class,
             io.github.thisisthepy.dsa.control.v1.SuDecision.class,
+            io.github.thisisthepy.dsa.control.v1.AddonImageRead.class,
+            io.github.thisisthepy.dsa.control.v1.AddonImagePart.class,
             io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.class,
             io.github.thisisthepy.dsa.control.v1.SpeechVoices.class,
             io.github.thisisthepy.dsa.control.v1.SpeakText.class,
@@ -16852,7 +16650,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.SpellingResult.class,
           };
           java.lang.String info =
-              "\u0000\u00a5\u0001\u0000\u0001\u0277\u00a5\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00a3\u0001\u0000\u0001\u0277\u00a3\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -16864,17 +16662,17 @@ public  final class Envelope extends
               "^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000" +
               "h<\u0000i<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000" +
               "<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<" +
-              "\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0096<\u0000\u0097<\u0000\u0098<\u0000" +
-              "\u0099<\u0000\u009a<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc" +
-              "<\u0000\u00dd<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000" +
-              "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
-              "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
-              "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
-              "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0190<\u0000" +
-              "\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000\u0197" +
-              "<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b<\u0000\u019c<\u0000\u019d<\u0000" +
-              "\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f<\u0000\u0270<\u0000\u0271<\u0000\u0272" +
-              "<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000\u0277<\u0000";
+              "\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000" +
+              "\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd<\u0000\u00de" +
+              "<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000\u0105<\u0000" +
+              "\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000\u0122" +
+              "<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000\u0157<\u0000\u0158<\u0000" +
+              "\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179<\u0000\u017c" +
+              "<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
+              "\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b" +
+              "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u026c<\u0000\u026d<\u0000" +
+              "\u026e<\u0000\u026f<\u0000\u0270<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274" +
+              "<\u0000\u0275<\u0000\u0276<\u0000\u0277<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

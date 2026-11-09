@@ -16,7 +16,7 @@ public struct GappsPackageInfo: Equatable, Sendable {
 
 /// What the running Android says of the Google apps.
 public struct GappsGuestInfo: Equatable, Sendable {
-    /// The package's image is on the Android disk.
+    /// The package's image is on the add-on disk.
     public var installed: Bool
     /// This boot runs with the Google apps laid over the system.
     public var active: Bool

@@ -5441,7 +5441,7 @@ class ArmTranslationImageTests(unittest.TestCase):
         return dropped
 
     def test_fr25_fr32_init_hands_every_mount_option_to_the_kernel(self):
-        for name in ["dsa-arm-translation.rc", "dsa-gapps.rc"]:
+        for name in ["dsa-arm-translation.rc", "dsa-gapps.rc", "dsa-addons.rc"]:
             rc = (Path(make_image.__file__).with_name(name)).read_text()
             self.assertEqual(self._dropped_mount_options(rc), [], name)
         # develop 406c30d7 named fscontext= and context= as two arguments. Init dropped
@@ -5461,7 +5461,7 @@ class ArmTranslationImageTests(unittest.TestCase):
         # with proc, and any domain creating, writing or relabelling a file or folder of a
         # contextmount_type. A rule that broke one would stop the policy compiling at boot.
         fs_types = {"labeledfs", "tmpfs", "rootfs", "proc", "binfmt_miscfs"}
-        for name in ("arm-translation.cil", "gapps.cil"):
+        for name in ("arm-translation.cil", "gapps.cil", "addons.cil"):
             text = (Path(make_image.__file__).parent / "sepolicy" / name).read_text()
             attributes = self._attributes(text)
             declared = attributes.get("fs_type", set())
@@ -5731,17 +5731,35 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
         rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
-        sections = dict(self._sections(rc))
+        sections = self._sections(rc)
+        triggers = [trigger for trigger, _ in sections]
+        on = "on post-fs-data && property:ro.boot.dsa.arm_translation=on"
+        # Where the image is: a user's package on the add-on disk, or, for one boot after an
+        # update, where an older DSA kept it in /data; the image's own default package.
         images = {
-            "on": "/data/vendor/dsa/arm-translation/system.img",
-            "default": "/system/etc/dsa/arm-translation/default.img",
+            f"{on} && property:ro.boot.dsa.arm_translation_image=disk": "/mnt/dsa-addons/arm-translation.img",
+            f"{on} && property:ro.boot.dsa.arm_translation_image=data":
+                "/data/vendor/dsa/arm-translation/system.img",
+            "on post-fs-data && property:ro.boot.dsa.arm_translation=default":
+                "/system/etc/dsa/arm-translation/default.img",
         }
-        for value, image in images.items():
-            section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
-            self.assertIn(f"mount erofs {image} /mnt/dsa-arm-translation ro nodev nosuid "
-                          "directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,"
-                          "context=u:object_r:system_lib_file:s0", section)
-            erofs = section.index(next(c for c in section if c.startswith("mount erofs ")))
+        for trigger, image in images.items():
+            commands = dict(sections)[trigger]
+            mount = (f"mount erofs {image} /mnt/dsa-arm-translation ro nodev nosuid "
+                     "directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,"
+                     "context=u:object_r:system_lib_file:s0")
+            self.assertIn(mount, commands, trigger)
+            self.assertEqual([c for c in commands if c.startswith("mount erofs ")], [mount], trigger)
+        # A user's package is mounted, from wherever it is, before its parts are bound: init
+        # runs the actions of one trigger in the order of the file.
+        for trigger in images:
+            if trigger.startswith(on + " "):
+                self.assertLess(triggers.index(trigger), triggers.index(on), trigger)
+        binders = {
+            on: dict(sections)[on],
+            "default": dict(sections)["on post-fs-data && property:ro.boot.dsa.arm_translation=default"],
+        }
+        for value, section in binders.items():
             # Each part of the package is bound onto the empty place the image carries for it,
             # once the image is mounted, and nothing else is mounted from it.
             binds = []
@@ -5749,9 +5767,11 @@ class ArmTranslationImageTests(unittest.TestCase):
                 binds.append(f"mount none /mnt/dsa-arm-translation/{inside} /{folder.lower()} bind")
             for name in make_image.ARM_TRANSLATION_BOUND_FILES:
                 binds.append(f"mount none /mnt/dsa-arm-translation/{name.lower()} /{name.lower()} bind")
+            erofs = [i for i, c in enumerate(section) if c.startswith("mount erofs ")]
             for bind in binds:
-                self.assertIn(bind, section)
-                self.assertGreater(section.index(bind), erofs, bind)
+                self.assertIn(bind, section, value)
+                if erofs:
+                    self.assertGreater(section.index(bind), erofs[0], bind)
             self.assertEqual(sorted(c for c in section if c.startswith("mount none ")), sorted(binds))
             # Nothing else in Android mounts binfmt_misc, so the handlers are registered only
             # once it is mounted here.
@@ -5760,11 +5780,12 @@ class ArmTranslationImageTests(unittest.TestCase):
                 register = section.index(f"copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/{rule} "
                                          "/proc/sys/fs/binfmt_misc/register")
                 self.assertGreater(register, mount)
-        # Every mount waits for the host's word.
-        for trigger, commands in self._sections(rc):
-            if trigger not in {f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"
-                               for value in images}:
+        # Every mount waits for the host's word, and nothing makes a folder in /data for a
+        # package any more: the host keeps it on the add-on disk.
+        for trigger, commands in sections:
+            if trigger not in set(images) | {on}:
                 self.assertFalse([c for c in commands if c.startswith("mount ")], trigger)
+            self.assertFalse([c for c in commands if c.startswith("mkdir /data")], trigger)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
@@ -5918,11 +5939,24 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr32_the_google_apps_are_laid_over_only_when_the_host_says_they_are_installed(self):
         rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
-        trigger = "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
-        before, after = rc.split(trigger, 1)
-        section, rest = after.split("\n\n", 1)
-        self.assertIn("mount erofs /data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
-                      "directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
+        sections = self._sections(rc)
+        triggers = [trigger for trigger, _ in sections]
+        on = "on post-fs-data && property:ro.boot.dsa.gapps=on"
+        # Where the image is: on the add-on disk, or, for one boot after an update, where an
+        # older DSA kept it in /data.
+        images = {
+            f"{on} && property:ro.boot.dsa.gapps_image=disk": "/mnt/dsa-addons/gapps.img",
+            f"{on} && property:ro.boot.dsa.gapps_image=data": "/data/vendor/dsa/gapps/system.img",
+        }
+        for trigger, image in images.items():
+            commands = dict(sections)[trigger]
+            mount = (f"mount erofs {image} /mnt/dsa-gapps ro nodev nosuid "
+                     "directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0")
+            self.assertEqual([c for c in commands if c.startswith("mount ")], [mount], trigger)
+            # Mounted before it is laid over: init runs one trigger's actions in file order.
+            self.assertLess(triggers.index(trigger), triggers.index(on), trigger)
+        # Every action of that trigger, in order: the overlays, and anything else done then.
+        section = [command for trigger, commands in sections if trigger == on for command in commands]
         for folder in make_image.gapps_folders():
             point = "/" + folder.lower()
             self.assertIn(
@@ -5930,11 +5964,16 @@ class ArmTranslationImageTests(unittest.TestCase):
                 f"lowerdir=/mnt/dsa-gapps{point}:{point}",
                 section,
             )
+        self.assertEqual(len([c for c in section if c.startswith("mount ")]), len(make_image.gapps_folders()))
         for partition in ["product", "system_ext"]:
-            self.assertNotIn(f"mount overlay overlay /{partition} ", section)
-        # Every mount waits for the host's word.
-        self.assertNotIn("mount ", before)
-        self.assertNotIn("mount ", rest)
+            self.assertNotIn(f"mount overlay overlay /{partition} ro nodev lowerdir=/mnt/dsa-gapps/{partition}:/{partition}",
+                             section)
+        # Every mount waits for the host's word, and nothing makes a folder in /data for the
+        # image any more: the host keeps it on the add-on disk.
+        for trigger, commands in sections:
+            if trigger not in set(images) | {on}:
+                self.assertFalse([c for c in commands if c.startswith("mount ")], trigger)
+            self.assertFalse([c for c in commands if c.startswith("mkdir /data")], trigger)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-gapps.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
@@ -5944,6 +5983,45 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertIn("(allow system_file dsa_gapps_fs (filesystem (associate)))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
             self.assertNotIn("(allow init system_file (filesystem (getattr)))", policy)
+
+    def test_fr32_the_addon_disk_is_mounted_read_only_before_the_images_on_it(self):
+        rc = (Path(make_image.__file__).with_name("dsa-addons.rc")).read_text()
+        sections = self._sections(rc)
+        self.assertEqual([trigger for trigger, _ in sections], [make_image.ADDONS_TRIGGER])
+        commands = sections[0][1]
+        self.assertEqual([c for c in commands if c.startswith("mount ")], [make_image.ADDONS_MOUNT])
+        self.assertIn("mkdir /mnt/dsa-addons 0755 root root", commands)
+        self.assertLess(commands.index("mkdir /mnt/dsa-addons 0755 root root"),
+                        commands.index(make_image.ADDONS_MOUNT))
+        # Read only, nothing on it runs or is a device, and labelled as system files, which init
+        # reads as it mounts each image from its file.
+        words = make_image.ADDONS_MOUNT.split()
+        for flag in ["ro", "nodev", "nosuid", "noexec"]:
+            self.assertIn(flag, words)
+        self.assertEqual(self._dropped_mount_options(rc), [])
+        self.assertEqual(self._erofs_mounts(rc), [("/mnt/dsa-addons", "dsa_addons_fs", "system_file")])
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read(make_image.ADDONS_RC).decode(), rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            config = archive.read("META/filesystem_config.txt").decode()
+            files = {name: archive.read(name) for name in archive.namelist()}
+        self.assertEqual(self._context_mount_problems("dsa-addons.rc", policy), [])
+        for rule in make_image.ADDONS_FS_CONFIG:
+            self.assertIn(rule, config)
+        self.assertEqual(make_image.addon_disk_problems(list(files), files.__getitem__), [])
+        # An image without the script, one that mounts the disk without waiting for the host, or
+        # whose Google apps still come only from /data, is refused.
+        gone = {n: d for n, d in files.items() if n != make_image.ADDONS_RC}
+        self.assertIn("is missing", make_image.addon_disk_problems(list(gone), gone.__getitem__)[0])
+        early = dict(files, **{make_image.ADDONS_RC: ("on early-init\n    " + make_image.ADDONS_MOUNT + "\n").encode()})
+        self.assertEqual(len(make_image.addon_disk_problems(list(early), early.__getitem__)), 1)
+        writable = dict(files, **{make_image.ADDONS_RC: rc.replace(" ro nodev", " rw nodev").encode()})
+        self.assertEqual(len(make_image.addon_disk_problems(list(writable), writable.__getitem__)), 1)
+        old_gapps = files[make_image.GAPPS_RC].decode().replace("/mnt/dsa-addons/gapps.img", "/data/x.img")
+        old = dict(files, **{make_image.GAPPS_RC: old_gapps.encode()})
+        problems = make_image.addon_disk_problems(list(old), old.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("dsa-gapps.rc never mounts /mnt/dsa-addons/gapps.img", problems[0])
 
     def test_fr32_x86_64_stays_the_first_abi_when_arm_translation_is_on(self):
         on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_text().splitlines()

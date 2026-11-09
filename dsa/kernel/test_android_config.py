@@ -160,9 +160,12 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIsNotNone(version, tag)
         self.assertGreaterEqual((int(version.group(1)), int(version.group(2))), (6, 12), tag)
         image = Path(__file__).parent.parent / "guest" / "image"
+        # Each image is a file on the user's add-on disk (and, for one boot after an update, the
+        # copy an older DSA kept in /data), or the default translator in /system.
         images = {
-            "dsa-gapps.rc": ["/data/vendor/dsa/gapps/system.img"],
-            "dsa-arm-translation.rc": ["/data/vendor/dsa/arm-translation/system.img",
+            "dsa-gapps.rc": ["/mnt/dsa-addons/gapps.img", "/data/vendor/dsa/gapps/system.img"],
+            "dsa-arm-translation.rc": ["/mnt/dsa-addons/arm-translation.img",
+                                       "/data/vendor/dsa/arm-translation/system.img",
                                        "/system/etc/dsa/arm-translation/default.img"],
         }
         for name, files in images.items():
@@ -174,6 +177,10 @@ class AndroidKernelConfigTests(unittest.TestCase):
                 # The kernel gets only the last argument that is not one of init's flags, so
                 # directio shares it with the SELinux contexts.
                 self.assertIn("directio", words[-1].split(","), name)
+        # The add-on disk itself is an erofs partition the kernel mounts from its block device.
+        disk = [line.split() for line in (image / "dsa-addons.rc").read_text().splitlines()
+                if line.strip().startswith("mount erofs ")]
+        self.assertEqual([words[2] for words in disk], ["/dev/block/by-name/dsa_addons"])
         # The loop driver stays for apexd.
         self.assertIn("CONFIG_BLK_DEV_LOOP=y", lines)
 

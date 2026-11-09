@@ -638,21 +638,21 @@ USB로 연결한 안드로이드 폰 안의 VM에서 DSA 안드로이드를 돌�
 
 ### FR-36 호스트 시스템 서비스 (`Agreed`)
 안드로이드가 게스트 안에서 따로 돌리거나 Google Play 서비스에 기대는 시스템 서비스를 호스트 운영체제의 같은 기능으로 제공한다. 게스트에 엔진과 데이터를 따로 두지 않아 메모리가 줄고, 결과가 호스트의 다른 앱과 같아진다. 각 서비스는 안드로이드의 공식 확장점으로 게스트에 보이고, 백엔드는 PR-4의 제어 채널로 잇는다. Google Play가 설치되어 있어도 동작한다. 2026-11-10 소유자가 정했다.
-- 네트워크 위치: 네트워크 위치 제공자(`LocationProviderBase`)가 FR-26의 호스트 위치를 `network` 제공자로도 보인다. 주소 변환(`Geocoder`)은 호스트의 주소 변환 기능으로 답한다. Google Play 없이도 네트워크 위치와 주소 변환이 동작하게 하기 위해서다.
+- 네트워크 위치: 네트워크 위치 제공자(`LocationProviderBase`)가 FR-26의 호스트 위치를 `network` 제공자로도 보인다. 주소 변환(`Geocoder`)은 Google Play가 없을 때만 DSA가 맡고, 있으면 Google의 것을 그대로 쓴다. DSA의 주소 변환은 호스트에 둔 행정 경계 데이터로 좌표를 시, 구, 동 수준의 주소로 바꾼다. 서버와 키가 필요 없고 위치가 밖으로 나가지 않는다. 번지 단위 주소와 주소를 좌표로 바꾸는 것은 하지 않는다. Windows의 주소 변환 API는 유료 키가 필요한 Bing Maps에 기대고 그 서비스가 끝나 가고, 공개 Nominatim 서버는 많은 사용자의 기본값으로 쓰지 말라는 사용 정책이 있기 때문이다.
 - 음성 합성: TTS 엔진(`TextToSpeechService`)이 호스트 음성 합성(Windows `Windows.Media.SpeechSynthesis`, macOS `AVSpeechSynthesizer`, Linux Speech Dispatcher)의 음성 목록을 보이고, 합성한 소리를 돌려준다. 기본 TTS 엔진이다.
 - 맞춤법 검사: 맞춤법 검사 서비스(`SpellCheckerService`)가 호스트 맞춤법 검사기(Windows `ISpellChecker`, macOS `NSSpellChecker`, Linux Enchant)로 답한다. 기본 맞춤법 검사기다. 지금 이미지에는 맞춤법 검사기가 없다.
 - 공유: 안드로이드의 공유 시트에 "PC에서 공유"를 두어, 고른 내용(글, 링크, 파일)을 호스트의 공유 창(Windows 공유와 근처 공유, macOS 공유 메뉴, Linux는 xdg-desktop-portal)으로 넘긴다.
 - 음성 인식: 음성 인식 서비스(`RecognitionService`)가 호스트 음성 인식으로 답한다. 마이크는 FR-26의 권한 규칙을 따른다.
-- 백업: 백업 전송(`BackupTransport`)이 앱 데이터 백업을 사용자 프로필 아래 DSA 백업 폴더에 암호화해 저장하고, 데이터 초기화(FR-31)나 다른 PC로 옮긴 뒤 복원한다. 암호화 키는 호스트의 자격 증명 저장소(Windows DPAPI, macOS 키체인, Linux Secret Service)에 둔다.
+- 백업: 백업 전송(`BackupTransport`)이 앱 데이터 백업을 사용자 프로필 아래 DSA 백업 폴더에 암호화해 저장하고, 데이터 초기화(FR-31)나 다른 PC로 옮긴 뒤 복원한다. 암호화 키는 호스트의 자격 증명 저장소(Windows DPAPI, macOS 키체인, Linux Secret Service)에 둔다. 백업은 사용자가 설정 앱이나 `dsa backup`으로 켤 때만 한다. 기본은 끔이다. 백업은 앱의 사용자 데이터를 PC 디스크에 한 벌 더 두는 것이라, 쓸지는 사용자가 정할 일이기 때문이다.
 - 패스키: 자격 증명 제공자(`CredentialProviderService`)가 호스트 패스키(Windows Hello WebAuthn, macOS 패스키)로 패스키를 만들고 쓴다. 앱이 요청한 신뢰 당사자(rpId)가 그 앱의 서명과 Digital Asset Links로 확인될 때만 호스트에 넘긴다. 확인 없이 넘기면 아무 앱이나 다른 사이트의 패스키를 얻기 때문이다.
-- 키 보호: 게스트 KeyMint의 루트 키를 호스트 TPM이나 자격 증명 저장소로 봉인한다. 게스트 디스크를 복사하는 것만으로는 키를 꺼낼 수 없게 하기 위해서다.
+- 키 보호: 게스트 KeyMint의 루트 키를 호스트 TPM으로 봉인한다. TPM이 없거나 쓸 수 없는 호스트에서만 자격 증명 저장소로 봉인하고, 그 사실을 설정 앱에 알린다. 게스트 디스크를 복사하는 것만으로는 키를 꺼낼 수 없게 하기 위해서다.
 - 호스트에 그 기능이 없거나 사용자가 호스트 개인 정보 설정에서 껐으면, 서비스는 사용할 수 없다고 알리고 앱은 안드로이드의 정상 실패 경로를 탄다. 호스트 프로세스는 죽지 않는다.
-- 수용 기준: 가짜 호스트 위치가 `network` 제공자의 위치로 나오고, 가짜 주소 변환 결과가 `Geocoder`의 `Address`로 같은 값으로 나온다. (`fr36_network_location_and_geocoder_come_from_the_host`)
+- 수용 기준: 가짜 호스트 위치가 `network` 제공자의 위치로 나오고, Google Play가 없을 때 알려진 좌표가 `Geocoder`의 `Address`로 그 행정 구역(시, 구, 동)으로 나오고, Google Play가 있으면 DSA는 주소 변환 제공자로 나서지 않는다. (`fr36_network_location_and_geocoder_come_from_the_host`)
 - 수용 기준: 가짜 호스트 음성의 목록이 TTS 엔진의 음성으로 보이고, 합성 요청이 호스트에 같은 글과 음성으로 가며 돌아온 소리가 `SynthesisCallback`으로 나온다. (`fr36_tts_speaks_through_the_host`)
 - 수용 기준: 가짜 맞춤법 검사기가 틀렸다고 한 단어가 안드로이드의 맞춤법 검사 결과에 제안과 함께 나온다. (`fr36_spell_checking_comes_from_the_host`)
 - 수용 기준: 공유 시트에서 "PC에서 공유"를 고르면 글, 링크, 파일이 같은 내용으로 호스트 공유 요청이 된다. (`fr36_sharing_hands_content_to_the_host_share_ui`)
 - 수용 기준: 가짜 호스트 음성 인식의 결과가 `RecognitionService`의 결과로 나오고, 마이크가 막혔으면 오류로 끝난다. (`fr36_speech_recognition_comes_from_the_host`)
-- 수용 기준: 앱 데이터를 백업하고 데이터를 초기화한 뒤 복원하면 같은 데이터가 돌아오고, 백업 파일은 키 없이 읽을 수 없다. (`fr36_backup_survives_a_data_reset`)
+- 수용 기준: 앱 데이터를 백업하고 데이터를 초기화한 뒤 복원하면 같은 데이터가 돌아오고, 백업 파일은 키 없이 읽을 수 없다. 백업을 켜지 않은 사용자에게는 백업 파일이 생기지 않는다. (`fr36_backup_survives_a_data_reset`)
 - 수용 기준: 서명과 Digital Asset Links가 맞는 앱의 패스키 요청만 호스트에 가고, 맞지 않는 rpId는 거절된다. (`fr36_passkeys_only_for_verified_relying_parties`)
 - 수용 기준: 봉인된 루트 키는 같은 호스트 사용자에서만 열리고, 디스크를 다른 사용자나 PC로 옮기면 열리지 않는다. (`fr36_keymint_root_key_is_sealed_by_the_host`)
 - 수용 기준: 실제 PC에서 지도 앱의 주소 검색, 읽어 주기 앱, 메모 앱의 맞춤법 표시, 공유에서 근처 공유, 음성 검색이 동작한다. (수동 확인)

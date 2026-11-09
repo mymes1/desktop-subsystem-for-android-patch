@@ -22,6 +22,7 @@ use crate::accessibility::{
     TreeUpdate,
 };
 use crate::adb_discovery::AutoConnectState;
+use crate::addon_disk::{Addon, AddonDisk, Format};
 use crate::apk::{self, InstallOutcome, InstallPart, InstallStatus, InstalledPackage};
 use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::background::{
@@ -31,8 +32,9 @@ use crate::background::{
 use crate::files::{FileAction, FileTransfer, MAX_FILE_BYTES};
 use crate::gapps::{self, GuestGapps};
 use crate::host_api::{
-    running_of, stop_every, ClientError, HostApiClient, HostApiService, InstallError,
-    ProgramUpdate, ServiceFacts, UpdateProgram, UserAndroid, UserAndroids,
+    running_of, stop_every, AddonDiskSource, AddonImagePart, ClientError, HostApiClient,
+    HostApiService, InstallError, ProgramUpdate, ServiceFacts, UpdateProgram, UserAndroid,
+    UserAndroids,
 };
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{buttons, PointerAction, PointerEvent, PointerTool};
@@ -138,9 +140,9 @@ pub struct FakeAndroid {
     accessibility_watchers: Mutex<Vec<(i32, Sender<GuestAccessibility>)>>,
     /// The accessibility actions it was asked for, in order.
     pub accessibility_actions: Mutex<Vec<(i32, ActionRequest)>>,
-    /// The ARM translation image on its disk, if any.
+    /// The ARM translation image a DSA from before the add-on disk left on its disk, if any.
     pub arm_image: Mutex<Option<Vec<u8>>>,
-    /// The Google apps' image on its disk, if any.
+    /// The Google apps' image a DSA from before the add-on disk left on its disk, if any.
     pub gapps_image: Mutex<Option<Vec<u8>>>,
     /// Each app whose settings it was asked to open, in order; `None` for the list of apps.
     pub app_settings: Mutex<Vec<Option<String>>>,
@@ -669,49 +671,36 @@ impl UserAndroid for FakeAndroid {
         self.widget_pointers.lock().unwrap().push(pointer);
         Ok(())
     }
-    fn install_arm_translation(
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<GuestArmTranslation, InstallError> {
+        addon: Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<AddonImagePart, InstallError> {
         if self.state() != SessionState::Active {
             return Err(InstallError::NotRunning("Android is not running".into()));
         }
-        let mut image = vec![0u8; size as usize];
-        content
-            .read_exact(&mut image)
-            .map_err(|e| InstallError::Refused(format!("the image did not arrive whole: {e}")))?;
-        use sha2::Digest;
-        if sha2::Sha256::digest(&image).as_slice() != sha256 {
-            return Err(InstallError::Refused("its SHA-256 differs".into()));
-        }
-        *self.arm_image.lock().unwrap() = Some(image);
-        Ok(self.arm_translation().unwrap_or_default())
+        let slot = match addon {
+            Addon::Gapps => &self.gapps_image,
+            Addon::ArmTranslation => &self.arm_image,
+        };
+        let image = slot.lock().unwrap();
+        let Some(image) = image.as_ref() else {
+            return Err(InstallError::Refused(format!(
+                "{} is not here",
+                addon.what()
+            )));
+        };
+        let start = (offset as usize).min(image.len());
+        let end = (start + length as usize).min(image.len());
+        Ok(AddonImagePart {
+            data: image[start..end].to_vec(),
+            size: image.len() as u64,
+        })
     }
     fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
         *self.arm_image.lock().unwrap() = None;
         Ok(self.arm_translation().unwrap_or_default())
-    }
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<GuestGapps, InstallError> {
-        if self.state() != SessionState::Active {
-            return Err(InstallError::NotRunning("Android is not running".into()));
-        }
-        let mut image = vec![0u8; size as usize];
-        content
-            .read_exact(&mut image)
-            .map_err(|e| InstallError::Refused(format!("the image did not arrive whole: {e}")))?;
-        use sha2::Digest;
-        if sha2::Sha256::digest(&image).as_slice() != sha256 {
-            return Err(InstallError::Refused("its SHA-256 differs".into()));
-        }
-        *self.gapps_image.lock().unwrap() = Some(image);
-        Ok(self.gapps().unwrap_or_default())
     }
     fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
         *self.gapps_image.lock().unwrap() = None;
@@ -719,7 +708,8 @@ impl UserAndroid for FakeAndroid {
     }
     fn gapps(&self) -> Option<GuestGapps> {
         (self.state() == SessionState::Active).then(|| GuestGapps {
-            installed: self.gapps_image.lock().unwrap().is_some(),
+            installed: false,
+            left_on_data: self.gapps_image.lock().unwrap().is_some(),
             active: false,
             sdk: 36,
             abi: "x86_64".into(),
@@ -730,7 +720,8 @@ impl UserAndroid for FakeAndroid {
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         let translating = *self.translating.lock().unwrap();
         (self.state() == SessionState::Active).then(|| GuestArmTranslation {
-            installed: self.arm_image.lock().unwrap().is_some() || translating,
+            installed: false,
+            left_on_data: self.arm_image.lock().unwrap().is_some(),
             active: translating,
             abilist: if translating {
                 "x86_64,arm64-v8a".into()
@@ -1323,6 +1314,13 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr32_an_image_made_by_an_older_host_is_made_again_or_installed_again() {
             $crate::host_api_conformance::old_gapps_images_are_never_laid_over(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
+        }
+        #[test]
+        fn fr32_addons_left_on_android_move_to_the_addon_disk() {
+            $crate::host_api_conformance::addon_images_left_on_android_move_to_the_addon_disk(
                 &mut || $make,
                 ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
             );
@@ -3159,13 +3157,46 @@ fn arm_package() -> Package {
     }
 }
 
+/// Each user's add-on disk, a raw disk in `dir`, which is emptied first.
+fn addon_disks(dir: std::path::PathBuf) -> AddonDiskSource {
+    let _ = std::fs::remove_dir_all(&dir);
+    Arc::new(move |user: &str| {
+        let stem = crate::settings::user_file_stem(user)?;
+        Ok(AddonDisk::new(
+            dir.join(format!("{stem}-addons.img")),
+            Format::Raw,
+        ))
+    })
+}
+
+/// A folder for the add-on disks of the test `name`, in the system's temporary folder.
+fn addon_dir(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "dsa-conformance-addons-{name}-{}",
+        std::process::id()
+    ))
+}
+
+/// An erofs image of about `size` bytes, as an add-on's image is.
+fn erofs_image(size: usize) -> Vec<u8> {
+    let mut tree = crate::erofs::Builder::new();
+    let data: Vec<u8> = (0..size as u32).map(|i| (i % 251) as u8).collect();
+    tree.file("system/lib64/libtranslator.so", 0o644, data)
+        .unwrap();
+    let mut image = Vec::new();
+    tree.write(&mut image).unwrap();
+    image
+}
+
 pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     use sha2::Digest;
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
     let androids = Arc::new(FakeAndroids::default());
-    let service =
-        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let disks = addon_disks(addon_dir("arm"));
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), facts())
+        .with_addon_disks(disks.clone());
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
     let none = client
@@ -3176,7 +3207,7 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     assert!(!none.restart_needed);
 
     client.start().unwrap();
-    let image: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    let image = erofs_image(300_000);
     let installed = connect(&mut *connector)
         .install_arm_translation(
             &arm_package(),
@@ -3190,14 +3221,14 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
         .guest
         .clone()
         .expect("the running Android answered");
-    assert!(guest.installed);
+    assert!(guest.installed, "on the add-on disk");
     assert!(!guest.active, "a package is used from the next start");
     assert!(installed.restart_needed);
+    // The image is on the caller's add-on disk, and nothing goes to Android's own disk.
+    let disk = disks(&user).unwrap();
+    assert_eq!(disk.image(Addon::ArmTranslation), Some(image.clone()));
     let android = androids.of(&user).unwrap();
-    assert_eq!(
-        android.arm_image.lock().unwrap().as_deref(),
-        Some(&image[..])
-    );
+    assert!(android.arm_image.lock().unwrap().is_none());
     assert_eq!(store.arm_translation(&user).unwrap(), Some(arm_package()));
 
     let removed = client
@@ -3205,7 +3236,7 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
         .expect("removing the package");
     assert_eq!(removed.package, None);
     assert!(!removed.restart_needed);
-    assert!(android.arm_image.lock().unwrap().is_none());
+    assert!(!disk.holds(Addon::ArmTranslation));
     assert_eq!(store.arm_translation(&user).unwrap(), None);
 }
 
@@ -3227,7 +3258,8 @@ pub fn default_arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     let androids = Arc::new(FakeAndroids::default());
     let service = HostApiService::new(androids.clone(), "test service")
         .with_settings(store.clone(), facts())
-        .with_default_arm_translation(Arc::new(|_: &str| Some(default_arm_package())));
+        .with_default_arm_translation(Arc::new(|_: &str| Some(default_arm_package())))
+        .with_addon_disks(addon_disks(addon_dir("default-arm")));
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
     let first = client
@@ -3241,7 +3273,7 @@ pub fn default_arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     assert!(!first.restart_needed, "Android is not running");
 
     client.start().unwrap();
-    let image: Vec<u8> = (0..4096u32).map(|i| (i % 251) as u8).collect();
+    let image = erofs_image(4096);
     let installed = connect(&mut *connector)
         .install_arm_translation(
             &arm_package(),
@@ -3333,13 +3365,14 @@ fn md5_of(data: &[u8]) -> String {
 }
 
 /// A service with settings in memory and Google Play served from `lite`, downloading into a
-/// folder of its own in `scratch`.
+/// folder of its own in `scratch`, with each user's add-on disk in `disks`.
 fn gapps_service(
     androids: Arc<FakeAndroids>,
     store: Arc<MemorySettings>,
     lite: FakeLiteGapps,
     name: &str,
     scratch: &std::path::Path,
+    disks: AddonDiskSource,
 ) -> HostApiService {
     let work = scratch.join(format!(
         "dsa-conformance-gapps-{name}-{}",
@@ -3349,6 +3382,15 @@ fn gapps_service(
     HostApiService::new(androids, "test service")
         .with_settings(store, facts())
         .with_gapps(source)
+        .with_addon_disks(disks)
+}
+
+/// The add-on disks of the Google Play test `name`, in `scratch`.
+fn gapps_disks(name: &str, scratch: &std::path::Path) -> AddonDiskSource {
+    addon_disks(scratch.join(format!(
+        "dsa-conformance-addons-{name}-{}",
+        std::process::id()
+    )))
 }
 
 pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
@@ -3357,7 +3399,15 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
     let androids = Arc::new(FakeAndroids::default());
     let zip = gapps::package::fixture::sample();
     let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
-    let service = gapps_service(androids.clone(), store.clone(), lite, "reach", scratch);
+    let disks = gapps_disks("reach", scratch);
+    let service = gapps_service(
+        androids.clone(),
+        store.clone(),
+        lite,
+        "reach",
+        scratch,
+        disks.clone(),
+    );
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
     let none = client.gapps().expect("asking where Google Play stands");
@@ -3386,15 +3436,18 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
         .guest
         .clone()
         .expect("the running Android answered");
-    assert!(guest.installed);
+    assert!(guest.installed, "on the add-on disk");
     assert!(
         !guest.active,
         "the Google apps are used from the next start"
     );
     assert!(installed.restart_needed);
     assert_eq!(store.gapps(&user).unwrap(), Some(package));
+    // The image is on the caller's add-on disk, and nothing goes to Android's own disk.
     let android = androids.of(&user).unwrap();
-    let image = android.gapps_image.lock().unwrap().clone().unwrap();
+    assert!(android.gapps_image.lock().unwrap().is_none());
+    let disk = disks(&user).unwrap();
+    let image = disk.image(Addon::Gapps).expect("on the add-on disk");
     let files = crate::erofs::read::files(&image);
     assert!(files.contains_key("product/priv-app/GmsCore/GmsCore.apk"));
     assert!(files
@@ -3408,7 +3461,7 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
     let removed = client.remove_gapps().expect("removing Google Play");
     assert_eq!(removed.package, None);
     assert!(!removed.restart_needed, "this boot never had them");
-    assert!(android.gapps_image.lock().unwrap().is_none());
+    assert!(!disk.holds(Addon::Gapps));
     assert_eq!(store.gapps(&user).unwrap(), None);
 }
 
@@ -3453,9 +3506,11 @@ pub fn old_gapps_images_are_never_laid_over(make: MakeLocal<'_>, scratch: &std::
     let kept = gapps::Source::new(Arc::new(crate::update::store::FileFetch), &work)
         .kept_package(&user)
         .unwrap();
+    let disks = gapps_disks("old", scratch);
     let service = HostApiService::new(androids.clone(), "test service")
         .with_settings(store.clone(), facts())
-        .with_gapps(gapps::Source::new(Arc::new(lite), &work).with_project(FAKE_PROJECT));
+        .with_gapps(gapps::Source::new(Arc::new(lite), &work).with_project(FAKE_PROJECT))
+        .with_addon_disks(disks.clone());
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
 
@@ -3465,24 +3520,24 @@ pub fn old_gapps_images_are_never_laid_over(make: MakeLocal<'_>, scratch: &std::
     assert_eq!(status.package.as_ref().map(|p| p.image_format), Some(0));
     assert!(status.reinstall_needed);
     assert!(!status.restart_needed);
-    assert_eq!(gapps::bootconfig_for(&*store, &user), "");
+    assert_eq!(gapps::bootconfig_for(&*store, &user, &[]), "");
 
     // With the package kept, the first boot that reaches the desktop makes the image again and
-    // sends it, and the next boot lays it over.
+    // puts it on the add-on disk, and the next boot lays it over.
     std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
     std::fs::write(&kept, &zip).unwrap();
     assert!(!client.gapps().unwrap().reinstall_needed);
     client.start().unwrap();
-    let android = androids.of(&user).unwrap();
+    let disk = disks(&user).unwrap();
     assert!(
-        eventually(|| android.gapps_image.lock().unwrap().is_some()),
+        eventually(|| disk.holds(Addon::Gapps)),
         "the image was not made again"
     );
     assert!(eventually(|| store
         .gapps(&user)
         .unwrap()
         .is_some_and(|p| p.image_format == gapps::IMAGE_FORMAT)));
-    let image = android.gapps_image.lock().unwrap().clone().unwrap();
+    let image = disk.image(Addon::Gapps).unwrap();
     let files = crate::erofs::read::files(&image);
     for partition in ["product", "system_ext"] {
         let allowlist = format!("{partition}/etc/permissions/{}", gapps::privapp::FILE_NAME);
@@ -3491,7 +3546,9 @@ pub fn old_gapps_images_are_never_laid_over(make: MakeLocal<'_>, scratch: &std::
     let status = client.gapps().unwrap();
     assert!(!status.reinstall_needed);
     assert!(status.restart_needed, "it is laid over from the next start");
-    assert_eq!(gapps::bootconfig_for(&*store, &user), gapps::BOOTCONFIG_ON);
+    assert!(
+        gapps::bootconfig_for(&*store, &user, &[Addon::Gapps]).starts_with(gapps::BOOTCONFIG_ON)
+    );
     let _ = std::fs::remove_dir_all(&work);
 }
 
@@ -3509,14 +3566,31 @@ pub fn gapps_are_removed_while_android_cannot_start(
     };
     store.set_gapps(&user, Some(&installed)).unwrap();
     let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
-    let service = gapps_service(androids.clone(), store.clone(), lite, "stopped", scratch);
+    let disks = gapps_disks("stopped", scratch);
+    let service = gapps_service(
+        androids.clone(),
+        store.clone(),
+        lite,
+        "stopped",
+        scratch,
+        disks.clone(),
+    );
     let _service = RunningService::start_service(listener, service);
-    // The image is on the stopped Android's disk, as after a boot that never finished.
+    // The image is on the add-on disk, and an older DSA's copy on the stopped Android's disk.
     let android = {
         let _ = androids.android(&user).unwrap();
         androids.of(&user).unwrap()
     };
     *android.gapps_image.lock().unwrap() = Some(b"an image".to_vec());
+    let disk = disks(&user).unwrap();
+    let image = erofs_image(4096);
+    disk.install(
+        Addon::Gapps,
+        image.len() as u64,
+        None,
+        &mut image.as_slice(),
+    )
+    .unwrap();
 
     let mut client = connect(&mut *connector);
     let removed = client
@@ -3526,13 +3600,14 @@ pub fn gapps_are_removed_while_android_cannot_start(
     assert!(removed.guest.is_none(), "Android was not started for it");
     assert_eq!(android.state(), SessionState::Stopped);
     assert_eq!(store.gapps(&user).unwrap(), None);
+    assert!(!disk.holds(Addon::Gapps));
     assert_eq!(
-        gapps::bootconfig_for(&*store, &user),
+        gapps::bootconfig_for(&*store, &user, &[]),
         "",
         "the next start goes without Google's apps"
     );
 
-    // The next boot that reaches the desktop takes the image off the disk.
+    // The next boot that reaches the desktop takes the older DSA's copy off Android's disk.
     client.start().unwrap();
     assert!(
         eventually(|| android.gapps_image.lock().unwrap().is_none()),
@@ -3547,7 +3622,15 @@ pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>, scratch: &std::path::Pat
     let zip = gapps::package::fixture::sample();
     // The file host publishes another digest than the download has.
     let lite = FakeLiteGapps::new(&zip, "00000000000000000000000000000000");
-    let service = gapps_service(androids.clone(), store.clone(), lite, "refused", scratch);
+    let disks = gapps_disks("refused", scratch);
+    let service = gapps_service(
+        androids.clone(),
+        store.clone(),
+        lite,
+        "refused",
+        scratch,
+        disks.clone(),
+    );
     let _service = RunningService::start_service(listener, service);
     connect(&mut *connector).start().unwrap();
     match connect(&mut *connector).install_gapps(&mut |_| {}) {
@@ -3558,24 +3641,84 @@ pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>, scratch: &std::path::Pat
         other => panic!("expected the build to be refused, got {other:?}"),
     }
     assert_eq!(store.gapps(&user).unwrap(), None);
-    assert!(androids
-        .of(&user)
-        .unwrap()
-        .gapps_image
-        .lock()
-        .unwrap()
-        .is_none());
+    assert!(disks(&user).unwrap().contents().is_empty());
+}
+
+/// The images a DSA from before the add-on disk left on a user's Android disk move onto their
+/// add-on disk at the first boot that reaches the desktop, and their copies on Android's disk
+/// go, so nothing of them stays in `/data`.
+pub fn addon_images_left_on_android_move_to_the_addon_disk(
+    make: MakeLocal<'_>,
+    scratch: &std::path::Path,
+) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    let recorded = gapps::GappsPackage {
+        image_format: gapps::IMAGE_FORMAT,
+        ..old_gapps_record(&zip)
+    };
+    store.set_gapps(&user, Some(&recorded)).unwrap();
+    store
+        .set_arm_translation(&user, Some(&arm_package()))
+        .unwrap();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let disks = gapps_disks("move", scratch);
+    let service = gapps_service(
+        androids.clone(),
+        store.clone(),
+        lite,
+        "move",
+        scratch,
+        disks.clone(),
+    );
+    let _service = RunningService::start_service(listener, service);
+    let android = {
+        let _ = androids.android(&user).unwrap();
+        androids.of(&user).unwrap()
+    };
+    let (google, translator) = (erofs_image(3 << 20), erofs_image(10_000));
+    *android.gapps_image.lock().unwrap() = Some(google.clone());
+    *android.arm_image.lock().unwrap() = Some(translator.clone());
+    let disk = disks(&user).unwrap();
+    // Until they are moved, a boot mounts them where the older DSA kept them.
+    assert!(gapps::bootconfig_for(&*store, &user, &[])
+        .ends_with("androidboot.dsa.gapps_image = \"data\"\n"));
+
+    connect(&mut *connector).start().unwrap();
+    assert!(
+        eventually(|| android.gapps_image.lock().unwrap().is_none()
+            && android.arm_image.lock().unwrap().is_none()),
+        "the images stayed on Android's disk"
+    );
+    assert_eq!(disk.image(Addon::Gapps), Some(google));
+    assert_eq!(disk.image(Addon::ArmTranslation), Some(translator));
+    assert_eq!(store.gapps(&user).unwrap(), Some(recorded));
+    assert_eq!(store.arm_translation(&user).unwrap(), Some(arm_package()));
+    // The next start attaches the disk and mounts both from it.
+    let attached = disk.prepare_for_boot();
+    assert_eq!(attached, [Addon::Gapps, Addon::ArmTranslation]);
+    assert!(gapps::bootconfig_for(&*store, &user, &attached)
+        .ends_with("androidboot.dsa.gapps_image = \"disk\"\n"));
+    let status = connect(&mut *connector).gapps().unwrap();
+    assert!(status
+        .guest
+        .is_some_and(|guest| guest.installed && !guest.left_on_data));
+    assert!(!status.reinstall_needed);
 }
 
 pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
     let androids = Arc::new(FakeAndroids::default());
-    let service =
-        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let disks = addon_disks(addon_dir("unusable-arm"));
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), facts())
+        .with_addon_disks(disks.clone());
     let _service = RunningService::start_service(listener, service);
     connect(&mut *connector).start().unwrap();
-    let image = vec![1u8; 64];
+    let image = erofs_image(64);
     let thirty_two = [0u8; 32];
     for package in [
         Package {
@@ -3611,13 +3754,7 @@ pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {
         other => panic!("expected the image to be refused, got {other:?}"),
     }
     assert_eq!(store.arm_translation(&user).unwrap(), None);
-    assert!(androids
-        .of(&user)
-        .unwrap()
-        .arm_image
-        .lock()
-        .unwrap()
-        .is_none());
+    assert!(disks(&user).unwrap().contents().is_empty());
 }
 
 pub fn developer_mode_port_refusal_is_reported(make: MakeLocal<'_>) {

@@ -1865,8 +1865,8 @@ pub struct ArmTranslationPackage {
 /// Installs an ARM translation package for the caller's Android. The service answers at once:
 /// Done when it takes a package with this description and size, or an error. After Done the
 /// client sends the package's system image, `size` bytes, in ApkChunk frames, and the service
-/// answers the same request id once more: ArmTranslation once Android has the image, or an
-/// error. The connection then ends. Android must be running; the package is used from its next
+/// answers the same request id once more: ArmTranslation once the image is on the caller's
+/// add-on disk, or an error. The connection then ends. The package is used from Android's next
 /// start.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstallArmTranslation {
@@ -1899,7 +1899,7 @@ pub struct ArmTranslation {
     /// then.
     #[prost(bool, tag = "3")]
     pub guest_known: bool,
-    /// A package image is on the user's Android disk.
+    /// The package image is on the caller's add-on disk, for Android's next start.
     #[prost(bool, tag = "4")]
     pub guest_installed: bool,
     /// The running Android has a package laid over its system, so ARM64 apps install and run.
@@ -1921,6 +1921,11 @@ pub struct ArmTranslation {
     /// translator), or empty for none.
     #[prost(string, tag = "9")]
     pub translator: ::prost::alloc::string::String,
+    /// The running Android still has a package image a DSA from before the add-on disk sent to
+    /// its own disk, which the service moves onto the add-on disk and then removes. Holds only
+    /// when guest_known.
+    #[prost(bool, tag = "10")]
+    pub guest_left_on_data: bool,
 }
 /// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
 /// service downloaded from LiteGapps' file host.
@@ -1957,10 +1962,11 @@ pub struct GappsPackage {
 }
 /// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
 /// build for the Android version and architecture the running Android reports, downloads it,
-/// checks it, makes a system image of its apps and permission files, and sends the image to
-/// the caller's Android, which lays it over its system from its next start. While it works it
-/// answers the request id with GappsProgress, as often as there is news; it then answers once
-/// more with Gapps, or an error. The connection then ends. Android must be running.
+/// checks it, makes a system image of its apps and permission files, and puts the image on
+/// the caller's add-on disk, from which Android lays it over its system from its next start.
+/// While it works it answers the request id with GappsProgress, as often as there is news; it
+/// then answers once more with Gapps, or an error. The connection then ends. Android must be
+/// running, because it says which Android version and processor the build is for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstallGapps {}
 /// Asks where Google Play stands for the caller. Answered with Gapps.
@@ -1991,7 +1997,7 @@ pub struct Gapps {
     /// hold only then.
     #[prost(bool, tag = "2")]
     pub guest_known: bool,
-    /// The Google apps image is on the user's Android disk.
+    /// The Google apps image is on the caller's add-on disk, for Android's next start.
     #[prost(bool, tag = "3")]
     pub guest_installed: bool,
     /// The running Android has the Google apps laid over its system.
@@ -2018,6 +2024,11 @@ pub struct Gapps {
     /// without Google's apps until the user installs Google Play again.
     #[prost(bool, tag = "10")]
     pub reinstall_needed: bool,
+    /// The running Android still has a Google apps image a DSA from before the add-on disk sent
+    /// to its own disk, which the service moves onto the add-on disk and then removes. Holds only
+    /// when guest_known.
+    #[prost(bool, tag = "11")]
+    pub guest_left_on_data: bool,
 }
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -3617,7 +3628,7 @@ pub enum GappsStage {
     Downloading = 2,
     /// Checking the build and making the system image.
     Building = 3,
-    /// Sending the image to Android: `done` of `total` bytes.
+    /// Putting the image on the add-on disk: `done` of `total` bytes.
     Sending = 4,
 }
 impl GappsStage {

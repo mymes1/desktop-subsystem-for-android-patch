@@ -415,28 +415,6 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode();
 
   /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   * @return Whether the armTranslationInstall field is set.
-   */
-  boolean hasArmTranslationInstall();
-  /**
-   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
-   * @return The armTranslationInstall.
-   */
-  io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall getArmTranslationInstall();
-
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   * @return Whether the armTranslationChunk field is set.
-   */
-  boolean hasArmTranslationChunk();
-  /**
-   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
-   * @return The armTranslationChunk.
-   */
-  io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk getArmTranslationChunk();
-
-  /**
    * <code>.dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;</code>
    * @return Whether the armTranslationRemove field is set.
    */
@@ -468,28 +446,6 @@ public interface EnvelopeOrBuilder extends
    * @return The armTranslationState.
    */
   io.github.thisisthepy.dsa.control.v1.ArmTranslationState getArmTranslationState();
-
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   * @return Whether the gappsInstall field is set.
-   */
-  boolean hasGappsInstall();
-  /**
-   * <code>.dsa.control.v1.GappsInstall gapps_install = 400;</code>
-   * @return The gappsInstall.
-   */
-  io.github.thisisthepy.dsa.control.v1.GappsInstall getGappsInstall();
-
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   * @return Whether the gappsChunk field is set.
-   */
-  boolean hasGappsChunk();
-  /**
-   * <code>.dsa.control.v1.GappsChunk gapps_chunk = 401;</code>
-   * @return The gappsChunk.
-   */
-  io.github.thisisthepy.dsa.control.v1.GappsChunk getGappsChunk();
 
   /**
    * <code>.dsa.control.v1.GappsRemove gapps_remove = 402;</code>
@@ -578,6 +534,28 @@ public interface EnvelopeOrBuilder extends
    * @return The suDecision.
    */
   io.github.thisisthepy.dsa.control.v1.SuDecision getSuDecision();
+
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   * @return Whether the addonImageRead field is set.
+   */
+  boolean hasAddonImageRead();
+  /**
+   * <code>.dsa.control.v1.AddonImageRead addon_image_read = 414;</code>
+   * @return The addonImageRead.
+   */
+  io.github.thisisthepy.dsa.control.v1.AddonImageRead getAddonImageRead();
+
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   * @return Whether the addonImagePart field is set.
+   */
+  boolean hasAddonImagePart();
+  /**
+   * <code>.dsa.control.v1.AddonImagePart addon_image_part = 415;</code>
+   * @return The addonImagePart.
+   */
+  io.github.thisisthepy.dsa.control.v1.AddonImagePart getAddonImagePart();
 
   /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>

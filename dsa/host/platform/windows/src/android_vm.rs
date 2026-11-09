@@ -376,6 +376,7 @@ impl AndroidVmLauncher {
         let mut access = vec![config.data_disk.clone()];
         access.extend(boot.vm_access());
         access.extend(config.pstore_disk.iter().cloned());
+        access.extend(config.addon_disk.iter().cloned());
         for path in &access {
             grant_vm_access(&self.id, path).map_err(|e| {
                 format!(
@@ -426,6 +427,17 @@ impl GuestLauncher for AndroidVmLauncher {
         let mut config = (self.config)()?;
         config.check_settings().map_err(|e| e.to_string())?;
         self.data_disk = Some(config.data_disk.clone());
+        // The add-on disk this start attaches: a change the user made while Android ran takes
+        // the place of the disk before now, and a disk without add-ons is not attached.
+        if let Some(path) = config.addon_disk.clone() {
+            let disk = dsa_host_core::addon_disk::AddonDisk::new(
+                path,
+                dsa_host_core::addon_disk::Format::Vhd,
+            );
+            if disk.prepare_for_boot().is_empty() {
+                config.addon_disk = None;
+            }
+        }
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
         let more = self

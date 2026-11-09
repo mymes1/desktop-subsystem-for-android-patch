@@ -238,6 +238,19 @@ impl Planner {
                 read_only: false,
             });
         }
+        // The add-on disk this start attaches: a change the user made while Android ran takes
+        // the place of the disk before now, and a disk without add-ons is not attached.
+        let attached = dsa_host_core::addon_disk::AddonDisk::new(
+            self.user.addon_disk(),
+            dsa_host_core::addon_disk::Format::Raw,
+        )
+        .prepare_for_boot();
+        if !attached.is_empty() {
+            disks.push(Disk {
+                path: self.user.addon_disk(),
+                read_only: true,
+            });
+        }
         let cmdline = crate::cmdline::for_virtualization_framework(
             &files.kernel_cmdline,
             &self.config.kernel_cmdline,
@@ -281,11 +294,14 @@ impl Planner {
         Ok(BootPlan {
             vm,
             properties: Some(properties),
-            bootconfig: dsa_host_core::arm_translation::bootconfig_for(
-                &*self.settings,
-                &self.name,
-                Some(dir.as_path()),
-            ) + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name),
+            bootconfig: dsa_host_core::addon_disk::bootconfig(&attached).to_string()
+                + &dsa_host_core::arm_translation::bootconfig_for(
+                    &*self.settings,
+                    &self.name,
+                    Some(dir.as_path()),
+                    &attached,
+                )
+                + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name, &attached),
         })
     }
 }
@@ -798,6 +814,17 @@ pub fn serve(
         Arc::new(CurlFetch),
         config.settings_dir(&user).with_file_name("gapps"),
     ));
+    // The user's add-ons, on the add-on disk in their folder, which their VM attaches read
+    // only. This agent serves its own user alone.
+    service = service.with_addon_disks({
+        let addons = user.addon_disk();
+        Arc::new(move |_: &str| {
+            Ok(dsa_host_core::addon_disk::AddonDisk::new(
+                &addons,
+                dsa_host_core::addon_disk::Format::Raw,
+            ))
+        })
+    });
     if let Some(store) = &store {
         // The agent keeps this user's own images, so the choice is theirs alone.
         service = service.with_android_versions(Arc::new(StoreVersions {
