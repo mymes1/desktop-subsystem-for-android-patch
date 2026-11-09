@@ -116,7 +116,7 @@
                             <TextBlock Text="{l:Text ResetDataCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsResetting, Converter={StaticResource Visible}}" />
                         <ui:Button Content="{l:Text ResetDataButton.Content}" Click="OnResetData"
@@ -148,7 +148,7 @@
                             <TextBlock Text="{l:Text ArmGoogleCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsFetchingGoogleArm, Converter={StaticResource Visible}}" />
                         <ui:HyperlinkButton Content="{l:Text ArmGoogleTermsLink.Content}" Click="OnOpenGoogleArmTerms"
@@ -194,7 +194,7 @@
                             <TextBlock Text="{l:Text GappsCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsInstallingGapps, Converter={StaticResource Visible}}" />
                         <ui:Button Content="{l:Text GappsInstallButton.Content}" Click="OnInstallGapps"
@@ -267,7 +267,7 @@
                                        Visibility="{Binding RootElevationNeedsAdministrator, Converter={StaticResource Visible}}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding RootElevationNeedsAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnRootElevationAsAdministrator" />
@@ -297,7 +297,7 @@
                             <TextBlock Text="{l:Text InputTraceCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnInputTraceAsAdministrator" />
@@ -315,7 +315,7 @@
                             <TextBlock Text="{l:Text ResizeTraceCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnResizeTraceAsAdministrator" />
