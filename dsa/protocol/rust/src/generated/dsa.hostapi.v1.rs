@@ -1116,6 +1116,10 @@ pub struct Task {
     /// window shows a back button in the place of the app's icon.
     #[prost(bool, tag = "25")]
     pub can_go_back: bool,
+    /// Whether the task's top activity says it handles a change of density itself, so it
+    /// redraws at a new density rather than being relaunched. False when unknown.
+    #[prost(bool, tag = "26")]
+    pub handles_density_change: bool,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2261,6 +2265,9 @@ pub struct AppWindowSettings {
     pub start_width_dp: u32,
     #[prost(uint32, tag = "4")]
     pub start_height_dp: u32,
+    /// How the app follows its window to a monitor of another scale. No way restarts the app.
+    #[prost(enumeration = "DpiScaling", tag = "5")]
+    pub dpi_scaling: i32,
 }
 /// Lists the caller's window settings for every app that has any. The service answers
 /// AppWindowSettingsList.
@@ -3597,6 +3604,48 @@ impl ErrorCode {
             "ERROR_CODE_INSTALL_REFUSED" => Some(Self::InstallRefused),
             "ERROR_CODE_WIDGET_REFUSED" => Some(Self::WidgetRefused),
             "ERROR_CODE_DATA_WOULD_BE_LOST" => Some(Self::DataWouldBeLost),
+            _ => None,
+        }
+    }
+}
+/// How an app follows its window to a monitor of another scale, as Windows' "high DPI scaling
+/// performed by" does for a desktop program.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum DpiScaling {
+    /// The app's own way: APP for an app whose activity says it handles a change of density
+    /// itself, SYSTEM for any other.
+    Auto = 0,
+    /// The task takes the new monitor's density and the app redraws at it.
+    App = 1,
+    /// The task keeps its density and the host scales the window's picture to the new monitor,
+    /// so the app keeps its size on the screen.
+    System = 2,
+    /// The app is given the new density without a restart, even though it does not say it
+    /// handles one. It needs a change to Android's framework that is not made yet; until then it
+    /// works as SYSTEM does.
+    SystemForced = 3,
+}
+impl DpiScaling {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Auto => "DPI_SCALING_AUTO",
+            Self::App => "DPI_SCALING_APP",
+            Self::System => "DPI_SCALING_SYSTEM",
+            Self::SystemForced => "DPI_SCALING_SYSTEM_FORCED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "DPI_SCALING_AUTO" => Some(Self::Auto),
+            "DPI_SCALING_APP" => Some(Self::App),
+            "DPI_SCALING_SYSTEM" => Some(Self::System),
+            "DPI_SCALING_SYSTEM_FORCED" => Some(Self::SystemForced),
             _ => None,
         }
     }

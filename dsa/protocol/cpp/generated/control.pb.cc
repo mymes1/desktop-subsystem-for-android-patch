@@ -126,6 +126,7 @@ PROTOBUF_CONSTEXPR TaskUpdated::TaskUpdated(
   , /*decltype(_impl_.transparent_caption_)*/false
   , /*decltype(_impl_.orientation_)*/0
   , /*decltype(_impl_.can_go_back_)*/false
+  , /*decltype(_impl_.handles_density_change_)*/false
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct TaskUpdatedDefaultTypeInternal {
   PROTOBUF_CONSTEXPR TaskUpdatedDefaultTypeInternal()
@@ -6036,6 +6037,7 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     , decltype(_impl_.transparent_caption_){}
     , decltype(_impl_.orientation_){}
     , decltype(_impl_.can_go_back_){}
+    , decltype(_impl_.handles_density_change_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -6059,8 +6061,8 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     _this->_impl_.bounds_ = new ::dsa::control::v1::Rect(*from._impl_.bounds_);
   }
   ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.can_go_back_) -
-    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.can_go_back_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.handles_density_change_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.handles_density_change_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.TaskUpdated)
 }
 
@@ -6087,6 +6089,7 @@ inline void TaskUpdated::SharedCtor(
     , decltype(_impl_.transparent_caption_){false}
     , decltype(_impl_.orientation_){0}
     , decltype(_impl_.can_go_back_){false}
+    , decltype(_impl_.handles_density_change_){false}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.package_name_.InitDefault();
@@ -6134,8 +6137,8 @@ void TaskUpdated::Clear() {
   }
   _impl_.bounds_ = nullptr;
   ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.can_go_back_) -
-      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.can_go_back_));
+      reinterpret_cast<char*>(&_impl_.handles_density_change_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.handles_density_change_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -6300,6 +6303,14 @@ const char* TaskUpdated::_InternalParse(const char* ptr, ::_pbi::ParseContext* c
         } else
           goto handle_unusual;
         continue;
+      // bool handles_density_change = 26;
+      case 26:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 208)) {
+          _impl_.handles_density_change_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -6450,6 +6461,12 @@ uint8_t* TaskUpdated::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteBoolToArray(25, this->_internal_can_go_back(), target);
   }
 
+  // bool handles_density_change = 26;
+  if (this->_internal_handles_density_change() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(26, this->_internal_handles_density_change(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -6566,6 +6583,11 @@ size_t TaskUpdated::ByteSizeLong() const {
     total_size += 2 + 1;
   }
 
+  // bool handles_density_change = 26;
+  if (this->_internal_handles_density_change() != 0) {
+    total_size += 2 + 1;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -6640,6 +6662,9 @@ void TaskUpdated::MergeFrom(const TaskUpdated& from) {
   if (from._internal_can_go_back() != 0) {
     _this->_internal_set_can_go_back(from._internal_can_go_back());
   }
+  if (from._internal_handles_density_change() != 0) {
+    _this->_internal_set_handles_density_change(from._internal_handles_density_change());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -6669,8 +6694,8 @@ void TaskUpdated::InternalSwap(TaskUpdated* other) {
       &other->_impl_.label_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.can_go_back_)
-      + sizeof(TaskUpdated::_impl_.can_go_back_)
+      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.handles_density_change_)
+      + sizeof(TaskUpdated::_impl_.handles_density_change_)
       - PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.bounds_)>(
           reinterpret_cast<char*>(&_impl_.bounds_),
           reinterpret_cast<char*>(&other->_impl_.bounds_));
