@@ -768,6 +768,12 @@ jobs:
           echo "the image is revision $revision"
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
+      # A restored build cache can bring back the folder of an image an earlier run made (the
+      # v0.2.1 run checked 17.0.0-16373615-11 while it had made -12-arm64), and the check and
+      # publish steps below take the one folder there is, so only this run's image may be left.
+      - name: Clear images an earlier run left
+        run: find dsa/target/image -mindepth 1 -maxdepth 1 -type d ! -name '.work-*' -exec rm -rf {} + 2>/dev/null || true
+
       - name: Make the image
         run: >
           uv run dsa/guest/image/make-image.py --major ${{ matrix.android }} --arch ${{ matrix.arch }}
