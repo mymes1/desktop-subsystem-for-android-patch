@@ -251,7 +251,9 @@
 //! image runs ARM apps itself and has none. `dsa arm-translation install <folder>` installs a
 //! translation package, which is used in place of the default one: a folder holding
 //! `arm-translation.json` and `system.img`, as `dsa/guest/arm-translation/make-package.py`
-//! makes one. Android is started first when it is not running. `dsa arm-translation remove`
+//! makes one. Its image goes on the user's add-on disk, a disk the service builds and attaches
+//! to the VM read only, so Android reads it once rather than through its encrypted data disk.
+//! Android is started first when it is not running. `dsa arm-translation remove`
 //! removes it, and the default translator, if the image has one, is used again;
 //! `dsa arm-translation use-default` does the same, and refuses where there is no default
 //! translator. Each applies from the next start of Android, and says so. With `--json` each
@@ -281,11 +283,13 @@
 //! Android ID Google's page for uncertified devices asks for. DSA ships no Google app.
 //! `dsa gapps install` has the service download the newest LiteGapps Core build for the Android
 //! version and processor the running Android reports, check it, make a system image of its
-//! apps and permission files, and send it to Android; with `--progress` it prints a `stage`
-//! line as each step starts and as bytes arrive; Android is started first when it is not
-//! running. `dsa gapps remove` removes it without starting Android, so it also works while
-//! Google's apps keep Android from starting: the next start goes without them, and the image
-//! leaves Android's disk at once when Android runs, else at its next start. Both apply from
+//! apps and permission files, and put it on the user's add-on disk; with `--progress` it
+//! prints a `stage` line as each step starts and as bytes arrive (`sending` is the image going
+//! onto the disk); Android is started first when it is not running. `dsa gapps remove` removes
+//! it without starting Android, so it also works while Google's apps keep Android from
+//! starting: the image leaves the add-on disk, so the next start goes without them. An image
+//! an older DSA kept on Android's own disk moves to the add-on disk at the first start after
+//! the update, and leaves Android's disk then, or once Google Play is removed. Both apply from
 //! Android's next start, and say so. An image an older DSA made is never laid over: the
 //! service makes it again from the package it kept, or the status says to install Google Play
 //! again. Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
@@ -3118,7 +3122,7 @@ fn install(
 }
 
 /// `dsa arm-translation install`: checks the package before anything starts, starts Android
-/// when it is not running, and sends the package's image.
+/// when it is not running, and sends the package's image for the add-on disk.
 fn install_arm_translation(
     invocation: &Invocation,
     client: HostApiClient,
@@ -3192,7 +3196,7 @@ fn start_for_gapps(invocation: &Invocation, client: &mut HostApiClient) -> Resul
 }
 
 /// `dsa gapps install`: starts Android when it is not running, then has the service download,
-/// check and send Google Play, printing each step with `--progress`.
+/// check and put Google Play on the add-on disk, printing each step with `--progress`.
 fn install_gapps(
     invocation: &Invocation,
     mut client: HostApiClient,
