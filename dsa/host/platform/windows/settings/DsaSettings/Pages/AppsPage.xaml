@@ -132,6 +132,16 @@
                                                   ToolTip="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.Name="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.HelpText="{Binding Label}" />
+                                        <!-- How the app's windows follow a monitor of another scale: the app
+                                             redraws, or its window is scaled. No choice restarts the app. -->
+                                        <ComboBox Tag="{Binding Package}" MinWidth="200" Margin="16,4,0,0" VerticalAlignment="Center"
+                                                  ItemsSource="{Binding DataContext.DpiScalingChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedIndex="{Binding DpiScalingIndex, Mode=OneWay}"
+                                                  SelectionChanged="OnDpiScaling"
+                                                  ToolTip="{Binding DpiScalingTip, TargetNullValue={l:Text AppsDpiScaling.ToolTip}}"
+                                                  AutomationProperties.Name="{l:Text AppsDpiScaling.Name}"
+                                                  AutomationProperties.HelpText="{Binding Label}" />
                                         <!-- Whether the app runs its ARM code through the translator. -->
                                         <ui:ToggleSwitch Content="{l:Text AppsRunAsArm.Content}" Tag="{Binding Package}"
                                                          IsChecked="{Binding RunAsArm, Mode=OneWay}" Click="OnRunAsArm"

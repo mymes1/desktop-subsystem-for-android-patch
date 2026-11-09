@@ -50,9 +50,9 @@ public class AppWindowSettingsTests
         var cli = new FakeCli()
             .Answer("apps list --json", List)
             .Answer("app-window --json", "{\"apps\":[]}")
-            .Answer("app-window com.example.notes --fixed-size on --start-size auto --json",
+            .Answer("app-window com.example.notes --fixed-size on --start-size auto --dpi-scaling auto --json",
                 "{\"apps\":[{\"package\":\"com.example.notes\",\"fixed_size\":true,\"start_size\":null}]}")
-            .Answer("app-window com.example.notes --fixed-size on --start-size 1280x800 --json",
+            .Answer("app-window com.example.notes --fixed-size on --start-size 1280x800 --dpi-scaling auto --json",
                 "{\"apps\":[{\"package\":\"com.example.notes\",\"fixed_size\":true,\"start_size\":[1280,800]}]}");
         var vm = Make(cli);
         await vm.RefreshAsync();
@@ -82,6 +82,83 @@ public class AppWindowSettingsTests
         await vm.LoadWindowSettingsAsync();
         Assert.False(vm.HasError, vm.Error);
         Assert.All(vm.Rows, row => Assert.True(row.Resizable));
+    }
+
+    [Fact]
+    public async Task Fr4_dpi_scaling_choice_is_read_and_sent()
+    {
+        var cli = new FakeCli()
+            .Answer("apps list --json", List)
+            .Answer("app-window --json",
+                "{\"apps\":[{\"package\":\"com.example.reader\",\"fixed_size\":false,\"start_size\":null,\"dpi_scaling\":\"system\"}]," +
+                "\"system_forced_available\":false}")
+            .Answer("app-window com.example.notes --fixed-size off --start-size auto --dpi-scaling app --json",
+                "{\"apps\":[{\"package\":\"com.example.notes\",\"fixed_size\":false,\"start_size\":null,\"dpi_scaling\":\"app\"}]}");
+        var vm = Make(cli);
+        await vm.RefreshAsync();
+        await vm.LoadWindowSettingsAsync();
+        Assert.False(vm.HasError, vm.Error);
+        // An app without settings, and one dsa names nothing for, follow the automatic choice.
+        var notes = vm.Rows.Single(r => r.Package == "com.example.notes");
+        Assert.Equal(DpiScaling.Auto, vm.DpiScalingChoices[notes.DpiScalingIndex].Scaling);
+        var reader = vm.Rows.Single(r => r.Package == "com.example.reader");
+        Assert.Equal(DpiScaling.System, vm.DpiScalingChoices[reader.DpiScalingIndex].Scaling);
+
+        var app = vm.DpiScalingChoices.ToList().FindIndex(c => c.Scaling == DpiScaling.App);
+        await vm.SetDpiScalingAsync("com.example.notes", app);
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Equal("Apps_WindowChanged", vm.Message);
+        Assert.Equal(app, vm.Rows.Single(r => r.Package == "com.example.notes").DpiScalingIndex);
+        // Choosing what the app has already sends nothing.
+        var calls = cli.Calls.Count;
+        await vm.SetDpiScalingAsync("com.example.notes", app);
+        Assert.Equal(calls, cli.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Fr4_system_forced_is_marked_not_available_yet()
+    {
+        var cli = new FakeCli()
+            .Answer("apps list --json", List)
+            .Answer("app-window --json",
+                "{\"apps\":[{\"package\":\"com.example.reader\",\"fixed_size\":false,\"start_size\":null,\"dpi_scaling\":\"system-forced\"}]}");
+        var vm = Make(cli);
+        await vm.RefreshAsync();
+        await vm.LoadWindowSettingsAsync();
+        Assert.False(vm.HasError, vm.Error);
+        // A dsa that does not say whether Android can do it counts as one that cannot yet.
+        Assert.False(vm.SystemForcedAvailable);
+        var forced = vm.DpiScalingChoices.Single(c => c.Scaling == DpiScaling.SystemForced);
+        Assert.False(forced.Available);
+        Assert.Equal("Apps_DpiScaling_SystemForcedNotYet", forced.Label);
+        Assert.All(vm.DpiScalingChoices.Where(c => c.Scaling != DpiScaling.SystemForced), c => Assert.True(c.Available));
+        // It is still the app's stored choice, and the page says why it works like System.
+        var reader = vm.Rows.Single(r => r.Package == "com.example.reader");
+        Assert.Equal(DpiScaling.SystemForced, vm.DpiScalingChoices[reader.DpiScalingIndex].Scaling);
+        Assert.Equal("Apps_DpiScaling_SystemForcedTip", reader.DpiScalingTip);
+        Assert.Null(vm.Rows.Single(r => r.Package == "com.example.notes").DpiScalingTip);
+    }
+
+    [Fact]
+    public async Task Fr4_system_forced_is_offered_plainly_once_android_can_do_it()
+    {
+        var vm = Make(new FakeCli()
+            .Answer("apps list --json", List)
+            .Answer("app-window --json", "{\"apps\":[],\"system_forced_available\":true}"));
+        await vm.RefreshAsync();
+        await vm.LoadWindowSettingsAsync();
+        var forced = vm.DpiScalingChoices.Single(c => c.Scaling == DpiScaling.SystemForced);
+        Assert.True(forced.Available);
+        Assert.Equal("Apps_DpiScaling_SystemForced", forced.Label);
+    }
+
+    [Fact]
+    public void Fr4_dpi_scaling_is_passed_to_dsa_as_it_takes_it()
+    {
+        Assert.Equal(new[] { "auto", "app", "system", "system-forced" }, DpiScalings.All.Select(DpiScalings.Code));
+        Assert.All(DpiScalings.All, s => Assert.Equal(s, DpiScalings.Parse(DpiScalings.Code(s))));
+        Assert.Equal(DpiScaling.Auto, DpiScalings.Parse(null));
+        Assert.Equal(DpiScaling.Auto, DpiScalings.Parse("enhanced"));
     }
 
     [Fact]
