@@ -678,6 +678,10 @@ impl MemoryGrowth {
         if self.stopped {
             return None;
         }
+        // One resize at a time: the platform has not answered the last one yet.
+        if self.in_flight() {
+            return None;
+        }
         if self.retry_at.is_some_and(|at| now < at) {
             return None;
         }
@@ -780,6 +784,13 @@ impl MemoryGrowth {
             .saturating_mul(1 << self.failures.saturating_sub(1).min(16))
             .min(RETRY_MOST);
         self.retry_at = Some(now + wait);
+    }
+
+    /// Whether the last [`GrowthAction::Resize`] has not been answered yet
+    /// ([`MemoryGrowth::applied`] or [`MemoryGrowth::refused`]). No other resize is asked for
+    /// meanwhile.
+    pub fn in_flight(&self) -> bool {
+        self.previous_mb.is_some()
     }
 
     /// How long until a resize may be tried again after a failure, if one is being waited out.

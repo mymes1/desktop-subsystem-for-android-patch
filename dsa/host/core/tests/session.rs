@@ -18,8 +18,8 @@ use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
 use dsa_host_core::print::{PrintEvent, PrintJob, PrintOutcome};
 use dsa_host_core::session::{
-    BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
-    SessionError, SessionEvent, SessionState, StopReason,
+    BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, MemoryResizer, Session,
+    SessionConfig, SessionError, SessionEvent, SessionState, StopReason,
 };
 use dsa_host_core::tasks::{Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest};
 use dsa_host_core::widgets::{self, Placement, Widget, WidgetEvent, WidgetSize};
@@ -67,6 +67,9 @@ struct Guest {
     /// and how many times the session told the launcher growing failed for good.
     refuse_memory: Vec<u64>,
     growth_failed: usize,
+    /// Set to resize on a thread of the launcher's own that waits until this is opened, as
+    /// Hyper-V took 45 s over one resize.
+    resize_gate: Option<Arc<(Mutex<bool>, std::sync::Condvar)>>,
     /// What the launcher tells about a guest that is late.
     stall: Option<String>,
 }
@@ -165,6 +168,14 @@ impl GuestLauncher for FakeLauncher {
         self.0.lock().unwrap().growth_failed += 1;
     }
 
+    fn memory_resizer(&mut self) -> Option<Box<dyn MemoryResizer>> {
+        let gate = self.0.lock().unwrap().resize_gate.clone()?;
+        Some(Box::new(BlockingResizer {
+            launcher: self.clone(),
+            gate,
+        }))
+    }
+
     fn explain_stall(&mut self, _stall: GuestStall) -> Option<String> {
         self.0.lock().unwrap().stall.clone()
     }
@@ -184,6 +195,24 @@ impl GuestLauncher for FakeLauncher {
         guest.frozen = false;
         guest.thaws += 1;
         Ok(())
+    }
+}
+
+/// A resize that waits until its gate opens, then records the size as the launcher does.
+struct BlockingResizer {
+    launcher: FakeLauncher,
+    gate: Arc<(Mutex<bool>, std::sync::Condvar)>,
+}
+
+impl MemoryResizer for BlockingResizer {
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        let (open, changed) = &*self.gate;
+        let mut open = open.lock().unwrap();
+        while !*open {
+            open = changed.wait(open).unwrap();
+        }
+        drop(open);
+        self.launcher.set_memory_mb(mb)
     }
 }
 
@@ -1208,6 +1237,61 @@ fn nfr2_a_resize_that_times_out_is_tried_again_smaller_and_later_resizes_still_h
         launcher.0.lock().unwrap().memory_sizes == vec![4608, 3840]
     });
     // The failure never told the launcher to stop growing.
+    assert_eq!(launcher.0.lock().unwrap().growth_failed, 0);
+}
+
+#[test]
+fn nfr2_a_slow_resize_runs_beside_the_session_which_keeps_serving_and_asks_for_no_second() {
+    let launcher = FakeLauncher::default();
+    let gate = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+    {
+        let mut guest = launcher.0.lock().unwrap();
+        guest.memory_range = Some((3072, 16384));
+        guest.resize_gate = Some(Arc::clone(&gate));
+    }
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    let session = Arc::new(session);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    let short = || {
+        Body::GuestMemoryPressure(dsa_protocol::control::GuestMemoryPressure {
+            mem_total_kb: 2900 * 1024,
+            mem_available_kb: 200 * 1024,
+            stall_centipercent: 0,
+        })
+    };
+    send_body(&mut agent, short());
+    // The resize waits on its gate. Meanwhile the session's own thread still answers a press
+    // in a widget's window, as it does input and the apps' requests.
+    let asking = Arc::clone(&session);
+    let (answered, answer) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let _ = answered.send(asking.widget_pointer(dsa_protocol::control::WidgetPointer {
+            action: dsa_protocol::control::PointerAction::Down as i32,
+            ..Default::default()
+        }));
+    });
+    answer
+        .recv_timeout(Duration::from_secs(2))
+        .expect("the session answers while a resize is in flight")
+        .expect("the press reaches the guest");
+    assert_eq!(launcher.0.lock().unwrap().memory_sizes, Vec::<u64>::new());
+    // Still short, past the cooldown: no second resize while the first is in flight.
+    thread::sleep(Duration::from_millis(5100));
+    send_body(&mut agent, short());
+    thread::sleep(Duration::from_millis(200));
+    // The platform answers: the size is set once.
+    {
+        let (open, changed) = &*gate;
+        *open.lock().unwrap() = true;
+        changed.notify_all();
+    }
+    wait_until("the resize lands", || {
+        launcher.0.lock().unwrap().memory_sizes == vec![4608]
+    });
+    thread::sleep(Duration::from_millis(200));
+    assert_eq!(launcher.0.lock().unwrap().memory_sizes, vec![4608]);
     assert_eq!(launcher.0.lock().unwrap().growth_failed, 0);
 }
 
