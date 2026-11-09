@@ -133,6 +133,23 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   (or its text), and streams each file from the app's provider in answer to `DragRead`.
   Content URIs and paths stay in the guest. `DragEnd` closes the streams and gives the
   access back, whether the drag was dropped or cancelled on the host.
+- **Share on PC.** "Share on PC" in Android's share sheet (`ShareActivity`, for `ACTION_SEND`
+  and `ACTION_SEND_MULTIPLE` of any type) sends the host `ShareToHost` with the shared text,
+  links and files. The host reads the files with `DragRead` under the share's ID, as a drag's,
+  ends the share with `DragEnd`, and shows its own share UI (Windows' share window with Nearby
+  sharing, the macOS share menu, the desktop portal on Linux). The activity shows nothing and
+  stays, in a task of its own the host shows no window for, until the host has the files,
+  since the app's read access lasts only while it does. A `ShareResult` that failed is shown
+  to the user as a toast.
+- **Network location and geocoding.** The image names the agent as the guest's network
+  location provider and geocode provider, so both work with or without Google Play. The
+  network provider (`HostNetworkLocationService`) asks the host for its location with
+  `LocationRequest` while Android wants network locations, and reports each `LocationFix` as a
+  `network` location; a `LocationStatus` that is not allowed disables the provider. The control
+  daemon tells the host what it and the GNSS HAL want together. The geocode provider
+  (`HostGeocodeService`) sends each lookup as `GeocodeRequest` and turns the `GeocodeResult`
+  into Android `Address`es, or into the `IOException` Android's geocoder reports when the
+  service is not available.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.

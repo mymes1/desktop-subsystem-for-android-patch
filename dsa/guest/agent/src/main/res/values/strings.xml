@@ -8,4 +8,7 @@
     <string name="print_unavailable">DSA\'s agent is not running, so the document cannot reach the desktop.</string>
     <string name="accessibility_service_name">DSA host accessibility</string>
     <string name="accessibility_service_description">Lets screen readers and other accessibility tools on the host read and use the apps in their windows.</string>
+    <string name="share_target_name">Share on PC</string>
+    <string name="share_unavailable">The PC cannot be reached, so this cannot be shared there.</string>
+    <string name="share_failed">The PC could not share this: %1$s</string>
 </resources>
