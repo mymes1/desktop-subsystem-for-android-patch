@@ -274,6 +274,7 @@ impl Planner {
             dsa_host_core::file_share::SHARE_PORT,
         ];
         listen_ports.extend(RELAYED_PORTS);
+        listen_ports.extend(crate::host_services::listen_ports());
         let vm = MacVmConfig {
             kernel: files.kernel.clone(),
             initrd: files.initrd.clone(),
@@ -542,6 +543,18 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     // The Mac's name becomes the guest's device name.
     session.set_device_name_source(Arc::new(move || boot_identity.device_name()));
     session.serve_file_shares(Box::new(share), Arc::new(user_folders()));
+    // App data backups in ~/DSA Backup, the passkey check, and KeyMint's root key, with the
+    // keys in the user's login keychain.
+    let keymint = VsockListener::new(
+        channels.receiver(dsa_host_core::keymint_root::KEYMINT_PORT),
+        Framing::Framed,
+    );
+    crate::host_services::serve(
+        &session,
+        &user_folders().home,
+        Box::new(keymint),
+        &shared.build,
+    );
     let dial = |port: u32| {
         let slot = slot.clone();
         Arc::new(move |_vm_id: &str| {

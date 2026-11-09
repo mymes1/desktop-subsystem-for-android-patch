@@ -29,6 +29,8 @@
 //!   one window host per app, each given its tasks' frames.
 //! - [`root_approval`]: the administrator dialog an Android app's root request waits for,
 //!   through Authorization Services.
+//! - [`keychain`] and `host_services`: the app data backup in `~/DSA Backup`, the passkey check
+//!   and KeyMint's root key, with their keys in the user's login keychain.
 //!
 //! What can be checked anywhere (the kernel command line, the disk formats, the
 //! configuration, the launchd agent, key tables, sizes, bundle layouts, value conversions) is
@@ -42,6 +44,7 @@ pub mod devices;
 pub mod display_power;
 pub mod host_config;
 pub mod input;
+pub mod keychain;
 pub mod launchd;
 pub mod power;
 pub mod root_approval;
@@ -74,7 +77,11 @@ pub mod gfx;
 #[cfg(target_os = "macos")]
 pub mod host_memory;
 #[cfg(target_os = "macos")]
+pub mod host_services;
+#[cfg(target_os = "macos")]
 pub mod objc;
+#[cfg(target_os = "macos")]
+pub mod security;
 #[cfg(target_os = "macos")]
 pub mod service;
 #[cfg(target_os = "macos")]
