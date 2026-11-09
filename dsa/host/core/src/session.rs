@@ -5187,8 +5187,9 @@ impl Worker {
     }
 
     /// The guest's control daemon says how much memory it has: the VM grows when the guest is
-    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A launcher that
-    /// cannot resize stops the growing, and the guest keeps the size it has.
+    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A resize the
+    /// launcher refuses or that times out is tried again in smaller steps; only memory that
+    /// was added and never reached the guest stops the growing.
     fn guest_memory_pressure(&mut self, pressure: GuestPressure) {
         let Some(growth) = self.memory_growth.as_mut() else {
             return;
@@ -5201,17 +5202,27 @@ impl Worker {
                 self.launcher.memory_growth_failed(&why);
             }
             Some(GrowthAction::Resize(mb)) => match self.launcher.set_memory_mb(mb) {
-                Ok(()) => eprintln!(
-                    "memory: Android's memory {} from {before} to {mb} MiB ({} MiB available, \
-                     {:.1}% stalled)",
-                    if mb > before { "grows" } else { "shrinks" },
-                    pressure.mem_available_kb / 1024,
-                    pressure.stall_percent
-                ),
+                Ok(()) => {
+                    growth.applied();
+                    eprintln!(
+                        "memory: Android's memory {} from {before} to {mb} MiB ({} MiB \
+                         available, {:.1}% stalled)",
+                        if mb > before { "grows" } else { "shrinks" },
+                        pressure.mem_available_kb / 1024,
+                        pressure.stall_percent
+                    )
+                }
                 Err(why) => {
-                    growth.refused(before);
-                    eprintln!("memory: Android's memory could not be set to {mb} MiB: {why}");
-                    self.launcher.memory_growth_failed(&why);
+                    // A refused or timed-out resize is tried again in a smaller step; it
+                    // never stops later ones (see MemoryGrowth::refused).
+                    let now = Instant::now();
+                    growth.refused(now);
+                    let wait = growth.retry_in(now).unwrap_or_default().as_secs();
+                    eprintln!(
+                        "memory: Android's memory could not be set from {before} to {mb} MiB \
+                         ({why}); it stays at {before} MiB and is resized again in smaller \
+                         steps in {wait} s"
+                    );
                 }
             },
         }
