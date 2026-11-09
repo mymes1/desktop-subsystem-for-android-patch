@@ -132,6 +132,13 @@ windows = { version = "0.62", features = [
     "Win32_Media_Audio",
     # Windows' media controls for the media sessions of the user's Android.
     "Media",
+    # Speech and spelling for the user's Android: Windows' voices, speech recognition and
+    # spell checker.
+    "Media_SpeechSynthesis",
+    "Media_SpeechRecognition",
+    "Media_Core",
+    "Globalization",
+    "Win32_Globalization",
 ] }
 
 [build-dependencies]

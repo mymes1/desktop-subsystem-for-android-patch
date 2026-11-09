@@ -22,7 +22,9 @@
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
 //! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
 //! Android on their default output device ([`audio`]), and records their default capture
-//! device for its microphone ([`microphone`]).
+//! device for its microphone ([`microphone`]). It answers the text-to-speech engine, speech
+//! recognition service and spell checker of the user's Android with Windows' own
+//! ([`language`]).
 
 pub mod adapter;
 pub mod audio;
@@ -36,6 +38,7 @@ pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
 pub mod hosts;
+pub mod language;
 pub mod links;
 pub mod location;
 pub mod log;
@@ -157,6 +160,8 @@ pub struct Compositor {
     print_jobs: bool,
     /// Whether the user's Android gets the computer's location from Windows.
     give_location: bool,
+    /// Whether the user's Android speaks, recognises speech and checks spelling with Windows.
+    serve_language: bool,
     /// Whether the apps that run in the background in the user's Android are shown in the
     /// notification area, with their media sessions in Windows' media controls.
     show_background: bool,
@@ -270,6 +275,7 @@ impl Compositor {
             show_widgets: true,
             print_jobs: true,
             give_location: true,
+            serve_language: true,
             show_background: true,
             touch_gestures: touch_gestures::TouchGestureSetup::for_this_user(),
         }
@@ -307,6 +313,7 @@ impl Compositor {
             show_widgets: false,
             print_jobs: false,
             give_location: false,
+            serve_language: false,
             show_background: false,
             touch_gestures: None,
         }
@@ -429,6 +436,7 @@ impl Compositor {
         let links_thread = self.start_links(&stop);
         let clipboard_thread = self.start_clipboard(&stop);
         let location_thread = self.start_location(&stop);
+        let language_thread = self.start_language(&stop);
         let notifications_thread = self.start_notifications(&stop);
         let widgets_thread = self.start_widgets(&stop);
         let background_thread = self.start_background(&stop);
@@ -632,6 +640,9 @@ impl Compositor {
             let _ = thread.join();
         }
         if let Some(thread) = location_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = language_thread {
             let _ = thread.join();
         }
         if let Some(thread) = notifications_thread {
@@ -886,6 +897,29 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the location's thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts answering the speech and spelling requests of the user's Android with Windows'
+    /// voices, speech recognition and spell checker, on a thread of its own that ends with
+    /// `stop`. Each of the three runs on a thread of its own besides.
+    fn start_language(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.serve_language {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-language".into())
+            .spawn(move || language::serve(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the speech and spelling thread: {e}"),
                 )
             })
             .ok()
