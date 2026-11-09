@@ -15,8 +15,9 @@
 //! task pixels) are used as they come.
 
 use dsa_host_core::compositor::caption::{
-    band_fill, caption_tone, paint_title_bar, title_bar_hit, BackButton, CaptionLayout,
-    CaptionPalette, CaptionState, CaptionTone, TitleBarContent, TitleBarHit, TitleBarMode,
+    band_sample, caption_icon, caption_tone, paint_title_bar, title_bar_hit, BackButton,
+    BandSample, CaptionLayout, CaptionPalette, CaptionState, CaptionTone, TitleBarContent,
+    TitleBarHit, TitleBarMode,
 };
 use dsa_host_core::tasks::{AppInfo, Bounds, StatusBarAppearance};
 
@@ -32,19 +33,39 @@ pub fn caption_icon_png(app: &AppInfo) -> &[u8] {
     }
 }
 
+/// Whether the title bar of `app`'s windows shows an adaptive icon's foreground alone, with
+/// no plate behind it ([`caption_icon_png`]).
+pub fn caption_icon_is_logo(app: &AppInfo) -> bool {
+    !app.caption_icon_png.is_empty()
+}
+
 /// An app's title bar icon, decoded once and kept at the side the window draws it.
 #[derive(Debug, Clone, Default)]
 pub struct CaptionIcon {
     image: Option<Rgba>,
+    /// Whether it is an adaptive icon's foreground alone, which is enlarged to the size of a
+    /// whole icon ([`caption_icon`]).
+    logo: bool,
     scaled: Option<(u32, Vec<u8>)>,
 }
 
 impl CaptionIcon {
-    /// The icon in `png`; one that does not decode leaves the cell empty.
+    /// The whole icon in `png`, background and all; one that does not decode leaves the cell
+    /// empty.
     pub fn new(png: &[u8]) -> CaptionIcon {
         CaptionIcon {
             image: (!png.is_empty()).then(|| png::decode(png).ok()).flatten(),
+            logo: false,
             scaled: None,
+        }
+    }
+
+    /// An adaptive icon's foreground in `png`, drawn without its plate: its logo is cropped
+    /// to what it draws and fitted to the box a whole icon fills.
+    pub fn logo(png: &[u8]) -> CaptionIcon {
+        CaptionIcon {
+            logo: true,
+            ..CaptionIcon::new(png)
         }
     }
 
@@ -59,10 +80,32 @@ impl CaptionIcon {
             return None;
         }
         if self.scaled.as_ref().map(|(at, _)| *at) != Some(side) {
-            self.scaled = Some((side, scale_premultiplied(image, side)));
+            let pixels = if self.logo {
+                let bgra = premultiplied_bgra(image);
+                caption_icon(&bgra, image.width, image.height, side, true)
+            } else {
+                scale_premultiplied(image, side)
+            };
+            self.scaled = Some((side, pixels));
         }
         self.scaled.as_ref().map(|(_, pixels)| pixels.as_slice())
     }
+}
+
+/// `image` (straight RGBA) as premultiplied BGRA rows.
+fn premultiplied_bgra(image: &Rgba) -> Vec<u8> {
+    let mut out = Vec::with_capacity(image.pixels.len());
+    for pixel in image.pixels.chunks_exact(4) {
+        let alpha = u32::from(pixel[3]);
+        let premultiply = |value: u8| ((u32::from(value) * alpha + 127) / 255) as u8;
+        out.extend_from_slice(&[
+            premultiply(pixel[2]),
+            premultiply(pixel[1]),
+            premultiply(pixel[0]),
+            pixel[3],
+        ]);
+    }
+    out
 }
 
 /// `image` fitted into a square of `side` pixels, centred, as premultiplied BGRA rows. Each
@@ -152,7 +195,7 @@ pub struct BandArt<'a> {
     pub icon: Option<&'a [u8]>,
     /// The app's name as coverage, the size of the layout's title rectangle ([`place_text`]).
     pub title: Option<&'a [u8]>,
-    /// The color the band is filled with, when the app leaves it empty ([`frame_band_fill`]).
+    /// The color the band is filled with, when the app leaves it empty ([`frame_band_sample`]).
     pub fill: Option<u32>,
 }
 
@@ -246,22 +289,30 @@ impl TitleBar {
     }
 }
 
-/// The color to fill the band of a frame with, when the app leaves it empty or black: the
-/// app's color just under the band. `pixels` are the frame's `XRGB8888` rows (blue, green,
-/// red, unused in memory), `width` x `height`, and the band is `band` rows high.
-pub fn frame_band_fill(pixels: &[u8], width: u32, height: u32, band: u32) -> Option<u32> {
-    let [inside, below] = crate::compositor::frames::band_probe_rows(band, height)?;
+/// What a frame shows under its band ([`BandSample`]): the color to fill the band with when
+/// the app leaves it empty or black (the app's color just under the band), and how light the
+/// band is, which the caption glyphs' tone follows. `pixels` are the frame's `XRGB8888` rows
+/// (blue, green, red, unused in memory), `width` x `height`, and the band is `band` rows
+/// high. The default when the frame has no band or its rows cannot be read.
+pub fn frame_band_sample(pixels: &[u8], width: u32, height: u32, band: u32) -> BandSample {
+    let Some([inside, below]) = crate::compositor::frames::band_probe_rows(band, height) else {
+        return BandSample::default();
+    };
     let row = width as usize * 4;
     let row_at = |y: u32| pixels.get(y as usize * row..(y as usize + 1) * row);
-    rows_band_fill(row_at(inside)?, row_at(below)?, width)
+    match (row_at(inside), row_at(below)) {
+        (Some(inside), Some(below)) => rows_band_sample(inside, below, width),
+        _ => BandSample::default(),
+    }
 }
 
-/// The band's fill from the two rows [`crate::compositor::frames::band_probe_rows`] names, as
-/// `XRGB8888` rows `width` pixels wide: `inside` from the middle of the band, `below` from
-/// just under it. This is all a GPU frame reads back for the band.
-pub fn rows_band_fill(inside: &[u8], below: &[u8], width: u32) -> Option<u32> {
+/// The band's sample ([`BandSample`]) from the two rows
+/// [`crate::compositor::frames::band_probe_rows`] names, as `XRGB8888` rows `width` pixels
+/// wide: `inside` from the middle of the band, `below` from just under it. This is all a GPU
+/// frame reads back for the band.
+pub fn rows_band_sample(inside: &[u8], below: &[u8], width: u32) -> BandSample {
     if width == 0 {
-        return None;
+        return BandSample::default();
     }
     const SAMPLES: u32 = 16;
     let color = |row: &[u8], x: u32| -> Option<u32> {
@@ -279,12 +330,23 @@ pub fn rows_band_fill(inside: &[u8], below: &[u8], width: u32) -> Option<u32> {
         .collect();
     let inside: Option<Vec<u32>> = columns.iter().map(|&x| color(inside, x)).collect();
     let below: Option<Vec<u32>> = columns.iter().map(|&x| color(below, x)).collect();
-    band_fill(&inside?, &below?)
+    match (inside, below) {
+        (Some(inside), Some(below)) => band_sample(&inside, &below),
+        _ => BandSample::default(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn frame_band_fill(pixels: &[u8], width: u32, height: u32, band: u32) -> Option<u32> {
+        frame_band_sample(pixels, width, height, band).fill
+    }
+
+    fn rows_band_fill(inside: &[u8], below: &[u8], width: u32) -> Option<u32> {
+        rows_band_sample(inside, below, width).fill
+    }
     use dsa_host_core::compositor::caption::{CaptionButton, CaptionHit};
 
     fn app(icon: &[u8], caption_icon: &[u8]) -> AppInfo {
@@ -340,6 +402,46 @@ mod tests {
         let (left, top, _, _) = layout.icon_rect().unwrap();
         let at = ((top as usize + 2) * 400 + left as usize + 2) * 4;
         assert_eq!(&band[at..at + 4], &[0, 0, 0xff, 0xff]);
+    }
+
+    #[test]
+    fn fr22_a_logo_only_title_bar_icon_fills_the_box_of_a_whole_icon() {
+        // A foreground whose logo covers the middle half, where the plate surrounded it.
+        let mut pixels = Vec::new();
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let inside = (16..48).contains(&x) && (16..48).contains(&y);
+                pixels.extend_from_slice(if inside { &[0xff, 0, 0, 0xff] } else { &[0; 4] });
+            }
+        }
+        let foreground = png::encode(
+            &Rgba {
+                width: 64,
+                height: 64,
+                pixels,
+            },
+            true,
+        );
+        let adaptive = app(&solid_png(4, 4, [0, 0, 0xff, 0xff]), &foreground);
+        assert!(caption_icon_is_logo(&adaptive));
+        assert!(!caption_icon_is_logo(&app(&foreground, &[])));
+        let opaque_columns = |icon: &[u8], side: u32| {
+            let row = side / 2;
+            (0..side)
+                .filter(|x| icon[((row * side + x) * 4 + 3) as usize] >= 128)
+                .count() as u32
+        };
+        for side in [16, 20, 24, 32] {
+            let padding = dsa_host_core::compositor::caption::logo_padding(side);
+            let logo = CaptionIcon::logo(&foreground).at(side).unwrap().to_vec();
+            assert_eq!(opaque_columns(&logo, side), side - 2 * padding, "at {side}");
+            // Red, premultiplied BGRA, in the middle.
+            let middle = (((side / 2) * side + side / 2) * 4) as usize;
+            assert_eq!(&logo[middle..middle + 4], &[0, 0, 0xff, 0xff]);
+            // The same image as a whole icon is drawn as it is: half the box.
+            let whole = CaptionIcon::new(&foreground).at(side).unwrap().to_vec();
+            assert_eq!(opaque_columns(&whole, side), side / 2, "at {side}");
+        }
     }
 
     #[test]
@@ -537,6 +639,38 @@ mod tests {
         // Rows shorter than the width say nothing.
         assert_eq!(rows_band_fill(&empty[..8], &toolbar, width), None);
         assert_eq!(rows_band_fill(&empty, &toolbar, 0), None);
+    }
+
+    #[test]
+    fn fr22_a_frame_tells_how_light_its_band_is() {
+        use dsa_host_core::compositor::caption::shown_tone;
+        let (width, height, band) = (64u32, 48u32, 16u32);
+        // An app drawing edge to edge with a transparent status bar: its header runs under
+        // the band, light or dark, whatever its status bar reports.
+        let frame = |header: [u8; 4]| -> Vec<u8> { header.repeat((width * height) as usize) };
+        let light = frame_band_sample(&frame([0xFA, 0xF9, 0xF8, 0xff]), width, height, band);
+        let dark = frame_band_sample(&frame([0x24, 0x21, 0x20, 0xff]), width, height, band);
+        assert!(light.luminance.is_some_and(|l| l > 900), "{light:?}");
+        assert!(dark.luminance.is_some_and(|l| l < 50), "{dark:?}");
+        for reported in [CaptionTone::DarkGlyphs, CaptionTone::LightGlyphs] {
+            assert_eq!(
+                shown_tone(reported, light, false, reported),
+                CaptionTone::DarkGlyphs
+            );
+            assert_eq!(
+                shown_tone(reported, dark, false, reported),
+                CaptionTone::LightGlyphs
+            );
+        }
+        // A frame with no band, or rows that cannot be read, says nothing.
+        assert_eq!(
+            frame_band_sample(&frame([0xff; 4]), width, height, 0),
+            BandSample::default()
+        );
+        assert_eq!(
+            frame_band_sample(&[], width, height, band),
+            BandSample::default()
+        );
     }
 
     #[test]

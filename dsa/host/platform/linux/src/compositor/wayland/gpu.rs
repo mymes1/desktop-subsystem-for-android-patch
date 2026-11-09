@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::compositor::caption::BandSample;
 use dsa_host_core::compositor::window_sizing::{to_task_length, to_window_size};
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_shm::Format;
@@ -39,7 +40,7 @@ use crate::compositor::frames::{
     app_rows, band_probe_rows, Frame, GpuFrame, GpuImage, DRM_FORMAT_MOD_LINEAR,
 };
 use crate::compositor::session::log;
-use crate::compositor::title_bar::rows_band_fill;
+use crate::compositor::title_bar::rows_band_sample;
 
 /// How often a GPU frame's band is sampled, at most: the app's top color changes with its
 /// screens, not with every frame, and each sample waits for the GPU.
@@ -163,16 +164,18 @@ impl State {
         })
     }
 
-    /// The color the band of a GPU frame takes when the app leaves it empty, from the two
-    /// rows the band fill samples. `None` when the app draws the band, or the rows cannot be
-    /// read (which is logged once for each image).
-    fn gpu_band_fill(&mut self, display_id: u32, frame: GpuFrame, band: u32) -> Option<u32> {
-        let [inside, below] = band_probe_rows(band, frame.height)?;
+    /// What a GPU frame shows under its band, from the two rows the band fill samples: the
+    /// color the band takes when the app leaves it empty, and how light the band is. The
+    /// default when the rows cannot be read (which is logged once for each image).
+    fn gpu_band_sample(&mut self, display_id: u32, frame: GpuFrame, band: u32) -> BandSample {
+        let Some([inside, below]) = band_probe_rows(band, frame.height) else {
+            return BandSample::default();
+        };
         match self.read_gpu_rows(display_id, frame.slot, frame.width, &[inside, below]) {
             Ok(read) => {
                 let row = read.width as usize * 4;
                 let (inside, below) = read.pixels.split_at(row.min(read.pixels.len()));
-                rows_band_fill(inside, below, read.width)
+                rows_band_sample(inside, below, read.width)
             }
             Err(why) => {
                 if let Some(gpu) = self.gpu_buffers.get_mut(&(display_id, frame.slot)) {
@@ -182,7 +185,7 @@ impl State {
                         ));
                     }
                 }
-                None
+                BandSample::default()
             }
         }
     }
@@ -312,7 +315,7 @@ impl State {
             }
             return;
         }
-        // The band's fill, from two rows of the frame read back, now and then.
+        // The band's fill and lightness, from two rows of the frame read back, now and then.
         let now = Instant::now();
         let probe = self.windows.get(&task_id).and_then(|window| {
             (window.model.has_caption()
@@ -322,9 +325,9 @@ impl State {
             .then(|| to_task_length(window.model.caption_height(), window.model.frame_scale))
         });
         if let Some(band) = probe {
-            let fill = self.gpu_band_fill(display_id, frame, band);
+            let sample = self.gpu_band_sample(display_id, frame, band);
             if let Some(window) = self.windows.get_mut(&task_id) {
-                window.gpu_fill = fill;
+                window.gpu_band = sample;
                 window.band_probed = Some(now);
             }
         }
@@ -361,12 +364,13 @@ impl State {
         viewport.set_destination(logical_width, logical_height);
 
         // The title bar's band, on its own surface over the frame, filled with the app's top
-        // color as sampled last when the app leaves the band empty.
+        // color as sampled last when the app leaves the band empty, its glyphs in the tone
+        // the band's lightness calls for.
         if window.model.has_caption() && !in_pip {
             let scale = window.model.scale.max(1) as i32;
             let parent = window.surface.clone();
-            let fill = window.gpu_fill;
-            let (layout, pixels) = window.band_pixels(self.text.as_ref(), fill);
+            let sample = window.gpu_band;
+            let (layout, pixels) = window.band_pixels(self.text.as_ref(), sample);
             let pixels = pixels.to_vec();
             let size = (layout.width.max(1), layout.height.max(1));
             let layer = window.caption_layer.get_or_insert_with(|| {
