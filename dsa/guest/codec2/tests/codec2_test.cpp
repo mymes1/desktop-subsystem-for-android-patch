@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "config_rules.h"
 #include "output_buffer.h"
 #include "picture_copy.h"
 #include "test_main.h"
@@ -226,6 +227,32 @@ TEST(fr26_a_failure_on_every_picture_is_logged_once_in_a_while) {
     throttle.reset();
     EXPECT_TRUE(throttle.shouldLog(&count));
     EXPECT_EQ(count, 1u);
+}
+
+TEST(fr26_a_surface_mode_configure_takes_the_surfaces_pixel_format) {
+    // The pixel formats CCodecConfig sets on a video decoder's output, from the app's color
+    // format: COLOR_FormatSurface for a surface, the flexible YUV formats for buffers.
+    struct Request {
+        uint32_t value;
+        bool accepted;
+    };
+    const Request requests[] = {
+        {0x22, true},        // HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED: a surface
+        {0x23, true},        // HAL_PIXEL_FORMAT_YCBCR_420_888: buffers the app reads
+        {0x36, false},       // HAL_PIXEL_FORMAT_YCBCR_P010: 10-bit, which the decoders do not give
+        {0x7f000789, false}, // a framework color format that is not a pixel format
+    };
+    for (const Request& request : requests) {
+        uint32_t kept = 0;
+        const bool accepted = acceptPixelFormat(request.value, &kept);
+        EXPECT_EQ(accepted, request.accepted);
+        if (accepted) {
+            // The decoders always output flexible YUV, which a surface takes as well.
+            EXPECT_EQ(kept, kPixelFormatFlexible);
+        }
+    }
+    EXPECT_EQ(kPixelFormatSurface, 0x22u);
+    EXPECT_EQ(kPixelFormatFlexible, 0x23u);
 }
 
 int main(int argc, char** argv) {
