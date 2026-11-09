@@ -26,8 +26,10 @@
 //!   (`dsa-linux-hostd`);
 //! - [`root_approval`]: the administrator prompt an Android app's root request waits for,
 //!   through polkit in the user's desktop session;
-//! - [`secret_service`]: each user's backup key and KeyMint root key, kept in their Secret
-//!   Service through a helper that runs as them;
+//! - [`secret_service`]: each user's backup key, kept in their Secret Service through a
+//!   helper that runs as them, and their KeyMint root key where no TPM 2.0 works;
+//! - [`tpm2`]: each user's KeyMint root key, sealed by the computer's TPM 2.0 through the
+//!   kernel's resource manager;
 //! - `host_services`: the app data backup in `~/DSA Backup`, the passkey check and the
 //!   KeyMint root key each user's session serves.
 //!
@@ -71,6 +73,7 @@ pub mod secret_service;
 pub mod service;
 pub mod shell;
 pub mod signs;
+pub mod tpm2;
 #[cfg(target_os = "linux")]
 pub mod users;
 #[cfg(target_os = "linux")]

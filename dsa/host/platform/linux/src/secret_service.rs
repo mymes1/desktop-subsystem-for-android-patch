@@ -148,6 +148,8 @@ pub trait SecretBus {
         secret: &WireSecret,
         replace: bool,
     ) -> Result<(String, String), BusError>;
+    /// `Item.Delete`: a prompt (or [`NO_OBJECT`]).
+    fn delete_item(&self, item: &str) -> Result<String, BusError>;
 }
 
 /// What a person reads when no Secret Service runs.
@@ -295,6 +297,21 @@ pub fn store(bus: &dyn SecretBus, purpose: KeyPurpose, secret: &Secret) -> Resul
     })
 }
 
+/// Removes every item kept for `purpose`; none kept is no error.
+pub fn remove(bus: &dyn SecretBus, purpose: KeyPurpose) -> Result<(), KeyError> {
+    let (unlocked, locked) = bus
+        .search_items(&attributes(purpose))
+        .map_err(failed("to search the keyring"))?;
+    for item in &locked {
+        unlock(bus, item)?;
+    }
+    for item in unlocked.iter().chain(locked.iter()) {
+        let prompt = bus.delete_item(item).map_err(failed("to remove the key"))?;
+        answer_prompt(bus, &prompt, "to remove the key")?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------------------------
 // What passes over the helper's pipes.
 
@@ -303,6 +320,7 @@ pub fn store(bus: &dyn SecretBus, purpose: KeyPurpose, secret: &Secret) -> Resul
 pub enum HelperRequest {
     Load(KeyPurpose),
     Store(KeyPurpose, Secret),
+    Remove(KeyPurpose),
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -323,6 +341,7 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 pub fn encode_request(request: &HelperRequest) -> Vec<u8> {
     match request {
         HelperRequest::Load(purpose) => format!("load {}\n", purpose.name()).into_bytes(),
+        HelperRequest::Remove(purpose) => format!("remove {}\n", purpose.name()).into_bytes(),
         HelperRequest::Store(purpose, secret) => {
             format!("store {} {}\n", purpose.name(), hex(secret.bytes())).into_bytes()
         }
@@ -339,6 +358,7 @@ pub fn decode_request(data: &[u8]) -> Result<HelperRequest, String> {
         .ok_or("the request names no key DSA keeps")?;
     let request = match (verb, words.next()) {
         ("load", None) => HelperRequest::Load(purpose),
+        ("remove", None) => HelperRequest::Remove(purpose),
         ("store", Some(value)) => {
             let mut bytes = unhex(value).ok_or("the key in the request is not hex")?;
             let secret = Secret::from_slice(&bytes);
@@ -348,7 +368,7 @@ pub fn decode_request(data: &[u8]) -> Result<HelperRequest, String> {
                 secret.ok_or("the key in the request is not 32 bytes")?,
             )
         }
-        _ => return Err(format!("the request {verb:?} is not load or store")),
+        _ => return Err(format!("the request {verb:?} is not load, store or remove")),
     };
     if words.next().is_some() {
         return Err("the request has more words than it should".into());
@@ -398,6 +418,7 @@ pub fn serve_request(
     match request {
         HelperRequest::Load(purpose) => load(bus, *purpose),
         HelperRequest::Store(purpose, secret) => store(bus, *purpose, secret).map(|()| None),
+        HelperRequest::Remove(purpose) => remove(bus, *purpose).map(|()| None),
     }
 }
 
@@ -634,6 +655,11 @@ mod linux {
             let (item, prompt): (OwnedObjectPath, OwnedObjectPath) = made?;
             Ok((item.to_string(), prompt.to_string()))
         }
+
+        fn delete_item(&self, item: &str) -> Result<String, BusError> {
+            let prompt: OwnedObjectPath = self.call(item, ITEM_IFACE, "Delete", &())?;
+            Ok(prompt.to_string())
+        }
     }
 
     /// Whether the helper has written its answer, so the watchdog and the request do not
@@ -797,6 +823,12 @@ mod linux {
             // Whatever happens, what is known may no longer be what the keyring keeps.
             self.known().remove(&purpose);
             self.ask(&HelperRequest::Store(purpose, secret.clone()))?;
+            Ok(())
+        }
+
+        fn remove(&self, purpose: KeyPurpose) -> Result<(), KeyError> {
+            self.known().remove(&purpose);
+            self.ask(&HelperRequest::Remove(purpose))?;
             Ok(())
         }
     }
@@ -967,6 +999,33 @@ mod tests {
                 .insert(path.clone(), (attributes, secret.value.clone()));
             Ok((path, NO_OBJECT.into()))
         }
+        fn delete_item(&self, item: &str) -> Result<String, BusError> {
+            self.log("Delete");
+            assert!(
+                !*self.locked.borrow(),
+                "a locked item is unlocked before it is removed"
+            );
+            self.items.borrow_mut().remove(item);
+            Ok(NO_OBJECT.into())
+        }
+    }
+
+    #[test]
+    fn fr36_a_key_is_removed_from_the_keyring_even_while_it_is_locked() {
+        let bus = FakeBus::default()
+            .with_item(KeyPurpose::Backup, &[3; 32])
+            .with_item(KeyPurpose::KeyMintRoot, &[4; 32]);
+        *bus.locked.borrow_mut() = true;
+        remove(&bus, KeyPurpose::Backup).unwrap();
+        assert_eq!(load(&bus, KeyPurpose::Backup), Ok(None));
+        assert_eq!(
+            load(&bus, KeyPurpose::KeyMintRoot),
+            Ok(Some(Secret::from_bytes([4; 32]))),
+            "only the purpose asked for goes"
+        );
+        remove(&bus, KeyPurpose::Backup).unwrap();
+        let request = HelperRequest::Remove(KeyPurpose::Backup);
+        assert_eq!(decode_request(&encode_request(&request)), Ok(request));
     }
 
     #[test]

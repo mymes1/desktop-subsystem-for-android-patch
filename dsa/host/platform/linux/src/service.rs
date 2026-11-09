@@ -459,9 +459,9 @@ pub fn create_user_android(
     let folders = crate::devices::file_share::UserFolders::for_uid(uid)
         .map_err(|e| format!("the folders of {user}: {e}"))?;
     session.serve_file_shares(Box::new(share_listener), Arc::new(folders));
-    // App data backups in the user's own folder, the passkey check, and KeyMint's root key,
-    // with the keys in the user's Secret Service.
-    crate::host_services::serve(&session, &account, cid, build, user)?;
+    // App data backups in the user's own folder (once they turn backup on), the passkey
+    // check, and KeyMint's root key, sealed by the TPM first.
+    crate::host_services::serve(&session, &account, cid, build, user, &config.settings_dir())?;
     // The guest's sound, cameras and sensors, passed on to the user's own device lender.
     for port in crate::devices::relay::RELAYED_PORTS {
         let listener = hub(port)?.listener(cid, true);
