@@ -49,7 +49,7 @@
                         </ui:CardControl.Header>
                         <TextBlock Text="{Binding SecurityPatch, Mode=OneWay}" />
                     </ui:CardControl>
-                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRouting24}">
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon BranchFork24}">
                         <ui:CardControl.Header>
                             <TextBlock Text="{l:Text AndroidFollowsCard.Header}" Style="{StaticResource CardTitle}" />
                         </ui:CardControl.Header>

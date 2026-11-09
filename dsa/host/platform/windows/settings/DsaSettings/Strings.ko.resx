@@ -265,6 +265,9 @@
   <data name="DisplayGpuCard.Description" xml:space="preserve">
     <value>기본값을 고르면 지금 이 GPU에서 렌더링합니다.</value>
   </data>
+  <data name="RenderGpuAppliesBar.Title" xml:space="preserve">
+    <value>다시 시작하면 적용됩니다</value>
+  </data>
   <data name="RenderGpuAppliesBar.Message" xml:space="preserve">
     <value>바꾼 렌더링 GPU는 창 관리자가 다시 시작할 때 적용됩니다. 다음에 로그인할 때 적용되며, 아래에서 바로 다시 시작할 수도 있습니다.</value>
   </data>

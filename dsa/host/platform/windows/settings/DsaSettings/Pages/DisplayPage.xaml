@@ -43,7 +43,7 @@
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 </ui:CardControl>
 
-                <ui:InfoBar Message="{l:Text RenderGpuAppliesBar.Message}" Severity="Informational" IsClosable="False" IsOpen="True"
+                <ui:InfoBar Title="{l:Text RenderGpuAppliesBar.Title}" Message="{l:Text RenderGpuAppliesBar.Message}" Severity="Informational" IsClosable="False" IsOpen="True"
                             Margin="0,0,0,4" />
 
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon TapDouble24}"
