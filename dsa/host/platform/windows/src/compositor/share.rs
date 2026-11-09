@@ -255,13 +255,20 @@ mod window {
             let file = StorageFile::GetFileFromPathAsync(&path)
                 .and_then(|asked| asked.join())
                 .map_err(|e| fail("opening a shared file", e))?;
-            items.push(file.cast::<IStorageItem>().map_err(|e| fail("a shared file", e))?);
+            items.push(
+                file.cast::<IStorageItem>()
+                    .map_err(|e| fail("a shared file", e))?,
+            );
         }
         Ok(Files(items))
     }
 
     /// Fills the share window's data with `content`.
-    fn fill(data: &DataPackage, content: &ShareContent, files: &[IStorageItem]) -> windows::core::Result<()> {
+    fn fill(
+        data: &DataPackage,
+        content: &ShareContent,
+        files: &[IStorageItem],
+    ) -> windows::core::Result<()> {
         let properties = data.Properties()?;
         properties.SetTitle(&HSTRING::from(content.title.as_str()))?;
         properties.SetApplicationName(&HSTRING::from("Android"))?;
@@ -313,13 +320,14 @@ mod window {
                     let data = args.Request()?.Data()?;
                     fill(&data, &content, files.items())?;
                     let (anchor, decided) = (Arc::clone(&anchor_done), Arc::clone(&decided_done));
-                    data.ShareCompleted(&TypedEventHandler::<
-                        DataPackage,
-                        ShareCompletedEventArgs,
-                    >::new(move |_, _| {
-                        finish(&anchor, &decided, SHARED);
-                        Ok(())
-                    }))?;
+                    data.ShareCompleted(
+                        &TypedEventHandler::<DataPackage, ShareCompletedEventArgs>::new(
+                            move |_, _| {
+                                finish(&anchor, &decided, SHARED);
+                                Ok(())
+                            },
+                        ),
+                    )?;
                     let (anchor, decided) = (Arc::clone(&anchor_done), Arc::clone(&decided_done));
                     data.ShareCanceled(&TypedEventHandler::<
                         DataPackage,
