@@ -828,6 +828,33 @@ fn fr14_the_updates_page_shows_the_version_followed_and_the_download_with_its_pr
 }
 
 #[test]
+fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
+    let read = |value: serde_json::Value| dsa_settings_linux::model::AndroidVersion::read(&value);
+    let waiting = read(json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17,
+        "notice": "Android 17.0.0-2 is downloaded and will be used the next time Android starts",
+        "restart_pending": "17.0.0-2"
+    }));
+    assert_eq!(waiting.restart_pending.as_deref(), Some("17.0.0-2"));
+    let text = view::android_update_text(&waiting);
+    assert!(
+        text.contains("17.0.0-2") && text.contains("Restart Android"),
+        "{text}"
+    );
+    let idle = read(json!({
+        "version": "17.0.0-2", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17, "restart_pending": null
+    }));
+    assert_eq!(idle.restart_pending, None);
+
+    // The setting is on unless the service says it is off.
+    let settings = |value: serde_json::Value| dsa_settings_linux::model::Settings::read(&value);
+    assert!(settings(json!({"render_gpu": "display"})).image_auto_restart);
+    assert!(!settings(json!({"image_auto_restart": false})).image_auto_restart);
+}
+
+#[test]
 fn fr14_check_now_chooses_the_version_already_followed_as_an_administrator() {
     let fake = Fake::new(json!({}));
     let elevated = Fake::new(json!({

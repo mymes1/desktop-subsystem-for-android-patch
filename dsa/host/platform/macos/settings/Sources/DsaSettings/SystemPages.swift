@@ -264,8 +264,16 @@ struct UpdatesPage: View {
                         }
                     }
                     Spacer()
+                    // Shown while a downloaded image waits for this user's Android to restart.
+                    if android.isRestartPending {
+                        Button(T("AndroidRestartButton.Content")) { restartNow() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!android.canRestartNow)
+                    }
                     Button(T("AndroidCheckButton.Content")) { checkNow() }.disabled(!android.canCheckNow)
                 }
+                SwitchRow(title: T("ImageAutoRestartCard.Header"), detail: T("ImageAutoRestartCard.Description"),
+                          isOn: vm.imageAutoRestart, enabled: vm.canChange) { await vm.setImageAutoRestart($0) }
                 AdministratorSwitchRow(
                     title: T("ImageUpdatesCard.Header"), detail: T("ImageUpdatesCard.Description"),
                     isOn: vm.imageUpdates, canChange: vm.canChangeImageUpdates,
@@ -384,6 +392,17 @@ struct UpdatesPage: View {
             }
             await android.load()
         }
+    }
+
+    /// Restarts Android now into the downloaded image, after the user agrees that its app
+    /// windows close. The restart is the user's own Android's, so no administrator is asked.
+    private func restartNow() {
+        guard let version = android.restartPending,
+              Shell.confirm(T("AndroidRestartConfirm.Title"), appText.format("AndroidRestartConfirm.Body", version),
+                            T("AndroidRestartButton.Content"), destructive: false) else {
+            return
+        }
+        Task { await android.restartNow() }
     }
 
     private func apply() {

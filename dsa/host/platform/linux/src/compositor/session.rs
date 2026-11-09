@@ -374,6 +374,22 @@ fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
             match Notifier::connect(icons.clone()) {
                 Ok(notifier) => {
                     let watched = notifier.watch(|signal| {
+                        // [Restart now] on DSA's question: the service restarts Android into
+                        // the new image.
+                        if let Signal::ActionInvoked { id, action } = &signal {
+                            let restart = shown
+                                .lock()
+                                .is_ok_and(|shown| shown.restart_asked(*id, action));
+                            if restart {
+                                let asked = connect().and_then(|mut client| {
+                                    client.restart_for_update().map_err(|e| e.to_string())
+                                });
+                                if let Err(why) = asked {
+                                    log(&format!("Android was not restarted: {why}"));
+                                }
+                                return;
+                            }
+                        }
                         let action = match shown.lock() {
                             Ok(mut shown) => match signal {
                                 Signal::ActionInvoked { id, action } => {
@@ -432,7 +448,7 @@ fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
                 Ok(Some(NotificationEvent::Posted(notification))) => {
                     let notification = in_user_language(notification, reads_korean());
                     let notify = match shown.lock() {
-                        Ok(shown) => shown.notify(&notification),
+                        Ok(shown) => shown.notify_in(&notification, reads_korean()),
                         Err(_) => continue,
                     };
                     match notifier.notify(&notify, &notification.icon_png) {
