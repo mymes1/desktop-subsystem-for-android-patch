@@ -17,6 +17,14 @@ namespace Dsa.ApkInstaller;
 /// </summary>
 public partial class InstallerWindow : FluentWindow
 {
+    /// <summary>The icon tile's colours, which App.xaml defines for each theme and its
+    /// <c>AppIconTile</c> style reads from the window.</summary>
+    private static readonly string[] AppIconTileColours =
+    {
+        "AppIconTileActiveBackground", "AppIconTileActiveBorder",
+        "AppIconTileInactiveBackground", "AppIconTileInactiveBorder",
+    };
+
     private readonly ApkInstallViewModel _vm;
     private bool _closed;
     private ApkIcon? _drawnIcon;
@@ -30,8 +38,9 @@ public partial class InstallerWindow : FluentWindow
         // Width and Height are the size it prefers; on a screen too small for that it opens
         // smaller, inside the work area, so its title bar can be grabbed.
         Dsa.Settings.StartupPlacement.Attach(this);
-        // The title bar dims while another window has the focus, as Windows' own do.
-        Dsa.Settings.TitleBarActivation.Attach(this);
+        // The title bar dims while another window has the focus, as Windows' own do, and the
+        // icon's tile with it; the tile's colours follow the theme.
+        Dsa.Settings.TitleBarActivation.Attach(this, AppIconTileColours);
         Icon =BitmapFrame.Create(new Uri("pack://application:,,,/Assets/apk-installer.ico"));
         Resources["SensitiveText"] = App.Text.Get("ApkWindow_Sensitive");
         Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture);
