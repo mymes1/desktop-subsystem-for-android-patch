@@ -32,7 +32,9 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar x:Name="TitleBar" Grid.Row="0" Height="32" ShowMaximize="False" />
+        <!-- Dims, and leaves the accent colour, while another window has the focus. -->
+        <ui:TitleBar x:Name="TitleBar" Grid.Row="0" Height="32" ShowMaximize="False"
+                     Style="{StaticResource WindowTitleBar}" />
 
         <Grid Grid.Row="1" Margin="{StaticResource ContentMargin}">
             <Grid.RowDefinitions>
