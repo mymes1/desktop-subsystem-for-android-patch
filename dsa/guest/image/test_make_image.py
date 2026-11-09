@@ -976,6 +976,23 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("ro.hardware.gralloc=minigbm\n", props)
         self.assertIn("ro.cpuvulkan.version=0\n", props)
 
+    def test_fr32_pr3_android_reports_opengles_3_2_to_app_stores(self):
+        # v0.2.1 on a real PC: ro.opengles.version was empty and `pm list features` reported
+        # reqGlEsVersion=0x0, so Google Play called YouTube incompatible and left YouTube and
+        # Chrome out of its search. Cuttlefish's launcher passes the version at boot, and DSA
+        # does not run it, so the vendor build.prop claims it and the boot passes the same one.
+        self.assertEqual(make_image.OPENGLES_VERSION, 196610)
+        for vendor in [False, True]:
+            props = make_image.edit_props("ro.debuggable=1\nro.opengles.version=196608\n", vendor=vendor)
+            self.assertIn("ro.opengles.version=196610\n", props)
+            self.assertNotIn("ro.opengles.version=196608", props)
+        self.assertIn("ro.opengles.version=196610\n",
+                      make_image.edit_props("ro.debuggable=1\n", vendor=True, network=True))
+        for arch in sorted(make_image.ARCHES):
+            for hwcomposer in [False, True]:
+                cmdline = make_image.kernel_cmdline("", hwcomposer=hwcomposer, arch=arch)
+                self.assertIn("androidboot.opengles.version=196610", cmdline.split())
+
     def test_fr4_android_starts_at_the_main_monitors_density(self):
         # Image test run 42562909966: without ro.sf.lcd_density SurfaceFlinger fell back to
         # 213 dpi, the host then asked each task for 160, and that density change relaunched

@@ -465,11 +465,21 @@ MEMORY_PROPS = {
 # stays, so a build.prop value would hold every boot at this default.
 DISPLAY_DPI = 160
 
+# The OpenGL ES version Android reports to apps and to app stores: 3.2 (0x30002), which ANGLE
+# provides on the host GPU's Vulkan for every app. PackageManager reports it as reqGlEsVersion,
+# and Google Play hides every app whose manifest asks for a version above it (<uses-feature
+# android:glEsVersion>). Cuttlefish leaves it to its launcher, which passes
+# androidboot.opengles.version for init_graphics.vendor.rc to copy; DSA does not run that
+# launcher, so without this the property stayed empty, reqGlEsVersion was 0, and Play called
+# YouTube incompatible and left YouTube and Chrome out of its search.
+OPENGLES_VERSION = 0x30002
+
 GRAPHICS_PROPS = {
     "ro.hardware.egl": "angle",
     "ro.hardware.vulkan": "ranchu",
     "ro.hardware.gralloc": "minigbm",
     "ro.cpuvulkan.version": "0",
+    "ro.opengles.version": str(OPENGLES_VERSION),
 }
 
 # Properties no build.prop may set, whatever the input build's files say: the boot sets them.
@@ -5643,6 +5653,9 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
         # replaces it with its main monitor's at each boot, as it does display_dpi.
         f"androidboot.lcd_density={DISPLAY_DPI}",
         "androidboot.cpuvulkan.version=0",
+        # init_graphics.vendor.rc copies it to ro.opengles.version, which the build.prop files
+        # have already claimed with the same value (OPENGLES_VERSION).
+        f"androidboot.opengles.version={OPENGLES_VERSION}",
         # The Cuttlefish lights HAL listens on this vsock port for a host client; without
         # one it binds port 0, which only privileged processes may, and aborts. No host
         # client connects; DSA's own ports are 5000-5001, 5555 (adb) and 5566-5567.
