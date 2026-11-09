@@ -2,9 +2,22 @@ using System.Text.Json;
 
 namespace Dsa.Settings.Core;
 
+/// <summary>How the root key of Android's KeyMint is sealed on this PC, as <c>dsa backup
+/// --json</c> prints it under <c>keymint_key</c>. <see cref="SealedBy"/> is <c>tpm</c>,
+/// <c>dpapi</c> (and on other hosts <c>secure-enclave</c>, <c>secret-service</c>,
+/// <c>keychain</c>); <see cref="Kept"/> is false until Android first starts.</summary>
+public sealed record KeyProtectionInfo(
+    bool Kept,
+    string SealedBy,
+    bool Hardware,
+    string Description,
+    string FallbackReason,
+    string Problem);
+
 /// <summary>Where the backup of Android's app data stands, as <c>dsa backup --json</c> prints
 /// it. Times are Unix milliseconds, 0 for never. <see cref="Succeeded"/>, <see cref="Failed"/>
-/// and <see cref="Installed"/> count what a backup or restore just run covered.</summary>
+/// and <see cref="Installed"/> count what a backup or restore just run covered.
+/// <see cref="Enabled"/> is whether the user turned backup on; it is off until they do.</summary>
 public sealed record BackupInfo(
     bool Available,
     string Problem,
@@ -16,10 +29,12 @@ public sealed record BackupInfo(
     string LastError,
     ulong Succeeded,
     ulong Failed,
-    ulong Installed);
+    ulong Installed,
+    bool Enabled = false,
+    KeyProtectionInfo? KeyMint = null);
 
 /// <summary>The backup of Android's app data: encrypted in the user's DSA Backup folder, with a
-/// key Windows keeps for the user.</summary>
+/// key Windows keeps for the user, made only once the user turns backup on.</summary>
 public sealed partial class DsaService
 {
     private static long Long(JsonElement element, string name) =>
@@ -27,6 +42,18 @@ public sealed partial class DsaService
             && value.TryGetInt64(out var number)
             ? number
             : 0;
+
+    /// <summary>Reads <c>keymint_key</c>; null from a service that does not print it.</summary>
+    public static KeyProtectionInfo? ReadKeyProtection(JsonElement json) =>
+        json.TryGetProperty("keymint_key", out var key) && key.ValueKind == JsonValueKind.Object
+            ? new KeyProtectionInfo(
+                Bool(key, "kept"),
+                String(key, "sealed_by"),
+                Bool(key, "hardware"),
+                String(key, "description"),
+                String(key, "fallback_reason"),
+                String(key, "problem"))
+            : null;
 
     /// <summary>Reads what <c>dsa backup ... --json</c> prints. A field a service from before it
     /// existed does not print reads as empty.</summary>
@@ -41,11 +68,23 @@ public sealed partial class DsaService
         String(json, "last_error"),
         Number(json, "succeeded"),
         Number(json, "failed"),
-        Number(json, "installed"));
+        Number(json, "installed"),
+        Bool(json, "enabled"),
+        ReadKeyProtection(json));
 
     /// <summary>Where the backup stands. It never starts Android.</summary>
     public async Task<BackupInfo> BackupAsync() =>
         ReadBackup(await RunJsonAsync("backup", "status").ConfigureAwait(true));
+
+    /// <summary>Turns backup on, or off; off with <paramref name="deleteBackups"/>, the backups
+    /// kept so far and their key are removed as well.</summary>
+    public async Task<BackupInfo> SetBackupAsync(bool on, bool deleteBackups) =>
+        ReadBackup(await (on
+                ? RunJsonAsync("backup", "on")
+                : deleteBackups
+                    ? RunJsonAsync("backup", "off", "--delete-backups")
+                    : RunJsonAsync("backup", "off"))
+            .ConfigureAwait(true));
 
     /// <summary>Backs up every app's data now, starting Android first when it is off.</summary>
     public async Task<BackupInfo> BackUpNowAsync() =>

@@ -113,7 +113,21 @@
                             Severity="Error" IsClosable="False" IsOpen="{Binding HasBackupError, Mode=OneWay}" Margin="0,0,0,4" />
                 <ui:InfoBar Title="{l:Text BackupResultBar.Title}" Message="{Binding BackupResult, Mode=OneWay}"
                             Severity="Success" IsClosable="False" IsOpen="{Binding HasBackupResult, Mode=OneWay}" Margin="0,0,0,4" />
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon CloudArrowUp24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DocumentCopy24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text BackupSwitchCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text BackupSwitchCard.Description}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding BackupOffNote, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                       Visibility="{Binding HasBackupOffNote, Converter={StaticResource Visible}}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="BackupSwitch" IsChecked="{Binding BackupEnabled, Mode=OneWay}"
+                                     IsEnabled="{Binding CanToggleBackup, Mode=OneWay}" Click="OnBackupToggled"
+                                     AutomationProperties.Name="{l:Text BackupSwitchCard.Header}" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon CloudArrowUp24}"
+                                Visibility="{Binding BackupEnabled, Converter={StaticResource Visible}}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text BackupCard.Header}" Style="{StaticResource CardTitle}" />
@@ -137,7 +151,8 @@
                                    IsEnabled="{Binding CanBackUpNow, Mode=OneWay}" />
                     </StackPanel>
                 </ui:CardControl>
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Key24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Key24}"
+                                Visibility="{Binding BackupEnabled, Converter={StaticResource Visible}}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text RecoveryKeyCard.Header}" Style="{StaticResource CardTitle}" />
@@ -169,7 +184,8 @@
                                    Visibility="{Binding ShowsRecoveryKeyButton, Converter={StaticResource Visible}}" />
                     </StackPanel>
                 </ui:CardControl>
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}"
+                                Visibility="{Binding BackupEnabled, Converter={StaticResource Visible}}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text UseRecoveryKeyCard.Header}" Style="{StaticResource CardTitle}" />
@@ -181,6 +197,19 @@
                     </ui:CardControl.Header>
                     <ui:Button Content="{l:Text UseRecoveryKeyButton.Content}" Click="OnUseRecoveryKey"
                                IsEnabled="{Binding CanUseRecoveryKey, Mode=OneWay}" />
+                </ui:CardControl>
+                <ui:InfoBar Title="{l:Text KeyProblemBar.Title}" Message="{Binding KeyProblem, Mode=OneWay}"
+                            Severity="Error" IsClosable="False" IsOpen="{Binding HasKeyProblem, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ShieldKeyhole24}"
+                                Visibility="{Binding HasKeyProtection, Converter={StaticResource Visible}}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text KeyProtectionCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding KeyProtectionText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding KeyProtectionDetail, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                       Visibility="{Binding HasKeyProtectionDetail, Converter={StaticResource Visible}}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
                 </ui:CardControl>
 
                 <TextBlock Text="{l:Text ResetDataHeader.Text}" Style="{StaticResource SectionHeader}" />

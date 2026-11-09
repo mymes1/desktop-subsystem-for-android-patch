@@ -13,13 +13,20 @@ public class BackupViewModelTests
 
     private const string Folder = "C:\\\\Users\\\\alice\\\\DSA Backup";
 
+    private const string TpmKey =
+        "{\"kept\":true,\"sealed_by\":\"tpm\",\"hardware\":true," +
+        "\"description\":\"the computer's TPM 2.0 and Windows DPAPI under your account\"," +
+        "\"fallback_reason\":\"\",\"problem\":\"\"}";
+
     private static string Report(bool available = true, string problem = "", long last = 1_700_000_000_000,
         int packages = 3, long size = 3 * 1024 * 1024, string lastError = "", int succeeded = 0, int failed = 0,
-        int installed = 0) =>
-        "{\"available\":" + (available ? "true" : "false") + ",\"problem\":\"" + problem + "\"," +
+        int installed = 0, bool enabled = true, string keymint = TpmKey) =>
+        "{\"enabled\":" + (enabled ? "true" : "false") + "," +
+        "\"available\":" + (available ? "true" : "false") + ",\"problem\":\"" + problem + "\"," +
         "\"folder\":\"" + Folder + "\",\"last_backup_unix_ms\":" + last + ",\"last_restore_unix_ms\":0," +
         "\"packages\":" + packages + ",\"size\":" + size + ",\"last_error\":\"" + lastError + "\"," +
-        "\"succeeded\":" + succeeded + ",\"failed\":" + failed + ",\"installed\":" + installed + "}";
+        "\"succeeded\":" + succeeded + ",\"failed\":" + failed + ",\"installed\":" + installed + "," +
+        "\"keymint_key\":" + keymint + "}";
 
     public BackupViewModelTests()
     {
@@ -60,6 +67,81 @@ public class BackupViewModelTests
         Assert.True(vm.CanUseRecoveryKey);
         Assert.False(vm.HasRecoveryKey);
         Assert.True(vm.ShowsRecoveryKeyButton);
+    }
+
+    [Fact]
+    public async Task Fr36_backup_is_off_until_turned_on_and_off_is_no_problem()
+    {
+        var cli = Cli(Report(enabled: false, available: false, packages: 0, last: 0))
+            .Answer("backup on --json", Report(packages: 0, last: 0));
+        var vm = await Loaded(cli);
+        Assert.False(vm.BackupEnabled);
+        Assert.True(vm.CanToggleBackup);
+        Assert.False(vm.HasBackupProblem, "off is the user's choice, not a problem");
+        Assert.Equal("Backup_Off", vm.BackupOffNote);
+        Assert.False(vm.CanBackUpNow);
+        Assert.False(vm.CanShowRecoveryKey);
+        Assert.False(vm.CanUseRecoveryKey);
+        Assert.False(vm.HasBackupsKept);
+
+        await vm.SetBackupAsync(true);
+        Assert.Contains("backup on --json", cli.Calls);
+        Assert.True(vm.BackupEnabled);
+        Assert.False(vm.HasBackupOffNote);
+        Assert.Equal("Backup_TurnedOn", vm.BackupResult);
+        Assert.True(vm.CanBackUpNow);
+    }
+
+    [Fact]
+    public async Task Fr36_turning_backup_off_keeps_or_deletes_the_backups_as_the_user_says()
+    {
+        var cli = Cli(Report())
+            .Answer("backup off --json", Report(enabled: false, available: false))
+            .Answer("backup off --delete-backups --json", Report(enabled: false, available: false, packages: 0, size: 0));
+        var vm = await Loaded(cli);
+        Assert.True(vm.HasBackupsKept);
+        Assert.Equal("Backup_DeleteQuestion", vm.BackupDeleteQuestion);
+
+        await vm.SetBackupAsync(false);
+        Assert.Contains("backup off --json", cli.Calls);
+        Assert.False(vm.BackupEnabled);
+        Assert.Equal("Backup_TurnedOff", vm.BackupResult);
+        Assert.Equal("Backup_OffKept", vm.BackupOffNote);
+
+        await vm.SetBackupAsync(false, deleteBackups: true);
+        Assert.Contains("backup off --delete-backups --json", cli.Calls);
+        Assert.Equal("Backup_TurnedOffDeleted", vm.BackupResult);
+        Assert.Equal("Backup_Off", vm.BackupOffNote);
+    }
+
+    [Fact]
+    public async Task Fr36_the_section_says_what_seals_androids_keys()
+    {
+        var vm = await Loaded(Cli(Report()));
+        Assert.True(vm.HasKeyProtection);
+        Assert.Equal("KeyProtection_Tpm", vm.KeyProtectionText);
+        Assert.False(vm.KeyProtectionWeaker);
+        Assert.False(vm.HasKeyProtectionDetail);
+        Assert.False(vm.HasKeyProblem);
+
+        var dpapi = "{\"kept\":true,\"sealed_by\":\"dpapi\",\"hardware\":false," +
+            "\"description\":\"Windows DPAPI under your account\"," +
+            "\"fallback_reason\":\"this computer has no TPM that DSA can use\"," +
+            "\"problem\":\"the TPM is locked out\"}";
+        vm = await Loaded(Cli(Report(keymint: dpapi)));
+        Assert.Equal("KeyProtection_Dpapi", vm.KeyProtectionText);
+        Assert.True(vm.KeyProtectionWeaker);
+        Assert.Equal("KeyProtection_Why", vm.KeyProtectionDetail);
+        Assert.True(vm.HasKeyProblem);
+        Assert.Contains("locked out", vm.KeyProblem);
+
+        var none = "{\"kept\":false,\"sealed_by\":\"\",\"hardware\":false,\"description\":\"\"," +
+            "\"fallback_reason\":\"\",\"problem\":\"\"}";
+        vm = await Loaded(Cli(Report(keymint: none)));
+        Assert.Equal("KeyProtection_None", vm.KeyProtectionText);
+
+        vm = await Loaded(Cli(Report(keymint: "null")));
+        Assert.False(vm.HasKeyProtection, "a service that does not say shows nothing");
     }
 
     [Fact]

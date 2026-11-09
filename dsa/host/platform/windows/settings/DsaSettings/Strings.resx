@@ -1774,6 +1774,63 @@
   <data name="Backup_KeyUsed" xml:space="preserve">
     <value>The recovery key is kept as your backup key. The backup folder made with it can now be restored here.</value>
   </data>
+  <data name="BackupSwitchCard.Header" xml:space="preserve">
+    <value>Back up apps' data to this PC</value>
+  </data>
+  <data name="BackupSwitchCard.Description" xml:space="preserve">
+    <value>Keeps a second copy of your Android apps' user data on this PC, encrypted, so it can be restored after a data reset or on another PC. It is off until you turn it on.</value>
+  </data>
+  <data name="Backup_Off" xml:space="preserve">
+    <value>Backup is off. No backup is made, and nothing of the apps' data is kept on this PC.</value>
+  </data>
+  <data name="Backup_OffKept" xml:space="preserve">
+    <value>Backup is off. Earlier backups of {0} apps ({1}) are still kept in your DSA Backup folder.</value>
+  </data>
+  <data name="Backup_DeleteQuestion" xml:space="preserve">
+    <value>The backups of {0} apps ({1}) are still kept on this PC. Delete them and their key as well, or keep them for a later restore?</value>
+  </data>
+  <data name="BackupOffConfirm.Title" xml:space="preserve">
+    <value>Turn off backup</value>
+  </data>
+  <data name="BackupOffConfirm.Delete" xml:space="preserve">
+    <value>Delete backups</value>
+  </data>
+  <data name="BackupOffConfirm.Keep" xml:space="preserve">
+    <value>Keep them</value>
+  </data>
+  <data name="Backup_TurnedOn" xml:space="preserve">
+    <value>Backup is on. Android backs up its apps' data to this PC from now on.</value>
+  </data>
+  <data name="Backup_TurnedOff" xml:space="preserve">
+    <value>Backup is off. The backups made so far are kept.</value>
+  </data>
+  <data name="Backup_TurnedOffDeleted" xml:space="preserve">
+    <value>Backup is off, and the backups and their key were deleted.</value>
+  </data>
+  <data name="KeyProtectionCard.Header" xml:space="preserve">
+    <value>Protection of Android's keys</value>
+  </data>
+  <data name="KeyProtection_None" xml:space="preserve">
+    <value>Android's keys get their protection the first time Android starts.</value>
+  </data>
+  <data name="KeyProtection_Tpm" xml:space="preserve">
+    <value>Sealed by this PC's TPM. A copy of Android's disk cannot open the apps' keys or Android's encrypted storage anywhere else.</value>
+  </data>
+  <data name="KeyProtection_Dpapi" xml:space="preserve">
+    <value>Kept by Windows for your account only, because this PC has no TPM that can be used. A copy of Android's disk still cannot open the keys without your account. Once a TPM works, DSA seals the keys with it.</value>
+  </data>
+  <data name="KeyProtection_Hardware" xml:space="preserve">
+    <value>Sealed by {0}.</value>
+  </data>
+  <data name="KeyProtection_Store" xml:space="preserve">
+    <value>Kept by {0}.</value>
+  </data>
+  <data name="KeyProtection_Why" xml:space="preserve">
+    <value>Why not the TPM: {0}</value>
+  </data>
+  <data name="KeyProblemBar.Title" xml:space="preserve">
+    <value>Android's keys could not be opened</value>
+  </data>
   <data name="ResetDataHeader.Text" xml:space="preserve">
     <value>Reset</value>
   </data>

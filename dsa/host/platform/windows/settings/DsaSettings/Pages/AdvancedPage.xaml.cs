@@ -125,6 +125,20 @@ public partial class AdvancedPage : Page
         button.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24 };
     }
 
+    /// <summary>Turns backup on, or off; off while backups are kept, asks whether they are
+    /// deleted too or kept for a later restore.</summary>
+    private async void OnBackupToggled(object sender, RoutedEventArgs e)
+    {
+        var on = BackupSwitch.IsChecked == true;
+        var delete = false;
+        if (!on && ViewModel.HasBackupsKept)
+        {
+            delete = await Shell.Ask(App.Text.Get("BackupOffConfirm.Title"), ViewModel.BackupDeleteQuestion,
+                App.Text.Get("BackupOffConfirm.Delete"), App.Text.Get("BackupOffConfirm.Keep"));
+        }
+        await ViewModel.SetBackupAsync(on, delete);
+    }
+
     private async void OnBackUpNow(object sender, RoutedEventArgs e) => await ViewModel.BackUpNowAsync();
 
     /// <summary>Asks first, saying each app's data is replaced by the backup's, then restores.</summary>

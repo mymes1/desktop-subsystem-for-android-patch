@@ -10,11 +10,14 @@ public enum BackupActivity
     Restoring,
     ShowingKey,
     UsingKey,
+    Switching,
 }
 
-/// <summary>The backup section of the Advanced page: where the backup of Android's app data
-/// stands, backing up and restoring now, and the recovery key that opens the backup folder on
-/// another computer. Every action goes through <c>dsa backup</c>.</summary>
+/// <summary>The backup section of the Advanced page: whether backup is on (off until the user
+/// turns it on, since it keeps a second copy of the apps' data on this PC), where the backup of
+/// Android's app data stands, backing up and restoring now, the recovery key that opens the
+/// backup folder on another computer, and how Android's own keys are protected on this PC.
+/// Every action goes through <c>dsa backup</c>.</summary>
 public sealed partial class SettingsViewModel
 {
     private BackupInfo? _backup;
@@ -30,17 +33,75 @@ public sealed partial class SettingsViewModel
     /// backups, or one that cannot reach the user's backup, leaves the section saying why.</summary>
     public bool HasBackup => _backup is not null;
 
-    /// <summary>Whether backups can be made and restored now: the folder and its key are there.</summary>
+    /// <summary>Whether backups can be made and restored now: backup is on, and the folder and
+    /// its key are there.</summary>
     public bool BackupAvailable => _backup?.Available ?? false;
 
-    /// <summary>Why backups cannot be used, when they cannot.</summary>
+    /// <summary>Whether the user turned backup on. Off until they do.</summary>
+    public bool BackupEnabled => _backup?.Enabled ?? false;
+
+    /// <summary>The switch can be used once the service has said where the backup stands.</summary>
+    public bool CanToggleBackup => !_busy && !IsBackupWorking && HasBackup;
+
+    /// <summary>What the switch's card says while backup is off: what turning it on does, and
+    /// what earlier backups are still kept.</summary>
+    public string BackupOffNote => _backup switch
+    {
+        { Enabled: false, Packages: > 0 } backup => string.Format(CultureInfo.CurrentCulture,
+            _text.Get("Backup_OffKept"), backup.Packages, Format.Size(backup.Size / 1024)),
+        { Enabled: false } => _text.Get("Backup_Off"),
+        _ => "",
+    };
+
+    public bool HasBackupOffNote => BackupOffNote.Length > 0;
+
+    /// <summary>Whether turning backup off leaves backups behind, which the page offers to delete.</summary>
+    public bool HasBackupsKept => (_backup?.Packages ?? 0) > 0;
+
+    /// <summary>What the page asks when backup is turned off while backups are kept.</summary>
+    public string BackupDeleteQuestion => string.Format(CultureInfo.CurrentCulture,
+        _text.Get("Backup_DeleteQuestion"), _backup?.Packages ?? 0, Format.Size((_backup?.Size ?? 0) / 1024));
+
+    /// <summary>Why backups cannot be used, when they cannot. Off is not a problem.</summary>
     public string BackupProblem => _backup switch
     {
         null when _backupLoaded => _text.Get("Backup_NoService"),
         { Available: false, Problem.Length: > 0 } backup => backup.Problem,
+        { Enabled: false } => "",
         { Available: false } => _text.Get("Backup_Unavailable"),
         _ => "",
     };
+
+    /// <summary>How Android's KeyMint root key is protected, from a service that says.</summary>
+    public KeyProtectionInfo? KeyProtection => _backup?.KeyMint;
+
+    public bool HasKeyProtection => KeyProtection is not null;
+
+    /// <summary>What protects Android's keys on this PC, in the user's language.</summary>
+    public string KeyProtectionText => KeyProtection switch
+    {
+        null => "",
+        { Kept: false } => _text.Get("KeyProtection_None"),
+        { SealedBy: "tpm" } => _text.Get("KeyProtection_Tpm"),
+        { SealedBy: "dpapi" } => _text.Get("KeyProtection_Dpapi"),
+        { Hardware: true } key => string.Format(CultureInfo.CurrentCulture, _text.Get("KeyProtection_Hardware"), key.Description),
+        { } key => string.Format(CultureInfo.CurrentCulture, _text.Get("KeyProtection_Store"), key.Description),
+    };
+
+    /// <summary>Why the PC's TPM does not seal Android's keys, when it does not.</summary>
+    public string KeyProtectionDetail => KeyProtection is { Kept: true, Hardware: false, FallbackReason.Length: > 0 } key
+        ? string.Format(CultureInfo.CurrentCulture, _text.Get("KeyProtection_Why"), key.FallbackReason)
+        : "";
+
+    public bool HasKeyProtectionDetail => KeyProtectionDetail.Length > 0;
+
+    /// <summary>Android's keys are protected less than they could be: no TPM seals them.</summary>
+    public bool KeyProtectionWeaker => KeyProtection is { Kept: true, Hardware: false };
+
+    /// <summary>Why the latest start of Android got no key, and what to do.</summary>
+    public string KeyProblem => KeyProtection?.Problem ?? "";
+
+    public bool HasKeyProblem => KeyProblem.Length > 0;
 
     public bool HasBackupProblem => BackupProblem.Length > 0;
 
@@ -80,9 +141,9 @@ public sealed partial class SettingsViewModel
 
     public bool CanShowRecoveryKey => !_busy && !IsBackupWorking && BackupAvailable;
 
-    /// <summary>A recovery key can be brought whenever the service keeps backups, also while
-    /// the backup cannot be opened: bringing the key is what opens it.</summary>
-    public bool CanUseRecoveryKey => !_busy && !IsBackupWorking && HasBackup;
+    /// <summary>A recovery key can be brought whenever backup is on, also while the backup
+    /// cannot be opened: bringing the key is what opens it.</summary>
+    public bool CanUseRecoveryKey => !_busy && !IsBackupWorking && HasBackup && BackupEnabled;
 
     /// <summary>What the last action in the section failed with.</summary>
     public string BackupError => _backupError ?? "";
@@ -131,6 +192,18 @@ public sealed partial class SettingsViewModel
         _backupLoaded = true;
         ChangedAll();
     }
+
+    /// <summary>Turns backup on or off. The page asks first, when backups are kept, whether
+    /// turning it off deletes them (<paramref name="deleteBackups"/>); this does not ask again.</summary>
+    public Task SetBackupAsync(bool on, bool deleteBackups = false) => RunBackupAsync(BackupActivity.Switching, async () =>
+    {
+        var report = await _service.SetBackupAsync(on, !on && deleteBackups).ConfigureAwait(true);
+        _backup = report;
+        _recoveryKey = null;
+        _backupResult = on
+            ? _text.Get("Backup_TurnedOn")
+            : deleteBackups ? _text.Get("Backup_TurnedOffDeleted") : _text.Get("Backup_TurnedOff");
+    });
 
     /// <summary>Backs up every app's data now.</summary>
     public Task BackUpNowAsync() => RunBackupAsync(BackupActivity.BackingUp, async () =>
