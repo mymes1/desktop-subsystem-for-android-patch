@@ -1,0 +1,252 @@
+//! Where a decoded picture lies in a hardware decoder's padded surface: the chroma plane's
+//! start, the visible size, and the sizes VP9 and AV1 headers carry.
+
+use dsa_host_core::video::Codec;
+use dsa_host_core::video_layout::{
+    av1_frame_size, chroma_start_row, picture_from_surface, rows_from_length, stream_frame_size,
+    visible_size, vp9_frame_size, SurfaceFormat,
+};
+
+const Y: u8 = 81;
+const U: u8 = 90;
+const V: u8 = 240;
+
+/// An NV12 surface as a hardware decoder leaves it: `width` by `height` visible, rows `pitch`
+/// bytes apart, `rows` rows of luma (the rest below the picture zero), then the chroma plane.
+fn surface(width: usize, height: usize, pitch: usize, rows: usize) -> Vec<u8> {
+    let mut data = vec![0u8; pitch * (rows + rows.div_ceil(2))];
+    for row in 0..height {
+        data[row * pitch..row * pitch + width].fill(Y);
+    }
+    let chroma = rows * pitch;
+    for row in 0..height.div_ceil(2) {
+        for x in 0..width.div_ceil(2) {
+            data[chroma + row * pitch + 2 * x] = U;
+            data[chroma + row * pitch + 2 * x + 1] = V;
+        }
+    }
+    data
+}
+
+fn chroma_of(nv12: &[u8], stride: usize, height: usize) -> &[u8] {
+    &nv12[stride * height..]
+}
+
+#[test]
+fn fr26_the_chroma_plane_starts_after_the_surfaces_own_rows() {
+    // A 360x640 picture, coded 368x640, in a surface the driver made 1088 rows tall.
+    assert_eq!(chroma_start_row(Some(1088), 640, 640), 1088);
+    // Without the surface's height, the coded height, never less than the picture's.
+    assert_eq!(chroma_start_row(None, 368, 360), 368);
+    assert_eq!(chroma_start_row(None, 0, 240), 240);
+    // A surface height smaller than the picture is not one.
+    assert_eq!(chroma_start_row(Some(120), 256, 240), 256);
+}
+
+#[test]
+fn fr26_a_picture_in_a_taller_surface_keeps_its_chroma() {
+    // 426x240, coded 432x240, in a surface rounded up to 256 rows.
+    let (width, height, pitch, rows) = (426, 240, 512, 256);
+    let data = surface(width, height, pitch, rows);
+    let start = chroma_start_row(Some(rows), 240, height);
+    let picture = picture_from_surface(1, &data, SurfaceFormat::Nv12, pitch, start, 426, 240)
+        .expect("a picture");
+    assert_eq!(
+        (picture.width, picture.height, picture.stride),
+        (426, 240, 426)
+    );
+    assert!(picture.nv12[..426 * 240].iter().all(|&y| y == Y));
+    let chroma = chroma_of(&picture.nv12, 426, 240);
+    assert_eq!(chroma.len(), 426 * 120);
+    assert!(chroma.chunks(2).all(|pair| pair == [U, V]), "chroma lost");
+
+    // Taking the chroma after the coded rows reads the zero padding: a green picture.
+    let wrong = picture_from_surface(1, &data, SurfaceFormat::Nv12, pitch, 240, 426, 240).unwrap();
+    assert!(chroma_of(&wrong.nv12, 426, 240)[..426 * 8]
+        .iter()
+        .all(|&c| c == 0));
+}
+
+#[test]
+fn fr26_an_odd_width_keeps_whole_chroma_pairs() {
+    let data = surface(5, 3, 8, 4);
+    let picture = picture_from_surface(1, &data, SurfaceFormat::Nv12, 8, 4, 5, 3).unwrap();
+    assert_eq!(picture.stride, 6);
+    assert_eq!(picture.nv12.len(), 6 * (3 + 2));
+    assert_eq!(&chroma_of(&picture.nv12, 6, 3)[..6], &[U, V, U, V, U, V]);
+}
+
+#[test]
+fn fr26_a_surface_too_short_for_its_geometry_gives_no_picture() {
+    let data = surface(4, 2, 8, 4);
+    assert!(picture_from_surface(1, &data[..10], SurfaceFormat::Nv12, 8, 4, 4, 2).is_none());
+    assert!(picture_from_surface(1, &data, SurfaceFormat::Nv12, 2, 4, 4, 2).is_none());
+    assert!(picture_from_surface(1, &data, SurfaceFormat::Nv12, 8, 1, 4, 2).is_none());
+    assert!(picture_from_surface(1, &data, SurfaceFormat::Nv12, 8, 64, 4, 2).is_none());
+}
+
+#[test]
+fn fr26_a_10_bit_surface_becomes_8_bit_nv12() {
+    // 2x2 P010: each sample two bytes, little-endian, its value in the top bits.
+    let pitch = 8;
+    let mut data = vec![0u8; pitch * 3];
+    for row in 0..2 {
+        for x in 0..2 {
+            data[row * pitch + 2 * x + 1] = Y;
+        }
+    }
+    data[2 * pitch + 1] = U;
+    data[2 * pitch + 3] = V;
+    let picture = picture_from_surface(1, &data, SurfaceFormat::P010, pitch, 2, 2, 2).unwrap();
+    assert_eq!(picture.nv12, vec![Y, Y, Y, Y, U, V]);
+}
+
+#[test]
+fn fr26_a_surfaces_height_follows_from_its_length() {
+    assert_eq!(rows_from_length(512 * (256 + 128), 512), Some(256));
+    assert_eq!(rows_from_length(8 * (5 + 3), 8), Some(5));
+    assert_eq!(rows_from_length(100, 8), None);
+    assert_eq!(rows_from_length(8 * 4, 8), None);
+}
+
+#[test]
+fn fr26_the_visible_size_is_the_aperture_then_the_streams_own() {
+    // H.264 360x640: coded 368x640, cropped by the aperture.
+    assert_eq!(visible_size((368, 640), Some((360, 640)), None), (360, 640));
+    // VP9 426x240: no aperture, the frame header's size.
+    assert_eq!(visible_size((432, 256), None, Some((426, 240))), (426, 240));
+    // A size larger than the surface is not believed.
+    assert_eq!(
+        visible_size((432, 256), Some((1920, 1080)), None),
+        (432, 256)
+    );
+    assert_eq!(
+        visible_size((432, 256), Some((0, 240)), Some((426, 240))),
+        (426, 240)
+    );
+    assert_eq!(visible_size((640, 368), None, None), (640, 368));
+}
+
+/// Writes bits most significant first.
+#[derive(Default)]
+struct BitWriter {
+    bytes: Vec<u8>,
+    bits: usize,
+}
+
+impl BitWriter {
+    fn put(&mut self, value: u32, count: u32) {
+        for i in (0..count).rev() {
+            if self.bits % 8 == 0 {
+                self.bytes.push(0);
+            }
+            if (value >> i) & 1 == 1 {
+                let last = self.bytes.len() - 1;
+                self.bytes[last] |= 0x80 >> (self.bits % 8);
+            }
+            self.bits += 1;
+        }
+    }
+}
+
+/// A VP9 profile 0 key frame's uncompressed header for `width` by `height`.
+fn vp9_key_frame(width: u32, height: u32) -> Vec<u8> {
+    let mut w = BitWriter::default();
+    w.put(2, 2); // frame_marker
+    w.put(0, 2); // profile 0
+    w.put(0, 1); // show_existing_frame
+    w.put(0, 1); // key frame
+    w.put(1, 1); // show_frame
+    w.put(0, 1); // error_resilient_mode
+    w.put(0x49_83_42, 24);
+    w.put(2, 3); // color_space BT.709
+    w.put(0, 1); // color_range
+    w.put(width - 1, 16);
+    w.put(height - 1, 16);
+    w.put(0, 1); // render size as the frame's
+    w.bytes.extend_from_slice(&[0; 8]);
+    w.bytes
+}
+
+#[test]
+fn fr26_a_vp9_key_frame_gives_its_size() {
+    assert_eq!(vp9_frame_size(&vp9_key_frame(426, 240)), Some((426, 240)));
+    assert_eq!(
+        stream_frame_size(Codec::Vp9, &vp9_key_frame(360, 640)),
+        Some((360, 640))
+    );
+    assert_eq!(
+        stream_frame_size(Codec::H264, &vp9_key_frame(360, 640)),
+        None
+    );
+}
+
+#[test]
+fn fr26_a_vp9_superframe_gives_its_first_frames_size() {
+    let first = vp9_key_frame(426, 240);
+    let second = vec![0x86, 0x00, 0x40];
+    let marker = 0xc0 | (1 << 3) | 1; // two frames, two bytes each
+    let mut packet = first.clone();
+    packet.extend_from_slice(&second);
+    packet.push(marker);
+    packet.extend_from_slice(&(first.len() as u16).to_le_bytes());
+    packet.extend_from_slice(&(second.len() as u16).to_le_bytes());
+    packet.push(marker);
+    assert_eq!(vp9_frame_size(&packet), Some((426, 240)));
+}
+
+#[test]
+fn fr26_a_vp9_inter_frame_gives_no_size() {
+    let mut w = BitWriter::default();
+    w.put(2, 2);
+    w.put(0, 2);
+    w.put(0, 1);
+    w.put(1, 1); // inter frame
+    w.put(1, 1); // shown, so not intra-only
+    w.put(0, 1);
+    w.bytes.extend_from_slice(&[0; 8]);
+    assert_eq!(vp9_frame_size(&w.bytes), None);
+    assert_eq!(vp9_frame_size(&[]), None);
+}
+
+/// An AV1 sequence header OBU for `width` by `height`, after a temporal delimiter.
+fn av1_temporal_unit(width: u32, height: u32) -> Vec<u8> {
+    let mut w = BitWriter::default();
+    w.put(0, 3); // seq_profile
+    w.put(0, 1); // still_picture
+    w.put(0, 1); // reduced_still_picture_header
+    w.put(0, 1); // timing_info_present_flag
+    w.put(0, 1); // initial_display_delay_present_flag
+    w.put(0, 5); // operating_points_cnt_minus_1
+    w.put(0, 12); // operating_point_idc
+    w.put(8, 5); // seq_level_idx 4.0
+    w.put(0, 1); // seq_tier
+    w.put(9, 4); // frame_width_bits_minus_1
+    w.put(10, 4); // frame_height_bits_minus_1
+    w.put(width - 1, 10);
+    w.put(height - 1, 11);
+    w.put(0, 8);
+    let mut unit = vec![0x12, 0x00];
+    unit.push((1 << 3) | 0x2);
+    unit.push(w.bytes.len() as u8);
+    unit.extend_from_slice(&w.bytes);
+    unit
+}
+
+#[test]
+fn fr26_an_av1_sequence_header_gives_its_size() {
+    assert_eq!(
+        av1_frame_size(&av1_temporal_unit(426, 240)),
+        Some((426, 240))
+    );
+    assert_eq!(
+        stream_frame_size(Codec::Av1, &av1_temporal_unit(360, 640)),
+        Some((360, 640))
+    );
+    // The codec configuration record Android passes: four bytes, then the OBUs.
+    let mut record = vec![0x81, 0x00, 0x0c, 0x00];
+    record.extend_from_slice(&av1_temporal_unit(360, 640)[2..]);
+    assert_eq!(av1_frame_size(&record), Some((360, 640)));
+    // A temporal unit with no sequence header.
+    assert_eq!(av1_frame_size(&[0x12, 0x00, 0x32, 0x01, 0x00]), None);
+}

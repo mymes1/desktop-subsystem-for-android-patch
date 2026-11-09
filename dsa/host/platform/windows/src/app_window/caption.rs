@@ -19,8 +19,12 @@
 //! buttons themselves are pressed here, on the non-client mouse messages, so Windows never
 //! draws its classic buttons over them.
 //!
-//! The glyphs follow the app's status bar (`ToHost::CaptionTone`): dark over a light one,
-//! light over a dark one. Under a high contrast theme the buttons take the theme's colors.
+//! The glyphs are dark over a light band and light over a dark one. The presenter reads how
+//! light the app's pixels under the band are ([`WindowPresenter::on_band_colour`]), and they
+//! decide, since an app drawing edge to edge often leaves its status bar transparent or reports
+//! icons for a status bar it does not show; what the app's status bar reports
+//! (`ToHost::CaptionTone`) counts only until a frame has been read. Under a high contrast theme
+//! the buttons take the theme's colors.
 //!
 //! At the left of the band the window draws the app's icon (the program's icon, which the
 //! taskbar shows too, read at the small icon size of the window's DPI so it stays sharp) and
@@ -36,7 +40,9 @@
 //!
 //! The icon is the one the title bar of an app's program carries: an adaptive icon's
 //! foreground layer alone (`CAPTION_ICON_ID`), so no square plate stands over the app, else
-//! the program's own icon. While the task can go back (`ToHost::CaptionBack`), the icon's cell
+//! the program's own icon. The foreground alone keeps the margin the plate had, so its logo
+//! is cropped to what it draws and fitted to the box a whole icon fills; the program's own
+//! icon, which the taskbar and Alt+Tab show too, has its plate and is drawn as it is. While the task can go back (`ToHost::CaptionBack`), the icon's cell
 //! shows a back arrow instead, a button of the caption buttons' look whose click sends the task
 //! Back; its hit test code is `HTHELP`, which a window without a help button never otherwise
 //! answers, so Windows leaves the press to this window.
@@ -51,14 +57,14 @@ use std::cell::{Cell, RefCell};
 use std::sync::mpsc::Sender;
 
 use dsa_host_core::compositor::caption::{
-    caption_tone, paint_title_bar, scaled, title_bar_hit, BackButton, CaptionBand, CaptionButton,
-    CaptionHit, CaptionLayout, CaptionPalette, CaptionState, CaptionTone, TitleBarContent,
-    TitleBarHit, TitleBarMode, TITLE_TEXT_AT_100,
+    paint_title_bar, scaled, shown_tone, title_bar_hit, BackButton, BandSample, CaptionBand,
+    CaptionButton, CaptionHit, CaptionLayout, CaptionPalette, CaptionState, CaptionTone,
+    TitleBarContent, TitleBarHit, TitleBarMode, TITLE_TEXT_AT_100,
 };
 use dsa_host_core::compositor::window_hosts::FromHost;
 use dsa_host_core::input::InputEvent;
 use dsa_host_core::keys::{keycode, KeyAction, KeyEvent as GuestKey};
-use dsa_host_core::tasks::{Bounds, StatusBarAppearance};
+use dsa_host_core::tasks::Bounds;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{
     DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -371,8 +377,11 @@ pub struct CaptionWindow {
     icon_id: usize,
     /// The app's name: the window's title.
     title: RefCell<String>,
-    /// The color the band is filled with while the app leaves it empty.
-    fill: Cell<Option<u32>>,
+    /// What was last read from the app's frame under the band: the color the band is filled
+    /// with while the app leaves it empty, and how light the band is.
+    sample: Cell<BandSample>,
+    /// The tone the glyphs, the name and the frame are drawn in now ([`shown_tone`]).
+    shown: Cell<CaptionTone>,
     /// The icon as last read, and the side it was read at.
     icon: RefCell<Option<(u32, Option<Vec<u8>>)>>,
     /// The name as last laid out, and what it was laid out for: text, box and DPI.
@@ -413,7 +422,8 @@ impl CaptionWindow {
             ex_style,
             icon_id,
             title: RefCell::new(String::new()),
-            fill: Cell::new(None),
+            sample: Cell::new(BandSample::default()),
+            shown: Cell::new(CaptionTone::default()),
             icon: RefCell::new(None),
             text: RefCell::new(None),
             tone: Cell::new(CaptionTone::default()),
@@ -445,12 +455,9 @@ impl CaptionWindow {
         interactive: Vec<Bounds>,
         presenter: Option<&WindowPresenter>,
     ) {
-        let before = self.shown_tone();
         self.app_drawn.set(app_drawn);
         *self.interactive.borrow_mut() = interactive;
-        if self.shown_tone() != before {
-            self.apply_tone(hwnd);
-        }
+        self.retone(hwnd);
         self.paint(hwnd, presenter);
     }
 
@@ -539,7 +546,8 @@ impl CaptionWindow {
         self.apply_tone(hwnd);
     }
 
-    /// The buttons take `tone`, and the window's frame the matching dark or light mode.
+    /// The app's status bar calls for `tone`. The buttons take it, and the window's frame the
+    /// matching dark or light mode, unless the pixels under the band say otherwise.
     ///
     /// # Safety
     ///
@@ -550,32 +558,27 @@ impl CaptionWindow {
         tone: CaptionTone,
         presenter: Option<&WindowPresenter>,
     ) {
-        let before = self.shown_tone();
         self.tone.set(tone);
-        if self.shown_tone() != before {
-            self.apply_tone(hwnd);
-        }
+        self.retone(hwnd);
         self.paint(hwnd, presenter);
     }
 
-    /// The band takes `fill` (0xAARRGGBB), the app's top color, while the app leaves the band
-    /// empty, or stays transparent with `None`. The glyphs then take the tone the fill calls
-    /// for.
+    /// What the presenter last read from the app's frame under the band: the band takes the
+    /// fill (0xAARRGGBB), the app's top color, while the app leaves the band empty, or stays
+    /// transparent without one; the glyphs take the tone the fill, else the band's lightness,
+    /// calls for.
     ///
     /// # Safety
     ///
     /// `hwnd` is this window, a live window of the calling thread.
-    pub unsafe fn set_fill(
+    pub unsafe fn set_sample(
         &self,
         hwnd: HWND,
-        fill: Option<u32>,
+        sample: BandSample,
         presenter: Option<&WindowPresenter>,
     ) {
-        let before = self.shown_tone();
-        self.fill.set(fill);
-        if self.shown_tone() != before {
-            self.apply_tone(hwnd);
-        }
+        self.sample.set(sample);
+        self.retone(hwnd);
         self.paint(hwnd, presenter);
     }
 
@@ -589,15 +592,28 @@ impl CaptionWindow {
         self.paint(hwnd, presenter);
     }
 
-    /// The tone the glyphs, the name and the frame are drawn in: the one the fill calls for
-    /// while the band is filled, otherwise the app's. An app that draws its own title bar is
-    /// never filled over, so its own tone counts.
-    fn shown_tone(&self) -> CaptionTone {
-        match self.fill.get() {
-            Some(fill) if !self.app_drawn.get() => {
-                caption_tone(StatusBarAppearance::Unspecified, fill)
-            }
-            _ => self.tone.get(),
+    /// The color the band is filled with: the app's top color while it leaves the band
+    /// empty. An app that draws its own title bar is never filled over.
+    fn fill(&self) -> Option<u32> {
+        self.sample.get().fill.filter(|_| !self.app_drawn.get())
+    }
+
+    /// Settles the tone the glyphs, the name and the frame are drawn in, from the app's
+    /// status bar and the pixels under the band ([`shown_tone`]), and gives the frame its
+    /// mode when the tone changed.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
+    unsafe fn retone(&self, hwnd: HWND) {
+        let now = shown_tone(
+            self.tone.get(),
+            self.sample.get(),
+            self.app_drawn.get(),
+            self.shown.get(),
+        );
+        if self.shown.replace(now) != now {
+            self.apply_tone(hwnd);
         }
     }
 
@@ -634,7 +650,7 @@ impl CaptionWindow {
     }
 
     unsafe fn apply_tone(&self, hwnd: HWND) {
-        let dark: i32 = i32::from(self.shown_tone() == CaptionTone::LightGlyphs);
+        let dark: i32 = i32::from(self.shown.get() == CaptionTone::LightGlyphs);
         DwmSetWindowAttribute(
             hwnd,
             DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
@@ -681,14 +697,14 @@ impl CaptionWindow {
             maximized: IsZoomed(hwnd) != 0,
             active: self.active.get(),
         };
-        let palette = palette(self.shown_tone());
+        let palette = palette(self.shown.get());
         let now = Some((
             layout,
             state,
             palette,
             dpi,
             self.title.borrow().clone(),
-            self.fill.get(),
+            self.fill(),
             self.app_drawn.get(),
             self.back_button(),
         ));
@@ -700,7 +716,7 @@ impl CaptionWindow {
             .title_rect()
             .and_then(|(_, _, width, height)| self.title_pixels((width, height), dpi));
         let content = TitleBarContent {
-            fill: self.fill.get(),
+            fill: self.fill(),
             icon: icon.as_deref(),
             title: title.as_deref(),
             app_drawn: self.app_drawn.get(),

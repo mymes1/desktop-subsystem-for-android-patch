@@ -412,6 +412,15 @@ pub trait GuestLauncher: Send + 'static {
         Err(format!("this kind of guest cannot be resized to {mb} MiB"))
     }
 
+    /// A handle that resizes the running guest's memory from a thread of its own, for a
+    /// platform whose resize can take long (Hyper-V answered one after 45 s). The session's
+    /// thread then keeps serving windows, input and requests meanwhile. `None`, the default,
+    /// has the session call [`GuestLauncher::set_memory_mb`] on its own thread, for a resize
+    /// that returns at once.
+    fn memory_resizer(&mut self) -> Option<Box<dyn MemoryResizer>> {
+        None
+    }
+
     /// Growing the guest's memory did not work, for the reason given. The launcher starts the
     /// next guest at a fixed size instead.
     fn memory_growth_failed(&mut self, why: &str) {
@@ -593,6 +602,28 @@ enum Command {
     HostSleep(Sender<()>),
     /// The host woke, with its wall clock then.
     HostWoke(SystemTime),
+    /// A resize of the guest's memory, run on a thread of its own, finished.
+    MemoryResized(ResizeOutcome),
+}
+
+/// How a resize of the guest's memory went, for the session to take in.
+struct ResizeOutcome {
+    /// Which boot of the guest asked for it.
+    generation: u64,
+    before: u64,
+    mb: u64,
+    /// The guest's memory when it was asked for, for the log.
+    available_mb: u64,
+    stall_percent: f64,
+    result: Result<(), String>,
+}
+
+/// Resizes the running guest's memory from a thread other than the session's
+/// ([`GuestLauncher::memory_resizer`]).
+pub trait MemoryResizer: Send + 'static {
+    /// Sets the guest's memory to `mb` MiB, as [`GuestLauncher::set_memory_mb`] does. It may
+    /// take as long as the platform takes; the session goes on meanwhile.
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String>;
 }
 
 /// Says the device name a guest is given: the computer's name, as its last boot found it.
@@ -1300,6 +1331,8 @@ impl Session {
         let (commands, command_rx) = mpsc::channel();
         let incoming = Arc::new(Mutex::new(None));
         let worker = Worker {
+            own_commands: commands.clone(),
+            memory_generation: 0,
             launcher: Box::new(launcher),
             listener,
             handshake: Box::new(handshake),
@@ -3863,6 +3896,10 @@ const PREREQUISITE_POLL: Duration = Duration::from_secs(1);
 const DIAGNOSIS_POLL: Duration = Duration::from_secs(10);
 
 struct Worker {
+    /// Where work the session hands to other threads posts its outcome.
+    own_commands: Sender<Command>,
+    /// Counts the guest's boots, so a resize from an earlier one is not taken for this one's.
+    memory_generation: u64,
     launcher: Box<dyn GuestLauncher>,
     listener: Box<dyn Listener>,
     handshake: Box<dyn Handshake>,
@@ -3999,6 +4036,7 @@ impl Worker {
                         }
                         // A stopped guest's clock is set when it next boots.
                         Ok(Command::HostWoke(_)) => self.host_asleep = None,
+                        Ok(Command::MemoryResized(outcome)) => self.memory_resized(outcome),
                         Ok(Command::Shutdown) | Err(_) => return,
                     }
                 }
@@ -4031,6 +4069,7 @@ impl Worker {
                         }
                         // A stopped guest's clock is set when it next boots.
                         Ok(Command::HostWoke(_)) => self.host_asleep = None,
+                        Ok(Command::MemoryResized(outcome)) => self.memory_resized(outcome),
                         Ok(Command::Shutdown) | Err(_) => return,
                     }
                 }
@@ -4141,6 +4180,10 @@ impl Worker {
             }
             Command::HostWoke(wall_clock) => {
                 self.host_woke(wall_clock);
+                self.running()
+            }
+            Command::MemoryResized(outcome) => {
+                self.memory_resized(outcome);
                 self.running()
             }
         }
@@ -5187,33 +5230,100 @@ impl Worker {
     }
 
     /// The guest's control daemon says how much memory it has: the VM grows when the guest is
-    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A launcher that
-    /// cannot resize stops the growing, and the guest keeps the size it has.
+    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A resize the
+    /// launcher refuses or that times out is tried again in smaller steps; only memory that
+    /// was added and never reached the guest stops the growing.
+    ///
+    /// The resize itself runs on a thread of its own when the launcher gives a
+    /// [`MemoryResizer`]: Hyper-V took 45 s to answer one, and the session's thread, which
+    /// serves windows, input and the apps' requests, must not wait for it. Its outcome comes
+    /// back as a command ([`Worker::memory_resized`]). [`MemoryGrowth`] asks for no other
+    /// resize while one is in flight.
     fn guest_memory_pressure(&mut self, pressure: GuestPressure) {
         let Some(growth) = self.memory_growth.as_mut() else {
             return;
         };
         let before = growth.current_mb();
-        match growth.on_pressure(&pressure, Instant::now()) {
-            None => {}
+        let mb = match growth.on_pressure(&pressure, Instant::now()) {
+            None => return,
             Some(GrowthAction::GiveUp(why)) => {
                 eprintln!("memory: Android's memory no longer grows: {why}");
                 self.launcher.memory_growth_failed(&why);
+                return;
             }
-            Some(GrowthAction::Resize(mb)) => match self.launcher.set_memory_mb(mb) {
-                Ok(()) => eprintln!(
+            Some(GrowthAction::Resize(mb)) => mb,
+        };
+        let outcome = |result| ResizeOutcome {
+            generation: 0,
+            before,
+            mb,
+            available_mb: pressure.mem_available_kb / 1024,
+            stall_percent: pressure.stall_percent,
+            result,
+        };
+        let generation = self.memory_generation;
+        let Some(mut resizer) = self.launcher.memory_resizer() else {
+            let result = self.launcher.set_memory_mb(mb);
+            self.memory_resized(ResizeOutcome {
+                generation,
+                ..outcome(result)
+            });
+            return;
+        };
+        let commands = self.own_commands.clone();
+        let mut done = ResizeOutcome {
+            generation,
+            ..outcome(Ok(()))
+        };
+        let spawned = thread::Builder::new()
+            .name("dsa-memory-resize".into())
+            .spawn(move || {
+                done.result = resizer.set_memory_mb(done.mb);
+                let _ = commands.send(Command::MemoryResized(done));
+            });
+        if let Err(error) = spawned {
+            self.memory_resized(ResizeOutcome {
+                generation,
+                ..outcome(Err(format!("the resize could not be started: {error}")))
+            });
+        }
+    }
+
+    /// A resize asked for by [`Worker::guest_memory_pressure`] finished. One from an earlier
+    /// boot of the guest says nothing about this one and is dropped.
+    fn memory_resized(&mut self, outcome: ResizeOutcome) {
+        if outcome.generation != self.memory_generation {
+            return;
+        }
+        let Some(growth) = self.memory_growth.as_mut() else {
+            return;
+        };
+        let ResizeOutcome {
+            before, mb, result, ..
+        } = outcome;
+        match result {
+            Ok(()) => {
+                growth.applied();
+                eprintln!(
                     "memory: Android's memory {} from {before} to {mb} MiB ({} MiB available, \
                      {:.1}% stalled)",
                     if mb > before { "grows" } else { "shrinks" },
-                    pressure.mem_available_kb / 1024,
-                    pressure.stall_percent
-                ),
-                Err(why) => {
-                    growth.refused(before);
-                    eprintln!("memory: Android's memory could not be set to {mb} MiB: {why}");
-                    self.launcher.memory_growth_failed(&why);
-                }
-            },
+                    outcome.available_mb,
+                    outcome.stall_percent
+                )
+            }
+            Err(why) => {
+                // A refused or timed-out resize is tried again in a smaller step; it never
+                // stops later ones (see MemoryGrowth::refused).
+                let now = Instant::now();
+                growth.refused(now);
+                let wait = growth.retry_in(now).unwrap_or_default().as_secs();
+                eprintln!(
+                    "memory: Android's memory could not be set from {before} to {mb} MiB \
+                     ({why}); it stays at {before} MiB and is resized again in smaller steps \
+                     in {wait} s"
+                );
+            }
         }
     }
 
@@ -5546,6 +5656,7 @@ impl Worker {
         // The guest renders while it boots, before the agent connects, and the compositor
         // binds its sockets to this ID, so it is known from the moment the guest runs.
         self.shared.set_vm_id(self.launcher.vm_id());
+        self.memory_generation = self.memory_generation.wrapping_add(1);
         self.memory_growth = self.launcher.memory_range_mb().map(|(base, max)| {
             eprintln!("memory: Android starts with {base} MiB and may grow to {max} MiB");
             MemoryGrowth::new(base, max)
@@ -5702,6 +5813,10 @@ impl Worker {
             Command::HostWoke(wall_clock) => {
                 self.host_asleep = None;
                 self.clock_pending = Some((wall_clock, Instant::now()));
+                true
+            }
+            Command::MemoryResized(outcome) => {
+                self.memory_resized(outcome);
                 true
             }
             Command::Stop => {

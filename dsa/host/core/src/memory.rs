@@ -603,6 +603,13 @@ pub enum GrowthAction {
 ///   not a wait, keeps the size from swinging.
 /// - If memory added does not show in the guest's total within 30 seconds, give up growing:
 ///   the platform or the guest cannot hot-add.
+/// - A resize the platform refuses or that times out ([`MemoryGrowth::refused`]) leaves the VM
+///   at the size before it and is tried again, in steps half the size of the one that failed
+///   (down to 128 MiB), after a wait that doubles with each failure in a row (5 seconds up to
+///   5 minutes). A failure never stops later resizes: taking 1.5 GiB back in one request timed
+///   out in Hyper-V while the guest still held the pages, and the VM then kept the memory for
+///   the rest of the session. Each resize that goes through ([`MemoryGrowth::applied`]) ends
+///   the wait and lets the steps double back toward their full size.
 #[derive(Debug, Clone)]
 pub struct MemoryGrowth {
     base_mb: u64,
@@ -612,6 +619,16 @@ pub struct MemoryGrowth {
     /// The guest total before the last growth, and when it was asked for.
     awaiting: Option<(u64, Instant)>,
     stopped: bool,
+    /// The size before the last resize asked for, while the platform has not answered it.
+    previous_mb: Option<u64>,
+    /// The most one growth or one shrink may change, after a resize of that kind failed.
+    grow_limit_mb: Option<u64>,
+    shrink_limit_mb: Option<u64>,
+    /// Where a shrink that goes back in steps is headed.
+    shrink_goal_mb: Option<u64>,
+    /// Resizes that failed in a row, and when the next may be tried.
+    failures: u32,
+    retry_at: Option<Instant>,
 }
 
 /// Memory is added and removed in steps of this, in MiB, the guest's memory block size.
@@ -619,6 +636,9 @@ const GROWTH_GRANULE_MB: u64 = 128;
 const GROW_COOLDOWN: Duration = Duration::from_secs(5);
 const SHRINK_COOLDOWN: Duration = Duration::from_secs(5);
 const HOT_ADD_DEADLINE: Duration = Duration::from_secs(30);
+/// The wait before the first retry of a failed resize; it doubles with each failure in a row.
+const RETRY_FIRST: Duration = Duration::from_secs(5);
+const RETRY_MOST: Duration = Duration::from_secs(5 * 60);
 
 fn round_up_mb(mb: u64) -> u64 {
     mb.div_ceil(GROWTH_GRANULE_MB) * GROWTH_GRANULE_MB
@@ -634,6 +654,12 @@ impl MemoryGrowth {
             last_change: None,
             awaiting: None,
             stopped: false,
+            previous_mb: None,
+            grow_limit_mb: None,
+            shrink_limit_mb: None,
+            shrink_goal_mb: None,
+            failures: 0,
+            retry_at: None,
         }
     }
 
@@ -650,6 +676,13 @@ impl MemoryGrowth {
     /// Takes in a pressure report and says what to do now, if anything.
     pub fn on_pressure(&mut self, p: &GuestPressure, now: Instant) -> Option<GrowthAction> {
         if self.stopped {
+            return None;
+        }
+        // One resize at a time: the platform has not answered the last one yet.
+        if self.in_flight() {
+            return None;
+        }
+        if self.retry_at.is_some_and(|at| now < at) {
             return None;
         }
         let total_mb = p.mem_total_kb / 1024;
@@ -677,9 +710,13 @@ impl MemoryGrowth {
             if self.current_mb >= self.max_mb || !since_change(GROW_COOLDOWN) {
                 return None;
             }
-            let step = (self.current_mb / 2).max(1024);
+            let mut step = (self.current_mb / 2).max(1024);
+            if let Some(limit) = self.grow_limit_mb {
+                step = step.min(limit);
+            }
             let target = round_up_mb(self.current_mb + step).min(self.max_mb);
             self.awaiting = Some((total_mb, now));
+            self.shrink_goal_mb = None;
             return Some(self.resize(target, now));
         }
         if self.current_mb <= self.base_mb
@@ -690,24 +727,77 @@ impl MemoryGrowth {
         }
         let used_mb = p.used_mb();
         let want = round_up_mb(used_mb + (used_mb / 2).max(1024)).max(self.base_mb);
-        // Not worth a balloon for less than half a gibibyte.
-        if want + 512 > self.current_mb {
+        // Not worth a balloon for less than half a gibibyte, unless it is the rest of a shrink
+        // that goes back in steps.
+        let resuming = self.shrink_goal_mb.is_some();
+        if want >= self.current_mb || (!resuming && want + 512 > self.current_mb) {
+            self.shrink_goal_mb = None;
             return None;
         }
-        Some(self.resize(want, now))
+        // After a shrink failed, the memory goes back in smaller steps.
+        let target = match self.shrink_limit_mb {
+            Some(limit) => want.max(self.current_mb.saturating_sub(limit)),
+            None => want,
+        };
+        self.shrink_goal_mb = (target > want).then_some(want);
+        Some(self.resize(target, now))
     }
 
     fn resize(&mut self, mb: u64, now: Instant) -> GrowthAction {
+        self.previous_mb = Some(self.current_mb);
         self.current_mb = mb;
         self.last_change = Some(now);
         GrowthAction::Resize(mb)
     }
 
-    /// The platform refused the last resize: stay at the size before it, and stop growing.
-    pub fn refused(&mut self, previous_mb: u64) {
+    /// The platform set the VM to the size the last [`GrowthAction::Resize`] asked for. Later
+    /// resizes need not wait, and a step that was cut down after a failure doubles again.
+    pub fn applied(&mut self) {
+        self.previous_mb = None;
+        self.failures = 0;
+        self.retry_at = None;
+        let double = |limit: Option<u64>| limit.and_then(|mb| mb.checked_mul(2));
+        self.grow_limit_mb = double(self.grow_limit_mb);
+        self.shrink_limit_mb = double(self.shrink_limit_mb);
+    }
+
+    /// The platform refused the last resize, or it did not finish in time, at `now`. The VM
+    /// counts as still at the size before it. The next resize of that kind is at most half as
+    /// large, down to 128 MiB, and nothing is asked for until the retry wait has passed.
+    pub fn refused(&mut self, now: Instant) {
+        let Some(previous_mb) = self.previous_mb.take() else {
+            return;
+        };
+        let failed_mb = self.current_mb.abs_diff(previous_mb);
+        let half = round_up_mb((failed_mb / 2).max(GROWTH_GRANULE_MB));
+        if self.current_mb > previous_mb {
+            self.grow_limit_mb = Some(half);
+            self.awaiting = None;
+        } else {
+            self.shrink_limit_mb = Some(half);
+            // The rest still goes back, in the smaller steps.
+            self.shrink_goal_mb = Some(self.current_mb);
+        }
         self.current_mb = previous_mb;
-        self.awaiting = None;
-        self.stopped = true;
+        self.failures = self.failures.saturating_add(1);
+        let wait = RETRY_FIRST
+            .saturating_mul(1 << self.failures.saturating_sub(1).min(16))
+            .min(RETRY_MOST);
+        self.retry_at = Some(now + wait);
+    }
+
+    /// Whether the last [`GrowthAction::Resize`] has not been answered yet
+    /// ([`MemoryGrowth::applied`] or [`MemoryGrowth::refused`]). No other resize is asked for
+    /// meanwhile.
+    pub fn in_flight(&self) -> bool {
+        self.previous_mb.is_some()
+    }
+
+    /// How long until a resize may be tried again after a failure, if one is being waited out.
+    pub fn retry_in(&self, now: Instant) -> Option<Duration> {
+        self.retry_at
+            .map(|at| at.saturating_duration_since(now))
+            .filter(|wait| !wait.is_zero())
     }
 }
 

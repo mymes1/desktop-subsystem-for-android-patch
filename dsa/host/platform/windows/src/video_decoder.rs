@@ -9,10 +9,12 @@
 //! that would decode on the processor is left to the guest's own software decoder, which
 //! costs the same and keeps the host's processor free.
 //!
-//! [`picture_from_planes`] is the copy of a picture out of a texture's memory, and is tested on
-//! every platform; the rest is Windows only.
+//! Where each picture lies in the decoder's surface (the chroma plane's row, the visible size)
+//! is decided by [`dsa_host_core::video_layout`], which every host shares and which is tested
+//! on every platform; the rest is Windows only.
 
 use dsa_host_core::video::Picture;
+use dsa_host_core::video_layout::{picture_from_surface, SurfaceFormat};
 
 /// Copies the visible `width` by `height` of an NV12 picture whose rows are `pitch` bytes
 /// apart and whose chroma plane starts `plane_rows` rows after the luma plane (the decoder
@@ -25,37 +27,15 @@ pub fn picture_from_planes(
     width: u32,
     height: u32,
 ) -> Option<Picture> {
-    let (w, h) = (width as usize, height as usize);
-    if w == 0 || h == 0 || pitch < w || plane_rows < h {
-        return None;
-    }
-    let chroma_rows = h.div_ceil(2);
-    let needed = pitch.checked_mul(plane_rows + chroma_rows)?;
-    if data.len() < needed {
-        return None;
-    }
-    // The stride sent is the visible width rounded up to 2, so each chroma row holds whole
-    // pairs.
-    let stride = w + (w & 1);
-    let mut nv12 = Vec::with_capacity(stride * (h + chroma_rows));
-    for row in 0..h {
-        let start = row * pitch;
-        nv12.extend_from_slice(&data[start..start + stride.min(pitch)]);
-        nv12.resize(nv12.len() + stride - stride.min(pitch), 0);
-    }
-    let chroma = plane_rows * pitch;
-    for row in 0..chroma_rows {
-        let start = chroma + row * pitch;
-        nv12.extend_from_slice(&data[start..start + stride.min(pitch)]);
-        nv12.resize(nv12.len() + stride - stride.min(pitch), 0);
-    }
-    Some(Picture {
+    picture_from_surface(
         id,
+        data,
+        SurfaceFormat::Nv12,
+        pitch,
+        plane_rows,
         width,
         height,
-        stride: stride as u32,
-        nv12,
-    })
+    )
 }
 
 use dsa_host_core::video::Codec;
@@ -96,32 +76,36 @@ mod system {
     use std::sync::OnceLock;
 
     use dsa_host_core::video::{Codec, CodecSupport, Packet, Picture, VideoDecoder, VideoDecoders};
+    use dsa_host_core::video_layout::{
+        chroma_start_row, picture_from_surface, rows_from_length, stream_frame_size, visible_size,
+        Size, SurfaceFormat,
+    };
     use windows::core::{Interface, GUID};
     use windows::Win32::Foundation::HMODULE;
     use windows::Win32::Graphics::Direct3D::{
         D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
     };
     use windows::Win32::Graphics::Direct3D11::{
-        D3D11CreateDevice, ID3D11Device, ID3D11Multithread, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-        D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
+        D3D11CreateDevice, ID3D11Device, ID3D11Multithread, ID3D11Texture2D,
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
+        D3D11_TEXTURE2D_DESC,
     };
     use windows::Win32::Graphics::Dxgi::IDXGIAdapter;
     use windows::Win32::Media::MediaFoundation::{
-        IMF2DBuffer, IMFActivate, IMFDXGIDeviceManager, IMFMediaType, IMFSample, IMFTransform,
-        MFCreateDXGIDeviceManager, MFCreateMediaType, MFCreateMemoryBuffer, MFCreateSample,
-        MFMediaType_Video, MFStartup, MFTEnumEx, MFVideoArea, MFVideoFormat_AV1,
-        MFVideoFormat_H264, MFVideoFormat_HEVC, MFVideoFormat_NV12, MFVideoFormat_VP90,
-        MFSTARTUP_NOSOCKET, MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG_SORTANDFILTER,
-        MFT_ENUM_FLAG_SYNCMFT, MFT_MESSAGE_COMMAND_DRAIN, MFT_MESSAGE_COMMAND_FLUSH,
-        MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, MFT_MESSAGE_NOTIFY_START_OF_STREAM,
-        MFT_MESSAGE_SET_D3D_MANAGER, MFT_OUTPUT_DATA_BUFFER, MFT_OUTPUT_STREAM_PROVIDES_SAMPLES,
-        MFT_REGISTER_TYPE_INFO, MF_E_NOTACCEPTING, MF_E_TRANSFORM_NEED_MORE_INPUT,
-        MF_E_TRANSFORM_STREAM_CHANGE, MF_MT_FRAME_SIZE, MF_MT_MAJOR_TYPE,
-        MF_MT_MINIMUM_DISPLAY_APERTURE, MF_MT_SUBTYPE, MF_SA_D3D11_AWARE, MF_VERSION,
+        IMF2DBuffer, IMFActivate, IMFDXGIBuffer, IMFDXGIDeviceManager, IMFMediaType, IMFSample,
+        IMFTransform, MFCreateDXGIDeviceManager, MFCreateMediaType, MFCreateMemoryBuffer,
+        MFCreateSample, MFMediaType_Video, MFStartup, MFTEnumEx, MFVideoArea, MFVideoFormat_AV1,
+        MFVideoFormat_H264, MFVideoFormat_HEVC, MFVideoFormat_NV12, MFVideoFormat_P010,
+        MFVideoFormat_VP90, MFSTARTUP_NOSOCKET, MFT_CATEGORY_VIDEO_DECODER,
+        MFT_ENUM_FLAG_SORTANDFILTER, MFT_ENUM_FLAG_SYNCMFT, MFT_MESSAGE_COMMAND_DRAIN,
+        MFT_MESSAGE_COMMAND_FLUSH, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
+        MFT_MESSAGE_NOTIFY_START_OF_STREAM, MFT_MESSAGE_SET_D3D_MANAGER, MFT_OUTPUT_DATA_BUFFER,
+        MFT_OUTPUT_STREAM_PROVIDES_SAMPLES, MFT_REGISTER_TYPE_INFO, MF_E_NOTACCEPTING,
+        MF_E_TRANSFORM_NEED_MORE_INPUT, MF_E_TRANSFORM_STREAM_CHANGE, MF_MT_FRAME_SIZE,
+        MF_MT_GEOMETRIC_APERTURE, MF_MT_MAJOR_TYPE, MF_MT_MINIMUM_DISPLAY_APERTURE,
+        MF_MT_PAN_SCAN_APERTURE, MF_MT_SUBTYPE, MF_SA_D3D11_AWARE, MF_VERSION,
     };
     use windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_MULTITHREADED};
-
-    use super::picture_from_planes;
 
     /// The largest picture offered for each format: 4096 by 2304, what H.264's highest
     /// common level and every hardware decoder of the others take.
@@ -255,12 +239,48 @@ mod system {
         }
     }
 
-    /// A width and a height.
-    type Size = (u32, u32);
+    /// The display area an output type gives, when it gives one: the minimum display
+    /// aperture, else the geometric or the pan and scan aperture.
+    fn aperture(media_type: &IMFMediaType) -> Option<Size> {
+        for key in [
+            &MF_MT_MINIMUM_DISPLAY_APERTURE,
+            &MF_MT_GEOMETRIC_APERTURE,
+            &MF_MT_PAN_SCAN_APERTURE,
+        ] {
+            let mut area = MFVideoArea::default();
+            let mut len = 0u32;
+            // SAFETY: the blob is an MFVideoArea, written into one.
+            let read = unsafe {
+                media_type.GetBlob(
+                    key,
+                    std::slice::from_raw_parts_mut(
+                        (&mut area as *mut MFVideoArea).cast::<u8>(),
+                        std::mem::size_of::<MFVideoArea>(),
+                    ),
+                    Some(&mut len),
+                )
+            };
+            // The area starts at the surface's corner: an offset one would need cropping
+            // this copy does not do, so only its size is taken.
+            if read.is_ok() && area.Area.cx > 0 && area.Area.cy > 0 {
+                return Some((area.Area.cx as u32, area.Area.cy as u32));
+            }
+        }
+        None
+    }
 
-    /// Chooses NV12 among the decoder's output types. Returns the coded size and the visible
-    /// size.
-    fn choose_nv12(decoder: &IMFTransform) -> Result<(Size, Size), String> {
+    /// The output the decoder gives: its surfaces' format, coded size and display area.
+    #[derive(Clone, Copy)]
+    struct Output {
+        format: SurfaceFormat,
+        coded: Size,
+        aperture: Option<Size>,
+    }
+
+    /// Chooses NV12 among the decoder's output types, else P010 (a 10-bit stream, whose
+    /// decoder offers no 8-bit output), which is sent on as 8-bit.
+    fn choose_output(decoder: &IMFTransform) -> Result<Output, String> {
+        let mut p010 = None;
         for index in 0.. {
             // SAFETY: plain Media Foundation calls.
             let available = match unsafe { decoder.GetOutputAvailableType(0, index) } {
@@ -269,36 +289,52 @@ mod system {
             };
             // SAFETY: as above.
             let subtype = unsafe { available.GetGUID(&MF_MT_SUBTYPE) }.unwrap_or_default();
-            if subtype != MFVideoFormat_NV12 {
-                continue;
+            if subtype == MFVideoFormat_NV12 {
+                return set_output(decoder, &available, SurfaceFormat::Nv12);
             }
-            // SAFETY: as above.
-            unsafe { decoder.SetOutputType(0, &available, 0) }
-                .map_err(|e| format!("the decoder did not take NV12 output: {e}"))?;
-            // SAFETY: as above.
-            let size = unsafe { available.GetUINT64(&MF_MT_FRAME_SIZE) }.unwrap_or(0);
-            let coded = ((size >> 32) as u32, size as u32);
-            let mut area = MFVideoArea::default();
-            let mut len = 0u32;
-            // SAFETY: the blob is an MFVideoArea, written into one.
-            let visible = unsafe {
-                available.GetBlob(
-                    &MF_MT_MINIMUM_DISPLAY_APERTURE,
-                    std::slice::from_raw_parts_mut(
-                        (&mut area as *mut MFVideoArea).cast::<u8>(),
-                        std::mem::size_of::<MFVideoArea>(),
-                    ),
-                    Some(&mut len),
-                )
-            };
-            let shown = if visible.is_ok() && area.Area.cx > 0 && area.Area.cy > 0 {
-                (area.Area.cx as u32, area.Area.cy as u32)
-            } else {
-                coded
-            };
-            return Ok((coded, shown));
+            if subtype == MFVideoFormat_P010 && p010.is_none() {
+                p010 = Some(available);
+            }
         }
-        Err("the decoder offers no NV12 output".into())
+        match p010 {
+            Some(available) => set_output(decoder, &available, SurfaceFormat::P010),
+            None => Err("the decoder offers neither NV12 nor P010 output".into()),
+        }
+    }
+
+    fn set_output(
+        decoder: &IMFTransform,
+        available: &IMFMediaType,
+        format: SurfaceFormat,
+    ) -> Result<Output, String> {
+        // SAFETY: plain Media Foundation calls.
+        unsafe { decoder.SetOutputType(0, available, 0) }
+            .map_err(|e| format!("the decoder did not take {format:?} output: {e}"))?;
+        // SAFETY: as above.
+        let size = unsafe { available.GetUINT64(&MF_MT_FRAME_SIZE) }.unwrap_or(0);
+        Ok(Output {
+            format,
+            coded: ((size >> 32) as u32, size as u32),
+            aperture: aperture(available),
+        })
+    }
+
+    /// The height of the texture a decoded sample's first buffer is, when it is one.
+    fn texture_rows(sample: &IMFSample) -> Option<usize> {
+        // SAFETY: plain Media Foundation and Direct3D calls on interfaces the sample holds.
+        unsafe {
+            let buffer = sample.GetBufferByIndex(0).ok()?;
+            let dxgi = buffer.cast::<IMFDXGIBuffer>().ok()?;
+            let mut texture: Option<ID3D11Texture2D> = None;
+            dxgi.GetResource(
+                &ID3D11Texture2D::IID,
+                (&mut texture as *mut Option<ID3D11Texture2D>).cast(),
+            )
+            .ok()?;
+            let mut desc = D3D11_TEXTURE2D_DESC::default();
+            texture?.GetDesc(&mut desc);
+            Some(desc.Height as usize)
+        }
     }
 
     /// One decoder on the GPU.
@@ -306,8 +342,11 @@ mod system {
         codec: Codec,
         decoder: IMFTransform,
         _gpu: Gpu,
-        coded: (u32, u32),
-        shown: (u32, u32),
+        output: Output,
+        /// The size the guest opened the stream with, and the size the stream's own headers
+        /// last gave (VP9, AV1), for decoders that report no display area.
+        opened: Size,
+        stream: Option<Size>,
         provides_samples: bool,
         sample_size: u32,
     }
@@ -343,7 +382,7 @@ mod system {
             unsafe { decoder.SetInputType(0, &input, 0) }.map_err(|e| {
                 format!("the {} decoder did not take the stream: {e}", codec.name())
             })?;
-            let (coded, shown) = choose_nv12(&decoder)?;
+            let output = choose_output(&decoder)?;
             // SAFETY: as above.
             let info = unsafe { decoder.GetOutputStreamInfo(0) }
                 .map_err(|e| format!("the decoder's output is unknown: {e}"))?;
@@ -356,8 +395,9 @@ mod system {
                 codec,
                 decoder,
                 _gpu: gpu,
-                coded,
-                shown,
+                output,
+                opened: (width, height),
+                stream: None,
                 provides_samples: info.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 as u32 != 0,
                 sample_size: info.cbSize,
             })
@@ -421,9 +461,7 @@ mod system {
                     Ok(()) => {}
                     Err(e) if e.code() == MF_E_TRANSFORM_NEED_MORE_INPUT => return Ok(out),
                     Err(e) if e.code() == MF_E_TRANSFORM_STREAM_CHANGE => {
-                        let (coded, shown) = choose_nv12(&self.decoder)?;
-                        self.coded = coded;
-                        self.shown = shown;
+                        self.output = choose_output(&self.decoder)?;
                         continue;
                     }
                     Err(e) => return Err(format!("the {} decoder failed: {e}", self.codec.name())),
@@ -437,15 +475,31 @@ mod system {
             }
         }
 
+        /// The picture's visible size: the decoder's display area, else the size the stream's
+        /// own headers gave, else the size the guest opened the stream with when the coded
+        /// size is only that rounded up to the codec's blocks, else the coded size.
+        fn shown(&self) -> Size {
+            let coded = self.output.coded;
+            let opened = Some(self.opened).filter(|&(w, h)| {
+                w <= coded.0 && h <= coded.1 && coded.0 - w < 64 && coded.1 - h < 64
+            });
+            visible_size(coded, self.output.aperture, self.stream.or(opened))
+        }
+
         fn read(&self, sample: &IMFSample) -> Result<Option<Picture>, String> {
+            let format = self.output.format;
+            let (width, height) = self.shown();
+            let coded_rows = self.output.coded.1 as usize;
+            // The chroma plane follows the texture's own rows, which a driver may make taller
+            // than the coded size (for the largest picture it expects). Taking it after the
+            // coded rows instead read the zero padding: green pictures, or a green band.
+            let surface_rows = texture_rows(sample);
             // SAFETY: plain Media Foundation calls; the buffer is unlocked before it goes.
             unsafe {
                 let id = sample.GetSampleTime().map_err(|e| e.to_string())? as u64;
                 let buffer = sample
                     .ConvertToContiguousBuffer()
                     .map_err(|e| e.to_string())?;
-                let (width, height) = self.shown;
-                let rows = self.coded.1.max(height) as usize;
                 if let Ok(two_d) = buffer.cast::<IMF2DBuffer>() {
                     let mut data = std::ptr::null_mut();
                     let mut pitch = 0i32;
@@ -453,9 +507,11 @@ mod system {
                         .Lock2D(&mut data, &mut pitch)
                         .map_err(|e| format!("cannot read the picture: {e}"))?;
                     let pitch = pitch.unsigned_abs() as usize;
+                    let rows = chroma_start_row(surface_rows, coded_rows, height as usize);
                     let len = pitch * (rows + rows.div_ceil(2));
                     let bytes = std::slice::from_raw_parts(data, len);
-                    let picture = picture_from_planes(id, bytes, pitch, rows, width, height);
+                    let picture =
+                        picture_from_surface(id, bytes, format, pitch, rows, width, height);
                     let _ = two_d.Unlock2D();
                     return Ok(picture);
                 }
@@ -464,9 +520,19 @@ mod system {
                 buffer
                     .Lock(&mut data, None, Some(&mut len))
                     .map_err(|e| format!("cannot read the picture: {e}"))?;
-                let pitch = self.coded.0.max(width) as usize;
+                let sample_bytes = match format {
+                    SurfaceFormat::Nv12 => 1,
+                    SurfaceFormat::P010 => 2,
+                };
+                let pitch = self.output.coded.0.max(width) as usize * sample_bytes;
+                // A buffer in system memory is packed: its length says how many rows it has.
+                let rows = chroma_start_row(
+                    surface_rows.or_else(|| rows_from_length(len as usize, pitch)),
+                    coded_rows,
+                    height as usize,
+                );
                 let bytes = std::slice::from_raw_parts(data, len as usize);
-                let picture = picture_from_planes(id, bytes, pitch, rows, width, height);
+                let picture = picture_from_surface(id, bytes, format, pitch, rows, width, height);
                 let _ = buffer.Unlock();
                 Ok(picture)
             }
@@ -475,6 +541,11 @@ mod system {
 
     impl VideoDecoder for MediaFoundationDecoder {
         fn decode(&mut self, packet: Packet) -> Result<Vec<Picture>, String> {
+            // A VP9 key frame or an AV1 sequence header gives the picture's size, which their
+            // decoders may not report.
+            if let Some(size) = stream_frame_size(self.codec, &packet.data) {
+                self.stream = Some(size);
+            }
             // VP9 and AV1 carry their configuration in the stream; the configuration Android
             // passes separately (AV1's codec configuration record) is not a frame.
             if packet.codec_config && matches!(self.codec, Codec::Vp9 | Codec::Av1) {

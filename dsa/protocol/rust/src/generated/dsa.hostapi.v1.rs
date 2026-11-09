@@ -1701,6 +1701,13 @@ pub struct Settings {
     /// cannot change it here: SetAppRoot with the package "com.android.shell" sets it.
     #[prost(string, tag = "38")]
     pub adb_shell_root: ::prost::alloc::string::String,
+    /// Whether the caller's Android restarts by itself into an Android image the service has
+    /// downloaded: at once while no app window is open (Dozing), and otherwise after the user's
+    /// desktop asks, or once every window is closed and Android dozes. On unless the user turned
+    /// it off; a client sends back the value it read. Off, a downloaded image is used from the
+    /// next time the user starts Android.
+    #[prost(bool, tag = "39")]
+    pub image_auto_restart: bool,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1779,6 +1786,28 @@ pub struct AndroidVersions {
     /// The latest news about the image; empty when there is none.
     #[prost(string, tag = "10")]
     pub notice: ::prost::alloc::string::String,
+    /// The image the caller's running Android waits to restart into: one the service downloaded
+    /// after it started. Empty when none waits (it is not running, or it already runs the
+    /// newest image). RestartForUpdate applies it now.
+    #[prost(string, tag = "11")]
+    pub restart_pending: ::prost::alloc::string::String,
+}
+/// Restarts the caller's Android now into the Android image that waits for it
+/// (AndroidVersions.restart_pending), as the \[Restart now\] of the desktop's question and of
+/// the settings app do. The service answers UpdateRestart at once; the restart then happens on
+/// its own, with the new image's trial boot and, when it fails, the rollback to the previous
+/// image.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RestartForUpdate {}
+/// The answer to RestartForUpdate.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdateRestart {
+    /// The image Android restarts into. Empty when none waits, and nothing is restarted.
+    #[prost(string, tag = "1")]
+    pub version: ::prost::alloc::string::String,
+    /// What happens next, in words for the user.
+    #[prost(string, tag = "2")]
+    pub detail: ::prost::alloc::string::String,
 }
 /// What an ARM translation package says of itself, from its arm-translation.json.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2322,7 +2351,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340, 341, 350"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2454,6 +2483,8 @@ pub mod request {
         GetAndroidVersions(super::GetAndroidVersions),
         #[prost(message, tag = "331")]
         UseAndroidVersion(super::UseAndroidVersion),
+        #[prost(message, tag = "332")]
+        RestartForUpdate(super::RestartForUpdate),
         #[prost(message, tag = "400")]
         InstallGapps(super::InstallGapps),
         #[prost(message, tag = "401")]
@@ -2474,7 +2505,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340, 341"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 332, 400, 401, 340, 341"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2528,6 +2559,8 @@ pub mod response {
         DragData(super::DragData),
         #[prost(message, tag = "330")]
         AndroidVersions(super::AndroidVersions),
+        #[prost(message, tag = "332")]
+        UpdateRestart(super::UpdateRestart),
         #[prost(message, tag = "400")]
         Gapps(super::Gapps),
         #[prost(message, tag = "401")]

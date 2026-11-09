@@ -47,7 +47,7 @@ use std::ffi::c_void;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use dsa_host_core::compositor::caption::band_fill;
+use dsa_host_core::compositor::caption::{band_sample, BandSample};
 use dsa_host_core::compositor::frame_buffers::{
     buffers_after_frame, content_region, frame_scale, sample_points, swapchain_buffers,
     swapchain_change, uniform_colour, wanted_swapchain_buffers, HiddenBuffers, HiddenFrame,
@@ -465,7 +465,8 @@ struct State {
     /// them; the window then makes all of it again on the new ones (`follow_gpu`).
     devices: Arc<Devices>,
     generation: u64,
-    /// The window's DirectComposition target: `None` only while it is made again.
+    /// The window's DirectComposition target: `None` only while it is made again. Closing
+    /// never takes the visual tree off it (`close`).
     target: Option<IDCompositionTarget>,
     /// The frame's visual, under the caption's.
     visual: IDCompositionVisual,
@@ -538,8 +539,8 @@ struct State {
     band_pending: bool,
     /// When the band was last copied.
     band_probed: Option<Instant>,
-    /// What the window was last told to fill the band with.
-    band_fill: Option<u32>,
+    /// What the window was last told of the band: its fill and its lightness.
+    band_sample: BandSample,
     /// Whether a screenshot waits for the next frame, and what it got once one came.
     capture_wanted: bool,
     captured: Option<Result<CapturedFrame, String>>,
@@ -720,9 +721,10 @@ fn compose_window(devices: &Devices, hwnd: isize) -> Result<Composition, String>
 /// Tells a window that a frame of another size is kept for it to take.
 pub type FrameReady = Box<dyn Fn() + Send + Sync>;
 
-/// Tells a window the color its title bar's band should be filled with (0xAARRGGBB), or
-/// `None` when the app draws the band itself.
-pub type BandColour = Box<dyn Fn(Option<u32>) + Send + Sync>;
+/// Tells a window what the app's frame shows under its title bar: the color the band should
+/// be filled with (0xAARRGGBB), `None` when the app draws the band itself, and how light the
+/// band is, which the caption glyphs' tone follows.
+pub type BandColour = Box<dyn Fn(BandSample) + Send + Sync>;
 
 /// How many pixels are sampled across the band, and across the row under it.
 const BAND_SAMPLES: u32 = 8;
@@ -807,7 +809,7 @@ impl WindowPresenter {
                 band_probe: None,
                 band_pending: false,
                 band_probed: None,
-                band_fill: None,
+                band_sample: BandSample::default(),
                 capture_wanted: false,
                 captured: None,
             }),
@@ -825,9 +827,10 @@ impl WindowPresenter {
         *self.frame_ready.lock().unwrap_or_else(|e| e.into_inner()) = Some(ready);
     }
 
-    /// Has `told` called, from the thread that shows frames, whenever the color the title
-    /// bar's band should be filled with changes: the app's top color while the app's frames
-    /// leave the band empty or black, `None` once the app draws the band itself.
+    /// Has `told` called, from the thread that shows frames, whenever what the app's frames
+    /// show under the title bar changes: the color the band should be filled with (the app's
+    /// top color while the app's frames leave the band empty or black, `None` once the app
+    /// draws the band itself), and how light the band is.
     pub fn on_band_colour(&self, told: BandColour) {
         *self.band_colour.lock().unwrap_or_else(|e| e.into_inner()) = Some(told);
     }
@@ -835,13 +838,13 @@ impl WindowPresenter {
     /// Samples the band and the row under it from the frame in `texture` (of `region`
     /// pixels), at most every [`BAND_PROBE_EVERY`]. The copy is read on a later frame, once
     /// the GPU has made it, so showing a frame never waits for it. Returns the band's new
-    /// fill when it changed.
+    /// sample when it changed.
     unsafe fn probe_band(
         &self,
         state: &mut State,
         texture: &ID3D11Texture2D,
         region: (u32, u32),
-    ) -> Option<Option<u32>> {
+    ) -> Option<BandSample> {
         let devices = Arc::clone(&state.devices);
         // The band is the window's; the frame is sampled in its own pixels.
         let band = to_task_length(state.band, state.scale);
@@ -871,10 +874,10 @@ impl WindowPresenter {
                     let (inside, below) = (row(0), row(1));
                     context.Unmap(&probe, 0);
                     state.band_pending = false;
-                    let fill = band_fill(&inside, &below);
-                    if fill != state.band_fill {
-                        state.band_fill = fill;
-                        changed = Some(fill);
+                    let sample = band_sample(&inside, &below);
+                    if sample != state.band_sample {
+                        state.band_sample = sample;
+                        changed = Some(sample);
                     }
                 }
                 // The GPU has not made the copy yet: it is read on a later frame.
@@ -1413,10 +1416,12 @@ impl WindowPresenter {
         }
     }
 
-    /// The window is closing: nothing more is shown in it.
+    /// The window is closing: nothing more is shown in it. The frame it shows stays in it,
+    /// so the close animation Windows plays when the window is destroyed shows the window
+    /// whole, with its content, and not an empty frame. [`WindowPresenter::release`] lets
+    /// the content go once the window is gone.
     pub fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let devices = Arc::clone(&state.devices);
         if !state.closed {
             if let Some(summary) = state.latency.summary() {
                 note(
@@ -1426,20 +1431,33 @@ impl WindowPresenter {
             }
         }
         state.closed = true;
-        state.newest = None;
-        // A screenshot waiting for a frame gets none.
+        drop(state);
+        // A screenshot waiting for a frame gets none, and a frame waiting for the window to
+        // take its size waits for nothing.
         self.capture_done.notify_all();
-        let Ok(dcomp) = devices.dcomp() else {
-            return;
-        };
-        let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
-        // SAFETY: plain COM calls on objects this presenter owns.
-        unsafe {
-            if let Some(target) = &state.target {
-                let _ = target.SetRoot(None::<&IDCompositionVisual>);
-            }
-            let _ = dcomp.Commit();
-        }
+        self.claim_released.notify_all();
+    }
+
+    /// The window is gone: what it showed is let go. Nothing is committed to the window's
+    /// visual tree, which went with the window; an empty tree committed now could reach the
+    /// close animation, which still shows the window's last content.
+    pub fn release(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.closed = true;
+        state.newest = None;
+        state.swapchain = None;
+        state.buffers = None;
+        state.buffer_count = 0;
+        state.committed = None;
+        state.splash_surface = None;
+        state.splash_image = None;
+        state.caption_surface = None;
+        state.last_frame = None;
+        state.readback = None;
+        state.samples = None;
+        state.band_probe = None;
+        state.band_pending = false;
+        state.presents.forget();
     }
 
     /// The frame the window shows, read back for a screenshot, or `None` before the app's
@@ -1617,14 +1635,14 @@ impl WindowPresenter {
             );
         }
         drop(state);
-        if let Some(fill) = band_changed {
+        if let Some(sample) = band_changed {
             if let Some(told) = self
                 .band_colour
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .as_ref()
             {
-                told(fill);
+                told(sample);
             }
         }
         if keep {

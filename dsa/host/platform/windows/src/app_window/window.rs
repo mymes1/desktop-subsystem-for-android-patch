@@ -45,7 +45,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use dsa_host_core::compositor::caption::CaptionBand;
+use dsa_host_core::compositor::caption::{BandSample, CaptionBand};
 use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
@@ -125,9 +125,29 @@ const WM_APP_COMMANDS: u32 = WM_APP + 1;
 const WM_APP_QUIT: u32 = WM_APP + 2;
 /// Sent to a task window when a frame of another size than the window's is kept for it.
 const WM_APP_FRAME_READY: u32 = WM_APP + 4;
-/// Sent to a task window when the color its title bar's band is filled with changes: the
-/// color in `wparam`, and `lparam` 0 when the band is left as the app draws it.
+/// Sent to a task window when what its presenter reads from the app's frame under the title
+/// bar changes ([`pack_band_sample`]).
 const WM_APP_BAND_COLOUR: u32 = WM_APP + 5;
+
+/// A band sample as the parameters of [`WM_APP_BAND_COLOUR`]: the fill color in `wparam`, and
+/// in `lparam` bit 0 set when there is a fill, bit 1 set when the band's luminance was read,
+/// and the luminance itself from bit 16.
+fn pack_band_sample(sample: BandSample) -> (WPARAM, LPARAM) {
+    let wparam = sample.fill.unwrap_or(0) as WPARAM;
+    let mut lparam = LPARAM::from(sample.fill.is_some());
+    if let Some(luminance) = sample.luminance {
+        lparam |= 2 | (luminance as LPARAM) << 16;
+    }
+    (wparam, lparam)
+}
+
+/// The band sample [`pack_band_sample`] put in a message's parameters.
+fn unpack_band_sample(wparam: WPARAM, lparam: LPARAM) -> BandSample {
+    BandSample {
+        fill: (lparam & 1 != 0).then_some(wparam as u32),
+        luminance: (lparam & 2 != 0).then_some(((lparam >> 16) & 0xFFFF) as u16),
+    }
+}
 
 /// The message window's timer, which reports windows left showing a frame of an older size
 /// and takes the commands whose wake-up message could not be posted.
@@ -661,11 +681,12 @@ unsafe extern "system" fn task_window_proc(
             0
         }
         WM_APP_BAND_COLOUR => {
-            // The app's frames show whether it leaves the title bar's band empty.
+            // The app's frames show whether it leaves the title bar's band empty, and how
+            // light the band is.
             if let Some(data) = window_data(hwnd) {
-                let fill = (lparam != 0).then_some(wparam as u32);
+                let sample = unpack_band_sample(wparam, lparam);
                 let presenter = data.presenter.borrow().clone();
-                data.caption.set_fill(hwnd, fill, presenter.as_deref());
+                data.caption.set_sample(hwnd, sample, presenter.as_deref());
             }
             0
         }
@@ -1557,13 +1578,8 @@ impl Ui {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&task_id);
-        if let Some(presenter) = presenter {
-            presenter.close();
-        }
-        if let Some(hwnd) = self.open.remove(&task_id) {
-            // SAFETY: a window of this thread.
-            unsafe { DestroyWindow(hwnd) };
-        }
+        let hwnd = self.open.remove(&task_id);
+        close_whole(&mut ClosingTask { presenter, hwnd });
     }
 
     unsafe fn open_window(&mut self, task_id: i32, title: &str, size: (u32, u32), focused: bool) {
@@ -1687,16 +1703,10 @@ impl Ui {
                 // drops the message.
                 unsafe { PostMessageW(window as HWND, WM_APP_FRAME_READY, 0, 0) };
             }));
-            presenter.on_band_colour(Box::new(move |fill| {
+            presenter.on_band_colour(Box::new(move |sample| {
+                let (wparam, lparam) = pack_band_sample(sample);
                 // SAFETY: as above.
-                unsafe {
-                    PostMessageW(
-                        window as HWND,
-                        WM_APP_BAND_COLOUR,
-                        fill.unwrap_or(0) as WPARAM,
-                        LPARAM::from(fill.is_some()),
-                    )
-                };
+                unsafe { PostMessageW(window as HWND, WM_APP_BAND_COLOUR, wparam, lparam) };
             }));
             self.setup
                 .presenters
@@ -1751,9 +1761,126 @@ impl Ui {
     }
 }
 
+/// The steps of closing a task window, which [`close_whole`] takes in order.
+trait ClosingWindow {
+    /// No more frames are shown in the window; the one it shows stays in it.
+    fn stop_frames(&mut self);
+    /// The window leaves the screen. Windows plays its close animation on the window as it
+    /// is now, with its content still in it.
+    fn destroy(&mut self);
+    /// What the window showed is let go: its swapchain, its surfaces and the newest frame.
+    fn release_content(&mut self);
+}
+
+/// Closes a task window as one piece, as Windows closes its own: the window is destroyed
+/// with its last frame still in it, and what it showed is let go only once it is gone.
+/// Letting the content go first left an empty frame on the screen, and only that frame
+/// played the close animation.
+fn close_whole(window: &mut impl ClosingWindow) {
+    window.stop_frames();
+    window.destroy();
+    window.release_content();
+}
+
+/// A task window being closed: its presenter and its window, either of which may be missing
+/// (a window that could not show frames has no presenter).
+struct ClosingTask {
+    presenter: Option<Arc<WindowPresenter>>,
+    hwnd: Option<HWND>,
+}
+
+impl ClosingWindow for ClosingTask {
+    fn stop_frames(&mut self) {
+        if let Some(presenter) = &self.presenter {
+            presenter.close();
+        }
+    }
+
+    fn destroy(&mut self) {
+        if let Some(hwnd) = self.hwnd.take() {
+            // SAFETY: a window of this thread.
+            unsafe { DestroyWindow(hwnd) };
+        }
+    }
+
+    fn release_content(&mut self) {
+        if let Some(presenter) = self.presenter.take() {
+            presenter.release();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A task window that records what is done to it, and what it showed when it left the
+    /// screen.
+    struct FakeWindow {
+        steps: Vec<&'static str>,
+        content_attached: bool,
+        frames_flowing: bool,
+        /// Whether the content was attached, and frames still came, when it was destroyed.
+        destroyed: Option<(bool, bool)>,
+    }
+
+    impl ClosingWindow for FakeWindow {
+        fn stop_frames(&mut self) {
+            self.steps.push("stop_frames");
+            self.frames_flowing = false;
+        }
+
+        fn destroy(&mut self) {
+            self.steps.push("destroy");
+            self.destroyed = Some((self.content_attached, self.frames_flowing));
+        }
+
+        fn release_content(&mut self) {
+            self.steps.push("release_content");
+            self.content_attached = false;
+        }
+    }
+
+    #[test]
+    fn fr3_content_stays_attached_until_the_window_is_gone() {
+        let mut window = FakeWindow {
+            steps: Vec::new(),
+            content_attached: true,
+            frames_flowing: true,
+            destroyed: None,
+        };
+        close_whole(&mut window);
+        // The window left the screen with its last frame still in it and no newer frame on
+        // the way, so the close animation shows the whole window; its content went after.
+        assert_eq!(window.destroyed, Some((true, false)));
+        assert_eq!(
+            window.steps,
+            vec!["stop_frames", "destroy", "release_content"]
+        );
+        assert!(!window.content_attached);
+    }
+
+    #[test]
+    fn fr22_a_band_sample_reaches_the_window_whole() {
+        for sample in [
+            BandSample::default(),
+            BandSample {
+                fill: Some(0xFFFF_FFFF),
+                luminance: None,
+            },
+            BandSample {
+                fill: None,
+                luminance: Some(0),
+            },
+            BandSample {
+                fill: Some(0xFF00_0000),
+                luminance: Some(1000),
+            },
+        ] {
+            let (wparam, lparam) = pack_band_sample(sample);
+            assert_eq!(unpack_band_sample(wparam, lparam), sample);
+        }
+    }
 
     #[test]
     fn fr3_a_command_whose_wake_up_cannot_be_posted_does_not_end_the_windows() {

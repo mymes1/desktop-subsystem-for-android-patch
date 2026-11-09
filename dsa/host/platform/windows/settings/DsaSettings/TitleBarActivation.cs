@@ -35,12 +35,23 @@ internal static class TitleBarActivation
     private const int WmThemeChanged = 0x031A;
     private const int WmDwmColorizationColorChanged = 0x0320;
 
+    /// <summary>The suffixes of a themed resource's variants: <c>Name.Light</c>,
+    /// <c>Name.Dark</c> and <c>Name.HighContrast</c>.</summary>
+    public const string LightVariant = ".Light";
+    public const string DarkVariant = ".Dark";
+    public const string HighContrastVariant = ".HighContrast";
+
     /// <summary>Fills <paramref name="window"/>'s title bar colours now and whenever Windows
-    /// changes them. Call it after <c>InitializeComponent</c>.</summary>
-    public static void Attach(Window window)
+    /// changes them. Call it after <c>InitializeComponent</c>.
+    ///
+    /// Each of <paramref name="themedKeys"/> names another resource that follows the theme, such
+    /// as the APK Installer's icon tile, which changes with the window's activation as the bar
+    /// does. The window gets it under that name, copied from the app's resource of the same name
+    /// with the current theme's suffix, and again whenever the theme changes.</summary>
+    public static void Attach(Window window, params string[] themedKeys)
     {
-        Apply(window);
-        ThemeChangedEvent onTheme = (_, _) => Apply(window);
+        Apply(window, themedKeys);
+        ThemeChangedEvent onTheme = (_, _) => Apply(window, themedKeys);
         ApplicationThemeManager.Changed += onTheme;
         window.Closed += (_, _) => ApplicationThemeManager.Changed -= onTheme;
         window.SourceInitialized += (_, _) =>
@@ -52,14 +63,14 @@ internal static class TitleBarActivation
                 {
                     // WPF reads the new system colours in its own handler of the same message,
                     // so the bar is coloured once that has run.
-                    window.Dispatcher.InvokeAsync(() => Apply(window), DispatcherPriority.Background);
+                    window.Dispatcher.InvokeAsync(() => Apply(window, themedKeys), DispatcherPriority.Background);
                 }
                 return IntPtr.Zero;
             });
         };
     }
 
-    private static void Apply(Window window)
+    private static void Apply(Window window, string[] themedKeys)
     {
         var look = TitleBarLook.For(ReadSystem());
         window.Resources[ActiveBackground] = Fill(look.ActiveFill);
@@ -67,6 +78,18 @@ internal static class TitleBarActivation
         window.Resources[ActiveForeground] = Text(window, look.ActiveText, "TextFillColorPrimaryBrush");
         window.Resources[InactiveForeground] = Text(window, look.InactiveText, "TextFillColorDisabledBrush");
         window.Resources[InactiveIconOpacity] = look.InactiveIconOpacity;
+
+        // High contrast first: WPF UI may still report the light or the dark theme under it.
+        var variant = SystemParameters.HighContrast ? HighContrastVariant
+            : ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark ? DarkVariant
+            : LightVariant;
+        foreach (var key in themedKeys)
+        {
+            if (window.TryFindResource(key + variant) is { } value)
+            {
+                window.Resources[key] = value;
+            }
+        }
     }
 
     /// <summary>A fill colour, or the backdrop: a clear brush, not none, so the bar still takes

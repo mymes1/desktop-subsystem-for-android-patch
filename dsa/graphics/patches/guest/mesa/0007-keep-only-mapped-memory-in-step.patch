@@ -1,0 +1,130 @@
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+@@ -6,6 +6,7 @@
+ #include "ResourceTracker.h"
+ 
+ #include "dsa_shadow_blocks.h"
++#include "dsa_shadow_memory.h"
+ #if DETECT_OS_ANDROID
+ #include <sys/system_properties.h>
+ #endif
+@@ -1581,7 +1582,11 @@ void ResourceTracker::flushShadowedMemory(VkEncoder* enc, VkDevice device) {
+         // from under it.
+         std::lock_guard<std::recursive_mutex> lock(mLock);
+         for (const auto& [memory, info] : info_VkDeviceMemory) {
+-            if (!info.shadowed || info.device != device || !info.shadowBlocks) continue;
++            // Memory the app never mapped holds nothing the CPU wrote.
++            if (!info.shadowed || info.device != device || !info.shadowBlocks ||
++                !info.shadowMapping.keptInStep()) {
++                continue;
++            }
+             scanned += info.shadowBlocks->size();
+             for (const dsa::ShadowBlocks::Range& range : info.shadowBlocks->changed(info.ptr)) {
+                 ranges.push_back({VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, memory,
+@@ -1633,7 +1638,11 @@ void ResourceTracker::invalidateShadowedMemory(VkEncoder* enc, VkDevice device)
+         if (deviceIt == info_VkDevice.end()) return;
+         const auto& memProps = deviceIt->second.memProps;
+         for (const auto& [memory, info] : info_VkDeviceMemory) {
+-            if (!info.shadowed || info.device != device) continue;
++            // Memory the app never mapped is never read by the CPU, so the device's writes to
++            // it (an image's drawing, most of an app's memory) stay on the host.
++            if (!info.shadowed || info.device != device || !info.shadowMapping.keptInStep()) {
++                continue;
++            }
+             if (!(memProps.memoryTypes[info.memoryTypeIndex].propertyFlags &
+                   VK_MEMORY_PROPERTY_HOST_CACHED_BIT)) {
+                 continue;
+@@ -3367,19 +3376,21 @@ VkResult ResourceTracker::allocateCoherentMemory(VkDevice device,
+     }
+ 
+     if (!usingDirectMapping()) {
+-        uint8_t* shadow = static_cast<uint8_t*>(
+-            aligned_alloc(kLargestPageSize, hostAllocationInfo.allocationSize));
++        // Zero pages the kernel gives on first touch: a copy the app never maps takes no
++        // memory (dsa_shadow_memory.h).
++        uint8_t* shadow =
++            dsa::allocateShadowMemory(hostAllocationInfo.allocationSize, kLargestPageSize);
+         if (!shadow) {
+             enc->vkFreeMemory(device, mem, nullptr, true);
+             std::lock_guard<std::recursive_mutex> lock(mLock);
+             info_VkDeviceMemory.erase(mem);
+             return VK_ERROR_OUT_OF_HOST_MEMORY;
+         }
+-        memset(shadow, 0, hostAllocationInfo.allocationSize);
+         std::lock_guard<std::recursive_mutex> lock(mLock);
+         auto& stored = info_VkDeviceMemory[mem];
+         stored.allocationSize = pAllocateInfo->allocationSize;
+         stored.ptr = shadow;
++        stored.shadowSize = hostAllocationInfo.allocationSize;
+         stored.shadowed = true;
+         stored.shadowBlocks = std::make_shared<dsa::ShadowBlocks>(pAllocateInfo->allocationSize);
+         *pMemory = mem;
+@@ -4303,7 +4314,7 @@ void ResourceTracker::on_vkFreeMemory(void* context, VkDevice device, VkDeviceMe
+ 
+     if (!info.coherentMemory) {
+         if (info.shadowed) {
+-            free(info.ptr);
++            dsa::freeShadowMemory(info.ptr, info.shadowSize);
+             info_VkDeviceMemory.erase(it);
+         }
+         lock.unlock();
+@@ -4391,6 +4402,34 @@ VkResult ResourceTracker::on_vkMapMemory(void* context, VkResult host_result, Vk
+         return VK_ERROR_MEMORY_MAP_FAILED;
+     }
+ 
++    if (deviceMemoryInfo.shadowed && deviceMemoryInfo.shadowMapping.firstMap()) {
++        // The guest's copy was not kept in step while the app had not mapped it, so the
++        // device's writes are read back first, for a type the host caches, as every later
++        // read back is (dsa_shadow_memory.h).
++        bool cached = false;
++        auto deviceIt = info_VkDevice.find(device);
++        if (deviceIt != info_VkDevice.end() &&
++            deviceMemoryInfo.memoryTypeIndex < VK_MAX_MEMORY_TYPES) {
++            cached = deviceIt->second.memProps.memoryTypes[deviceMemoryInfo.memoryTypeIndex]
++                         .propertyFlags &
++                     VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
++        }
++        if (cached) {
++            // NOTE: must not hold lock while calling into the encoder.
++            lock.unlock();
++            const VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr,
++                                               memory, 0, VK_WHOLE_SIZE};
++            static_cast<VkEncoder*>(context)->vkInvalidateMappedMemoryRanges(device, 1, &range,
++                                                                            true /* do lock */);
++            lock.lock();
++            // The copy now holds what the host sent; the next flush need not send it back.
++            if (deviceMemoryInfo.shadowBlocks) {
++                deviceMemoryInfo.shadowBlocks->refresh(deviceMemoryInfo.ptr);
++            }
++        }
++        deviceMemoryInfo.shadowMapping.mapped();
++    }
++
+     *ppData = deviceMemoryInfo.ptr + offset;
+ 
+     return host_result;
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+@@ -103,6 +103,8 @@ struct GfxStreamVkFeatureInfo {
+ 
+ class HostConnection;
+ 
++#include "dsa_shadow_memory.h"
++
+ namespace dsa {
+ class ShadowBlocks;
+ }  // namespace dsa
+@@ -777,6 +779,11 @@ class ResourceTracker {
+         bool shadowed = false;
+         // Which blocks of that copy changed since the host last had them.
+         std::shared_ptr<dsa::ShadowBlocks> shadowBlocks;
++        // Whether the copy is kept in step with the host: only once the app has mapped it
++        // (dsa_shadow_memory.h). Memory the app never maps is never sent or read back.
++        dsa::ShadowMapping shadowMapping;
++        // The size the copy was made with, which it is freed with.
++        uint64_t shadowSize = 0;
+ 
+         uint64_t blobId = 0;
+         uint64_t allocationSize = 0;
