@@ -204,7 +204,7 @@ message ResizeTask {
 }
 
 // A task's window moved to a monitor of another scale: asks the caller's Android to draw
-// the task at `density_dpi` (160 at a scale of 100%).
+// the task at `density_dpi` (96 at a scale of 100%, where a dp is 0.6 of a host pixel).
 message SetTaskDensity {
   int32 task_id = 1;
   uint32 density_dpi = 2;
@@ -745,7 +745,7 @@ message WidgetEvent {
 message PlaceWidget {
   int32 widget_id = 1;
   WidgetPlacement placement = 2;
-  // The window's size in its monitor's pixels, and the monitor's density (160 at a scale of
+  // The window's size in its monitor's pixels, and Android's density for it (96 at a scale of
   // 100%).
   uint32 width = 3;
   uint32 height = 4;
@@ -1045,7 +1045,7 @@ message Task {
   string label = 4;
   // Whether the task has input focus in Android.
   bool focused = 5;
-  // The density the task's app draws at, in dots per inch (160 at a scale of 100%). 0 when
+  // The density the task's app draws at, in dots per inch (96 at a scale of 100%). 0 when
   // unknown.
   uint32 density_dpi = 6;
   // The largest size Android can give the task, in its display pixels. 0 when unknown.
@@ -2035,6 +2035,10 @@ message SystemSettings {
   bool dark_mode = 6;
   // The accent color as 0xAARRGGBB; 0 when there is none.
   fixed32 accent_color = 7;
+  // The size of text the user asked for, in percent of the default: Windows' text size
+  // setting (100 to 225), or the desktop's text scaling factor. 0 when unknown, which counts
+  // as 100.
+  uint32 text_scale_percent = 8;
 }
 
 // Turns the connection into the caller's game controllers: after the answer (Done), the client
