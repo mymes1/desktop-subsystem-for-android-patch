@@ -13,11 +13,15 @@
 //! [`fd_frames`] is the connection between the window manager and its graphics renderer
 //! process, whose frames can carry file descriptors, and [`renderer_launch`] starts that
 //! process.
+//!
+//! [`https_get`] is the HTTPS fetch, through `curl`, that the passkey check reads a website's
+//! Digital Asset Links with: certificate checked, no redirect followed.
 
 #[cfg(unix)]
 pub mod device_socket;
 #[cfg(unix)]
 pub mod fd_frames;
+pub mod https_get;
 pub mod paths;
 #[cfg(unix)]
 pub mod renderer_launch;
