@@ -76,14 +76,15 @@ public static class RootLevels
 /// has now, and the service's words when it was not set.</summary>
 public sealed record RootReport(bool Done, string Level, string Message);
 
-/// <summary>How an app's window follows a move to a monitor of another scale. No choice
-/// restarts the app.</summary>
+/// <summary>How an app's window follows a move to a monitor of another scale. Auto and System
+/// never restart the app.</summary>
 public enum DpiScaling
 {
     /// <summary>App for apps that say they handle a change of density themselves, System for
     /// the others.</summary>
     Auto,
-    /// <summary>The app redraws at the new monitor's scale.</summary>
+    /// <summary>The app redraws at the new monitor's scale. Android recreates the screen of an
+    /// app that does not say it handles a change of density, and restores its state.</summary>
     App,
     /// <summary>The app keeps its scale and its window is scaled to the new monitor, at the
     /// same physical size.</summary>
@@ -779,7 +780,7 @@ public sealed class AppsViewModel : ObservableObject
 
     /// <summary>Has the app's windows follow a monitor of another scale the way at
     /// <paramref name="index"/> of <see cref="DpiScalingChoices"/>. Windows that move from now
-    /// on follow it; no choice restarts the app.</summary>
+    /// on follow it.</summary>
     public Task SetDpiScalingAsync(string package, int index)
     {
         if (index < 0 || index >= DpiScalings.All.Count)

@@ -481,7 +481,7 @@ pub fn dpi_scaling_subtitle(window: Option<&AppWindow>, system_forced_available:
     if scaling == DpiScaling::SystemForced && !system_forced_available {
         tr("System (forced) gives the app the new scale without restarting it, even if it does not say it handles one. It is not available yet: it needs a change to Android's framework that this build does not have, so until then it works like System.")
     } else {
-        tr("App: the app redraws at the new scale, and text stays sharp; an app that does not say it handles this would restart, so the system scales it instead. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. No choice restarts the app.")
+        tr("App: the app redraws at the new scale, and text stays sharp; for an app that does not say it handles this, Android recreates its screen and restores its state, so it may redraw briefly when it moves. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. Automatic and System never restart the app.")
     }
 }
 

@@ -309,7 +309,7 @@ fn app_row(
     };
     size.set(&labels, index as u32);
     row.add_row(&size.row);
-    // No choice restarts the app; System (forced) is marked while Android cannot do it.
+    // Auto and System never restart the app; System (forced) is marked while Android cannot do it.
     let dpi_choices = view::dpi_scaling_choices(system_forced_available);
     let dpi = {
         let state = state.clone();

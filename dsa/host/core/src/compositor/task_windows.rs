@@ -661,8 +661,9 @@ impl TaskWindows {
     /// that keeps the app the same size to the eye, when it opened on a monitor of another
     /// scale) and the density request.
     ///
-    /// A task whose app does not say it handles a change of density is never asked for
-    /// another: its window shows it scaled to the monitor instead, and hears the scale.
+    /// A task whose app does not say it handles a change of density is not asked for another
+    /// unless the user chose the app mode for it (Android then recreates its activity): its
+    /// window shows it scaled to the monitor instead, and hears the scale.
     pub fn window_dpi(&mut self, task_id: i32, dpi: u32) -> (Vec<WindowChange>, Vec<TaskRequest>) {
         if !self.has_window(task_id) {
             return (Vec::new(), Vec::new());
@@ -1641,6 +1642,68 @@ mod tests {
         let (_, requests) = windows.window_dpi(1, 96);
         assert!(!asks_for_density(&requests));
         assert_eq!(windows.scale(1), (1, 2));
+    }
+
+    #[test]
+    fn fr4_an_explicit_app_choice_gives_the_density_to_an_app_that_does_not_handle_it() {
+        // The user chose the app mode for an app that does not say it handles a change of
+        // density: it is given the new density anyway, and Android recreates its activity and
+        // restores its state, so its text stays sharp. Its window stays 1:1.
+        let (mut windows, _) = notes_at_100(false);
+        windows.set_app_windows(&[AppWindowSettings {
+            package_name: "com.example.app1".into(),
+            dpi_scaling: crate::app_windows::DpiScaling::App,
+            ..AppWindowSettings::default()
+        }]);
+        windows.apply(&TaskEvent::Removed { task_id: 1 });
+        let mut notes = task(1, "Notes", 400, 300);
+        notes.density_dpi = 160;
+        notes.max_width = 1920;
+        notes.max_height = 1920;
+        windows.apply(&TaskEvent::Updated(notes.clone()));
+        let (_, requests) = windows.window_dpi(1, 96);
+        assert!(
+            !asks_for_density(&requests),
+            "it starts at its monitor's density"
+        );
+        let (_, requests) = windows.window_dpi(1, 192);
+        assert_eq!(
+            requests,
+            vec![TaskRequest::SetDensity {
+                task_id: 1,
+                density_dpi: 320
+            }]
+        );
+        assert_eq!(windows.scale(1), (1, 1));
+        // Its next activity does not say so either, and the choice still holds.
+        notes.density_dpi = 320;
+        windows.apply(&TaskEvent::Updated(notes));
+        let (_, requests) = windows.window_dpi(1, 96);
+        assert_eq!(
+            requests,
+            vec![TaskRequest::SetDensity {
+                task_id: 1,
+                density_dpi: 160
+            }]
+        );
+        assert_eq!(windows.scale(1), (1, 1));
+
+        // Auto and system never give such an app another density.
+        for scaling in [
+            crate::app_windows::DpiScaling::Auto,
+            crate::app_windows::DpiScaling::System,
+        ] {
+            let (mut windows, _) = notes_at_100(false);
+            windows.set_app_windows(&[AppWindowSettings {
+                package_name: "com.example.app1".into(),
+                dpi_scaling: scaling,
+                ..AppWindowSettings::default()
+            }]);
+            for dpi in [192, 144, 96] {
+                let (_, requests) = windows.window_dpi(1, dpi);
+                assert!(!asks_for_density(&requests), "{scaling:?} at {dpi}");
+            }
+        }
     }
 
     #[test]

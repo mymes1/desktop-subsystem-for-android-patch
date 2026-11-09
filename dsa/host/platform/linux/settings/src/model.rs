@@ -489,15 +489,16 @@ impl App {
     }
 }
 
-/// How an app's window follows a move to a monitor of another scale. No choice restarts the
-/// app.
+/// How an app's window follows a move to a monitor of another scale. Auto and System never
+/// restart the app.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum DpiScaling {
     /// App for apps that say they handle a change of density themselves, System for the
     /// others.
     #[default]
     Auto,
-    /// The app redraws at the new monitor's scale.
+    /// The app redraws at the new monitor's scale. Android recreates the screen of an app that
+    /// does not say it handles a change of density, and restores its state.
     App,
     /// The app keeps its scale and its window is scaled to the new monitor, at the same
     /// physical size.

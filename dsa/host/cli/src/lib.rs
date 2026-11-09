@@ -35,14 +35,14 @@
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
 //! app's windows cannot be resized or maximized, and an app with a start size opens its windows
 //! at that size, in density-independent pixels. `--dpi-scaling` says how the app follows its
-//! window to a monitor of another scale, without ever being restarted: `app` gives it the new
-//! monitor's density and it redraws (for an app that says it handles a change of density;
-//! any other would be restarted by Android, so it is scaled as `system`), `system` keeps its
+//! window to a monitor of another scale: `app` gives it the new monitor's density and it
+//! redraws (Android recreates the screen of an app that does not say it handles a change of
+//! density, and restores its state, so it may redraw briefly), `system` keeps its
 //! density and scales the window to the same physical size, and `system-forced` would give a
 //! new density to any app without a restart, which needs a framework change that is not made
 //! yet, so it works as `system` until then. `auto`, the default, is `app` for an app that says
-//! it handles a change of density and `system` for any other. `reset` puts the app back to the
-//! defaults. With `--json` it prints `apps`, each with `package`, `fixed_size`, `start_size`
+//! it handles a change of density and `system` for any other; neither restarts the app.
+//! `reset` puts the app back to the defaults. With `--json` it prints `apps`, each with `package`, `fixed_size`, `start_size`
 //! (null for none, else `[width, height]`) and `dpi_scaling`, and `system_forced_available`,
 //! whether `system-forced` does what it says yet.
 //!
