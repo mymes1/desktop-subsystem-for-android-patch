@@ -35,10 +35,22 @@ public final class DsaService {
             state: SessionState.parse(json.optionalString("state")),
             lastReason: json.optionalString("last_reason"),
             updateNotice: json.optionalString("update_notice"),
-            problem: json.optionalString("problem"))
+            problem: json.optionalString("problem"),
+            programUpdate: readProgramUpdate(json["program_update"]))
+    }
+
+    static func readProgramUpdate(_ json: Json) -> ProgramUpdateProgress? {
+        let phase = ProgramUpdatePhase.parse(json.optionalString("phase"))
+        return phase == .none ? nil : ProgramUpdateProgress(phase: phase, version: json.string("version"))
     }
 
     public func status() async throws -> StatusInfo { DsaService.readStatus(try await runJson(["status"])) }
+
+    /// The status from a running service only. While setup has stopped the service this fails
+    /// rather than start the old service again under setup.
+    public func runningStatus() async throws -> StatusInfo {
+        DsaService.readStatus(try await runJson(["status", "--no-start"]))
+    }
 
     /// Starts Android and waits until it has started or failed.
     public func start() async throws -> StatusInfo {
@@ -362,12 +374,11 @@ public final class DsaService {
         try await runText(["logs", "collect", "-o", path])
     }
 
-    /// Installs the newest version of DSA now. Returns what the service said.
-    public func updateNow() async throws -> String {
-        let result = try await cli.run(["update"])
-        if result.exitCode != 0 {
-            throw DsaError(.refused, DsaError.detail(of: result))
-        }
-        return result.output
+    /// Installs the newest version of DSA now. Returns the version setup installs, or none
+    /// when DSA is up to date, with what the service said.
+    public func updateNow() async throws -> ProgramUpdateAnswer {
+        let json = try await runJson(["update"])
+        let installing = json.optionalString("installing") ?? ""
+        return ProgramUpdateAnswer(installing: installing.isEmpty ? nil : installing, detail: json.string("detail"))
     }
 }
