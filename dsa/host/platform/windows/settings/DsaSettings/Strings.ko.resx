@@ -97,6 +97,39 @@
   <data name="UpdateNoticeBar.Title" xml:space="preserve">
     <value>업데이트</value>
   </data>
+  <data name="UpdateNotice_AndroidUpdated" xml:space="preserve">
+    <value>Android를 {0}(으)로 업데이트했습니다.</value>
+  </data>
+  <data name="UpdateNotice_AndroidInstalled" xml:space="preserve">
+    <value>Android {0}을(를) 설치했습니다.</value>
+  </data>
+  <data name="UpdateNotice_AndroidChosen" xml:space="preserve">
+    <value>Android {0}을(를) 골랐습니다. DSA가 지금 내려받고, 다음에 Android를 시작할 때 씁니다.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBack" xml:space="preserve">
+    <value>Android {0}이(가) 시작하지 못해({1}) Android {2}을(를) 다시 씁니다. Android {0}은(는) 더 새 빌드나 새 DSA 버전이 나올 때까지 다시 시도하지 않습니다.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBackNotReady" xml:space="preserve">
+    <value>Android {0}이(가) 시작하지 못해({1}) Android {2}을(를) 다시 쓰지만, 아직 시작을 마치지 못했습니다({3}). Android {2}을(를) 부팅하려면 Android를 다시 시작하십시오.</value>
+  </data>
+  <data name="UpdateNotice_AndroidGaveUp" xml:space="preserve">
+    <value>Android {0}이(가) 시작하지 못했고({1}) 설치된 다른 이미지가 없습니다. DSA가 다른 이미지가 있으면 내려받고, 다음 DSA 버전이 이 이미지를 다시 시도합니다.</value>
+  </data>
+  <data name="UpdateNotice_AndroidOnTrial" xml:space="preserve">
+    <value>Android {0}은(는) 시험 중으로 두며 문제의 원인이 아닙니다: {1}</value>
+  </data>
+  <data name="UpdateNotice_DsaUpdated" xml:space="preserve">
+    <value>DSA를 {0}(으)로 업데이트했습니다.</value>
+  </data>
+  <data name="UpdateNotice_DsaDownloaded" xml:space="preserve">
+    <value>DSA {0}을(를) 내려받았습니다. Android가 실행 중이 아닐 때 설치합니다.</value>
+  </data>
+  <data name="UpdateNotice_DsaInstalling" xml:space="preserve">
+    <value>DSA {0}을(를) 설치하고 있습니다. 끝나면 서비스가 다시 시작합니다.</value>
+  </data>
+  <data name="UpdateNotice_DsaFailed" xml:space="preserve">
+    <value>DSA를 {0}(으)로 업데이트하지 못했습니다({1}). DSA {2}이(가) 그대로 설치되어 있습니다.</value>
+  </data>
   <data name="GeneralMoreHeader.Text" xml:space="preserve">
     <value>더 보기</value>
   </data>

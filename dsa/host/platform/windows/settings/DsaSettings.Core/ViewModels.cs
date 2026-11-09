@@ -78,7 +78,8 @@ public sealed partial class GeneralViewModel : ObservableObject
     public bool HasLastReasonDetail => HasLastReason && StopReasonText.KeyFor(_status!.LastReason!) != StopReasonText.Requested;
     public string Problem => _status?.Problem ?? "";
     public bool HasProblem => !string.IsNullOrEmpty(_status?.Problem);
-    public string UpdateNotice => _status?.UpdateNotice ?? "";
+    /// <summary>The service's news about updates, in the user's language.</summary>
+    public string UpdateNotice => HasUpdateNotice ? UpdateNoticeText.Localize(_text, _status!.UpdateNotice!) : "";
     public bool HasUpdateNotice => !string.IsNullOrEmpty(_status?.UpdateNotice);
     public bool IsBusy => _busy;
     public bool CanStart => !_busy && State == SessionState.Stopped;
