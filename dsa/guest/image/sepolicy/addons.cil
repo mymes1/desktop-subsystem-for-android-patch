@@ -1,0 +1,28 @@
+; Desktop Subsystem for Android (DSA)
+; The user's add-on disk (dsa-addons.rc). When the host attaches one, init mounts its partition
+; (/dev/block/by-name/dsa_addons, an erofs file system) read only at /mnt/dsa-addons, its files
+; labelled as system files, before /data. dsa-gapps.rc and dsa-arm-translation.rc then mount
+; the add-on images in it straight from their files: erofs opens each file with init's
+; credentials as init mounts it, and reads it with them afterwards. init already reads and
+; searches system files, so the files need no rule of their own.
+(allow init tmpfs (dir (mounton)))
+
+; The disk's superblock. Nothing is laid over or bound from the disk itself, only from the
+; images mounted from its files, which have superblocks of their own (gapps.cil,
+; arm-translation.cil); a statfs of /mnt/dsa-addons is checked against this type. As an
+; fs_type it is covered by the platform's "allow domain fs_type:filesystem getattr". It is a
+; contextmount_type because the platform forbids relabelling a superblock to any other
+; fs_type; the platform keeps such types read-only, and nothing writes to the disk.
+(type dsa_addons_fs)
+(roletype object_r dsa_addons_fs)
+(typeattributeset fs_type (dsa_addons_fs))
+(typeattributeset contextmount_type (dsa_addons_fs))
+; init mounts the disk with fscontext=dsa_addons_fs and context=system_file. The kernel
+; relabels the superblock from erofs's own type (relabelfrom labeledfs, relabelto the disk's
+; type); labels every file system_file, the root first (relabelfrom the disk's type, and
+; system_file associates with it); and then checks the mount against the disk's type.
+; system_file is a file type, not an fs_type, so the platform's neverallow on an fs_type
+; associating with a file type does not reach it.
+(allow init labeledfs (filesystem (relabelfrom)))
+(allow init dsa_addons_fs (filesystem (mount relabelfrom relabelto)))
+(allow system_file dsa_addons_fs (filesystem (associate)))

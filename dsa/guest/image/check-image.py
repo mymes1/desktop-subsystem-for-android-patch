@@ -416,13 +416,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         for section in sections:
             first = section.split("\n", 1)[0]
             trigger = first[3:] if first.startswith("on ") else first
-            if "mount " in section and trigger != "post-fs-data && property:ro.boot.dsa.gapps=on":
+            if "mount " in section and not trigger.startswith("post-fs-data && property:ro.boot.dsa.gapps=on"):
                 problems.append("dsa-gapps.rc lays the Google apps over the system without waiting "
                                 "for the host to say they are installed")
         if "on post-fs-data && property:ro.boot.dsa.gapps=on" not in rc:
             problems.append("dsa-gapps.rc never lays the Google apps over the system")
         # Each folder the Google apps are laid over is in the system, so its overlay mounts.
         problems += make_image.gapps_folder_problems(names)
+    # The add-on disk the Google apps and a user's ARM translation package are mounted from.
+    problems += make_image.addon_disk_problems(names, z.read)
     if "SYSTEM/etc/dsa/gapps-on.prop" in names:
         on = [line.strip() for line in
               z.read("SYSTEM/etc/dsa/gapps-on.prop").decode(errors="replace").splitlines()]
