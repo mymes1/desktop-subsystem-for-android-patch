@@ -3376,6 +3376,87 @@ fn fr36_dsa_backup_commands_are_parsed() {
     assert!(parse(&args("backup key import")).is_err());
     assert!(parse(&args("backup key forget")).is_err());
     assert!(parse(&args("backup everything")).is_err());
+    assert_eq!(parse(&args("backup on")).unwrap().command, Cmd::BackupOn);
+    let off = parse(&args("backup off")).unwrap();
+    assert_eq!(off.command, Cmd::BackupOff);
+    assert!(!off.delete_backups, "the backups stay unless asked");
+    let delete = parse(&args("backup off --delete-backups --json")).unwrap();
+    assert_eq!(delete.command, Cmd::BackupOff);
+    assert!(delete.delete_backups && delete.json);
+    assert!(
+        parse(&args("backup on --delete-backups")).is_err(),
+        "deleting goes only with turning off"
+    );
+}
+
+#[test]
+fn fr36_dsa_backup_says_backup_is_off_and_offers_to_delete_what_is_kept() {
+    let off = dsa_host_core::backup::BackupReport {
+        folder: "C:\\Users\\ada\\DSA Backup".into(),
+        ..Default::default()
+    };
+    let text = dsa_cli::describe_backup(Cmd::BackupStatus, &off);
+    assert!(text.contains("Backup: off"), "{text}");
+    assert!(text.contains("dsa backup on"), "{text}");
+    assert!(text.contains("second copy"), "{text}");
+    let kept = dsa_host_core::backup::BackupReport {
+        packages: 4,
+        size: 3 * 1024 * 1024,
+        ..off.clone()
+    };
+    let text = dsa_cli::describe_backup(Cmd::BackupOff, &kept);
+    assert!(text.contains("still kept"), "{text}");
+    assert!(text.contains("--delete-backups"), "{text}");
+    let text = dsa_cli::describe_backup(Cmd::BackupOff, &off);
+    assert!(text.contains("no backups are kept"), "{text}");
+    let on = dsa_host_core::backup::BackupReport {
+        enabled: true,
+        available: true,
+        ..off
+    };
+    assert!(dsa_cli::describe_backup(Cmd::BackupOn, &on).contains("Backup is on"));
+    assert_eq!(dsa_cli::backup_json(&on, None)["enabled"], true);
+}
+
+#[test]
+fn fr36_dsa_status_says_what_seals_the_keymint_root_key() {
+    use dsa_host_core::host_keys::KeyProtection;
+    use dsa_host_core::session::KeyMintKeyState;
+    let tpm = KeyMintKeyState {
+        protection: Some(KeyProtection {
+            sealed_by: "tpm".into(),
+            hardware: true,
+            description: "the computer's TPM 2.0 and DPAPI under your account".into(),
+            fallback_reason: String::new(),
+        }),
+        problem: String::new(),
+    };
+    let text = dsa_cli::describe_keymint_key(&tpm);
+    assert!(text.contains("sealed by the computer's TPM 2.0"), "{text}");
+    let json = dsa_cli::keymint_key_json(&tpm);
+    assert_eq!(json["sealed_by"], "tpm");
+    assert_eq!(json["hardware"], true);
+    assert_eq!(json["kept"], true);
+
+    let dpapi = KeyMintKeyState {
+        protection: Some(KeyProtection {
+            sealed_by: "dpapi".into(),
+            hardware: false,
+            description: "DPAPI under your account".into(),
+            fallback_reason: "this computer has no TPM".into(),
+        }),
+        problem: "the TPM is locked out".into(),
+    };
+    let text = dsa_cli::describe_keymint_key(&dpapi);
+    assert!(
+        text.contains("kept by DPAPI under your account only"),
+        "{text}"
+    );
+    assert!(text.contains("this computer has no TPM"), "{text}");
+    assert!(text.contains("the TPM is locked out"), "{text}");
+    let none = KeyMintKeyState::default();
+    assert!(dsa_cli::describe_keymint_key(&none).contains("no root key yet"));
+    assert_eq!(dsa_cli::keymint_key_json(&none)["kept"], false);
 }
 
 #[test]
@@ -3392,7 +3473,7 @@ fn fr36_dsa_backup_describes_where_the_backup_stands() {
     assert!(text.contains("DSA Backup"), "{text}");
     assert!(text.contains("1971-01-01 00:00 UTC"), "{text}");
     assert!(text.contains("Apps: 3 (5 MiB"), "{text}");
-    let json = dsa_cli::backup_json(&report);
+    let json = dsa_cli::backup_json(&report, None);
     assert_eq!(json["packages"], 3);
     assert_eq!(json["available"], true);
 }

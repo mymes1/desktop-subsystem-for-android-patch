@@ -29,10 +29,18 @@
 //! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default]
 //! dsa gapps [status | install [--progress] | remove]
 //! dsa reset-data --yes
-//! dsa backup [status | now | restore | key show | key import <recovery key>]
+//! dsa backup [status | on | off [--delete-backups] | now | restore | key show |
+//!             key import <recovery key>]
 //! ```
 //!
-//! `dsa backup status` (or `dsa backup`) says where the user's app data backup stands: its
+//! Backup is off until the user turns it on with `dsa backup on` (or in the settings app): it
+//! keeps a second copy of the apps' user data on this computer, which is the user's to choose.
+//! Until then no backup runs, and neither the backup folder nor its key is made.
+//! `dsa backup off` stops it: Android stops backing up to the host, and the backups made so
+//! far stay for a later restore; `dsa backup off --delete-backups` removes them and their key
+//! as well.
+//!
+//! `dsa backup status` (or `dsa backup`) says whether backup is on and where it stands: its
 //! folder (`DSA Backup` in the user's home folder), when an app was last backed up, how many
 //! apps it holds, and what went wrong last. `dsa backup now` has Android back up every app at
 //! once. `dsa backup restore` installs the apps of the backup that Android does not have and
@@ -41,6 +49,12 @@
 //! store keeps. `dsa backup key show` prints its recovery key, to write down; on another
 //! computer, or for another user, `dsa backup key import <recovery key>` lets that folder be
 //! read there. With `--json` they print the report's fields (`recovery_key` for `key show`).
+//! `dsa backup status` also says how the root key of Android's KeyMint is sealed on this
+//! computer (the TPM, the Secure Enclave, or the credential store where there is none), as
+//! `dsa status` does.
+//! `dsa backup status` also says how the root key of Android's KeyMint is sealed on this
+//! computer (the TPM, the Secure Enclave, or the credential store where there is none), as
+//! `dsa status` does.
 //!
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
@@ -362,7 +376,7 @@ use dsa_host_core::host_api::{
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::native_abi;
-use dsa_host_core::session::SessionState;
+use dsa_host_core::session::{KeyMintKeyState, SessionState};
 use dsa_host_core::tasks::{AppInfo, Task};
 use dsa_host_core::touch_gestures::TouchGesturesState;
 use dsa_host_core::update::store::Fetch;
@@ -385,7 +399,8 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
-     backup [status | now | restore | key show | key import <recovery key>] | \
+     backup [status | on | off [--delete-backups] | now | restore | key show | \
+     key import <recovery key>] | \
      android [version | use <major>|latest [--erase-data] | restart]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -463,6 +478,10 @@ pub enum Command {
     ResetData,
     /// Say where the user's app data backup stands.
     BackupStatus,
+    /// Turn the user's backup on.
+    BackupOn,
+    /// Turn the user's backup off, deleting the backups when [`Invocation::delete_backups`].
+    BackupOff,
     /// Back up every app now.
     BackupNow,
     /// Restore the apps and their data from the backup.
@@ -831,6 +850,8 @@ pub struct Invocation {
     pub no_start: bool,
     /// `dsa backup key import <key>`: the recovery key to keep.
     pub backup_key: Option<String>,
+    /// `dsa backup off --delete-backups`: remove the backups made so far and their key.
+    pub delete_backups: bool,
 }
 
 /// Whether `name` can be an Android package name: dot-separated parts of letters, digits
@@ -869,6 +890,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut erase_data = false;
     let mut no_start = false;
     let mut backup_key = None;
+    let mut delete_backups = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
     let mut tags = Vec::new();
@@ -1080,6 +1102,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 };
                 command = Some(match action {
                     None | Some("status") => Command::BackupStatus,
+                    Some("on") => Command::BackupOn,
+                    Some("off") => Command::BackupOff,
                     Some("now") => Command::BackupNow,
                     Some("restore") => Command::BackupRestore,
                     Some("key") => match args.next().map(String::as_str) {
@@ -1109,7 +1133,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     },
                     Some(other) => {
                         return Err(format!(
-                            "dsa backup takes status, now, restore or key, not {other:?}\n{USAGE}"
+                            "dsa backup takes status, on, off, now, restore or key, not \
+                             {other:?}\n{USAGE}"
                         ))
                     }
                 });
@@ -1266,6 +1291,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 erase_data = true
             }
             "--no-start" if command == Some(Command::Status) => no_start = true,
+            "--delete-backups" if command == Some(Command::BackupOff) => delete_backups = true,
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
             "--progress" if matches!(command, Some(Command::Install | Command::GappsInstall)) => {
                 progress = true
@@ -1412,6 +1438,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         erase_data,
         no_start,
         backup_key,
+        delete_backups,
     })
 }
 
@@ -2370,18 +2397,38 @@ fn backup(invocation: &Invocation, client: &mut HostApiClient) -> Result<String,
             }
             .map_err(|e| e.to_string())?
         }
+        Command::BackupOn | Command::BackupOff => client
+            .set_backup(
+                invocation.command == Command::BackupOn,
+                invocation.delete_backups,
+            )
+            .map_err(|e| e.to_string())?,
         _ => client.backup().map_err(|e| e.to_string())?,
     };
+    // How KeyMint's root key is sealed, from a service that says.
+    let keymint = client.key_protection().ok();
     Ok(if invocation.json {
-        backup_json(&report).to_string()
+        backup_json(&report, keymint.as_ref()).to_string()
     } else {
-        describe_backup(invocation.command, &report)
+        let mut text = describe_backup(invocation.command, &report);
+        if invocation.command == Command::BackupStatus {
+            if let Some(keymint) = &keymint {
+                text.push('\n');
+                text.push_str(&describe_keymint_key(keymint));
+            }
+        }
+        text
     })
 }
 
-/// The JSON `dsa backup --json` prints.
-pub fn backup_json(report: &dsa_host_core::backup::BackupReport) -> Value {
+/// The JSON `dsa backup --json` prints, with how KeyMint's root key is sealed when the service
+/// said.
+pub fn backup_json(
+    report: &dsa_host_core::backup::BackupReport,
+    keymint: Option<&KeyMintKeyState>,
+) -> Value {
     json!({
+        "enabled": report.enabled,
         "available": report.available,
         "problem": report.problem,
         "folder": report.folder.display().to_string(),
@@ -2393,7 +2440,47 @@ pub fn backup_json(report: &dsa_host_core::backup::BackupReport) -> Value {
         "succeeded": report.succeeded,
         "failed": report.failed,
         "installed": report.installed,
+        "keymint_key": keymint.map(keymint_key_json),
     })
+}
+
+/// How KeyMint's root key is sealed, as `dsa status --json` and `dsa backup --json` print it.
+pub fn keymint_key_json(state: &KeyMintKeyState) -> Value {
+    let protection = state.protection.clone().unwrap_or_default();
+    json!({
+        "kept": state.protection.is_some(),
+        "sealed_by": protection.sealed_by,
+        "hardware": protection.hardware,
+        "description": protection.description,
+        "fallback_reason": protection.fallback_reason,
+        "problem": state.problem,
+    })
+}
+
+/// How KeyMint's root key is sealed, in words.
+pub fn describe_keymint_key(state: &KeyMintKeyState) -> String {
+    let mut line = match &state.protection {
+        None => {
+            "Android's key protection: no root key yet (made when Android first starts)".to_string()
+        }
+        Some(protection) if protection.hardware => format!(
+            "Android's key protection: sealed by {}",
+            protection.description
+        ),
+        Some(protection) => format!(
+            "Android's key protection: kept by {} only{}",
+            protection.description,
+            if protection.fallback_reason.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", protection.fallback_reason)
+            }
+        ),
+    };
+    if !state.problem.is_empty() {
+        let _ = write!(line, "\nAndroid's key problem: {}", state.problem);
+    }
+    line
 }
 
 /// When, in words: `never`, or the UTC date and time.
@@ -2446,10 +2533,33 @@ pub fn describe_backup(command: Command, report: &dsa_host_core::backup::BackupR
         Command::BackupKeyImport => {
             lines.push("The recovery key is kept; the backup folder is read with it".into())
         }
+        Command::BackupOn => lines.push(
+            "Backup is on: Android backs the apps' data up to this computer, which keeps a \
+             second copy of it, encrypted"
+                .into(),
+        ),
+        Command::BackupOff if report.packages > 0 => lines.push(format!(
+            "Backup is off. The backups of {} apps ({} MiB) are still kept in {}; delete them \
+             with dsa backup off --delete-backups",
+            report.packages,
+            report.size / (1024 * 1024),
+            report.folder.display()
+        )),
+        Command::BackupOff => lines.push("Backup is off; no backups are kept".into()),
         _ => {}
     }
-    if !report.available {
-        lines.push(format!("Backup: unavailable ({})", report.problem));
+    if !report.enabled {
+        if command != Command::BackupOff {
+            lines.push(
+                "Backup: off (turn it on with dsa backup on; it keeps a second copy of the \
+                 apps' user data on this computer)"
+                    .into(),
+            );
+        }
+    } else if !report.available {
+        lines.push(format!("Backup: on, but unavailable ({})", report.problem));
+    } else {
+        lines.push("Backup: on".into());
     }
     lines.push(format!("Folder: {}", report.folder.display()));
     lines.push(format!("Last backup: {}", when(report.last_backup_ms)));
@@ -4562,6 +4672,8 @@ pub fn run_with_starter(
         }
         Command::ResetData => return reset_data(invocation, &mut client),
         Command::BackupStatus
+        | Command::BackupOn
+        | Command::BackupOff
         | Command::BackupNow
         | Command::BackupRestore
         | Command::BackupKeyShow
@@ -4591,7 +4703,23 @@ pub fn run_with_starter(
         Command::Gpus | Command::ApkInfo => unreachable!("answered before connecting"),
     }
     .map_err(|e| e.to_string())?;
-    if !invocation.wait || matches!(invocation.command, Command::Status | Command::Freeze) {
+    if invocation.command == Command::Status {
+        // How Android's KeyMint root key is sealed here, from a service that says.
+        let keymint = client.key_protection().ok();
+        return Ok(if invocation.json {
+            let mut value = status_json(&status);
+            value["keymint_key"] = keymint.as_ref().map(keymint_key_json).into();
+            value.to_string()
+        } else {
+            match &keymint {
+                Some(keymint) => {
+                    format!("{}\n{}", describe(&status), describe_keymint_key(keymint))
+                }
+                None => describe(&status),
+            }
+        });
+    }
+    if !invocation.wait || invocation.command == Command::Freeze {
         return Ok(show(&status));
     }
     let deadline = Instant::now() + invocation.timeout;
