@@ -113,7 +113,7 @@
                             </Border>
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <TextBlock Text="{l:Text AdbPortLabel.Text}" Style="{StaticResource CardValue}" Margin="0,0,8,0" />
                         <ui:TextBox x:Name="AdbPortBox" Width="90" ClearButtonEnabled="False" Text="{Binding AdbPort, Mode=OneWay}"
                                     IsEnabled="{Binding CanChange, Mode=OneWay}" LostFocus="OnAdbPortChanged"
