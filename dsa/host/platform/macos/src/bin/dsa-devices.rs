@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! dsa-devices [--socket <path>] [--no-location] [--no-print] [--no-links]
-//!             [--no-settings] [--no-gamepads] [--no-device-ports]
+//!             [--no-settings] [--no-gamepads] [--no-language] [--no-device-ports]
 //! dsa-devices version
 //! ```
 //!
@@ -50,7 +50,7 @@ fn main() -> std::process::ExitCode {
     use objc2::runtime::AnyObject;
 
     const HELP: &str = "usage: dsa-devices [--socket <path>] [--no-location] [--no-print] \
-                        [--no-links] [--no-settings] [--no-gamepads] [--no-device-ports] \
+                        [--no-links] [--no-settings] [--no-gamepads] [--no-language] [--no-device-ports] \
                         | version";
 
     static STOP: OnceLock<Arc<AtomicBool>> = OnceLock::new();
@@ -78,6 +78,7 @@ fn main() -> std::process::ExitCode {
             "--no-links" => which.links = false,
             "--no-settings" => which.settings = false,
             "--no-gamepads" => which.gamepads = false,
+            "--no-language" => which.language = false,
             "--no-device-ports" => ports = false,
             "version" | "--version" => {
                 println!("dsa-devices {}", dsa_host_macos::VERSION);

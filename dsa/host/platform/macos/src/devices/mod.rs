@@ -16,6 +16,9 @@
 //! settings           time zone, languages, format,    [`settings`]
 //!                    dark mode and accent color
 //! folders            the user's home folders          [`shared_folders`]
+//! speech             AVSpeechSynthesizer and          [`language`]
+//!                    SFSpeechRecognizer
+//! spelling           NSSpellChecker                   [`language`]
 //! ```
 //!
 //! The devices run in the user's device lender (`dsa-devices`), a launchd agent of its own in
@@ -31,6 +34,7 @@
 pub mod camera;
 pub mod front;
 pub mod gamepads;
+pub mod language;
 pub mod links;
 pub mod location;
 pub mod permissions;
@@ -92,6 +96,8 @@ pub struct Followers {
     pub links: bool,
     pub settings: bool,
     pub gamepads: bool,
+    /// Speech synthesis, speech recognition and spell checking for Android.
+    pub language: bool,
 }
 
 impl Default for Followers {
@@ -102,6 +108,7 @@ impl Default for Followers {
             links: true,
             settings: true,
             gamepads: true,
+            language: true,
         }
     }
 }
@@ -245,6 +252,25 @@ mod lender {
                 )
             }));
         }
+        if which.language {
+            let (mut connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+            threads.extend(spawn("dsa-language", &Arc::clone(&log), move || {
+                use dsa_host_core::language::server::{serve, Backends};
+                use dsa_host_core::language::{SpeechRecognizer, SpeechSynthesizer, SpellChecker};
+                let backends = Backends {
+                    speech: Box::new(|| {
+                        Box::new(super::language::MacSpeech::new()) as Box<dyn SpeechSynthesizer>
+                    }),
+                    recognition: Box::new(|| {
+                        Box::new(super::language::MacRecognition) as Box<dyn SpeechRecognizer>
+                    }),
+                    spelling: Box::new(|| {
+                        Box::new(super::language::MacSpelling) as Box<dyn SpellChecker>
+                    }),
+                };
+                serve(&mut *connector, &build("language"), backends, &stop, log)
+            }));
+        }
         if which.gamepads {
             let in_front = Arc::new(AtomicBool::new(false));
             {
@@ -280,6 +306,7 @@ mod tests {
     fn fr26_the_lender_runs_every_device_unless_told_otherwise() {
         let all = Followers::default();
         assert!(all.location && all.print && all.links && all.settings && all.gamepads);
+        assert!(all.language);
         assert!(build("camera").starts_with("dsa-devices "));
         assert!(build("camera").ends_with(" camera"));
     }
