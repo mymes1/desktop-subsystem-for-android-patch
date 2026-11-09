@@ -10,6 +10,7 @@
 //! sensors            none a program may read          [`sensors`]
 //! location           CoreLocation                     [`location`]
 //! printing           PDFKit and NSPrintOperation      [`print`], [`print_jobs`]
+//! passkeys           AuthenticationServices           `passkeys`, [`passkey_ceremonies`]
 //! web links          /usr/bin/open                    [`links`]
 //! controllers        the GameController framework     [`gamepads`], [`front`]
 //! permissions        AVFoundation's prompts           [`permissions`]
@@ -33,6 +34,7 @@ pub mod front;
 pub mod gamepads;
 pub mod links;
 pub mod location;
+pub mod passkey_ceremonies;
 pub mod permissions;
 pub mod print_jobs;
 pub mod sensors;
@@ -42,6 +44,8 @@ pub mod video;
 
 #[cfg(target_os = "macos")]
 pub mod audio;
+#[cfg(target_os = "macos")]
+pub mod passkeys;
 #[cfg(target_os = "macos")]
 pub mod print;
 
@@ -92,6 +96,7 @@ pub struct Followers {
     pub links: bool,
     pub settings: bool,
     pub gamepads: bool,
+    pub passkeys: bool,
 }
 
 impl Default for Followers {
@@ -102,6 +107,7 @@ impl Default for Followers {
             links: true,
             settings: true,
             gamepads: true,
+            passkeys: true,
         }
     }
 }
@@ -194,9 +200,9 @@ mod lender {
         threads
     }
 
-    /// Follows the local API for the devices it carries (the location, print jobs, web
-    /// links, the user's settings and the game controllers) until `stop`, each on a thread
-    /// of its own with its own connection.
+    /// Follows the local API for the devices it carries (the location, print jobs, passkey
+    /// ceremonies, web links, the user's settings and the game controllers) until `stop`,
+    /// each on a thread of its own with its own connection.
     pub fn start_followers(
         connect: ConnectorFactory,
         which: Followers,
@@ -223,6 +229,14 @@ mod lender {
             threads.extend(spawn("dsa-print", &Arc::clone(&log), move || {
                 let print: super::print_jobs::Print = Arc::new(super::print::print);
                 super::print_jobs::serve(connector, print, stop, log)
+            }));
+        }
+        if which.passkeys {
+            let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+            threads.extend(spawn("dsa-passkeys", &Arc::clone(&log), move || {
+                let perform: super::passkey_ceremonies::Perform =
+                    Arc::new(super::passkeys::perform);
+                super::passkey_ceremonies::serve(connector, perform, stop, log)
             }));
         }
         if which.links {
@@ -280,6 +294,7 @@ mod tests {
     fn fr26_the_lender_runs_every_device_unless_told_otherwise() {
         let all = Followers::default();
         assert!(all.location && all.print && all.links && all.settings && all.gamepads);
+        assert!(all.passkeys);
         assert!(build("camera").starts_with("dsa-devices "));
         assert!(build("camera").ends_with(" camera"));
     }
