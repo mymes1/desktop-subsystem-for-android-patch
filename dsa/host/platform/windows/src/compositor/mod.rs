@@ -1101,11 +1101,11 @@ impl Compositor {
                 crate::app_exe::default_template(),
                 crate::app_exe::default_apps_dir(),
             ) {
-                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher {
+                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher::new(
                     template,
                     apps_dir,
-                    logger: self.logger.clone(),
-                }),
+                    self.logger.clone(),
+                )),
                 _ => {
                     log("cannot tell where the app window programs go; task windows cannot open");
                     return TaskWindowThreads::default();

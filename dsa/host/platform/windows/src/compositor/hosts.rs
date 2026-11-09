@@ -128,6 +128,13 @@ pub trait HostLauncher: Send {
     /// Starts the window host of `package`, named and drawn as `app` when it is known. The
     /// window host then connects by itself.
     fn start(&mut self, package: &str, app: Option<&AppInfo>) -> Result<(), String>;
+
+    /// The window host of `package` ended, and `app` is the app's name and icon as the guest
+    /// last gave them. A program that could not take them while it ran takes them now.
+    fn ended(&mut self, _package: &str, _app: Option<&AppInfo>) {}
+
+    /// Called every tick of the manager, for work that waits.
+    fn tick(&mut self) {}
 }
 
 /// The window manager's end of one window host's connection.
@@ -699,6 +706,8 @@ struct Manager {
     windows: TaskWindows,
     hosts: WindowHosts,
     links: HashMap<HostId, Arc<HostLink>>,
+    /// The package each window host that connected said it shows, until its connection ends.
+    host_packages: HashMap<HostId, String>,
     remotes: HashMap<i32, Arc<RemoteWindow>>,
     shown: ShownWindows,
     /// The task windows that are the active window.
@@ -715,6 +724,7 @@ pub fn manage(setup: ManagerSetup) {
         windows: TaskWindows::new(),
         hosts: WindowHosts::new(),
         links: HashMap::new(),
+        host_packages: HashMap::new(),
         remotes: HashMap::new(),
         shown: ShownWindows::new(),
         focused: std::collections::BTreeSet::new(),
@@ -795,6 +805,7 @@ impl Manager {
             } => {
                 let id = link.id();
                 self.links.insert(id, link);
+                self.host_packages.insert(id, package.clone());
                 let actions = self.hosts.attached(id, &package, launch, now);
                 self.carry_out(actions);
             }
@@ -826,6 +837,14 @@ impl Manager {
                     // Ending an app's window program closes its windows, as ending any
                     // program does: Android ends their tasks.
                     self.user_closed(task_id, now);
+                }
+                // A program that ran under a name or icon the guest has since changed (or
+                // never gave) is made again now that it no longer runs.
+                if let Some(package) = self.host_packages.remove(&host) {
+                    if !self.host_packages.values().any(|p| *p == package) {
+                        let app = self.hosts.app_info(&package).cloned();
+                        self.setup.launcher.ended(&package, app.as_ref());
+                    }
                 }
             }
         }
@@ -940,6 +959,7 @@ impl Manager {
         // stayed at, which its window has gone back to.
         let requests = self.windows.reconfigures(Instant::now());
         self.request(requests);
+        self.setup.launcher.tick();
         let (failed, actions) = self.hosts.tick(Instant::now());
         for (package, tasks) in failed {
             self.log(&format!(
