@@ -13,6 +13,7 @@ import io.github.thisisthepy.dsa.agent.RecordingLog
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.RequestGuestMemory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -178,5 +179,36 @@ Hugepagesize:       2048 kB
         assertEquals(0L, report.totalPssKb)
         assertEquals(0L, report.zramUsedKb)
         assertTrue(log.lines.any { it.startsWith("warn: could not read the processes' memory") })
+    }
+
+    @Test
+    fun nfr2_google_play_services_is_reported_apart_with_every_one_of_its_processes() {
+        // The owner's PC: gms and gms.unstable mostly in zram, and twelve small processes of
+        // other apps, so gms.unstable is not among the ten largest.
+        val processes = listOf(
+            ProcessPss(700, "com.google.android.gms", 81_000, 74_600, googlePlay = true),
+            ProcessPss(701, "com.google.android.gms.unstable", 54_000, 49_000, googlePlay = true),
+        ) + (1..12).map { ProcessPss(800 + it, "app$it", 60_000L + it, 1_000) }
+        val report = guestMemory(MemInfo.parse(MEMINFO), null, processes)
+
+        assertEquals(2, report.googlePlayProcesses)
+        assertEquals(135_000L, report.googlePlayPssKb)
+        assertEquals(123_600L, report.googlePlaySwapPssKb)
+        assertEquals(123_600L + 12_000L, report.swapPssKb)
+        assertEquals(10, report.topProcessesCount)
+        assertTrue(report.topProcessesList.single { it.pid == 700 }.googlePlay)
+        assertTrue(report.topProcessesList.none { it.pid == 701 })
+        assertTrue(report.topProcessesList.filter { it.pid != 700 }.none { it.googlePlay })
+    }
+
+    @Test
+    fun nfr2_google_play_services_are_the_google_apps_not_a_google_app_the_user_installed() {
+        assertTrue(GooglePlayPackages.isGooglePlay("com.google.android.gms", system = true, fromImage = true))
+        assertTrue(GooglePlayPackages.isGooglePlay("com.android.vending", system = true, fromImage = false))
+        assertTrue(GooglePlayPackages.isGooglePlay("com.google.android.gsf", system = false, fromImage = false))
+        assertTrue(GooglePlayPackages.isGooglePlay("com.google.android.syncadapters.contacts", system = true, fromImage = false))
+        assertTrue(GooglePlayPackages.isGooglePlay("com.example.fromimage", system = true, fromImage = true))
+        assertFalse(GooglePlayPackages.isGooglePlay("com.google.android.youtube", system = false, fromImage = false))
+        assertFalse(GooglePlayPackages.isGooglePlay("com.android.settings", system = true, fromImage = false))
     }
 }
