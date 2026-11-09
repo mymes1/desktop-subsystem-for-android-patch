@@ -32,7 +32,8 @@ use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_alerting, next_image_check, CheckNow, StoreVersions, UpdateNotices, UpdatingAndroid,
+    check_alerting, follow_waiting_image, next_image_check, CheckNow, StoreVersions, UpdateNotices,
+    UpdatingAndroid, WAITING_IMAGE_CHECK,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::{WindowManagerHost, WindowManagerKeeper};
@@ -566,16 +567,22 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     }
     Ok(match &shared.store {
         None => session as Arc<dyn UserAndroid>,
-        Some(store) => Arc::new(UpdatingAndroid {
-            session,
-            store: Arc::clone(store),
-            notices: Arc::clone(&shared.notices),
-            boot_timeout: Duration::from_secs(
-                config.update.as_ref().map_or(300, |u| u.boot_timeout_secs),
-            ),
-            trial_running: Arc::new(AtomicBool::new(false)),
-            rollback: Default::default(),
-        }),
+        Some(store) => {
+            let android = Arc::new(UpdatingAndroid {
+                session,
+                store: Arc::clone(store),
+                notices: Arc::clone(&shared.notices),
+                boot_timeout: Duration::from_secs(
+                    config.update.as_ref().map_or(300, |u| u.boot_timeout_secs),
+                ),
+                trial_running: Arc::new(AtomicBool::new(false)),
+                rollback: Default::default(),
+                image_restart: Default::default(),
+            });
+            // An image downloaded while the user's Android runs is applied by restarting it.
+            follow_waiting_image(&android, WAITING_IMAGE_CHECK);
+            android as Arc<dyn UserAndroid>
+        }
     })
 }
 
@@ -598,6 +605,7 @@ fn apply_settings(
     android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
     android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
     android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
+    android.image_auto_restart(settings.as_ref().is_none_or(|s| s.image_auto_restart));
     android.share_folders(
         settings.as_ref().is_none_or(|s| s.file_sharing),
         settings
