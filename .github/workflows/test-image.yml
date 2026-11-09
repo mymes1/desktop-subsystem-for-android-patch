@@ -34,6 +34,7 @@ on:
       - "dsa/protocol/**"
       - "dsa/guest/media-probe/**"
       - "dsa/guest/arm-probe/**"
+      - "dsa/guest/gms-probe/**"
       - "dsa/host/platform/linux/tests/widgets.rs"
       - "dsa/host/platform/linux/tests/media.rs"
       - "dsa/host/platform/linux/tests/system_screens.rs"
@@ -486,6 +487,20 @@ jobs:
         with:
           name: guest-arm-probe
           path: .scratch/arm-probe/dsa-arm-probe.apk
+          if-no-files-found: error
+
+      # An app named as Google Play services, which the overlay check installs to see the
+      # agent keep Play services' desktop-irrelevant components off across an update.
+      - name: Build the Play services probe
+        id: gms-probe
+        if: ${{ !cancelled() }}
+        run: bash dsa/guest/gms-probe/build.sh .scratch/gms-probe
+
+      - if: ${{ !cancelled() && steps.gms-probe.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-gms-probe
+          path: .scratch/gms-probe/dsa-gms-probe.apk
           if-no-files-found: error
 
 
@@ -1114,7 +1129,7 @@ jobs:
               /tmp/graphics-test-*/*.log
           - check: Lay the ARM translator and Google Play over the booted system
             test: overlays
-            timeout: 16
+            timeout: 18
             keep: Keep the overlay check's logs
             artifact: overlay-check-logs
             # The idle reclaim measurement boots on a runner of its own, below.
@@ -1216,6 +1231,13 @@ jobs:
           name: guest-arm-probe
           path: .scratch/arm-probe
 
+      - name: Download the Play services probe
+        if: matrix.test == 'overlays'
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-gms-probe
+          path: .scratch/gms-probe
+
       - name: Download the graphics test apps
         if: matrix.test == 'graphics'
         uses: actions/download-artifact@v4
@@ -1283,6 +1305,7 @@ jobs:
           fi
           if [[ "${{ matrix.test }}" == overlays ]]; then
             export DSA_ARM_PROBE="$GITHUB_WORKSPACE/.scratch/arm-probe/dsa-arm-probe.apk"
+            export DSA_GMS_PROBE="$GITHUB_WORKSPACE/.scratch/gms-probe/dsa-gms-probe.apk"
           fi
           if [[ "${{ matrix.test }}" == graphics ]]; then
             # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.

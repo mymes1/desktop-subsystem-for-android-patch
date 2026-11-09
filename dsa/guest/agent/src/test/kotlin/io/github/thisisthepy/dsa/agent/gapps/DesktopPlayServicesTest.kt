@@ -14,6 +14,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.w3c.dom.Element
+import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
+
+private const val ANDROID = "http://schemas.android.com/apk/res/android"
 
 /**
  * The package manager as far as component states go. Like the real one, every change of a
@@ -184,6 +189,22 @@ class DesktopPlayServicesTest {
         states.update(gms)
         scheduler.advance(DesktopPlayServices.SETTLE_MILLIS)
         assertEquals(setOf(first) + needed, states.on(gms))
+    }
+
+    /** The image boot check's stand-in for Play services declares what the agent turns off. */
+    @Test
+    fun fr32_the_play_services_probe_declares_what_the_agent_turns_off() {
+        val document = DocumentBuilderFactory.newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(File("../gms-probe/AndroidManifest.xml"))
+        val manifest = document.documentElement
+        assertEquals(gms, manifest.getAttribute("package"))
+        val nodes = document.getElementsByTagName("service")
+        val declared = (0 until nodes.length)
+            .map { (nodes.item(it) as Element).getAttributeNS(ANDROID, "name") }
+            .toSet()
+        assertEquals(unused.toSet() + "com.google.android.gms.gcm.GcmService", declared)
     }
 
     @Test
