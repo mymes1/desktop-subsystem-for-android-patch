@@ -23,6 +23,7 @@
 //! (`settings_dir`). Turning either kind of update off there stops the checks while the
 //! service runs; the render GPU is for each user's window manager, which asks for it.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
@@ -243,10 +244,19 @@ fn user_network(sid: &str) -> crate::hcn::SharedNetwork {
 /// `<profile>\DSA Backup`, passkeys (checked here, made and used by Windows Hello in the user's
 /// desktop session, which watches for them) and the root key of its KeyMint on its own port.
 /// The backup key and the KeyMint root key are sealed in the user's DSA folder
-/// (`%LOCALAPPDATA%\DSA\keys`), never on the guest's disk. A part that cannot be set up is
-/// logged and left unavailable, which Android reports as such; the rest goes on.
-fn serve_host_services(session: &Session, sid: &str, build: &str, keymint: VmBoundListener) {
-    use dsa_host_core::backup::BackupService;
+/// (`%LOCALAPPDATA%\DSA\keys`), never on the guest's disk; the KeyMint root key by the
+/// computer's TPM first. Backup is off until the user turns it on, which the service keeps in
+/// its own settings folder (`settings_dir`); until then neither the backup folder nor its key
+/// is made. A part that cannot be set up is logged and left unavailable, which Android reports
+/// as such; the rest goes on.
+fn serve_host_services(
+    session: &Session,
+    sid: &str,
+    build: &str,
+    keymint: VmBoundListener,
+    settings_dir: &Path,
+) {
+    use dsa_host_core::backup::{BackupService, BackupSwitch, FileSwitch, MemorySwitch};
     use dsa_host_core::host_keys::{HostKeyStore, NoKeyStore};
     use dsa_host_core::passkeys::PasskeyService;
 
@@ -269,13 +279,24 @@ fn serve_host_services(session: &Session, sid: &str, build: &str, keymint: VmBou
     match crate::profile::profile_folder(sid) {
         Ok(home) => {
             let folder = dsa_host_core::backup::folder_in(&home);
-            if let Err(why) = crate::user_disk::prepare_backup_folder(&folder, sid) {
-                // The service makes the folder itself when it first writes; it is then the
-                // profile's to pass its access down.
-                eprintln!("{sid}: backup: {why}");
-            }
+            let switch: Arc<dyn BackupSwitch> = match FileSwitch::for_user(settings_dir, sid) {
+                Ok(switch) => Arc::new(switch),
+                Err(why) => {
+                    eprintln!("{sid}: backup: the choice cannot be kept, so it is off: {why}");
+                    Arc::new(MemorySwitch::default())
+                }
+            };
+            // Made at the first backup, never before the user turns backup on.
+            let owner = sid.to_string();
+            let prepare = Arc::new(move |folder: &Path| {
+                crate::user_disk::prepare_backup_folder(folder, &owner)
+            });
             let made_on = crate::computer_identity::computer_name();
-            session.serve_backup(Arc::new(BackupService::new(folder, keys, &made_on)));
+            session.serve_backup(Arc::new(
+                BackupService::new(folder, keys, &made_on)
+                    .with_switch(switch)
+                    .with_prepare(prepare),
+            ));
         }
         Err(why) => eprintln!("{sid}: backup: the user's backups cannot be kept: {why}"),
     }
@@ -543,7 +564,13 @@ pub fn create_user_android(
         Arc::new(crate::root_approval::UacPrompt::new(sid)),
         dsa_host_core::root_approval::service_log(),
     )));
-    serve_host_services(&session, sid, build, keymint_listener);
+    serve_host_services(
+        &session,
+        sid,
+        build,
+        keymint_listener,
+        &config.settings_dir(),
+    );
     let session = Arc::new(session);
     {
         let (watched, user_name) = (Arc::downgrade(&session), sid.to_string());

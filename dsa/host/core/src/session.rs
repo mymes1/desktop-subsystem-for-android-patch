@@ -161,7 +161,7 @@ use crate::widgets::{
 };
 
 mod host_services;
-pub use host_services::RestoreOutcome;
+pub use host_services::{KeyMintKeyState, RestoreOutcome};
 
 /// Where the session is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -5274,6 +5274,10 @@ impl Worker {
             if let Some(body) = self.shared.root_elevation_body(true) {
                 self.send_body(body);
             }
+            // A new agent keeps Android's backup manager from backing up to the host until it
+            // hears that the user turned backup on.
+            let body = self.shared.backup_setting_body();
+            self.send_body(body);
         } else {
             self.agent_lost_at = Some(now);
             // The tasks are what the agent reported, and the agent goes when Android's framework
@@ -6187,7 +6191,8 @@ impl Worker {
             | Some(Body::BackupRun(_))
             | Some(Body::BackupRestore(_))
             | Some(Body::PasskeyResponse(_))
-            | Some(Body::KeymintRootKey(_)) => {
+            | Some(Body::KeymintRootKey(_))
+            | Some(Body::BackupSetting(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))

@@ -20,6 +20,14 @@
 //! The guest's messages are handled one at a time on a thread of the service's own, so the
 //! session's thread never waits on the disk. Each is answered through the reply the session
 //! gives [`BackupService::attach`].
+//!
+//! Backup is the user's choice, and off until they turn it on ([`BackupService::set_enabled`],
+//! from the settings app or `dsa backup on`): it keeps a second copy of their apps' data on
+//! the computer's disk. While it is off the service makes no folder and no key, answers every
+//! request of the guest's transport as unavailable, and the session tells the agent to keep
+//! Android's backup manager from backing up to the host. Turning it off again stops all of
+//! that; the backups already made stay for a later restore unless the user has them deleted.
+//! The choice is kept by a [`BackupSwitch`], outside the backup folder.
 
 pub mod crypto;
 pub mod records;
@@ -83,7 +91,90 @@ pub struct BackupReport {
     pub succeeded: u32,
     pub failed: u32,
     pub installed: u32,
+    /// Whether the user turned backup on.
+    pub enabled: bool,
 }
+
+/// What a person reads when backup is off and something asks for it.
+pub const BACKUP_OFF: &str = "backup is off; turn it on in the settings app or with dsa backup on";
+
+/// Keeps whether the user turned backup on. Off when nothing was ever kept.
+pub trait BackupSwitch: Send + Sync {
+    fn enabled(&self) -> Result<bool, String>;
+    fn set_enabled(&self, on: bool) -> Result<(), String>;
+}
+
+/// A [`BackupSwitch`] in memory, off at first: for a host that keeps the choice nowhere else,
+/// and for tests.
+#[derive(Default)]
+pub struct MemorySwitch(std::sync::atomic::AtomicBool);
+
+impl BackupSwitch for MemorySwitch {
+    fn enabled(&self) -> Result<bool, String> {
+        Ok(self.0.load(Ordering::SeqCst))
+    }
+    fn set_enabled(&self, on: bool) -> Result<(), String> {
+        self.0.store(on, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+/// The choice as a file keeps it.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SwitchFile {
+    #[serde(default)]
+    enabled: bool,
+}
+
+/// A [`BackupSwitch`] in a JSON file of the service's own settings folder
+/// (`<settings>/users/<user>.backup.json`, `{"enabled": true}`), which users cannot write to,
+/// so the choice the service acts on is the one the user made through it. A missing file is
+/// off.
+pub struct FileSwitch {
+    path: PathBuf,
+}
+
+impl FileSwitch {
+    pub fn new(path: impl Into<PathBuf>) -> FileSwitch {
+        FileSwitch { path: path.into() }
+    }
+
+    /// The switch of `user` in the service's settings folder `settings_dir`.
+    pub fn for_user(settings_dir: &Path, user: &str) -> Result<FileSwitch, String> {
+        let stem = crate::settings::user_file_stem(user)?;
+        Ok(FileSwitch::new(
+            settings_dir
+                .join("users")
+                .join(format!("{stem}.backup.json")),
+        ))
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl BackupSwitch for FileSwitch {
+    fn enabled(&self) -> Result<bool, String> {
+        match std::fs::read(&self.path) {
+            Ok(data) => serde_json::from_slice::<SwitchFile>(&data)
+                .map(|file| file.enabled)
+                .map_err(|e| format!("{} cannot be read: {e}", self.path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(format!("{} cannot be read: {e}", self.path.display())),
+        }
+    }
+
+    fn set_enabled(&self, on: bool) -> Result<(), String> {
+        let data = serde_json::to_vec(&SwitchFile { enabled: on }).map_err(|e| e.to_string())?;
+        crate::host_keys::write_replacing(&self.path, &data)
+            .map_err(|e| format!("{} cannot be written: {e}", self.path.display()))
+    }
+}
+
+/// Makes the backup folder before its first use, as the platform wants it made (on Windows,
+/// with an access list that keeps it the user's although the service writes it).
+pub type PrepareFolder = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
 
 /// One package in the backup, for a restore.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,6 +211,8 @@ pub struct BackupService {
     runs: Mutex<HashMap<u64, Sender<control::BackupRunResult>>>,
     next_run: AtomicU64,
     file_access: Option<FileAccess>,
+    switch: Arc<dyn BackupSwitch>,
+    prepare: Option<PrepareFolder>,
 }
 
 /// Runs what it is given with the file rights of the user the folder belongs to, as
@@ -186,6 +279,8 @@ impl BackupService {
             runs: Mutex::new(HashMap::new()),
             next_run: AtomicU64::new(1),
             file_access: None,
+            switch: Arc::new(MemorySwitch::default()),
+            prepare: None,
         }
     }
 
@@ -193,6 +288,67 @@ impl BackupService {
     pub fn with_file_access(mut self, access: FileAccess) -> BackupService {
         self.file_access = Some(access);
         self
+    }
+
+    /// Keeps whether the user turned backup on with `switch`. Without one, the choice lasts
+    /// only as long as the service, and starts off.
+    pub fn with_switch(mut self, switch: Arc<dyn BackupSwitch>) -> BackupService {
+        self.switch = switch;
+        self
+    }
+
+    /// Has `prepare` make the folder before the first backup writes to it.
+    pub fn with_prepare(mut self, prepare: PrepareFolder) -> BackupService {
+        self.prepare = Some(prepare);
+        self
+    }
+
+    /// Whether the user turned backup on. A choice that cannot be read counts as off, so a
+    /// broken settings file never starts backups the user did not ask for.
+    pub fn enabled(&self) -> bool {
+        match self.switch.enabled() {
+            Ok(on) => on,
+            Err(why) => {
+                eprintln!("backup: whether backup is on cannot be read, so it is off: {why}");
+                false
+            }
+        }
+    }
+
+    /// Turns backup on or off. Off, nothing under way goes on; with `delete_backups` the files
+    /// the backup folder holds and the backup key are removed too (files of the user's own in
+    /// the folder stay). Returns where the backup stands after it.
+    pub fn set_enabled(&self, on: bool, delete_backups: bool) -> Result<BackupReport, String> {
+        if on && delete_backups {
+            return Err("backups are deleted only when backup is turned off".into());
+        }
+        self.switch.set_enabled(on)?;
+        eprintln!("backup: turned {}", if on { "on" } else { "off" });
+        if !on {
+            self.let_go(|state| {
+                state.folder = None;
+                state.uploads.clear();
+                state.fetches.clear();
+            });
+            if delete_backups {
+                self.delete_backups()?;
+            }
+        }
+        Ok(self.report())
+    }
+
+    /// Removes what the backup made: the folder's files and the backup key.
+    fn delete_backups(&self) -> Result<(), String> {
+        self.as_owner(|| store::delete(&self.folder_dir).map_err(Unavailable))
+            .map_err(|Unavailable(why)| why)?;
+        self.keys
+            .remove(KeyPurpose::Backup)
+            .map_err(|e| format!("the backups were deleted, but not their key: {e}"))?;
+        eprintln!(
+            "backup: deleted the backups in {} and their key",
+            self.folder_dir.display()
+        );
+        Ok(())
     }
 
     /// Runs `f` with the folder owner's file rights, when the service was given a way to.
@@ -316,14 +472,25 @@ impl BackupService {
         }
     }
 
-    /// Runs `f` on the open folder, opening it first.
+    /// Runs `f` on the open folder, opening it first. While backup is off only a folder an
+    /// earlier backup made is opened, to be read: nothing makes one, or its key.
     fn with_folder<T>(
         &self,
         f: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, Unavailable> {
+        let enabled = self.enabled();
         self.as_owner(|| {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if state.folder.is_none() {
+                let exists = matches!(store::read_metadata(&self.folder_dir), Ok(Some(_)));
+                if !enabled && !exists {
+                    return Err(Unavailable(BACKUP_OFF.into()));
+                }
+                if !exists && !self.folder_dir.is_dir() {
+                    if let Some(prepare) = &self.prepare {
+                        prepare(&self.folder_dir).map_err(Unavailable)?;
+                    }
+                }
                 let key = self.key()?;
                 let folder = Folder::open(&self.folder_dir, key, &self.made_on)
                     .map_err(|e| Unavailable(e.to_string()))?;
@@ -333,10 +500,13 @@ impl BackupService {
         })
     }
 
-    /// Where the backup stands. It never makes a folder or a key.
+    /// Where the backup stands. It never makes a folder or a key. While backup is off it is
+    /// not available, with no problem, and still counts what an earlier backup left.
     pub fn report(&self) -> BackupReport {
+        let enabled = self.enabled();
         let mut report = BackupReport {
             folder: self.folder_dir.clone(),
+            enabled,
             ..BackupReport::default()
         };
         let exists = match self.as_owner(|| Ok(store::read_metadata(&self.folder_dir))) {
@@ -346,6 +516,24 @@ impl BackupService {
                 return report;
             }
         };
+        if !enabled {
+            if exists {
+                // What is left can be counted, so the user knows what deleting it removes.
+                if let Ok(index) =
+                    self.with_folder(|state| Ok(state.folder.as_ref().expect("open").index.clone()))
+                {
+                    report.last_backup_ms = index.last_backup_ms;
+                    report.last_restore_ms = index.last_restore_ms;
+                    report.packages = index
+                        .packages
+                        .keys()
+                        .filter(|p| p.as_str() != PACKAGE_MANAGER)
+                        .count() as u32;
+                    report.size = index.packages.values().map(PackageEntry::size).sum();
+                }
+            }
+            return report;
+        }
         if !exists {
             // A first backup makes the folder; until then, say only whether it could.
             match self.keys.load(KeyPurpose::Backup) {
@@ -378,18 +566,32 @@ impl BackupService {
     /// The recovery key of the user's backup key, made with the folder's first use when there
     /// is none yet.
     pub fn recovery_key(&self) -> Result<String, Unavailable> {
-        let _ = self.as_owner(|| self.key())?;
+        // While backup is off a key an earlier backup made is shown, but none is made.
+        if self.enabled() {
+            let _ = self.as_owner(|| self.key())?;
+        }
         let secret = self
             .keys
             .load(KeyPurpose::Backup)
             .map_err(|e| Unavailable(key_problem(&e)))?
-            .ok_or_else(|| Unavailable("the backup key was not kept".into()))?;
+            .ok_or_else(|| {
+                Unavailable(if self.enabled() {
+                    "the backup key was not kept".into()
+                } else {
+                    format!("there is no backup key yet: {BACKUP_OFF}")
+                })
+            })?;
         Ok(crypto::recovery_key(&secret))
     }
 
     /// Keeps the key `text` carries as the user's backup key. A key that does not open the
     /// folder is refused, and the key kept stays.
     pub fn use_recovery_key(&self, text: &str) -> Result<(), String> {
+        if !self.enabled() {
+            return Err(format!(
+                "a recovery key is kept only while backup is on: {BACKUP_OFF}"
+            ));
+        }
         let secret: Secret = crypto::parse_recovery_key(text)?;
         let key = BackupKey::new(&secret);
         let metadata = self
@@ -542,6 +744,14 @@ impl BackupService {
     }
 
     fn handle(&self, body: Body, reply: &dyn Fn(Body)) {
+        if !self.enabled() {
+            // Nothing is read or written while backup is off; the agent keeps Android's
+            // backup manager from asking, and anything that asks all the same is told why.
+            if let Some(answer) = refusal(&body, BACKUP_OFF) {
+                reply(answer);
+            }
+            return;
+        }
         match body {
             Body::BackupUpload(upload) => reply(self.upload(upload)),
             Body::BackupCommit(commit) => reply(self.commit(commit)),
@@ -921,6 +1131,34 @@ impl BackupService {
             Err(Unavailable(why)) => refuse(BackupStatus::NotAvailable, why),
         }
     }
+}
+
+/// The answer that tells the guest's transport the host keeps no backup, with `why`, for a
+/// request that is answered; `None` for one that is not (a discard).
+pub fn refusal(body: &Body, why: &str) -> Option<Body> {
+    let request_id = match body {
+        Body::BackupUpload(control::BackupUpload { request_id, .. })
+        | Body::BackupCommit(control::BackupCommit { request_id, .. })
+        | Body::BackupClear(control::BackupClear { request_id, .. }) => *request_id,
+        Body::BackupQuery(query) => {
+            return Some(Body::BackupContents(control::BackupContents {
+                request_id: query.request_id,
+                status: BackupStatus::NotAvailable as i32,
+                message: why.to_string(),
+                ..Default::default()
+            }))
+        }
+        Body::BackupFetch(fetch) => {
+            return Some(Body::BackupFetchData(control::BackupFetchData {
+                request_id: fetch.request_id,
+                status: BackupStatus::NotAvailable as i32,
+                message: why.to_string(),
+                ..Default::default()
+            }))
+        }
+        _ => return None,
+    };
+    Some(answer(request_id, BackupStatus::NotAvailable, why))
 }
 
 /// What a person reads when the backup key cannot be had.

@@ -115,9 +115,9 @@ use crate::widgets::{
 };
 use dsa_protocol::control;
 
-use crate::backup::BackupService;
+use crate::backup::{BackupReport, BackupService};
 use crate::passkeys::{CeremonyResult, PasskeyEvent};
-use crate::session::RestoreOutcome;
+use crate::session::{KeyMintKeyState, RestoreOutcome};
 
 mod host_services;
 pub use host_services::{BackupOutcome, PasskeyCeremonyWatch};
@@ -344,6 +344,22 @@ pub trait UserAndroid: Send + Sync {
             "this Android keeps no backups on the host".into(),
         ))
     }
+    /// Turns this Android's backup on or off, telling Android at once; off with
+    /// `delete_backups`, removes the backups made so far and their key.
+    fn set_backup(&self, on: bool, delete_backups: bool) -> Result<BackupReport, TaskRequestError> {
+        let _ = (on, delete_backups);
+        Err(TaskRequestError::Failed(
+            "this Android keeps no backups on the host".into(),
+        ))
+    }
+    /// How this Android's KeyMint root key is protected on the host. `None` when its KeyMint
+    /// takes no root key from the host.
+    fn keymint_key_state(&self) -> Option<KeyMintKeyState> {
+        None
+    }
+    /// This Android's data was reset: its KeyMint root key goes, and the next start makes a
+    /// new one.
+    fn forget_keymint_root_key(&self) {}
     /// The passkey ceremonies of this Android from now on. `None` when it uses no passkeys of
     /// the host.
     fn watch_passkeys(&self) -> Option<Receiver<PasskeyEvent>> {
@@ -870,6 +886,15 @@ impl UserAndroid for Session {
     }
     fn restore_backup(&self) -> Result<RestoreOutcome, TaskRequestError> {
         Session::restore_backup(self).map_err(request_error)
+    }
+    fn set_backup(&self, on: bool, delete_backups: bool) -> Result<BackupReport, TaskRequestError> {
+        Session::set_backup(self, on, delete_backups).map_err(request_error)
+    }
+    fn keymint_key_state(&self) -> Option<KeyMintKeyState> {
+        Session::keymint_key_state(self)
+    }
+    fn forget_keymint_root_key(&self) {
+        Session::forget_keymint_root_key(self)
     }
     fn watch_passkeys(&self) -> Option<Receiver<PasskeyEvent>> {
         Session::watch_passkeys(self)
@@ -4282,6 +4307,8 @@ impl HostApiService {
             Some(request::Body::SetBackupRecoveryKey(set)) => {
                 self.set_backup_recovery_key(peer, &set.key)
             }
+            Some(request::Body::SetBackup(set)) => self.set_backup(peer, &set),
+            Some(request::Body::GetKeyProtection(_)) => self.key_protection(peer),
             Some(request::Body::ReportPasskeyCeremony(report)) => {
                 self.report_passkey_ceremony(peer, report)
             }
@@ -4532,6 +4559,8 @@ impl HostApiService {
                         | request::Body::RestoreBackup(_)
                         | request::Body::GetBackupRecoveryKey(_)
                         | request::Body::SetBackupRecoveryKey(_)
+                        | request::Body::SetBackup(_)
+                        | request::Body::GetKeyProtection(_)
                         | request::Body::WatchPasskeys(_)
                         | request::Body::ReportPasskeyCeremony(_)
                         | request::Body::ReportTouchGestures(_) => unreachable!("answered above"),

@@ -20,7 +20,9 @@ use dsa_transport::{Connection, TransportError};
 
 use super::{error, ClientError, HostApiClient, HostApiService, UserAndroid, CLIPBOARD_POLL};
 use crate::backup::{BackupReport, BackupService, BACKUP_RUN_WAIT, RESTORE_WAIT};
+use crate::host_keys::KeyProtection;
 use crate::passkeys::{Ceremony, CeremonyResult, PasskeyEvent};
+use crate::session::KeyMintKeyState;
 use crate::tasks::TaskRequestError;
 
 /// What a backup or a restore did, and where the backup stands after it.
@@ -49,6 +51,31 @@ fn report_to_wire(report: &BackupReport) -> types::BackupReport {
         failed: report.failed,
         installed: report.installed,
         last_restore_unix_ms: report.last_restore_ms,
+        enabled: report.enabled,
+    }
+}
+
+fn protection_to_wire(state: &KeyMintKeyState) -> types::KeyProtection {
+    let protection = state.protection.clone().unwrap_or_default();
+    types::KeyProtection {
+        kept: state.protection.is_some(),
+        sealed_by: protection.sealed_by,
+        hardware: protection.hardware,
+        description: protection.description,
+        fallback_reason: protection.fallback_reason,
+        problem: state.problem.clone(),
+    }
+}
+
+fn protection_from_wire(wire: types::KeyProtection) -> KeyMintKeyState {
+    KeyMintKeyState {
+        protection: wire.kept.then_some(KeyProtection {
+            sealed_by: wire.sealed_by,
+            hardware: wire.hardware,
+            description: wire.description,
+            fallback_reason: wire.fallback_reason,
+        }),
+        problem: wire.problem,
     }
 }
 
@@ -65,6 +92,7 @@ fn report_from_wire(report: types::BackupReport) -> BackupReport {
         succeeded: report.succeeded,
         failed: report.failed,
         installed: report.installed,
+        enabled: report.enabled,
     }
 }
 
@@ -288,6 +316,41 @@ impl HostApiService {
         }
     }
 
+    pub(super) fn set_backup(&self, peer: &Peer, set: &types::SetBackup) -> response::Body {
+        let (android, _) = match self.user_backup(peer) {
+            Ok(found) => found,
+            Err(body) => return *body,
+        };
+        eprintln!(
+            "local API: {} turns backup {}{}",
+            peer.user,
+            if set.enabled { "on" } else { "off" },
+            if set.delete_backups {
+                " and deletes the backups"
+            } else {
+                ""
+            }
+        );
+        match android.set_backup(set.enabled, set.delete_backups) {
+            Ok(report) => response::Body::BackupReport(report_to_wire(&report)),
+            Err(why) => task_error(why),
+        }
+    }
+
+    pub(super) fn key_protection(&self, peer: &Peer) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.keymint_key_state() {
+            Some(state) => response::Body::KeyProtection(protection_to_wire(&state)),
+            None => error(
+                ErrorCode::Unavailable,
+                "this Android's KeyMint takes no root key from the host".into(),
+            ),
+        }
+    }
+
     pub(super) fn set_backup_recovery_key(&self, peer: &Peer, key: &str) -> response::Body {
         match self.user_backup(peer) {
             Ok((_, backup)) => match backup.use_recovery_key(key) {
@@ -443,6 +506,36 @@ impl HostApiClient {
         )? {
             response::Body::BackupRecoveryKey(key) => Ok(key.key),
             _ => Err(ClientError::Malformed("expected the recovery key".into())),
+        }
+    }
+
+    /// Turns the caller's backup on or off; off with `delete_backups`, removes the backups
+    /// made so far and their key.
+    pub fn set_backup(
+        &mut self,
+        enabled: bool,
+        delete_backups: bool,
+    ) -> Result<BackupReport, ClientError> {
+        let wait = self.timeout;
+        self.backup_request(
+            request::Body::SetBackup(types::SetBackup {
+                enabled,
+                delete_backups,
+            }),
+            wait,
+        )
+    }
+
+    /// How the caller's KeyMint root key is protected on this computer.
+    pub fn key_protection(&mut self) -> Result<KeyMintKeyState, ClientError> {
+        match self.exchange(
+            request::Body::GetKeyProtection(types::GetKeyProtection {}),
+            self.timeout,
+        )? {
+            response::Body::KeyProtection(wire) => Ok(protection_from_wire(wire)),
+            _ => Err(ClientError::Malformed(
+                "expected how the KeyMint root key is protected".into(),
+            )),
         }
     }
 

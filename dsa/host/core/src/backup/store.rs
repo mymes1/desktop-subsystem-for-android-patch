@@ -137,6 +137,43 @@ pub fn read_metadata(dir: &Path) -> Result<Option<Metadata>, FolderError> {
     }
 }
 
+/// Removes every file a backup made in `dir`: the metadata, the index, the data files and what
+/// an interrupted write left, then the folders when nothing else is in them. A file the user
+/// put there is kept, and so is the folder that holds it. A folder that is not there is no
+/// error.
+pub fn delete(dir: &Path) -> Result<(), String> {
+    let remove = |path: &Path| match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("{} cannot be removed: {e}", path.display())),
+    };
+    let data = dir.join(DATA);
+    match std::fs::read_dir(&data) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let ours = path.is_file()
+                    && path
+                        .extension()
+                        .is_some_and(|e| e == EXTENSION || e == PART);
+                if ours {
+                    remove(&path)?;
+                }
+            }
+            let _ = std::fs::remove_dir(&data);
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("{} cannot be read: {e}", data.display())),
+    }
+    for name in [INDEX, METADATA] {
+        remove(&dir.join(name))?;
+        remove(&dir.join(format!("{name}.new")))?;
+    }
+    // Removed only when empty: whatever else is there is the user's.
+    let _ = std::fs::remove_dir(dir);
+    Ok(())
+}
+
 /// An open backup folder, with the key it is encrypted with.
 pub struct Folder {
     dir: PathBuf,

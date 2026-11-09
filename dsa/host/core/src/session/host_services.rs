@@ -19,8 +19,11 @@ use dsa_transport::{Listener, TransportError};
 
 use super::{send_quietly, Command, Session, SessionError, SessionState, Shared};
 use crate::apk::InstallPart;
-use crate::backup::{BackupReport, BackupService, BACKUP_RUN_WAIT, PACKAGE_MANAGER, RESTORE_WAIT};
-use crate::host_keys::HostKeyStore;
+use crate::backup::{
+    refusal, BackupReport, BackupService, BACKUP_OFF, BACKUP_RUN_WAIT, PACKAGE_MANAGER,
+    RESTORE_WAIT,
+};
+use crate::host_keys::{HostKeyStore, KeyProtection, KeyPurpose};
 use crate::keymint_root::{self, KEYMINT_WAIT};
 use crate::passkeys::{CeremonyResult, PasskeyEvent, PasskeyService};
 
@@ -35,6 +38,17 @@ pub(super) struct HostServices {
     keymint_keys: Option<Arc<dyn HostKeyStore>>,
     /// Whether the running boot has had its root key.
     keymint_given: bool,
+    /// Why the latest boot that asked got no root key; `None` when it got one.
+    keymint_problem: Option<String>,
+}
+
+/// How the KeyMint root key is protected, and why the latest start of Android got none.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeyMintKeyState {
+    /// `None` while no key is kept.
+    pub protection: Option<KeyProtection>,
+    /// Why the latest start of Android that asked got no key; empty when it got one.
+    pub problem: String,
 }
 
 fn reply_of(shared: &Arc<Shared>, commands: &Sender<Command>) -> Arc<dyn Fn(Body) + Send + Sync> {
@@ -49,6 +63,15 @@ fn reply_of(shared: &Arc<Shared>, commands: &Sender<Command>) -> Arc<dyn Fn(Body
 impl Shared {
     fn services(&self) -> std::sync::MutexGuard<'_, HostServices> {
         self.host_services.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// What the agent is told of backup: on only when the user turned it on. A host that keeps
+    /// no backups tells it off, so Android's backup manager never backs up to it.
+    pub(super) fn backup_setting_body(&self) -> Body {
+        let backup = self.services().backup.clone();
+        Body::BackupSetting(control::BackupSetting {
+            enabled: backup.is_some_and(|backup| backup.enabled()),
+        })
     }
 
     /// Android stopped: the backup and the passkeys let go of what is under way, and the next
@@ -107,31 +130,8 @@ impl Shared {
 
 /// Answers a backup request when the host keeps no backups.
 fn no_backup(body: Body, reply: &dyn Fn(Body)) {
-    let why = "this computer keeps no backups of Android's apps".to_string();
-    match body {
-        Body::BackupUpload(control::BackupUpload { request_id, .. })
-        | Body::BackupCommit(control::BackupCommit { request_id, .. })
-        | Body::BackupClear(control::BackupClear { request_id, .. }) => {
-            reply(Body::BackupAnswer(control::BackupAnswer {
-                request_id,
-                status: BackupStatus::NotAvailable as i32,
-                message: why,
-                apks_wanted: false,
-            }))
-        }
-        Body::BackupQuery(query) => reply(Body::BackupContents(control::BackupContents {
-            request_id: query.request_id,
-            status: BackupStatus::NotAvailable as i32,
-            message: why,
-            ..Default::default()
-        })),
-        Body::BackupFetch(fetch) => reply(Body::BackupFetchData(control::BackupFetchData {
-            request_id: fetch.request_id,
-            status: BackupStatus::NotAvailable as i32,
-            message: why,
-            ..Default::default()
-        })),
-        _ => {}
+    if let Some(answer) = refusal(&body, "this computer keeps no backups of Android's apps") {
+        reply(answer);
     }
 }
 
@@ -168,6 +168,70 @@ impl Session {
         self.shared.services().backup.clone()
     }
 
+    /// Turns the user's backup on or off, and tells the running agent at once, so Android's
+    /// backup manager starts or stops backing up to the host. Off with `delete_backups`, the
+    /// backups made so far and their key are removed as well.
+    pub fn set_backup(&self, on: bool, delete_backups: bool) -> Result<BackupReport, SessionError> {
+        let backup = self.backup().ok_or_else(|| {
+            SessionError::NoAnswer("this computer keeps no backups of Android's apps".into())
+        })?;
+        // The agent stops first, so nothing is sent while the folder goes away.
+        if !on {
+            send_quietly(
+                &self.shared,
+                &self.commands,
+                Body::BackupSetting(control::BackupSetting { enabled: false }),
+            );
+        }
+        let report = backup
+            .set_enabled(on, delete_backups)
+            .map_err(SessionError::NoAnswer)?;
+        send_quietly(
+            &self.shared,
+            &self.commands,
+            self.shared.backup_setting_body(),
+        );
+        Ok(report)
+    }
+
+    /// How the root key of the guest's KeyMint is protected, and why the latest start of
+    /// Android got none. `None` when the session keeps no KeyMint root key.
+    pub fn keymint_key_state(&self) -> Option<KeyMintKeyState> {
+        let (store, problem) = {
+            let services = self.shared.services();
+            (
+                services.keymint_keys.clone()?,
+                services.keymint_problem.clone(),
+            )
+        };
+        let (protection, read_problem) = match store.protection(KeyPurpose::KeyMintRoot) {
+            Ok(protection) => (protection, None),
+            Err(why) => (None, Some(why.to_string())),
+        };
+        Some(KeyMintKeyState {
+            protection,
+            problem: problem.or(read_problem).unwrap_or_default(),
+        })
+    }
+
+    /// Lets go of the KeyMint root key after the user's Android data was reset: the fresh
+    /// data holds no key wrapped under it, so the next start makes a new one. It is how a key
+    /// that can no longer be opened (its TPM was cleared) is left behind.
+    pub fn forget_keymint_root_key(&self) {
+        let store = self.shared.services().keymint_keys.clone();
+        if let Some(store) = store {
+            match store.remove(KeyPurpose::KeyMintRoot) {
+                Ok(()) => {
+                    self.shared.services().keymint_problem = None;
+                    eprintln!(
+                        "keymint: the data was reset, so the next start makes a new root key"
+                    );
+                }
+                Err(why) => eprintln!("keymint: the old root key was not removed: {why}"),
+            }
+        }
+    }
+
     /// The passkey ceremonies from now on, for the user's desktop session to perform. `None`
     /// when the session serves no passkeys.
     pub fn watch_passkeys(&self) -> Option<Receiver<PasskeyEvent>> {
@@ -186,7 +250,14 @@ impl Session {
         passkeys.report(id, result)
     }
 
+    /// The backup, while Android runs and the user has turned backup on.
     fn running_backup(&self) -> Result<Arc<BackupService>, SessionError> {
+        let backup = self.backup().ok_or_else(|| {
+            SessionError::NoAnswer("this computer keeps no backups of Android's apps".into())
+        })?;
+        if !backup.enabled() {
+            return Err(SessionError::NoAnswer(BACKUP_OFF.into()));
+        }
         let state = self.state();
         if !matches!(
             state,
@@ -194,9 +265,7 @@ impl Session {
         ) {
             return Err(SessionError::NotActive(state));
         }
-        self.backup().ok_or_else(|| {
-            SessionError::NoAnswer("this computer keeps no backups of Android's apps".into())
-        })
+        Ok(backup)
     }
 
     /// Has the agent back up every app now, and waits for Android's backup manager to finish.
@@ -401,6 +470,7 @@ fn accept_keymint(mut listener: Box<dyn Listener>, shared: Arc<Shared>, hello: c
                 Ok(_) => eprintln!("keymint: gave this boot its root key"),
                 Err(why) => eprintln!("keymint: gave this boot no root key: {why}"),
             }
+            shared.services().keymint_problem = key.as_ref().err().cloned();
             if let Err(why) = keymint_root::serve_root_key(connection.as_mut(), &key) {
                 eprintln!("keymint: the root key request failed: {why}");
                 // It may ask again on a connection of its own.

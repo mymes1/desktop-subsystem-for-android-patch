@@ -11,11 +11,12 @@ use std::time::Duration;
 use dsa_host_core::backup::crypto::{
     parse_recovery_key, recovery_key, BackupKey, DecryptingReader, EncryptingWriter, OpenError,
 };
-use dsa_host_core::backup::{records, BackupService};
+use dsa_host_core::backup::{records, BackupService, BackupSwitch, FileSwitch};
 use dsa_host_core::data_reset::{reset_user_data, TemplateDataDisk};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_keys::{
-    load_or_create, HostKeyStore, KeyError, KeyPurpose, NoKeyStore, SealedFileStore, Sealer, Secret,
+    load_or_create, sealer_of, Hardware, HostKeyStore, KeyError, KeyPurpose, NoKeyStore,
+    SealedFileStore, SealedKeys, Sealer, SealerSource, Secret,
 };
 use dsa_host_core::keymint_root::{ask_root_key, root_key};
 use dsa_host_core::passkeys::asset_links::{fingerprint, HttpsGet};
@@ -91,6 +92,8 @@ impl HostKeyStore for MemoryKeys {
 struct BoundSealer {
     computer: String,
     user: String,
+    name: &'static str,
+    hardware: bool,
 }
 
 impl BoundSealer {
@@ -98,6 +101,18 @@ impl BoundSealer {
         Arc::new(BoundSealer {
             computer: computer.into(),
             user: user.into(),
+            name: "test-bound",
+            hardware: false,
+        })
+    }
+
+    /// A sealer held by a TPM: `tpm` names the TPM, which a clear replaces.
+    fn tpm(computer: &str, user: &str, tpm: &str) -> Arc<BoundSealer> {
+        Arc::new(BoundSealer {
+            computer: format!("{computer}/{tpm}"),
+            user: user.into(),
+            name: "test-tpm",
+            hardware: true,
         })
     }
 
@@ -130,7 +145,24 @@ impl BoundSealer {
 
 impl Sealer for BoundSealer {
     fn name(&self) -> &str {
-        "test-bound"
+        self.name
+    }
+    fn kind(&self) -> &str {
+        if self.hardware {
+            "tpm"
+        } else {
+            "dpapi"
+        }
+    }
+    fn hardware(&self) -> bool {
+        self.hardware
+    }
+    fn description(&self) -> String {
+        if self.hardware {
+            "the test computer's TPM".into()
+        } else {
+            "the test credential store".into()
+        }
     }
     fn seal(&self, plain: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
         let pad = self.pad(label, plain.len());
@@ -402,6 +434,42 @@ fn fr36_backup_survives_a_data_reset() {
     let mut agent = connect_agent(&mut connector, &launcher);
     assert!(session.wait_for(SessionState::Active, WAIT));
 
+    // Backup is off until the user turns it on: the agent is told so, nothing the transport
+    // sends is kept, and neither a folder nor a key is made.
+    assert!(!backup_setting(&mut agent), "the agent hears backup is off");
+    let refused = upload_refused(&mut agent, 90);
+    assert_eq!(refused.status, BackupStatus::NotAvailable as i32);
+    assert!(
+        refused.message.contains("backup is off"),
+        "{}",
+        refused.message
+    );
+    let report = session.backup_report().expect("a backup");
+    assert!(!report.enabled && !report.available);
+    assert!(
+        report.problem.is_empty(),
+        "off is no problem: {}",
+        report.problem
+    );
+    assert!(
+        session.backup_now().is_err(),
+        "no backup runs while it is off"
+    );
+    assert!(
+        backup.recovery_key().is_err(),
+        "no key is made while it is off"
+    );
+    assert!(
+        !folder.exists(),
+        "a user who never turned backup on has no backup files"
+    );
+    assert_eq!(keys.load(KeyPurpose::Backup).unwrap(), None);
+
+    // The user turns it on, and the agent hears it at once.
+    let report = session.set_backup(true, false).expect("backup turns on");
+    assert!(report.enabled && report.available, "{}", report.problem);
+    assert!(backup_setting(&mut agent), "the agent hears backup is on");
+
     // Android backs the notes app up: a full backup, then its APK when the host asks for it,
     // and the settings provider's key-value records in two passes.
     let full = full_backup_of_notes();
@@ -476,7 +544,7 @@ fn fr36_backup_survives_a_data_reset() {
     assert!(!contains(&stored, b"com.example.notes"));
     assert!(!contains(&stored, b"chime"));
     let stranger = BackupService::new(folder.clone(), Arc::new(MemoryKeys::default()), "OTHER-PC");
-    let refused = stranger.report();
+    let refused = stranger.set_enabled(true, false).unwrap();
     assert!(!refused.available);
     assert!(
         refused.problem.contains("recovery key"),
@@ -628,6 +696,114 @@ fn fr36_backup_survives_a_data_reset() {
     assert!(outcome.install_failures.is_empty());
     assert_eq!(outcome.result.succeeded, 2);
     assert!(session.backup_report().unwrap().last_restore_ms > 0);
+
+    // Turned off, the agent hears it, the host keeps nothing more, and the backups stay for a
+    // later restore until the user has them deleted.
+    std::fs::write(folder.join("my notes.txt"), b"the user's own file").unwrap();
+    let report = session.set_backup(false, false).expect("backup turns off");
+    assert!(!report.enabled && !report.available);
+    assert_eq!(report.packages, 2, "what is kept is still counted");
+    assert!(!backup_setting(&mut agent), "the agent hears backup is off");
+    let refused = upload_refused(&mut agent, 91);
+    assert_eq!(refused.status, BackupStatus::NotAvailable as i32);
+    assert!(folder.join("backup.json").exists());
+    let report = session
+        .set_backup(false, true)
+        .expect("the backups are deleted");
+    assert_eq!(report.packages, 0);
+    assert!(!folder.join("backup.json").exists());
+    assert!(!folder.join("index.dsab").exists());
+    assert!(!folder.join("data").exists());
+    assert_eq!(
+        std::fs::read(folder.join("my notes.txt")).unwrap(),
+        b"the user's own file",
+        "a file of the user's own stays"
+    );
+    assert_eq!(
+        keys.load(KeyPurpose::Backup).unwrap(),
+        None,
+        "the key goes too"
+    );
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The next backup setting the host tells the agent: whether backup is on.
+fn backup_setting(agent: &mut Box<dyn Connection>) -> bool {
+    next_of(agent, |body| match body {
+        Body::BackupSetting(setting) => Some(setting.enabled),
+        _ => None,
+    })
+}
+
+/// One piece of an upload, which the host is expected to refuse.
+fn upload_refused(agent: &mut Box<dyn Connection>, request_id: u64) -> control::BackupAnswer {
+    send_body(
+        agent,
+        Body::BackupUpload(control::BackupUpload {
+            request_id,
+            offset: 0,
+            data: b"settings".to_vec(),
+        }),
+    );
+    backup_answer(agent, request_id)
+}
+
+#[test]
+fn fr36_backup_is_off_until_the_user_turns_it_on_and_the_choice_is_kept() {
+    let home = scratch("backup-switch");
+    let switch_path = home
+        .join("settings")
+        .join("users")
+        .join("S-1-5-21-1.backup.json");
+    let switch = Arc::new(
+        FileSwitch::for_user(&home.join("settings"), "S-1-5-21-1").expect("a user's switch"),
+    );
+    assert_eq!(switch.path(), switch_path.as_path());
+    assert_eq!(
+        switch.enabled(),
+        Ok(false),
+        "off when nothing was ever chosen"
+    );
+    let folder = home.join("DSA Backup");
+    let backup = Arc::new(
+        BackupService::new(folder.clone(), Arc::new(MemoryKeys::default()), "PC")
+            .with_switch(switch.clone()),
+    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    backup.attach(Arc::new(move |body| tx.send(body).unwrap()));
+    for body in [
+        Body::BackupUpload(control::BackupUpload {
+            request_id: 1,
+            offset: 0,
+            data: vec![1; 10],
+        }),
+        Body::BackupQuery(control::BackupQuery { request_id: 2 }),
+    ] {
+        assert!(backup.guest_message(body));
+        match rx.recv_timeout(WAIT).unwrap() {
+            Body::BackupAnswer(answer) => {
+                assert_eq!(answer.status, BackupStatus::NotAvailable as i32)
+            }
+            Body::BackupContents(contents) => {
+                assert_eq!(contents.status, BackupStatus::NotAvailable as i32)
+            }
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+    assert!(backup
+        .use_recovery_key(&recovery_key(&Secret::generate().unwrap()))
+        .is_err());
+    assert!(!folder.exists(), "nothing is made while backup is off");
+    assert!(!switch_path.exists(), "asking is not choosing");
+
+    backup.set_enabled(true, false).unwrap();
+    assert!(
+        backup.set_enabled(true, true).is_err(),
+        "deleting goes with turning off"
+    );
+    let again = BackupService::new(folder.clone(), Arc::new(MemoryKeys::default()), "PC")
+        .with_switch(Arc::new(FileSwitch::new(&switch_path)));
+    assert!(again.enabled(), "the choice outlives the service");
     let _ = std::fs::remove_dir_all(&home);
 }
 
@@ -637,6 +813,7 @@ fn fr36_a_backup_folder_moved_to_another_computer_reads_with_its_recovery_key() 
     let folder = home.join("DSA Backup");
     let here: Arc<dyn HostKeyStore> = Arc::new(MemoryKeys::default());
     let backup = Arc::new(BackupService::new(folder.clone(), here, "FIRST-PC"));
+    backup.set_enabled(true, false).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     backup.attach(Arc::new(move |body| tx.send(body).unwrap()));
     let data = b"settings that move with the folder".to_vec();
@@ -662,6 +839,7 @@ fn fr36_a_backup_folder_moved_to_another_computer_reads_with_its_recovery_key() 
     let key = backup.recovery_key().expect("a recovery key");
 
     let elsewhere = BackupService::new(folder.clone(), Arc::new(MemoryKeys::default()), "SECOND");
+    elsewhere.set_enabled(true, false).unwrap();
     assert!(elsewhere.contents().is_err(), "no key, no backup");
     let wrong = recovery_key(&Secret::generate().unwrap());
     assert!(
@@ -684,7 +862,7 @@ fn fr36_a_backup_is_refused_without_a_credential_store() {
         Arc::new(NoKeyStore("the keyring is locked".into())),
         "PC",
     );
-    let report = backup.report();
+    let report = backup.set_enabled(true, false).unwrap();
     assert!(!report.available);
     assert!(report.problem.contains("the keyring is locked"));
     let (tx, rx) = std::sync::mpsc::channel();
@@ -729,6 +907,7 @@ fn fr36_a_backup_folder_is_used_only_with_its_owners_rights() {
             }),
         ),
     );
+    backup.set_enabled(true, false).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     backup.attach(Arc::new(move |body| tx.send(body).unwrap()));
     assert!(
@@ -764,7 +943,7 @@ fn fr36_a_backup_folder_is_used_only_with_its_owners_rights() {
                 Err("the user's identity was refused".to_string())
             })),
     );
-    let report = refused.report();
+    let report = refused.set_enabled(true, false).unwrap();
     assert!(!report.available);
     assert!(report.problem.contains("the user's identity was refused"));
     let (tx, rx) = std::sync::mpsc::channel();
@@ -796,6 +975,7 @@ fn fr36_an_upload_out_of_order_or_short_is_not_kept() {
         Arc::new(MemoryKeys::default()),
         "PC",
     ));
+    backup.set_enabled(true, false).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     backup.attach(Arc::new(move |body| tx.send(body).unwrap()));
     let answer = |body: Body| {
@@ -989,12 +1169,92 @@ fn ask(
     )
 }
 
+/// The TPM of a [`FakeHost`].
+#[derive(Clone)]
+enum FakeTpm {
+    /// None, or turned off in the firmware.
+    Absent,
+    /// It works; the text names it, and a clear gives it another name.
+    Working(&'static str),
+    /// Locked out after too many wrong authorizations.
+    LockedOut,
+}
+
+/// A computer for the KeyMint root key: a credential store bound to its user, and a TPM that
+/// can be there, gone, locked out or cleared.
+struct FakeHost {
+    computer: &'static str,
+    user: &'static str,
+    tpm: Mutex<FakeTpm>,
+}
+
+impl FakeHost {
+    fn new(computer: &'static str, user: &'static str, tpm: FakeTpm) -> Arc<FakeHost> {
+        Arc::new(FakeHost {
+            computer,
+            user,
+            tpm: Mutex::new(tpm),
+        })
+    }
+
+    fn set_tpm(&self, tpm: FakeTpm) {
+        *self.tpm.lock().unwrap() = tpm;
+    }
+}
+
+impl SealerSource for FakeHost {
+    fn hardware(&self, _: KeyPurpose) -> Hardware {
+        match self.tpm.lock().unwrap().clone() {
+            FakeTpm::Working(id) => {
+                Hardware::Usable(BoundSealer::tpm(self.computer, self.user, id))
+            }
+            FakeTpm::Absent => Hardware::Unusable("this computer has no TPM".into()),
+            FakeTpm::LockedOut => Hardware::Unusable("the TPM is locked out".into()),
+        }
+    }
+    fn fallback(&self, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        Ok(BoundSealer::new(self.computer, self.user))
+    }
+    fn named(&self, name: &str, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        match (name, self.tpm.lock().unwrap().clone()) {
+            ("test-bound", _) => Ok(BoundSealer::new(self.computer, self.user)),
+            ("test-tpm", FakeTpm::Working(id)) => {
+                Ok(BoundSealer::tpm(self.computer, self.user, id))
+            }
+            ("test-tpm", FakeTpm::LockedOut) => Err(KeyError::Unavailable(
+                "the TPM is locked out; it opens again once the lockout ends".into(),
+            )),
+            ("test-tpm", FakeTpm::Absent) => Err(KeyError::Unreadable(
+                "the TPM that sealed it is turned off or gone".into(),
+            )),
+            (other, _) => Err(KeyError::Unreadable(format!("unknown sealer {other}"))),
+        }
+    }
+}
+
+/// Stops the session's Android if it runs, starts it again, and asks for this boot's root key.
+fn boot_and_ask(
+    session: &Session,
+    connector: &mut MemoryConnector,
+    key_connector: &mut MemoryConnector,
+    launcher: &FakeLauncher,
+) -> Result<Vec<u8>, String> {
+    if session.state() != SessionState::Stopped {
+        session.stop();
+        assert!(session.wait_for(SessionState::Stopped, WAIT));
+    }
+    session.start();
+    let _agent = connect_agent(connector, launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    ask(key_connector, &launcher.secret()).expect("the handshake passes")
+}
+
 #[test]
 fn fr36_keymint_root_key_is_sealed_by_the_host() {
     let dir = scratch("keymint");
-    let alice: Arc<dyn HostKeyStore> = Arc::new(SealedFileStore::new(
+    let alice: Arc<dyn HostKeyStore> = Arc::new(SealedKeys::new(
         dir.join("alice"),
-        BoundSealer::new("PC-1", "alice"),
+        FakeHost::new("PC-1", "alice", FakeTpm::Working("tpm-1")),
     ));
     let launcher = FakeLauncher::default();
     let (session, mut connector) = session_with(launcher.clone());
@@ -1020,8 +1280,17 @@ fn fr36_keymint_root_key_is_sealed_by_the_host() {
         "a second request in the same boot gets nothing"
     );
 
-    // The host keeps it sealed: no file holds it in the clear.
+    // The host keeps it sealed, by the computer's TPM since it has one that works: no file
+    // holds it in the clear, and the settings app and dsa status can say what sealed it.
     assert!(!contains(&all_bytes(&dir), &key));
+    let state = session
+        .keymint_key_state()
+        .expect("the session keeps a root key");
+    let protection = state.protection.expect("a key is kept");
+    assert!(protection.hardware, "{protection:?}");
+    assert_eq!(protection.sealed_by, "tpm");
+    assert!(protection.fallback_reason.is_empty());
+    assert!(state.problem.is_empty(), "{}", state.problem);
 
     // The next boot gets the same key, so the keys KeyMint wrapped under it still open.
     drop(agent);
@@ -1046,9 +1315,9 @@ fn fr36_keymint_root_key_is_sealed_by_the_host() {
             there.join("keymint-root-key.sealed"),
         )
         .unwrap();
-        let store: Arc<dyn HostKeyStore> = Arc::new(SealedFileStore::new(
+        let store: Arc<dyn HostKeyStore> = Arc::new(SealedKeys::new(
             &there,
-            BoundSealer::new(computer, user),
+            FakeHost::new(computer, user, FakeTpm::Working("tpm-1")),
         ));
         let refused = root_key(&store).expect_err("it opens only where it was sealed");
         assert!(refused.contains("cannot be opened"), "{refused}");
@@ -1067,6 +1336,109 @@ fn fr36_keymint_root_key_is_sealed_by_the_host() {
         .unwrap()
         .expect_err("no key");
     assert!(none.contains("no keyring"), "{none}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A computer without a usable TPM keeps the root key with the credential store and says so;
+/// once a TPM works the same key is sealed by it; a TPM locked out or cleared leaves it
+/// refused with the reason, never replaced, until a data reset lets it go.
+#[test]
+fn fr36_keymint_root_key_falls_back_without_a_tpm_and_moves_to_one() {
+    let dir = scratch("keymint-fallback");
+    let host = FakeHost::new("PC-1", "alice", FakeTpm::Absent);
+    let keys = Arc::new(SealedKeys::new(dir.join("alice"), host.clone()));
+    let file = keys.path(KeyPurpose::KeyMintRoot);
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone());
+    let (key_listener, mut key_connector) = memory::pair();
+    session.set_keymint_keys(keys.clone());
+    session.serve_keymint_port(Box::new(key_listener), "dsa-host keymint test");
+    let session = Arc::new(session);
+    assert_eq!(
+        session.keymint_key_state().unwrap().protection,
+        None,
+        "no key before the first start"
+    );
+
+    // No TPM: the credential store keeps it, and the reason is told.
+    let first = boot_and_ask(&session, &mut connector, &mut key_connector, &launcher)
+        .expect("a root key without a TPM");
+    let protection = session.keymint_key_state().unwrap().protection.unwrap();
+    assert!(!protection.hardware);
+    assert_eq!(protection.sealed_by, "dpapi");
+    assert_eq!(protection.fallback_reason, "this computer has no TPM");
+    assert_eq!(
+        sealer_of(&std::fs::read(&file).unwrap()),
+        Some("test-bound")
+    );
+
+    // The TPM is turned on: the same key, sealed by it now.
+    host.set_tpm(FakeTpm::Working("tpm-1"));
+    let moved = boot_and_ask(&session, &mut connector, &mut key_connector, &launcher)
+        .expect("the same root key");
+    assert_eq!(
+        moved, first,
+        "nothing Android wrapped under the key is lost"
+    );
+    assert_eq!(sealer_of(&std::fs::read(&file).unwrap()), Some("test-tpm"));
+    assert!(
+        session
+            .keymint_key_state()
+            .unwrap()
+            .protection
+            .unwrap()
+            .hardware
+    );
+
+    // Locked out: no key this boot, with the reason, and the key kept as it was.
+    let sealed = std::fs::read(&file).unwrap();
+    host.set_tpm(FakeTpm::LockedOut);
+    let why = boot_and_ask(&session, &mut connector, &mut key_connector, &launcher)
+        .expect_err("no key while the TPM is locked out");
+    assert!(why.contains("locked out"), "{why}");
+    assert!(session
+        .keymint_key_state()
+        .unwrap()
+        .problem
+        .contains("locked out"));
+    assert_eq!(std::fs::read(&file).unwrap(), sealed);
+    host.set_tpm(FakeTpm::Working("tpm-1"));
+    assert_eq!(
+        boot_and_ask(&session, &mut connector, &mut key_connector, &launcher).unwrap(),
+        first,
+        "the lockout ended and the key opens again"
+    );
+    assert!(session.keymint_key_state().unwrap().problem.is_empty());
+
+    // Cleared: the TPM is another one now. The key is refused, with what to do, and never
+    // replaced by a new one.
+    host.set_tpm(FakeTpm::Working("tpm-2"));
+    let why = boot_and_ask(&session, &mut connector, &mut key_connector, &launcher)
+        .expect_err("a cleared TPM opens nothing it sealed");
+    assert!(why.contains("cannot be opened"), "{why}");
+    let problem = session.keymint_key_state().unwrap().problem;
+    assert!(problem.contains("dsa reset-data"), "{problem}");
+    assert_eq!(std::fs::read(&file).unwrap(), sealed, "never replaced");
+
+    // A data reset leaves nothing wrapped under the old key, so it goes, and the next start
+    // has a new one, sealed by the TPM there is now.
+    let disk = dir.join("userdata.vhdx");
+    std::fs::write(&disk, b"the old disk").unwrap();
+    let reset = {
+        let disk = disk.clone();
+        TemplateDataDisk::new(
+            Box::new(move |_user: &str| Ok(disk.clone())),
+            Box::new(|path: &Path| {
+                std::fs::write(path, b"a fresh disk").map_err(|e| e.to_string())
+            }),
+        )
+    };
+    reset_user_data(&*session, &reset, "alice", WAIT).expect("the data is reset");
+    assert!(!file.exists(), "the old root key went with the old data");
+    let fresh = boot_and_ask(&session, &mut connector, &mut key_connector, &launcher)
+        .expect("a new root key after the reset");
+    assert_ne!(fresh, first);
+    assert_eq!(sealer_of(&std::fs::read(&file).unwrap()), Some("test-tpm"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
