@@ -15,7 +15,8 @@
 //! the Google apps; [`image_store`] reads and removes the image of either that an older host
 //! left on the user's disk, which the host moves onto its add-on disk.
 //! [`gamepad`] makes the host's game controllers gamepad devices of the guest.
-//! [`reclaim`] decides when the guest drops its caches so the host gets the memory back.
+//! [`reclaim`] decides when the guest drops its caches so the host gets the memory back, and
+//! [`pageout`] pages an idle app out to zram again soon after something woke it.
 //! [`pressure`] tells the host how much memory the guest has, so the VM grows and shrinks.
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
 //! the guest's diagnostics; [`logd`] reads logd for it.
@@ -34,6 +35,7 @@ pub mod gapps;
 pub mod image_store;
 pub mod logbridge;
 pub mod logd;
+pub mod pageout;
 pub mod pressure;
 pub mod reclaim;
 pub mod router;

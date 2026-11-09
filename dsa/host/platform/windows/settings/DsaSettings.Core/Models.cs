@@ -219,7 +219,23 @@ public enum HostRole
 
 public sealed record HostProcess(HostRole Role, uint Pid, ulong WorkingSetKb, ulong PrivateKb);
 
-public sealed record GuestProcess(int Pid, string Name, ulong PssKb, ulong SwapPssKb);
+/// <summary>What some of Android's processes cost, in KiB: their pages in memory, and their
+/// share of compressed memory (zram) at the compression zram measures. PSS counts what is
+/// swapped out at its size before compression, which is two or three times this.
+/// <see cref="CompressedKb"/> is null when the compression could not be measured.</summary>
+public sealed record MemoryShare(ulong ResidentKb, ulong? CompressedKb)
+{
+    public ulong TotalKb => ResidentKb + (CompressedKb ?? 0);
+}
+
+/// <summary>One of Android's largest processes. <see cref="Cost"/> is what it costs, null from
+/// a service that does not say; <see cref="GooglePlay"/> says it belongs to Google Play
+/// services.</summary>
+public sealed record GuestProcess(int Pid, string Name, ulong PssKb, ulong SwapPssKb,
+    bool GooglePlay = false, MemoryShare? Cost = null);
+
+/// <summary>Every process of Google Play services together: how many, and what they cost.</summary>
+public sealed record GooglePlayMemory(uint Processes, MemoryShare Cost);
 
 public sealed record GuestMemoryInfo(
     ulong TotalKb,
@@ -237,7 +253,9 @@ public sealed record GuestMemoryInfo(
     ulong TotalPssKb,
     IReadOnlyList<GuestProcess> TopProcesses,
     ulong AgeSeconds,
-    GuestKernelInfo? Kernel = null);
+    GuestKernelInfo? Kernel = null,
+    MemoryShare? Apps = null,
+    GooglePlayMemory? GooglePlay = null);
 
 /// <summary>What the guest kernel holds for itself, as <c>dsa memory</c> reports it, in KiB.
 /// <see cref="ReservedAtBootKb"/> is null when the guest could not count its memory.</summary>

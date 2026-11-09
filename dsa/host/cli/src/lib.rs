@@ -2516,9 +2516,32 @@ pub fn describe_settings(report: &SettingsReport) -> String {
 
 /// The memory report as one JSON object. Sizes in KiB; `guest` is null until Android has
 /// reported, and `age_seconds` says how old its report is.
+///
+/// `apps`, `google_play` and each process's `resident_kb` and `compressed_kb` are what the
+/// processes cost: resident pages, plus what zram holds of theirs at its measured compression,
+/// never the swapped-out size their PSS counts. `compressed_kb` is null when zram's
+/// compression could not be measured. `google_play` is null while none of its processes runs.
 pub fn memory_json(memory: &MemorySnapshot) -> Value {
+    fn share(share: &dsa_host_core::memory::MemoryShare) -> Value {
+        json!({
+            "resident_kb": share.resident_kb,
+            "compressed_kb": share.compressed_kb,
+            "swapped_out_kb": share.swapped_out_kb,
+            "total_kb": share.total_kb(),
+        })
+    }
     let guest = memory.guest.as_ref().map(|report| {
         let guest = &report.memory;
+        let google_play = guest
+            .google_play
+            .zip(guest.google_play_share())
+            .map(|(play, cost)| {
+                let mut value = share(&cost);
+                value["processes"] = json!(play.processes);
+                value["pss_kb"] = json!(play.pss_kb);
+                value["swap_pss_kb"] = json!(play.swap_pss_kb);
+                value
+            });
         json!({
             "mem_total_kb": guest.mem_total_kb,
             "mem_free_kb": guest.mem_free_kb,
@@ -2533,6 +2556,9 @@ pub fn memory_json(memory: &MemorySnapshot) -> Value {
             "zram_original_kb": guest.zram_original_kb,
             "zram_used_kb": guest.zram_used_kb,
             "total_pss_kb": guest.total_pss_kb,
+            "swap_pss_kb": guest.swap_pss_kb,
+            "apps": share(&guest.apps()),
+            "google_play": google_play,
             "kernel": {
                 "slab_unreclaimable_kb": guest.kernel.slab_unreclaimable_kb,
                 "kernel_stack_kb": guest.kernel.kernel_stack_kb,
@@ -2546,12 +2572,18 @@ pub fn memory_json(memory: &MemorySnapshot) -> Value {
                 "reserved_at_boot_kb": guest.reserved_at_boot_kb(),
             },
             "age_seconds": report.age.as_secs(),
-            "top_processes": guest.top_processes.iter().map(|p| json!({
-                "pid": p.pid,
-                "name": p.name,
-                "pss_kb": p.pss_kb,
-                "swap_pss_kb": p.swap_pss_kb,
-            })).collect::<Vec<_>>(),
+            "top_processes": guest.top_processes.iter().map(|p| {
+                let cost = guest.process_share(p);
+                json!({
+                    "pid": p.pid,
+                    "name": p.name,
+                    "pss_kb": p.pss_kb,
+                    "swap_pss_kb": p.swap_pss_kb,
+                    "google_play": p.google_play,
+                    "resident_kb": cost.resident_kb,
+                    "compressed_kb": cost.compressed_kb,
+                })
+            }).collect::<Vec<_>>(),
         })
     });
     json!({

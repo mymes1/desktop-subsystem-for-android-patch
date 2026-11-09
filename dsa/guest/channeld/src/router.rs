@@ -567,6 +567,17 @@ impl Router {
             .count()
     }
 
+    /// The packages that have an app task open, shown or minimized: their processes are the
+    /// user's to see, and their memory is left where it is.
+    pub fn task_packages(&self) -> std::collections::BTreeSet<String> {
+        self.lock()
+            .tasks
+            .values()
+            .filter(|task| task.updated.is_some() && !task.package.is_empty())
+            .map(|task| task.package.clone())
+            .collect()
+    }
+
     /// How many app tasks are in use: none while the host shows no window for them, when
     /// they are as idle as if they were closed.
     pub fn tasks_in_use(&self) -> usize {

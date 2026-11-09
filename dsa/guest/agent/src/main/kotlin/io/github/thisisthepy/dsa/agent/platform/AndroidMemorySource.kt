@@ -2,6 +2,9 @@ package io.github.thisisthepy.dsa.agent.platform
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import io.github.thisisthepy.dsa.agent.memory.GooglePlayPackages
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
 import io.github.thisisthepy.dsa.agent.memory.ProcessPss
 import java.io.File
@@ -15,6 +18,27 @@ import java.io.File
  */
 class AndroidMemorySource(context: Context) : MemorySource {
     private val activities = context.getSystemService(ActivityManager::class.java)
+    private val packages = context.packageManager
+
+    // Whether each package is one of the Google apps. The answer does not change while Android
+    // runs: an update keeps a system app a system app.
+    private val googlePlay = HashMap<String, Boolean>()
+
+    private fun isGooglePlay(packageName: String): Boolean = googlePlay.getOrPut(packageName) {
+        val info = try {
+            packages.getApplicationInfo(packageName, 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        }
+        val system = info != null && (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        // init mounts the Google apps image at GAPPS_IMAGE and lays it over the system's
+        // folders, so an app it brought is at the same path under the image. An update moves
+        // the APK to /data, and then the name decides.
+        val fromImage = info?.sourceDir?.let { path ->
+            runCatching { File(GAPPS_IMAGE + path).exists() }.getOrDefault(false)
+        } ?: false
+        GooglePlayPackages.isGooglePlay(packageName, system, fromImage)
+    }
 
     override fun meminfo(): String = File("/proc/meminfo").readText()
 
@@ -49,7 +73,15 @@ class AndroidMemorySource(context: Context) : MemorySource {
                 pssKb = memory.totalPss.toLong(),
                 // "summary.total-swap" is the swapped-out PSS in KiB, as dumpsys meminfo shows it.
                 swapPssKb = memory.getMemoryStat("summary.total-swap")?.toLongOrNull() ?: 0,
+                // A process runs the code of each package in its list; the Google apps share
+                // their processes (gms, gsf), so any one of them makes it Google Play's.
+                googlePlay = running[i].pkgList.orEmpty().any(::isGooglePlay),
             )
         }
+    }
+
+    private companion object {
+        /** Where init mounts the Google apps image before laying it over the system. */
+        const val GAPPS_IMAGE = "/mnt/dsa-gapps"
     }
 }

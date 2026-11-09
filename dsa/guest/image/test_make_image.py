@@ -26,6 +26,32 @@ SPEC.loader.exec_module(make_image)
 
 
 class ImageLayoutTests(unittest.TestCase):
+    def test_nfr2_the_cached_process_limit_applies_where_android_17_reads_it(self):
+        # Android 17 takes the limit from the device configuration, which the agent sets, and
+        # else from config_customizedMaxCachedProcesses (1024), never from the global setting.
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS["config_customizedMaxCachedProcesses"], 8)
+        self.assertIn("integer/config_customizedMaxCachedProcesses", make_image.framework_overlaid())
+        with tempfile.TemporaryDirectory() as tmp:
+            make_image.framework_overlay_sources(Path(tmp))
+            values = (Path(tmp) / "res/values/dsa.xml").read_text()
+        self.assertIn('<integer name="config_customizedMaxCachedProcesses">8</integer>', values)
+        agent = Path(__file__).parent.parent / "agent"
+        source = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/platform/AndroidAppProcesses.kt").read_text()
+        self.assertIn('NAMESPACE = "activity_manager"', source)
+        self.assertIn("DeviceConfig.setProperty(NAMESPACE, MAX_CACHED", source)
+        closed = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/memory/ClosedApps.kt").read_text()
+        self.assertIn("const val MAX_CACHED_PROCESSES = 8", closed)
+
+    def test_nfr2_channeld_may_page_a_woken_app_out_to_zram(self):
+        # process_madvise on another user's process asks CAP_SYS_NICE and CAP_SYS_PTRACE: init
+        # gives the daemon both, and the policy lets it use them, or every pageout is refused.
+        here = Path(__file__).parent
+        cil = (here / "sepolicy" / "channeld.cil").read_text()
+        self.assertRegex(cil, r"\(allow dsa_channeld self \(capability \([^)]*\bsys_nice\b[^)]*\bsys_ptrace\b")
+        rc = (here / "dsa-channeld.rc").read_text()
+        service = rc[rc.index("service dsa_channeld"):rc.index("on property:sys.boot_completed=1")]
+        self.assertIn("capabilities SYS_NICE SYS_PTRACE", service)
+
     def test_fr21_channeld_may_clear_the_pstore_records_the_host_collected(self):
         # init leaves /sys/fs/pstore read only to system; the daemon makes it writable to
         # itself and unlinks each collected record, which erases it from the pstore disk.
@@ -43,9 +69,14 @@ class ImageLayoutTests(unittest.TestCase):
         "/proc/meminfo": [("proc_meminfo", "file")],
         "/proc/pressure/memory": [("proc_pressure_mem", "file")],
         "/proc/vmstat": [("proc_vmstat", "file")],
-        # The process listing and each app process's /proc/<pid>/cmdline.
-        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
+        # The process listing, the owner of each process's entry (an app's or not), and each
+        # app process's /proc/<pid>/cmdline.
+        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "dir", "getattr"), ("appdomain", "file")],
         "/proc/{}/cmdline": [("appdomain", "file")],
+        # The pageout after an app wakes: its importance, its memory and its address space.
+        "/proc/{pid}/status": [("appdomain", "file")],
+        "/proc/{}/oom_score_adj": [("appdomain", "file")],
+        "/proc/{}/maps": [("appdomain", "file")],
         # The kernel's su guard on securityfs, which only the elevation helper writes.
         "/sys/kernel/security/dsa_su/control": [
             ("securityfs", "dir"),
@@ -2503,6 +2534,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
             + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
+            + "".join(context + "\n" for context in make_image.GAPPS_COMPILE_PROPERTY_CONTEXTS.values())
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
 
@@ -3145,7 +3177,10 @@ class TouchLatencyTests(unittest.TestCase):
     def test_fr5_a_press_on_a_list_row_is_not_held_back_by_the_tap_timeout(self):
         # Settings' rows sit in a RecyclerView, so View.onTouchEvent posts setPressed after
         # config_tapTimeoutMillis (100 ms) instead of calling it on the press.
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS, {"config_tapTimeoutMillis": 0})
+        self.assertEqual(
+            make_image.FRAMEWORK_OVERLAY_INTEGERS,
+            {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8},
+        )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_image.framework_overlay_sources(root / "src")
@@ -3187,6 +3222,22 @@ class TouchLatencyTests(unittest.TestCase):
             values = (root / "src/res/values/dsa.xml").read_text()
         self.assertIn('<bool name="config_checkWallpaperAtBoot">false</bool>', values)
         self.assertIn("bool/config_checkWallpaperAtBoot", make_image.framework_overlaid())
+
+    def test_nfr2_google_play_services_is_the_device_configurator(self):
+        # WRITE_DEVICE_CONFIG is a "configurator" permission. With no configurator named, Play
+        # services' platform configurator could never write the flags it syncs, and retried
+        # about once a second after boot (its RETRY_UPDATE alarm).
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS,
+                         {"config_deviceConfiguratorPackageName": "com.google.android.gms"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = ET.fromstring((root / "src/res/values/dsa.xml").read_text())
+        strings = {item.get("name"): item.text for item in values.findall("string")}
+        self.assertEqual(strings["config_deviceConfiguratorPackageName"], "com.google.android.gms")
+        # The overlay is checked against the image's framework-res, so a renamed resource fails
+        # the image check instead of leaving Play services without the permission again.
+        self.assertIn("string/config_deviceConfiguratorPackageName", make_image.framework_overlaid())
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"
@@ -5904,7 +5955,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertEqual([c for c in commands if c.startswith("mount ")], [mount], trigger)
             # Mounted before it is laid over: init runs one trigger's actions in file order.
             self.assertLess(triggers.index(trigger), triggers.index(on), trigger)
-        section = dict(sections)[on]
+        # Every action of that trigger, in order: the overlays, and anything else done then.
+        section = [command for trigger, commands in sections if trigger == on for command in commands]
         for folder in make_image.gapps_folders():
             point = "/" + folder.lower()
             self.assertIn(
@@ -6024,6 +6076,171 @@ class ArmTranslationImageTests(unittest.TestCase):
         self.assertNotIn("stops Android at every boot", good)
         self.assertIn("x86_64 is not the ABI apps are installed for first", arm_first)
         self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
+
+
+# What `cmd package art dump` prints for an updated Google Play services (Android 17), with the
+# filter and reason of its base APK left to fill in.
+ART_DUMP = """[{package}]
+  path: /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/base.apk
+    x86_64: [status={status}] [reason={reason}] [primary-abi]
+      [location is /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/oat/x86_64/base.odex]
+    used by other apps: [com.google.android.youtube (isa=x86_64)]
+  path: /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/split_AdsDynamite_installtime.apk
+    x86_64: [status=verify] [reason=vdex-dm] [primary-abi]
+      [location is primary.vdex mapped directly in memory]
+"""
+
+
+class GoogleAppsCompileTests(unittest.TestCase):
+    """Google Play services and the Play Store compiled again without an app image, which each
+    of their processes loaded into memory of its own: 25-30 MiB each for
+    com.google.android.gms and com.google.android.gms.unstable on a PC."""
+
+    RC = Path(__file__).with_name("dsa-gapps.rc")
+    SCRIPT = Path(__file__).with_name("gapps-compile.sh")
+
+    @staticmethod
+    def _sections(rc):
+        """Each action and service of an init script: its first line and its command lines."""
+        sections = []
+        for line in rc.splitlines():
+            if line.startswith(("on ", "service ")):
+                sections.append((line, []))
+            elif line.strip() and not line.lstrip().startswith("#") and sections:
+                sections[-1][1].append(line.strip())
+        return sections
+
+    def test_nfr2_init_runs_the_compile_as_the_shell_with_the_app_image_format_cleared(self):
+        sections = dict(self._sections(self.RC.read_text()))
+        service = sections["service dsa_gapps_compile /system/bin/sh /system/etc/dsa/gapps-compile.sh"]
+        self.assertIn("user shell", service)
+        self.assertIn("seclabel u:r:shell:s0", service)
+        self.assertIn("oneshot", service)
+        self.assertIn("disabled", service)
+        clear_and_start = ['setprop dalvik.vm.appimageformat ""', "start dsa_gapps_compile"]
+        # At each boot with the Google apps, and whenever the agent asks.
+        self.assertEqual(sections["on property:sys.boot_completed=1 && property:ro.boot.dsa.gapps=on"],
+                         clear_and_start)
+        self.assertEqual(sections[f"on property:{make_image.GAPPS_COMPILE_PROPERTY}=* && property:ro.boot.dsa.gapps=on"],
+                         clear_and_start)
+        # The build's format is kept before the first compile and put back after every one, with
+        # the image's own format should the keeping have failed.
+        self.assertIn(f"setprop {make_image.GAPPS_IMAGE_FORMAT_PROPERTY} ${{dalvik.vm.appimageformat}}",
+                      [command for line, commands in self._sections(self.RC.read_text())
+                       if line == "on post-fs-data && property:ro.boot.dsa.gapps=on" for command in commands])
+        self.assertEqual(sections["on property:init.svc.dsa_gapps_compile=stopped"],
+                         [f"setprop dalvik.vm.appimageformat ${{{make_image.GAPPS_IMAGE_FORMAT_PROPERTY}:-lz4}}"])
+
+    def test_nfr2_the_image_carries_the_script_its_properties_and_its_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read(make_image.GAPPS_COMPILE_SCRIPT), self.SCRIPT.read_bytes())
+                config = archive.read("META/filesystem_config.txt").decode()
+                contexts = archive.read(make_image.VENDOR_PROPERTY_CONTEXTS).decode().splitlines()
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        self.assertIn("system/etc/dsa/gapps-compile.sh 0 0 644 capabilities=0x0", config)
+        self.assertIn("vendor.dsa.gapps.compile u:object_r:dsa_gapps_compile_prop:s0 exact string", contexts)
+        self.assertIn("vendor.dsa.gapps.appimageformat u:object_r:dsa_gapps_compile_prop:s0 exact string", contexts)
+        # The agent asks; nothing else but init sets the property, and the script reads it.
+        setters = set(re.findall(r"\(allow (\S+) dsa_gapps_compile_prop \(property_service \(set\)\)\)", policy))
+        self.assertEqual(setters, {"platform_app"})
+        self.assertIn("(allow shell dsa_gapps_compile_prop (file (read open getattr map)))", policy)
+
+    def _run_script(self, packages, request_changes=0):
+        """Runs gapps-compile.sh with a fake `cmd`, `getprop` and `log`. `packages` maps each
+        package to its base APK's (filter, reason), or None when it is not installed. Returns
+        the compile commands it ran and what it logged."""
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        state = root / "state"
+        state.mkdir()
+        for package, status in packages.items():
+            if status is not None:
+                (state / package).write_text(ART_DUMP.format(package=package, status=status[0], reason=status[1]))
+        (state / "request").write_text("1")
+        (state / "changes").write_text(str(request_changes))
+        dump = ART_DUMP.replace("{status}", "speed-profile").replace("{reason}", "cmdline")
+        (state / "compiled-dump").write_text(dump)
+        scripts = {
+            # The package manager: ART's dump of a package, and a compile, which ART records with
+            # the reason "cmdline".
+            "cmd": f"""#!/bin/sh
+s={state}
+if [ "$1 $2 $3" = "package art dump" ]; then cat "$s/$4" 2>/dev/null; exit 0; fi
+if [ "$1 $2" = "package compile" ]; then
+    echo "$*" >> "$s/compiles"
+    for last; do :; done
+    sed "s/{{package}}/$last/g" "$s/compiled-dump" > "$s/$last"
+    exit 0
+fi
+exit 1
+""",
+            # The request property, which changes `changes` times while the script runs.
+            "getprop": f"""#!/bin/sh
+s={state}
+n=$(cat "$s/request")
+c=$(cat "$s/changes")
+if [ "$c" -gt 0 ] && [ -f "$s/compiles" ]; then echo $((n + 1)) > "$s/request"; echo $((c - 1)) > "$s/changes"; fi
+cat "$s/request"
+""",
+            "log": f"""#!/bin/sh
+echo "$*" >> {state}/log
+""",
+        }
+        for name, text in scripts.items():
+            (bin_dir / name).write_text(text)
+            (bin_dir / name).chmod(0o755)
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
+        subprocess.run(["sh", str(self.SCRIPT)], env=env, check=True, timeout=30)
+        compiles = (state / "compiles").read_text().splitlines() if (state / "compiles").exists() else []
+        log = (state / "log").read_text() if (state / "log").exists() else ""
+        return compiles, log
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_package_compiled_with_an_app_image_is_compiled_again_and_only_once(self):
+        compiles, log = self._run_script({
+            "com.google.android.gms": ("speed-profile", "install-dm"),
+            "com.android.vending": ("speed-profile", "bg-dexopt"),
+        })
+        self.assertEqual(compiles, [
+            "package compile -m speed-profile -p PRIORITY_BACKGROUND -f com.google.android.gms",
+            "package compile -m speed-profile -p PRIORITY_BACKGROUND -f com.android.vending",
+        ])
+        self.assertIn("compiled com.google.android.gms without an app image: speed-profile cmdline", log)
+        self.assertIn("checked com.google.android.gms com.android.vending", log)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_package_without_an_app_image_is_left_alone(self):
+        # Its own earlier compile, a compile without a profile, and Google Play not installed.
+        for packages in [
+            {"com.google.android.gms": ("speed-profile", "cmdline")},
+            {"com.google.android.gms": ("verify", "boot-after-ota"), "com.android.vending": ("verify", "install")},
+            {"com.google.android.gms": None, "com.android.vending": None},
+        ]:
+            compiles, log = self._run_script(packages)
+            self.assertEqual(compiles, [], packages)
+            self.assertIn("checked", log)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_request_that_comes_while_the_script_runs_is_not_lost(self):
+        # The agent asks again while the first compile runs: the script looks once more, and
+        # finds both packages already compiled by it.
+        compiles, log = self._run_script({"com.google.android.gms": ("speed-profile", "install")},
+                                         request_changes=1)
+        self.assertEqual(len(compiles), 1)
+        self.assertEqual(log.count("checked"), 1)
 
 
 class DefaultArmTranslationTests(unittest.TestCase):

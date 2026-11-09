@@ -66,8 +66,17 @@ msgstr "프로세스 {0}, 전용 {1}"
 msgid "Apps and system"
 msgstr "앱과 시스템"
 
-msgid "The apps and the system server, counted by their share (PSS)."
-msgstr "앱과 시스템 서버가 차지한 몫(PSS)입니다."
+msgid "{0} in memory, {1} compressed"
+msgstr "메모리 {0}, 압축 메모리 {1}"
+
+msgid "Google Play services"
+msgstr "Google Play 서비스"
+
+msgid "The Google apps you installed, {0} processes: {1}"
+msgstr "설치한 Google 앱, 프로세스 {0}개: {1}"
+
+msgid "unknown"
+msgstr "알 수 없음"
 
 msgid "Cache"
 msgstr "캐시"
@@ -125,6 +134,9 @@ msgstr "받은 {0} 중 커널 코드, 페이지 구조체, 버퍼. 연속 영역
 
 msgid "Process {0}"
 msgstr "프로세스 {0}"
+
+msgid "Process {0}, Google Play services"
+msgstr "프로세스 {0}, Google Play 서비스"
 
 msgid "Automatic"
 msgstr "자동"

@@ -1096,8 +1096,10 @@ def framework_overlay_sources(dest, record=None):
                        for name, value in FRAMEWORK_OVERLAY_INTEGERS.items())
     booleans = "".join(f'    <bool name="{name}">{str(value).lower()}</bool>\n'
                        for name, value in FRAMEWORK_OVERLAY_BOOLEANS.items())
+    strings = "".join(f'    <string name="{name}" translatable="false">{value}</string>\n'
+                      for name, value in FRAMEWORK_OVERLAY_STRINGS.items())
     (dest / "res/values/dsa.xml").write_text(
-        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}</resources>\n')
+        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}{strings}</resources>\n')
     write_overlay_files(dest, {
         "res/values/dsa_design.xml": resources_xml(
             [f'<color name="{name}">{value}</color>' for name, value in DESIGN_COLORS.items()]
@@ -1115,6 +1117,7 @@ def framework_overlaid():
     map, so the framework matches its resources to its own by name."""
     return ([f"integer/{name}" for name in FRAMEWORK_OVERLAY_INTEGERS]
             + [f"bool/{name}" for name in FRAMEWORK_OVERLAY_BOOLEANS]
+            + [f"string/{name}" for name in FRAMEWORK_OVERLAY_STRINGS]
             + FRAMEWORK_DESIGN_OVERLAID)
 
 
@@ -3329,10 +3332,23 @@ GAPPS_IMPORT = "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop"
 # partition's properties are read after every other partition's, so this wins over an
 # "enforce" set anywhere else.
 GAPPS_PRIVAPP_LOG = "ro.control_privapp_permissions=log"
+# Google Play services and the Play Store compiled again without an app image, which each of
+# their processes would otherwise load into memory of its own (dsa-gapps.rc). The script runs
+# as the shell; the agent asks for it through the first property, and init keeps the build's
+# app image format in the second while it clears it for the compile (sepolicy/gapps.cil).
+GAPPS_COMPILE_SCRIPT = "SYSTEM/etc/dsa/gapps-compile.sh"
+GAPPS_COMPILE_PACKAGES = ["com.google.android.gms", "com.android.vending"]
+GAPPS_COMPILE_PROPERTY = "vendor.dsa.gapps.compile"
+GAPPS_IMAGE_FORMAT_PROPERTY = "vendor.dsa.gapps.appimageformat"
+GAPPS_COMPILE_PROPERTY_CONTEXTS = {
+    GAPPS_COMPILE_PROPERTY: f"{GAPPS_COMPILE_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+    GAPPS_IMAGE_FORMAT_PROPERTY: f"{GAPPS_IMAGE_FORMAT_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+}
 GAPPS_FS_CONFIG = [
     "system/etc/init/dsa-gapps.rc 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-off.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/gapps-compile.sh 0 0 644 capabilities=0x0",
 ]
 
 
@@ -3466,7 +3482,13 @@ AGENT_APKCERTS = (
 # that becomes a scroll shows the row pressed until it moves past the touch slop.
 FRAMEWORK_OVERLAY_APK = "VENDOR/overlay/DsaFrameworkOverlay.apk"
 FRAMEWORK_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.framework"
-FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
+# The activity manager's cached process limit when the device configuration sets none: 8, not
+# Android 17's 1024, so a phone's dozens of cached processes do not hold memory the host would
+# get back. Android 17 reads the limit from the device configuration
+# (activity_manager/max_cached_processes, which the agent sets to the same value) and else from
+# this resource; the global setting activity_manager_constants no longer carries it. The
+# resource holds from the first boot, before the agent runs.
+FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8}
 # The user's aspect ratio override of an app, which Settings offers on the app's aspect ratio
 # page and a task window's system menu opens. The window manager applies the override only
 # while this flag is on, and Android leaves it off unless a device turns it on, as large
@@ -3481,6 +3503,16 @@ FRAMEWORK_OVERLAY_BOOLEANS = {
     "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
     "config_checkWallpaperAtBoot": False,
 }
+# The device configurator: the package the framework lets write DeviceConfig, Android's server
+# flags (WRITE_DEVICE_CONFIG and WRITE_ALLOWLISTED_DEVICE_CONFIG are "configurator"
+# permissions). On a phone with Google Play it is Google Play services, whose platform
+# configurator copies the flags Google serves into DeviceConfig. The image is built from AOSP,
+# which names no configurator ("Configurator: none" in `dumpsys package`), so Play services was
+# never granted those permissions and retried: one boot on a PC fired its RETRY_UPDATE alarm 720
+# times in about ten minutes, each a run of the Play services process. Without Google Play
+# no package has this name, and the framework takes the configurator to be absent, as before.
+GAPPS_CONFIGURATOR = "com.google.android.gms"
+FRAMEWORK_OVERLAY_STRINGS = {"config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'
@@ -3872,6 +3904,9 @@ def update_vendor_property_contexts(text):
         lines.append(FILES_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ROOT_ELEVATION_PROPERTY] for line in lines):
         lines.append(ROOT_ELEVATION_PROPERTY_CONTEXT)
+    for name, context in GAPPS_COMPILE_PROPERTY_CONTEXTS.items():
+        if not any(line.split()[:1] == [name] for line in lines):
+            lines.append(context)
     return "\n".join(lines) + "\n"
 
 
@@ -4712,6 +4747,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(ADDONS_RC, (HERE / "dsa-addons.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
+        zout.writestr(GAPPS_COMPILE_SCRIPT, (HERE / "gapps-compile.sh").read_bytes())
         for folder in added_gapps_folders:
             zout.writestr(directory_entry(folder + "/"), b"")
         if VENDOR_PROPERTY_CONTEXTS not in names:
