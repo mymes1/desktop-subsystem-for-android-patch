@@ -267,6 +267,7 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
                 LayerFill fill;
                 fill.frame = layer.frame;
                 fill.drawn = layer.client || device;
+                fill.alpha = layer.alpha;
                 if (device && !layer.client) {
                     fill.bufferWidth = layer.buffer.width;
                     fill.bufferHeight = layer.buffer.height;
@@ -274,6 +275,11 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
                     fill.cropHeight = layer.crop.bottom - layer.crop.top;
                 }
                 fills.push_back(fill);
+            }
+            // A task whose app shows nothing any more is ending: its window keeps its last
+            // frame and closes with it, rather than emptying first.
+            if (leavesLastFrameUndrawn(fills, output.posted)) {
+                continue;
             }
             const ResizeGate::Decision decision = mResizeGate.decide(
                 task.task, output.onHost ? output.width : 0, output.onHost ? output.height : 0,

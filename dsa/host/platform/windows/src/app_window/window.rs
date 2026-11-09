@@ -1509,13 +1509,8 @@ impl Ui {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&task_id);
-        if let Some(presenter) = presenter {
-            presenter.close();
-        }
-        if let Some(hwnd) = self.open.remove(&task_id) {
-            // SAFETY: a window of this thread.
-            unsafe { DestroyWindow(hwnd) };
-        }
+        let hwnd = self.open.remove(&task_id);
+        close_whole(&mut ClosingTask { presenter, hwnd });
     }
 
     unsafe fn open_window(&mut self, task_id: i32, title: &str, size: (u32, u32), focused: bool) {
@@ -1698,9 +1693,104 @@ impl Ui {
     }
 }
 
+/// The steps of closing a task window, which [`close_whole`] takes in order.
+trait ClosingWindow {
+    /// No more frames are shown in the window; the one it shows stays in it.
+    fn stop_frames(&mut self);
+    /// The window leaves the screen. Windows plays its close animation on the window as it
+    /// is now, with its content still in it.
+    fn destroy(&mut self);
+    /// What the window showed is let go: its swapchain, its surfaces and the newest frame.
+    fn release_content(&mut self);
+}
+
+/// Closes a task window as one piece, as Windows closes its own: the window is destroyed
+/// with its last frame still in it, and what it showed is let go only once it is gone.
+/// Letting the content go first left an empty frame on the screen, and only that frame
+/// played the close animation.
+fn close_whole(window: &mut impl ClosingWindow) {
+    window.stop_frames();
+    window.destroy();
+    window.release_content();
+}
+
+/// A task window being closed: its presenter and its window, either of which may be missing
+/// (a window that could not show frames has no presenter).
+struct ClosingTask {
+    presenter: Option<Arc<WindowPresenter>>,
+    hwnd: Option<HWND>,
+}
+
+impl ClosingWindow for ClosingTask {
+    fn stop_frames(&mut self) {
+        if let Some(presenter) = &self.presenter {
+            presenter.close();
+        }
+    }
+
+    fn destroy(&mut self) {
+        if let Some(hwnd) = self.hwnd.take() {
+            // SAFETY: a window of this thread.
+            unsafe { DestroyWindow(hwnd) };
+        }
+    }
+
+    fn release_content(&mut self) {
+        if let Some(presenter) = self.presenter.take() {
+            presenter.release();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A task window that records what is done to it, and what it showed when it left the
+    /// screen.
+    struct FakeWindow {
+        steps: Vec<&'static str>,
+        content_attached: bool,
+        frames_flowing: bool,
+        /// Whether the content was attached, and frames still came, when it was destroyed.
+        destroyed: Option<(bool, bool)>,
+    }
+
+    impl ClosingWindow for FakeWindow {
+        fn stop_frames(&mut self) {
+            self.steps.push("stop_frames");
+            self.frames_flowing = false;
+        }
+
+        fn destroy(&mut self) {
+            self.steps.push("destroy");
+            self.destroyed = Some((self.content_attached, self.frames_flowing));
+        }
+
+        fn release_content(&mut self) {
+            self.steps.push("release_content");
+            self.content_attached = false;
+        }
+    }
+
+    #[test]
+    fn fr3_content_stays_attached_until_the_window_is_gone() {
+        let mut window = FakeWindow {
+            steps: Vec::new(),
+            content_attached: true,
+            frames_flowing: true,
+            destroyed: None,
+        };
+        close_whole(&mut window);
+        // The window left the screen with its last frame still in it and no newer frame on
+        // the way, so the close animation shows the whole window; its content went after.
+        assert_eq!(window.destroyed, Some((true, false)));
+        assert_eq!(
+            window.steps,
+            vec!["stop_frames", "destroy", "release_content"]
+        );
+        assert!(!window.content_attached);
+    }
 
     #[test]
     fn fr3_a_command_whose_wake_up_cannot_be_posted_does_not_end_the_windows() {
