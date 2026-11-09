@@ -11,11 +11,18 @@
 //! every few seconds while Android runs ([`recorded_refresh`]): the guest's display refreshes
 //! at that rate, or at 60 Hz while energy saver is on. Without that record the guest keeps the
 //! rate it boots with.
+//!
+//! And they record the main monitor's DPI, which the service reads when it starts the VM
+//! ([`recorded_density`]): Android starts at the density a window on that monitor gives its
+//! task, so the apps that open there are never asked for another one right after they start.
+//! Without that record Android starts at the density of a 100% monitor.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use dsa_host_core::guest_display::{display_for, parse_record, record_text};
+use dsa_host_core::guest_display::{
+    boot_density, density_record_text, display_for, parse_density_record, parse_record, record_text,
+};
 use dsa_host_core::guest_refresh;
 
 /// More than any real record.
@@ -72,6 +79,35 @@ pub fn write_refresh_record(local_app_data: &Path, hz: u32) -> std::io::Result<(
     std::fs::rename(&partial, &path)
 }
 
+/// Where the main monitor's DPI is recorded, below a user's local application data.
+pub fn density_record_path(local_app_data: &Path) -> PathBuf {
+    crate::paths::UserRoot::in_local_app_data(local_app_data).monitor_density()
+}
+
+/// The density Android starts at for the main monitor recorded below `local_app_data`: that
+/// monitor's, or a 100% monitor's when there is no record.
+pub fn recorded_density(local_app_data: &Path) -> u32 {
+    let dpi = std::fs::File::open(density_record_path(local_app_data))
+        .ok()
+        .and_then(|file| {
+            let mut text = String::new();
+            file.take(MAX_RECORD_BYTES).read_to_string(&mut text).ok()?;
+            parse_density_record(&text)
+        });
+    boot_density(dpi)
+}
+
+/// Writes the main monitor's DPI whole, so the service never reads half of a record.
+pub fn write_density_record(local_app_data: &Path, dpi: u32) -> std::io::Result<()> {
+    let path = density_record_path(local_app_data);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let partial = path.with_extension("txt.new");
+    std::fs::write(&partial, density_record_text(dpi))?;
+    std::fs::rename(&partial, &path)
+}
+
 /// A monitor's rate from `DEVMODEW.dmDisplayFrequency`, in hertz: 0 and 1 mean the hardware's
 /// default rate, which Windows does not name, so they are 0 (unknown).
 pub fn frequency_hz(display_frequency: u32) -> u32 {
@@ -83,36 +119,56 @@ pub fn frequency_hz(display_frequency: u32) -> u32 {
 }
 
 #[cfg(windows)]
-pub use session::{current, current_refresh, record_current, system_density, MonitorWatch};
+pub use session::{
+    current, current_refresh, main_monitor_dpi, record_current, system_density, MonitorWatch,
+};
 
 #[cfg(windows)]
 mod session {
     use std::path::PathBuf;
 
-    use windows_sys::Win32::Foundation::{LPARAM, RECT, TRUE};
+    use windows_sys::Win32::Foundation::{LPARAM, POINT, RECT, TRUE};
     use windows_sys::Win32::Graphics::Gdi::{
-        EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, DEVMODEW,
+        EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, MonitorFromPoint, DEVMODEW,
         ENUM_CURRENT_SETTINGS, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW,
+        MONITOR_DEFAULTTOPRIMARY,
     };
     use windows_sys::Win32::UI::HiDpi::{
-        GetDpiForSystem, SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        GetDpiForMonitor, GetDpiForSystem, SetThreadDpiAwarenessContext,
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, MDT_EFFECTIVE_DPI,
     };
 
-    use super::{frequency_hz, write_record, write_refresh_record};
+    use super::{frequency_hz, write_density_record, write_record, write_refresh_record};
 
-    /// The density apps draw at on this session's main monitor, as a task's window gives it:
-    /// 160 at a scale of 100%, 240 at 150%. A split-APK bundle's density split is chosen for
-    /// it.
-    pub fn system_density() -> u32 {
-        // SAFETY: no pointers. A thread that is not DPI aware would be told 96 whatever the
-        // scale, so it asks as a per-monitor aware one, and goes back.
-        let dpi = unsafe {
+    /// The DPI of this session's main monitor (96 is 100%) as it is now. Windows' system DPI
+    /// is the main monitor's as of sign-in, so it stands in only when the monitor's own cannot
+    /// be read.
+    pub fn main_monitor_dpi() -> u32 {
+        // SAFETY: plain calls; the out pointers are locals. A thread that is not DPI aware
+        // would be told 96 whatever the scale, so it asks as a per-monitor aware one, and goes
+        // back.
+        unsafe {
             let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-            let dpi = GetDpiForSystem();
+            let primary = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
+            let (mut x, mut y) = (0u32, 0u32);
+            let dpi = if !primary.is_null()
+                && GetDpiForMonitor(primary, MDT_EFFECTIVE_DPI, &mut x, &mut y) == 0
+                && x > 0
+            {
+                x
+            } else {
+                GetDpiForSystem()
+            };
             SetThreadDpiAwarenessContext(previous);
             dpi
-        };
-        dsa_host_core::compositor::window_sizing::density_for_dpi(dpi)
+        }
+    }
+
+    /// The density apps draw at on this session's main monitor, as a task's window gives it:
+    /// 160 at a scale of 100%, 240 at 150%. Android starts at it, and a split-APK bundle's
+    /// density split is chosen for it.
+    pub fn system_density() -> u32 {
+        dsa_host_core::guest_display::boot_density(Some(main_monitor_dpi()))
     }
 
     unsafe extern "system" fn add_monitor(
@@ -203,17 +259,19 @@ mod session {
 
     /// Records this session's monitors for the service.
     pub fn record_current() -> Result<(), String> {
-        record(&current(), current_refresh())
+        record(&current(), current_refresh(), main_monitor_dpi())
     }
 
     /// A session that reports no monitors (no desktop, as over SSH) leaves the last record,
     /// and one that names no monitor's rate leaves the last rate.
-    fn record(monitors: &[(u32, u32)], refresh: Option<u32>) -> Result<(), String> {
+    fn record(monitors: &[(u32, u32)], refresh: Option<u32>, dpi: u32) -> Result<(), String> {
         if monitors.is_empty() {
             return Ok(());
         }
         let dir = local_app_data().ok_or("this user's local application data folder is unknown")?;
         write_record(&dir, monitors).map_err(|e| format!("recording the monitors: {e}"))?;
+        write_density_record(&dir, dpi)
+            .map_err(|e| format!("recording the main monitor's scale: {e}"))?;
         match refresh {
             Some(hz) => write_refresh_record(&dir, hz)
                 .map_err(|e| format!("recording the monitors' refresh rate: {e}")),
@@ -221,8 +279,9 @@ mod session {
         }
     }
 
-    /// The monitors' sizes and the fastest one's refresh rate, as last recorded.
-    type Recorded = (Vec<(u32, u32)>, Option<u32>);
+    /// The monitors' sizes, the fastest one's refresh rate and the main one's DPI, as last
+    /// recorded.
+    type Recorded = (Vec<(u32, u32)>, Option<u32>, u32);
 
     /// Keeps the record up to date from a loop that runs anyway.
     #[derive(Default)]
@@ -231,14 +290,14 @@ mod session {
     }
 
     impl MonitorWatch {
-        /// Records the monitors if they or the fastest one's refresh rate changed since the
-        /// last call. A failure is returned once, not on every call.
+        /// Records the monitors if they, the fastest one's refresh rate or the main one's
+        /// scale changed since the last call. A failure is returned once, not on every call.
         pub fn check(&mut self) -> Result<(), String> {
-            let now = (current(), current_refresh());
+            let now = (current(), current_refresh(), main_monitor_dpi());
             if self.last.as_ref() == Some(&now) {
                 return Ok(());
             }
-            let result = record(&now.0, now.1);
+            let result = record(&now.0, now.1, now.2);
             self.last = Some(now);
             result
         }

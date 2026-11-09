@@ -50,7 +50,7 @@ use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
 use dsa_host_core::compositor::window_sizing::{
-    maximized_position, min_client_size, rescaled_rect,
+    maximized_position, min_client_size, rescaled_rect, to_task_size,
 };
 use dsa_host_core::input::InputEvent;
 use windows_sys::Win32::Foundation::{
@@ -262,6 +262,10 @@ struct WindowData {
     /// The smallest size Android gives the task, as the window manager last said, for
     /// WM_GETMINMAXINFO.
     min_client: Cell<Option<(u32, u32)>>,
+    /// How large the window shows each of its task's pixels (window pixels per task pixels),
+    /// as the window manager last said: 1:1 unless the task keeps its density on a monitor of
+    /// another scale.
+    scale: Cell<(u32, u32)>,
     /// Whether the window reports its size: not until it has been given the task's.
     reporting: Cell<bool>,
     /// Whether the window is minimized, so a restore is reported once.
@@ -1344,9 +1348,11 @@ impl Ui {
                     } => {
                         if let Some(hwnd) = self.open.get(&task_id) {
                             if let Some(data) = window_data(*hwnd) {
-                                data.pointer.task_resized((width, height));
+                                // The window's size; the task's is that at the window's scale.
+                                let task = to_task_size((width, height), data.scale.get());
+                                data.pointer.task_resized(task);
                                 if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
-                                    tree.task_resized((width, height));
+                                    tree.task_resized(task);
                                 }
                             }
                             apply_size(*hwnd, (width, height));
@@ -1359,6 +1365,7 @@ impl Ui {
                         height,
                         max,
                         min,
+                        scale,
                     } => {
                         if let Some(data) =
                             self.open.get(&task_id).and_then(|hwnd| window_data(*hwnd))
@@ -1369,6 +1376,11 @@ impl Ui {
                             }
                             data.max_client.set(max);
                             data.min_client.set(min);
+                            if data.scale.replace(scale) != scale {
+                                if let Some(presenter) = data.presenter.borrow().as_deref() {
+                                    presenter.set_scale(scale);
+                                }
+                            }
                         }
                     }
                     ToHost::ImeCursor { task_id, cursor } => {
@@ -1531,6 +1543,7 @@ impl Ui {
             )),
             max_client: Cell::new(None),
             min_client: Cell::new(None),
+            scale: Cell::new((1, 1)),
             reporting: Cell::new(false),
             minimized: Cell::new(false),
             caption: CaptionWindow::new(

@@ -563,12 +563,19 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         ("ro.hardware.vulkan", "ranchu"),
         ("ro.hardware.gralloc", "minigbm"),
         ("ro.cpuvulkan.version", "0"),
-        # SurfaceFlinger falls back to 213 dpi without it, and the host's 160 then
-        # relaunches every app right after it opens.
-        ("ro.sf.lcd_density", str(make_image.DISPLAY_DPI)),
     ]:
         if f"{prop}={val}" not in props and f"{prop}={val}" not in vendor_props:
             problems.append(f"neither SYSTEM nor VENDOR build.prop sets {prop}={val}")
+    # The density every app starts at is the boot's (the user's main monitor's). A build.prop
+    # value comes before the script that sets it and would hold every boot at one density.
+    for name, text in [("SYSTEM", props), ("VENDOR", vendor_props)]:
+        if any(line.startswith("ro.sf.lcd_density=") for line in text.splitlines()):
+            problems.append(f"{name} build.prop sets ro.sf.lcd_density, so the boot's density "
+                            "never reaches SurfaceFlinger")
+    if make_image.DISPLAY_RC not in names or "setprop ro.sf.lcd_density ${ro.boot.lcd_density" not in \
+            z.read(make_image.DISPLAY_RC).decode(errors="replace"):
+        problems.append(f"{make_image.DISPLAY_RC} does not set ro.sf.lcd_density from the boot, so "
+                        "SurfaceFlinger falls back to 213 dpi and every app is relaunched after it opens")
 
     # init reads these as vendor_init, which may not set the user build's properties.
     for name in sorted(make_image.VENDOR_PROP_FILES & set(names)):
@@ -659,7 +666,8 @@ for boot_arg in [
     if boot_arg not in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line does not contain {boot_arg}")
 # The freeform display DSA's composer sets up, and nothing left over from Cuttlefish's.
-for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_height=", "androidboot.dsa.display_dpi="]:
+for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_height=", "androidboot.dsa.display_dpi=",
+                 "androidboot.lcd_density="]:
     if boot_arg not in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line does not contain {boot_arg}")
 for boot_arg in ["androidboot.hardware.hwcomposer.mode=", "androidboot.vendor.apex.com.android.hardware.graphics.composer="]:

@@ -9,6 +9,15 @@
 //! The guest has one display, but density is set per task, so two windows on monitors of
 //! different scales each get the density of their own monitor.
 //!
+//! That is the app way ([`ScalingMode::App`]). Android relaunches an activity whose density
+//! changes unless the app says it handles that itself, and no app may be restarted for a
+//! move, so a task whose app does not say so keeps its density, and its window shows its
+//! frames scaled to the new monitor instead ([`ScalingMode::System`]): a task at 160 dpi on a
+//! 200% monitor is shown at two window pixels per task pixel, the same size to the eye. The
+//! window's client area is then in window pixels and the task's size in task pixels, and
+//! [`WindowSizing::scale`] turns one into the other. A window opens at 1:1, and takes a scale
+//! from the first monitor scale it reports.
+//!
 //! [`WindowSizing`] holds one window's side of this. The platform tells it what the user and
 //! the window manager did (a new client size, a new monitor scale, a drag starting or
 //! ending) and carries out what it returns: a request to the guest, or a size the window
@@ -17,7 +26,74 @@
 use std::time::{Duration, Instant};
 
 use super::task_windows::{fit_within, window_size};
-use crate::tasks::{Task, TaskRequest};
+pub use crate::app_windows::ScalingMode;
+use crate::tasks::{Bounds, Task, TaskRequest};
+
+/// How large a window shows each of its task's pixels: `.0` window pixels per `.1` task
+/// pixels, in lowest terms. `(1, 1)` is 1:1.
+pub type Scale = (u32, u32);
+
+/// The scale that shows a task drawn at `task_density` the size a task drawn at
+/// `window_density` would be: `window_density` over `task_density`, in lowest terms. 1:1 when
+/// either is unknown (0).
+pub fn scale_between(window_density: u32, task_density: u32) -> Scale {
+    if window_density == 0 || task_density == 0 || window_density == task_density {
+        return (1, 1);
+    }
+    let (mut a, mut b) = (window_density, task_density);
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    (window_density / a, task_density / a)
+}
+
+/// `length` task pixels in window pixels at `scale`, rounded to the nearest.
+pub fn to_window_length(length: u32, (numerator, denominator): Scale) -> u32 {
+    if numerator == denominator || denominator == 0 {
+        return length;
+    }
+    ((u64::from(length) * u64::from(numerator) + u64::from(denominator) / 2)
+        / u64::from(denominator))
+    .min(u64::from(u32::MAX)) as u32
+}
+
+/// `length` window pixels in task pixels at `scale`, rounded to the nearest.
+pub fn to_task_length(length: u32, (numerator, denominator): Scale) -> u32 {
+    to_window_length(length, (denominator, numerator))
+}
+
+/// `size` task pixels in window pixels at `scale`, never smaller than one pixel.
+pub fn to_window_size((width, height): (u32, u32), scale: Scale) -> (u32, u32) {
+    (
+        to_window_length(width, scale).max(1),
+        to_window_length(height, scale).max(1),
+    )
+}
+
+/// `size` window pixels in task pixels at `scale`, never smaller than one pixel.
+pub fn to_task_size((width, height): (u32, u32), scale: Scale) -> (u32, u32) {
+    (
+        to_task_length(width, scale).max(1),
+        to_task_length(height, scale).max(1),
+    )
+}
+
+/// A rectangle in task pixels in window pixels at `scale`.
+pub fn to_window_rect(rect: Bounds, (numerator, denominator): Scale) -> Bounds {
+    let at = |v: i32| -> i32 {
+        if numerator == denominator || denominator == 0 {
+            return v;
+        }
+        let scaled = (i64::from(v) * i64::from(numerator)).div_euclid(i64::from(denominator));
+        scaled.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+    };
+    Bounds {
+        left: at(rect.left),
+        top: at(rect.top),
+        right: at(rect.right),
+        bottom: at(rect.bottom),
+    }
+}
 
 /// A monitor's dots per inch at a scale of 100%.
 pub const BASE_DPI: u32 = 96;
@@ -146,11 +222,26 @@ pub struct WindowSizing {
     reconfigure: bool,
     /// Whether the window has said which monitor scale it opened on.
     placed: bool,
+    /// Whether the task follows its window's monitor's density or keeps its own.
+    mode: ScalingMode,
+    /// The density of the window's monitor, once the window has said; 0 until then.
+    monitor_density: u32,
+    /// The density the task keeps while its window is scaled ([`ScalingMode::System`]); 0
+    /// while it follows its monitor. Fixed while the window is scaled, so a report of the task
+    /// in between cannot change the scale under the window.
+    kept_density: u32,
 }
 
 impl WindowSizing {
-    /// A window that shows `task` at the size the guest gave it.
+    /// A window that shows `task` at the size the guest gave it, whose task follows its
+    /// monitor's density.
     pub fn new(task: &Task) -> WindowSizing {
+        WindowSizing::with_mode(task, ScalingMode::App)
+    }
+
+    /// A window that shows `task` at the size the guest gave it, following its monitor's
+    /// scale in `mode`.
+    pub fn with_mode(task: &Task, mode: ScalingMode) -> WindowSizing {
         let guest = window_size(&task.bounds);
         WindowSizing {
             task_id: task.task_id,
@@ -165,13 +256,51 @@ impl WindowSizing {
             resized_live: false,
             reconfigure: false,
             placed: false,
+            mode,
+            monitor_density: 0,
+            kept_density: match mode {
+                ScalingMode::App => 0,
+                ScalingMode::System => task.density_dpi,
+            },
         }
     }
 
-    /// The largest client area the window may have: what the guest can draw. A larger window
-    /// could never match a frame of the task.
+    /// How the task follows its window's monitor now.
+    pub fn mode(&self) -> ScalingMode {
+        self.mode
+    }
+
+    /// The task's app now says it does (`App`) or does not handle a change of density, as the
+    /// user's choice for it reads. A window being scaled goes on being scaled until its scale is
+    /// 1:1 again, since giving the task its monitor's density then would change it. A task that
+    /// stops following its monitor keeps the density it has.
+    pub fn set_mode(&mut self, mode: ScalingMode) {
+        match mode {
+            ScalingMode::System if self.mode == ScalingMode::App => {
+                self.mode = ScalingMode::System;
+                self.kept_density = self.asked_density.unwrap_or(self.density);
+            }
+            ScalingMode::App if self.mode == ScalingMode::System && self.scale() == (1, 1) => {
+                self.mode = ScalingMode::App;
+                self.kept_density = 0;
+            }
+            _ => {}
+        }
+    }
+
+    /// How large the window shows each of the task's pixels: 1:1 while the task follows its
+    /// monitor's density, else the monitor's density over the density the task keeps.
+    pub fn scale(&self) -> Scale {
+        match self.mode {
+            ScalingMode::App => (1, 1),
+            ScalingMode::System => scale_between(self.monitor_density, self.kept_density),
+        }
+    }
+
+    /// The largest client area the window may have: what the guest can draw, at the window's
+    /// scale. A larger window could never match a frame of the task.
     pub fn max_client_size(&self) -> Option<(u32, u32)> {
-        self.max
+        self.max.map(|max| to_window_size(max, self.scale()))
     }
 
     /// The task's size as the guest last reported it.
@@ -189,10 +318,13 @@ impl WindowSizing {
     /// the density request, if the task draws at another density. The window then reports
     /// its client size through [`view_resized`](Self::view_resized), which asks the guest
     /// for that size.
+    ///
+    /// A task that keeps its density opens at the same size to the eye: its window shows it
+    /// scaled, and no density is asked for.
     pub fn opened(&mut self, dpi: u32) -> ((u32, u32), Option<TaskRequest>) {
         let request = self.dpi_changed(dpi);
         let size = rescale(self.guest, self.density, density_for_dpi(dpi));
-        let size = match self.max {
+        let size = match self.max_client_size() {
             Some(max) => fit_within(size, max),
             None => size,
         };
@@ -217,9 +349,15 @@ impl WindowSizing {
     }
 
     /// The task's size as the guest has it, which the window measures its pointer input in,
-    /// and the largest and smallest sizes the guest gives it, which the window keeps to.
+    /// and the largest and smallest client areas the window keeps to: the sizes the guest
+    /// gives the task, at the window's scale.
     pub fn task_size(&self) -> TaskSize {
-        (self.guest, self.max, self.min)
+        let scale = self.scale();
+        (
+            self.guest,
+            self.max.map(|max| to_window_size(max, scale)),
+            self.min.map(|min| to_window_size(min, scale)),
+        )
     }
 
     /// The window is now on a monitor of `dpi`. Returns the request that has the task draw
@@ -227,8 +365,16 @@ impl WindowSizing {
     /// window to keep its size to the eye, and that new size follows through
     /// [`view_resized`](Self::view_resized), so the guest gets the density first and the
     /// size right after it.
+    ///
+    /// A task that keeps its density ([`ScalingMode::System`]) is asked for nothing: its
+    /// window takes the scale between the monitor's density and the task's, and the new size
+    /// the window manager gives the window is the task's own size at that scale.
     pub fn dpi_changed(&mut self, dpi: u32) -> Option<TaskRequest> {
         let wanted = density_for_dpi(dpi);
+        self.monitor_density = wanted;
+        if self.mode == ScalingMode::System {
+            return None;
+        }
         if self.asked_density.unwrap_or(self.density) == wanted {
             return None;
         }
@@ -258,7 +404,7 @@ impl WindowSizing {
             return None;
         }
         self.view = view;
-        let size = clamp_size(view, self.max);
+        let size = clamp_size(to_task_size(view, self.scale()), self.max);
         let current = self.asked.map(|(size, _)| size).unwrap_or(self.guest);
         if size == current {
             return None;
@@ -330,7 +476,7 @@ impl WindowSizing {
             }
             return None;
         }
-        let size = clamp_size(self.view, self.max);
+        let size = clamp_size(to_task_size(self.view, self.scale()), self.max);
         // A task that has the size already reports the same bounds after it is
         // reconfigured, if it reports at all, so there is nothing to wait for.
         self.asked = (size != self.guest).then_some((size, now));
@@ -348,6 +494,10 @@ impl WindowSizing {
     pub fn guest_updated(&mut self, task: &Task) -> Option<(u32, u32)> {
         let size = window_size(&task.bounds);
         self.density = task.density_dpi;
+        if self.mode == ScalingMode::System && self.kept_density == 0 {
+            // The agent could not read the density when the window opened.
+            self.kept_density = task.density_dpi;
+        }
         if let Some(max) = task.max_size() {
             self.max = Some(max);
         }
@@ -355,6 +505,7 @@ impl WindowSizing {
             self.min = Some(min);
         }
         let previous = std::mem::replace(&mut self.guest, size);
+        let shown = to_window_size(size, self.scale());
         match self.asked {
             Some((asked, _)) if asked == size => {
                 self.asked = None;
@@ -362,9 +513,9 @@ impl WindowSizing {
             }
             // Still on its way to the size last asked for.
             Some(_) => None,
-            None if size != previous && size != self.view && !self.dragging => {
-                self.view = size;
-                Some(size)
+            None if size != previous && shown != self.view && !self.dragging => {
+                self.view = shown;
+                Some(shown)
             }
             None => None,
         }
@@ -379,11 +530,12 @@ impl WindowSizing {
             return None;
         }
         self.asked = None;
-        if self.guest == self.view {
+        let shown = to_window_size(self.guest, self.scale());
+        if shown == self.view {
             return None;
         }
-        self.view = self.guest;
-        Some(self.guest)
+        self.view = shown;
+        Some(shown)
     }
 }
 
@@ -649,6 +801,37 @@ mod tests {
         declared.min_width = 800;
         sizing.guest_updated(&declared);
         assert_eq!(sizing.task_size().2, Some((800, 500)));
+    }
+
+    #[test]
+    fn fr4_a_task_that_keeps_its_density_is_shown_at_the_same_physical_size() {
+        assert_eq!(scale_between(320, 160), (2, 1));
+        assert_eq!(scale_between(240, 160), (3, 2));
+        assert_eq!(scale_between(160, 240), (2, 3));
+        assert_eq!(scale_between(0, 160), (1, 1));
+        assert_eq!(to_window_size((400, 300), (3, 2)), (600, 450));
+        assert_eq!(to_task_size((600, 450), (3, 2)), (400, 300));
+        let mut sizing = WindowSizing::with_mode(&task(400, 300, 160), ScalingMode::System);
+        // It opens on a 150% monitor: the same size to the eye, and no density asked for.
+        assert_eq!(sizing.dpi_reported(144), (Some((600, 450)), None));
+        assert_eq!(sizing.scale(), (3, 2));
+        assert_eq!(sizing.max_client_size(), Some((2880, 1620)));
+        assert_eq!(
+            sizing.task_size(),
+            ((400, 300), Some((2880, 1620)), None),
+            "the task keeps its size; the limits are the window's"
+        );
+        let now = Instant::now();
+        assert_eq!(sizing.view_resized((600, 450), now), None);
+        // A move to a 200% monitor asks nothing either.
+        assert_eq!(sizing.dpi_changed(192), None);
+        assert_eq!(sizing.scale(), (2, 1));
+        assert_eq!(sizing.view_resized((800, 600), now), None);
+        // The guest resizing the task on its own resizes the window at the scale.
+        assert_eq!(
+            sizing.guest_updated(&task(500, 300, 160)),
+            Some((1000, 600))
+        );
     }
 
     #[test]

@@ -210,6 +210,8 @@ fn fr30_window_settings_for_an_app_are_kept_and_reset_through_the_local_api() {
         package_name: "com.example.notes".into(),
         fixed_size: true,
         start_size_dp: Some((400, 700)),
+        // The DPI scaling choice crosses the local API and is stored with the rest.
+        dpi_scaling: dsa_host_core::app_windows::DpiScaling::System,
     };
     assert_eq!(
         client.set_app_window_settings(&notes).unwrap(),

@@ -2729,6 +2729,7 @@ fn fr30_dsa_app_window_is_parsed() {
             package: "com.example.notes".into(),
             fixed_size: Some(true),
             start_size: Some(Some((400, 700))),
+            dpi_scaling: None,
         })
     );
     assert_eq!(
@@ -2739,6 +2740,7 @@ fn fr30_dsa_app_window_is_parsed() {
             package: "com.example.notes".into(),
             fixed_size: None,
             start_size: Some(None),
+            dpi_scaling: None,
         })
     );
     assert_eq!(
@@ -2780,7 +2782,8 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
     let output = dsa(&endpoint, "app-window com.example.notes");
     assert_eq!(
         stdout(&output).trim(),
-        "com.example.notes: resizable, opens at 400 x 700 dp"
+        "com.example.notes: resizable, opens at 400 x 700 dp, scales its own way on another \
+         monitor"
     );
     let reset = json_of(&dsa(&endpoint, "app-window com.example.notes reset --json"));
     assert_eq!(reset["apps"][0]["start_size"], serde_json::Value::Null);
@@ -2793,6 +2796,93 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
         "{}",
         stderr(&refused)
     );
+}
+
+#[test]
+fn fr4_dsa_app_window_dpi_scaling_is_parsed() {
+    use dsa_cli::AppWindowAction;
+    use dsa_host_core::app_windows::DpiScaling;
+    for (name, scaling) in [
+        ("app", DpiScaling::App),
+        ("system", DpiScaling::System),
+        ("system-forced", DpiScaling::SystemForced),
+        ("AUTO", DpiScaling::Auto),
+    ] {
+        assert_eq!(
+            parse(&args(&format!(
+                "app-window com.example.notes --dpi-scaling {name}"
+            )))
+            .unwrap()
+            .app_window,
+            Some(AppWindowAction::Set {
+                package: "com.example.notes".into(),
+                fixed_size: None,
+                start_size: None,
+                dpi_scaling: Some(scaling),
+            })
+        );
+    }
+    // With the other settings in one call, as the settings apps send it.
+    assert_eq!(
+        parse(&args(
+            "app-window com.example.notes --fixed-size off --start-size auto --dpi-scaling system"
+        ))
+        .unwrap()
+        .app_window,
+        Some(AppWindowAction::Set {
+            package: "com.example.notes".into(),
+            fixed_size: Some(false),
+            start_size: Some(None),
+            dpi_scaling: Some(DpiScaling::System),
+        })
+    );
+    assert!(parse(&args("app-window com.example.notes --dpi-scaling enhanced")).is_err());
+    assert!(parse(&args("app-window com.example.notes --dpi-scaling")).is_err());
+    assert!(parse(&args("app-window --dpi-scaling app")).is_err());
+}
+
+#[test]
+fn fr4_dsa_app_window_sets_and_keeps_an_apps_dpi_scaling() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    // The forced way is stored but does not do what it says yet.
+    assert_eq!(none["system_forced_available"], false);
+    let set = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling system --json",
+    ));
+    assert_eq!(set["apps"][0]["dpi_scaling"], "system");
+    // Changing another setting keeps it.
+    let fixed = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --fixed-size on --json",
+    ));
+    assert_eq!(fixed["apps"][0]["dpi_scaling"], "system");
+    assert_eq!(fixed["apps"][0]["fixed_size"], true);
+    let output = dsa(&endpoint, "app-window com.example.notes");
+    assert_eq!(
+        stdout(&output).trim(),
+        "com.example.notes: fixed size, opens at the size Android gives it, is scaled by DSA on \
+         another monitor"
+    );
+    let forced = dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling system-forced",
+    );
+    assert!(
+        stdout(&forced).contains("not available yet"),
+        "{}",
+        stdout(&forced)
+    );
+    // Back to auto and resizable is the defaults: the entry goes.
+    let auto = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling auto --fixed-size off --json",
+    ));
+    assert_eq!(auto["apps"][0]["dpi_scaling"], "auto");
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    assert_eq!(none["apps"], serde_json::json!([]));
 }
 
 #[test]

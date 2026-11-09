@@ -452,13 +452,17 @@ MEMORY_PROPS = {
     "dalvik.vm.heapmaxfree": "8m",
 }
 
-# The density of the freeform display every task window lives on: the host's at 100% scale,
-# which the hwcomposer reports (ro.boot.dsa.display_dpi) and the host asks a task on such a
-# monitor to draw at. SurfaceFlinger takes the display's density from ro.sf.lcd_density
-# alone, and without it falls back to 213 dpi ("ro.sf.lcd_density must be defined as a build
-# property"): every app then started at 213 and the host's 160 a moment later, a density
-# change, which relaunches every activity that does not handle one itself. hello-vulkan was
-# destroyed before its first window that way and crashed in its own clean-up.
+# The density of the freeform display every task window lives on, by default: a 100% monitor's.
+# The host replaces it on the kernel command line at each boot with the density of the user's
+# main monitor (240 at 150%), the density a task window there asks its task to draw at. The
+# hwcomposer reports it (ro.boot.dsa.display_dpi) and SurfaceFlinger takes it from
+# ro.sf.lcd_density alone, which dsa-display.rc sets from androidboot.lcd_density. Without
+# ro.sf.lcd_density SurfaceFlinger falls back to 213 dpi ("ro.sf.lcd_density must be defined as
+# a build property"): every app then started at 213 and the host's density a moment later, a
+# density change, which relaunches every activity that does not handle one itself. hello-vulkan
+# was destroyed before its first window that way and crashed in its own clean-up. No build.prop
+# may set it: init reads them before any script, and the first value of a read-only property
+# stays, so a build.prop value would hold every boot at this default.
 DISPLAY_DPI = 160
 
 GRAPHICS_PROPS = {
@@ -466,8 +470,10 @@ GRAPHICS_PROPS = {
     "ro.hardware.vulkan": "ranchu",
     "ro.hardware.gralloc": "minigbm",
     "ro.cpuvulkan.version": "0",
-    "ro.sf.lcd_density": str(DISPLAY_DPI),
 }
+
+# Properties no build.prop may set, whatever the input build's files say: the boot sets them.
+BOOT_SET_PROPS = {"ro.sf.lcd_density"}
 
 # ro.vulkan.apex makes the Vulkan loader take Cuttlefish's driver from its APEX, which
 # reaches the host only through virtio-gpu or the goldfish pipe; empty, the loader takes
@@ -2486,7 +2492,8 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False, 
     out = []
     for line in text.splitlines():
         key = line.split("=", 1)[0]
-        if key in props_to_apply or key in DROPPED_PROPS or (vendor and key in VENDOR_FORBIDDEN_PROPS):
+        if (key in props_to_apply or key in DROPPED_PROPS or key in BOOT_SET_PROPS
+                or (vendor and key in VENDOR_FORBIDDEN_PROPS)):
             continue
         if key.endswith("build.type"):
             line = f"{key}=user"
@@ -2775,6 +2782,8 @@ DISPLAY_BOOTCONFIG = {
 
 # Turns on the zram swap fstab.dsa declares, and tunes the kernel for it.
 MEMORY_RC = "VENDOR/etc/init/dsa-memory.rc"
+# Sets the density SurfaceFlinger starts at from the boot's androidboot.lcd_density.
+DISPLAY_RC = "VENDOR/etc/init/dsa-display.rc"
 # Main thread timing for the input trace (dsa-trace.rc). A system script, so init itself runs it.
 TRACE_RC = "SYSTEM/etc/init/dsa-trace.rc"
 # Quiets the serial console once boot completes, so it carries only the kernel's early boot and
@@ -3835,6 +3844,7 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
         ("vendor/lib64/hw/vulkan.ranchu.so", "vendor/lib64/hw/vulkan.ranchu.so 0 0 644 capabilities=0x0"),
         ("vendor/lib64/libOpenglSystemCommon.so", "vendor/lib64/libOpenglSystemCommon.so 0 0 644 capabilities=0x0"),
         ("vendor/etc/init/dsa-memory.rc", "vendor/etc/init/dsa-memory.rc 0 0 644 capabilities=0x0"),
+        ("vendor/etc/init/dsa-display.rc", "vendor/etc/init/dsa-display.rc 0 0 644 capabilities=0x0"),
         ("vendor/etc/selinux/vendor_property_contexts",
          "vendor/etc/selinux/vendor_property_contexts 0 0 644 capabilities=0x0"),
         ("vendor/etc/permissions/dsa-unavailable-features.xml",
@@ -4573,6 +4583,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         for directory in FSTAB_DIRS:
             zout.writestr(directory + "fstab.dsa", fstab)
         zout.writestr(MEMORY_RC, (HERE / "dsa-memory.rc").read_bytes())
+        zout.writestr(DISPLAY_RC, (HERE / "dsa-display.rc").read_bytes())
         zout.writestr(TRACE_RC, (HERE / "dsa-trace.rc").read_bytes())
         zout.writestr(CONSOLE_RC, (HERE / "dsa-console.rc").read_bytes())
         zout.writestr(ARM_TRANSLATION_RC, (HERE / "dsa-arm-translation.rc").read_bytes())
@@ -5595,6 +5606,9 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
         "androidboot.hardware.vulkan=ranchu",
         "androidboot.hardware.gralloc=minigbm",
         *composer,
+        # The density SurfaceFlinger, and so every app, starts at (dsa-display.rc). The host
+        # replaces it with its main monitor's at each boot, as it does display_dpi.
+        f"androidboot.lcd_density={DISPLAY_DPI}",
         "androidboot.cpuvulkan.version=0",
         # The Cuttlefish lights HAL listens on this vsock port for a host client; without
         # one it binds port 0, which only privileged processes may, and aborts. No host

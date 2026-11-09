@@ -75,6 +75,9 @@ pub struct Task {
     pub caption_interactive: Vec<Bounds>,
     /// Whether the task is past its first screen, so it has somewhere to go back to.
     pub can_go_back: bool,
+    /// Whether the task's top activity says it handles a change of density itself, so
+    /// Android redraws it at a new density instead of relaunching it.
+    pub handles_density_change: bool,
 }
 
 /// The orientation a task's top activity asks for.

@@ -1089,6 +1089,7 @@ fn task_to_wire(task: Task) -> types::Task {
             })
             .collect(),
         can_go_back: task.can_go_back,
+        handles_density_change: task.handles_density_change,
     }
 }
 
@@ -1137,6 +1138,7 @@ fn task_from_wire(task: types::Task) -> Task {
             })
             .collect(),
         can_go_back: task.can_go_back,
+        handles_density_change: task.handles_density_change,
     }
 }
 

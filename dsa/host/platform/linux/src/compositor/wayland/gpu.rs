@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::compositor::window_sizing::{to_task_length, to_window_size};
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_shm::Format;
 use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
@@ -317,7 +318,8 @@ impl State {
             (window.model.has_caption()
                 && window.pip.is_none()
                 && band_probe_due(window.band_probed, now))
-            .then(|| window.model.caption_height())
+            // The band is the window's; the frame is read in its own pixels.
+            .then(|| to_task_length(window.model.caption_height(), window.model.frame_scale))
         });
         if let Some(band) = probe {
             let fill = self.gpu_band_fill(display_id, frame, band);
@@ -342,8 +344,11 @@ impl State {
             return;
         }
         window.last_gpu = Some((display_id, frame));
-        window.model.frame_shown((width, height));
-        let (logical_width, logical_height) = window.model.to_logical((width, height));
+        // A task that keeps its density on a monitor of another scale fills the window at the
+        // window's scale; the viewport scales it there.
+        let in_window = to_window_size((width, height), window.model.frame_scale);
+        window.model.frame_shown(in_window);
+        let (logical_width, logical_height) = window.model.to_logical(in_window);
         let in_pip = window.pip.is_some();
         let target = window.target().clone();
         let viewport = match window.pip.as_mut().and_then(|pip| pip.viewport()) {

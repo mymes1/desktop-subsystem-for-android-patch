@@ -22,7 +22,9 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
-use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
+use dsa_host_core::guest_display::{
+    boot_density, display_or_smallest, with_display_density, with_display_size,
+};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid};
 use dsa_host_core::power::PowerHub;
@@ -241,6 +243,12 @@ impl Planner {
             self.config.pstore,
         );
         let cmdline = with_display_size(&cmdline, display_or_smallest(None));
+        // Every app starts at the density of a window on the main display, so the windows that
+        // open there ask for no other.
+        let cmdline = with_display_density(
+            &cmdline,
+            boot_density(crate::display_power::main_display_dpi()),
+        );
         let settings = self.settings.get(&self.name).ok();
         let limit = settings.as_ref().map_or(0, |s| s.memory_limit_mb);
         let (start, max) = self.config.memory_mb(limit, total_memory_mb());

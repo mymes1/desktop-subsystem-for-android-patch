@@ -9,6 +9,10 @@
 //! capture comes back empty), must be what the app draws: a triangle of the app's colour, point
 //! up, in the middle of a grey background, and the background must change from one capture to
 //! the next, since both apps fade it on every frame. A blank, black or garbled window fails.
+//! Neither app may be relaunched after it opens (the events log's `wm_relaunch_activity` and
+//! `wm_relaunch_resume_activity`): Android starts at the density its window asks for, and
+//! hello-vulkan, which does not handle a change of density, was relaunched before it had a
+//! window when the two differed.
 //!
 //! The CTS subset runs through `dsa/graphics/verify/verify.py cts --software-vulkan`, the same
 //! command a PC runs, which keeps each case's result and the dEQP log in the test's folder.
@@ -460,9 +464,52 @@ fn check_app(
     // The app sets up its surface and draws its first frames.
     std::thread::sleep(Duration::from_secs(5));
     let result = read_twice(api, adb, dir, app, task.task_id, display);
+    // Android started at the density of the main monitor, which the task window asks for, so
+    // the app was never given another one right after it opened, and was never relaunched.
+    let relaunched = adb
+        .shell("logcat -d -b events -s wm_relaunch_resume_activity wm_relaunch_activity")
+        .map(|events| relaunches_of(&events, app.package))
+        .map_err(|why| format!("reading the activity relaunches: {why}"));
+    let density = adb
+        .shell("getprop ro.sf.lcd_density")
+        .map(|value| value.trim().to_string());
     let _ = api.close_task(task.task_id);
     let _ = adb.shell(&format!("am force-stop {}", app.package));
-    result
+    let relaunched = match relaunched {
+        Ok(lines) if lines.is_empty() => return result,
+        Ok(lines) => format!(
+            "{} was relaunched after it opened (Android started at {} dpi), so it lost its \
+             state and drew its first frames twice:\n{}",
+            app.package,
+            density.unwrap_or_else(|why| format!("an unknown density: {why}")),
+            lines.join("\n")
+        ),
+        Err(why) => why,
+    };
+    Err(match result {
+        Ok(_) => relaunched,
+        Err(window) => format!("{window}\n{relaunched}"),
+    })
+}
+
+/// The lines of an events log that say Android relaunched an activity of `package`.
+fn relaunches_of(events: &str, package: &str) -> Vec<String> {
+    events
+        .lines()
+        .filter(|line| line.contains("wm_relaunch") && line.contains(&format!("{package}/")))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn fr4_the_boot_check_finds_an_apps_relaunch_in_the_events_log() {
+    let events = "11-09 10:00:01.000  512  540 I wm_relaunch_resume_activity: \
+                  [0,1234,5,com.android.hellovk/.VulkanActivity,800]\n\
+                  11-09 10:00:02.000  512  540 I wm_relaunch_activity: \
+                  [0,99,6,com.example.other/.Main,800]\n";
+    assert_eq!(relaunches_of(events, "com.android.hellovk").len(), 1);
+    assert!(relaunches_of(events, "com.android.gl2jni").is_empty());
+    assert!(relaunches_of("", "com.android.hellovk").is_empty());
 }
 
 // ---------------------------------------------------------------- the CTS subset

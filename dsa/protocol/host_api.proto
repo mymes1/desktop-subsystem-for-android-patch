@@ -1076,6 +1076,9 @@ message Task {
   // Whether the task has somewhere to go back to (it is past its first activity), so the
   // window shows a back button in the place of the app's icon.
   bool can_go_back = 25;
+  // Whether the task's top activity says it handles a change of density itself, so it
+  // redraws at a new density rather than being relaunched. False when unknown.
+  bool handles_density_change = 26;
 }
 
 // The orientation a task's top activity asks for.
@@ -2033,6 +2036,25 @@ message AppWindowSettings {
   // opens them at the size Android gives the task.
   uint32 start_width_dp = 3;
   uint32 start_height_dp = 4;
+  // How the app follows its window to a monitor of another scale. No way restarts the app.
+  DpiScaling dpi_scaling = 5;
+}
+
+// How an app follows its window to a monitor of another scale, as Windows' "high DPI scaling
+// performed by" does for a desktop program.
+enum DpiScaling {
+  // The app's own way: APP for an app whose activity says it handles a change of density
+  // itself, SYSTEM for any other.
+  DPI_SCALING_AUTO = 0;
+  // The task takes the new monitor's density and the app redraws at it.
+  DPI_SCALING_APP = 1;
+  // The task keeps its density and the host scales the window's picture to the new monitor,
+  // so the app keeps its size on the screen.
+  DPI_SCALING_SYSTEM = 2;
+  // The app is given the new density without a restart, even though it does not say it
+  // handles one. It needs a change to Android's framework that is not made yet; until then it
+  // works as SYSTEM does.
+  DPI_SCALING_SYSTEM_FORCED = 3;
 }
 
 // Lists the caller's window settings for every app that has any. The service answers
