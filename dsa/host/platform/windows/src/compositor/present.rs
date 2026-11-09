@@ -465,7 +465,8 @@ struct State {
     /// them; the window then makes all of it again on the new ones (`follow_gpu`).
     devices: Arc<Devices>,
     generation: u64,
-    /// The window's DirectComposition target: `None` only while it is made again.
+    /// The window's DirectComposition target: `None` only while it is made again. Closing
+    /// never takes the visual tree off it (`close`).
     target: Option<IDCompositionTarget>,
     /// The frame's visual, under the caption's.
     visual: IDCompositionVisual,
@@ -1413,10 +1414,12 @@ impl WindowPresenter {
         }
     }
 
-    /// The window is closing: nothing more is shown in it.
+    /// The window is closing: nothing more is shown in it. The frame it shows stays in it,
+    /// so the close animation Windows plays when the window is destroyed shows the window
+    /// whole, with its content, and not an empty frame. [`WindowPresenter::release`] lets
+    /// the content go once the window is gone.
     pub fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let devices = Arc::clone(&state.devices);
         if !state.closed {
             if let Some(summary) = state.latency.summary() {
                 note(
@@ -1426,20 +1429,33 @@ impl WindowPresenter {
             }
         }
         state.closed = true;
-        state.newest = None;
-        // A screenshot waiting for a frame gets none.
+        drop(state);
+        // A screenshot waiting for a frame gets none, and a frame waiting for the window to
+        // take its size waits for nothing.
         self.capture_done.notify_all();
-        let Ok(dcomp) = devices.dcomp() else {
-            return;
-        };
-        let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
-        // SAFETY: plain COM calls on objects this presenter owns.
-        unsafe {
-            if let Some(target) = &state.target {
-                let _ = target.SetRoot(None::<&IDCompositionVisual>);
-            }
-            let _ = dcomp.Commit();
-        }
+        self.claim_released.notify_all();
+    }
+
+    /// The window is gone: what it showed is let go. Nothing is committed to the window's
+    /// visual tree, which went with the window; an empty tree committed now could reach the
+    /// close animation, which still shows the window's last content.
+    pub fn release(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.closed = true;
+        state.newest = None;
+        state.swapchain = None;
+        state.buffers = None;
+        state.buffer_count = 0;
+        state.committed = None;
+        state.splash_surface = None;
+        state.splash_image = None;
+        state.caption_surface = None;
+        state.last_frame = None;
+        state.readback = None;
+        state.samples = None;
+        state.band_probe = None;
+        state.band_pending = false;
+        state.presents.forget();
     }
 
     /// The frame the window shows, read back for a screenshot, or `None` before the app's
