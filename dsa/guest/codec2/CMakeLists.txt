@@ -93,6 +93,7 @@ add_executable(dsa-codec2
     src/video_messages.cpp
     src/picture_copy.cpp
     src/output_buffer.cpp
+    src/config_rules.cpp
     src/platform_support.cpp
     ${PLATFORM_SOURCES}
     ${AIDL_SOURCES}

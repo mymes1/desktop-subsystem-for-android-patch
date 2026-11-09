@@ -5,14 +5,14 @@
 
 #include <cstring>
 
+#include "config_rules.h"
+
 namespace dsa::codec2 {
 
 using namespace android;
 
 namespace {
 
-// HAL_PIXEL_FORMAT_YCBCR_420_888: flexible YUV 4:2:0, as the software decoders output.
-constexpr uint32_t kPixelFormatYuv420Flexible = 0x23;
 // The smallest input buffer the framework is told to allocate.
 constexpr uint32_t kMinInputBufferSize = 2 * 1024 * 1024;
 // Pictures the host's decoder may hold before the first comes out (the stream's reorder
@@ -186,8 +186,13 @@ DecoderIntf::DecoderIntf(const std::shared_ptr<C2ReflectorHelper>& helper, const
                      .withSetter(ColorAspectsSetter, mDefaultColorAspects)
                      .build());
 
+    // Not a constant: the framework sets it for every configure, to the surface's format when
+    // the app shows the pictures, and a constant set to another value fails the whole
+    // configure with C2_CORRUPTED (config_rules.h).
     addParameter(DefineParam(mPixelFormat, C2_PARAMKEY_PIXEL_FORMAT)
-                     .withConstValue(new C2StreamPixelFormatInfo::output(0u, kPixelFormatYuv420Flexible))
+                     .withDefault(new C2StreamPixelFormatInfo::output(0u, kPixelFormatFlexible))
+                     .withFields({C2F(mPixelFormat, value).oneOf({kPixelFormatFlexible, kPixelFormatSurface})})
+                     .withSetter(PixelFormatSetter)
                      .build());
 
     addParameter(DefineParam(mUsage, C2_PARAMKEY_OUTPUT_STREAM_USAGE)
@@ -248,5 +253,18 @@ C2R DecoderIntf::ColorAspectsSetter(bool, C2P<C2StreamColorAspectsInfo::output>&
 }
 
 C2R DecoderIntf::UsageSetter(bool, C2P<C2StreamUsageTuning::output>&) { return C2R::Ok(); }
+
+C2R DecoderIntf::PixelFormatSetter(bool, C2P<C2StreamPixelFormatInfo::output>& me) {
+    uint32_t kept = kPixelFormatFlexible;
+    if (!acceptPixelFormat(me.v.value, &kept)) {
+        // A format the decoders cannot give (P010, a vendor format): a bad value, and the
+        // format stays the one they output.
+        C2R res = C2R::Ok().plus(C2SettingResultBuilder::BadValue(me.F(me.v.value)));
+        me.set().value = kPixelFormatFlexible;
+        return res;
+    }
+    me.set().value = kept;
+    return C2R::Ok();
+}
 
 }  // namespace dsa::codec2

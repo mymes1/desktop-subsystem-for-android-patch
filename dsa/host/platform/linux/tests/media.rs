@@ -705,6 +705,57 @@ fn codec_buffer_errors(log: &str) -> Vec<&str> {
         .collect()
 }
 
+/// The first Codec 2.0 component name (`c2.<vendor>.<name>`) a log line mentions.
+fn component_in(line: &str) -> Option<&str> {
+    let mut from = 0;
+    while let Some(at) = line[from..].find("c2.") {
+        let start = from + at;
+        let before = line[..start].chars().next_back();
+        let name: &str = {
+            let rest = &line[start..];
+            let end = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '_'))
+                .unwrap_or(rest.len());
+            rest[..end].trim_end_matches('.')
+        };
+        if !before.is_some_and(|c| c.is_ascii_alphanumeric()) && name.matches('.').count() >= 2 {
+            return Some(name);
+        }
+        from = start + 3;
+    }
+    None
+}
+
+/// The framework's "config failed => CORRUPTED" lines for one of DSA's decoders: a configure
+/// the component's interface refused as corrupted rather than as a bad value or an unknown
+/// parameter. The line names no component, so each is put down to the last component its
+/// process named before it (the probe and an app create their decoders one at a time). The
+/// platform's own decoders answer the same for a surface's pixel format, so theirs are not
+/// counted.
+fn dsa_config_corrupted(log: &str) -> Vec<&str> {
+    let mut last: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut found = Vec::new();
+    for line in log.lines() {
+        // threadtime: date, time, pid, tid, level, tag: message
+        let Some(pid) = line.split_whitespace().nth(2) else {
+            continue;
+        };
+        if line.contains("config failed => CORRUPTED") {
+            if last
+                .get(pid)
+                .is_some_and(|name| name.starts_with("c2.dsa."))
+            {
+                found.push(line);
+            }
+            continue;
+        }
+        if let Some(name) = component_in(line) {
+            last.insert(pid, name);
+        }
+    }
+    found
+}
+
 /// What is wrong with the probe's video results (see `VideoCheck`): each clip must be encoded
 /// and decoded by the guest's own decoder and the host's; every decoder's pictures must keep
 /// the bars' colours to the edges, in buffers and on screen; pictures must reach both
@@ -927,6 +978,26 @@ fn fr26_green_pictures_and_a_stalled_surface_fail_the_video_check() {
     let log = "11-10 05:00:00.000  612  640 E dsa-codec2: c2.dsa.vp9.decoder: the surface gave no 426x240 buffer (1 in a row): Status(-8, EX_SERVICE_SPECIFIC): '14: '\n\
                11-10 05:00:00.010  612  640 I dsa-codec2: c2.dsa.vp9.decoder: decoding 426x240 on the host's GPU\n";
     assert_eq!(codec_buffer_errors(log).len(), 1);
+}
+
+#[test]
+fn fr26_a_dsa_decoders_configure_refused_as_corrupted_fails_the_media_check() {
+    // What a surface-mode configure logged before the pixel format was settable.
+    let log = "11-10 05:00:00.000   738   790 D CCodec  : allocate(c2.dsa.avc.decoder)\n\
+               11-10 05:00:00.010   738   790 D CCodecConfig: config failed => CORRUPTED\n\
+               11-10 05:00:00.020   738   790 D CCodecConfig: query failed after returning 11 values (BAD_INDEX)\n\
+               11-10 05:00:01.000  4650  4670 D CCodec  : allocate(c2.android.avc.decoder)\n\
+               11-10 05:00:01.010  4650  4670 D CCodecConfig: config failed => CORRUPTED\n\
+               11-10 05:00:01.020   738   790 I MediaCodec: loading /vendor/etc/media_codecs_c2.xml\n";
+    let found = dsa_config_corrupted(log);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains(" 738 "));
+    assert_eq!(
+        component_in("[c2.dsa.vp9.decoder] setting surface generation"),
+        Some("c2.dsa.vp9.decoder")
+    );
+    assert_eq!(component_in("loading media_codecs_c2.xml"), None);
+    assert_eq!(component_in("libc2.dsa.so"), None);
 }
 
 #[test]
@@ -1284,6 +1355,11 @@ fn boot_check(check_media: bool, check_root: bool) {
         }
         for line in codec_buffer_errors(&guest_log) {
             problems.push(format!("the codec HAL lost a picture: {line}"));
+        }
+        for line in dsa_config_corrupted(&guest_log) {
+            problems.push(format!(
+                "a DSA decoder's configure was refused as corrupted: {line}"
+            ));
         }
     }
     if check_root {

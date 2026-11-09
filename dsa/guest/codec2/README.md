@@ -34,7 +34,10 @@ host's answer. A format the host does not decode stays with the guest's own deco
 
 The component describes its parameters with the platform's own Codec 2.0 helpers, built from
 the fetched sources (`fetch.sh`), so the framework configures it as it configures the
-platform's decoders. `shim/` stands in for the parts of libbase, libutils and libcutils those
+platform's decoders. The output pixel format is settable rather than a constant
+(`src/config_rules.h`): the framework sets it to the surface's format for an app that shows
+its video, and the helper answers a constant set to another value with `C2_CORRUPTED`, which
+failed every such configure. `shim/` stands in for the parts of libbase, libutils and libcutils those
 sources name, which an NDK build cannot link.
 
 The image sets `debug.stagefright.c2-poolmask` to keep the framework's codec buffers out of
