@@ -2659,13 +2659,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."
+            "value": "Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
+            "value": "추가 구성 요소 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
           }
         }
       }
@@ -3016,13 +3016,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deletes Google's apps from your Android disk. They are gone from the next start of Android."
+            "value": "Deletes Google's apps from your add-on disk. They are gone from the next start of Android."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 사라집니다."
+            "value": "추가 구성 요소 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 사라집니다."
           }
         }
       }

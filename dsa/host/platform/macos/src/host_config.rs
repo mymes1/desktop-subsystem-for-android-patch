@@ -266,6 +266,10 @@ impl UserFolders {
     pub fn pstore_disk(&self) -> PathBuf {
         self.root.join("pstore.img")
     }
+    /// The disk of the add-ons the user installed (raw), which the VM attaches read only.
+    pub fn addon_disk(&self) -> PathBuf {
+        self.root.join("addons.img")
+    }
     /// The raw copies of image `version`'s disks.
     pub fn image_cache(&self, version: &str) -> PathBuf {
         self.root.join("cache").join("images").join(version)

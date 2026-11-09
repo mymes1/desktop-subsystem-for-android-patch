@@ -183,7 +183,7 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   installed (`dsa arm-translation install`) and on, and the "default" file (the same lines),
   which it selects while they have none and the image has a default package, name the native
   bridge and add `arm64-v8a` after `x86_64` to the ABIs. Then `dsa-arm-translation.rc` mounts
-  the package's erofs image (the user's from `/data/vendor/dsa/arm-translation/system.img`, or
+  the package's erofs image (the user's from `arm-translation.img` on the add-on disk, or
   the default one from `/system/etc/dsa/arm-translation/default.img`) at
   `/mnt/dsa-arm-translation` before the zygote starts, and binds its parts onto empty places
   an x86_64 image carries for them: `system/lib64` onto `/system_ext/lib64`, on the linker
@@ -196,8 +196,8 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   through an overlay is looked up with init's credentials, and bpfloader's start failed that
   way and rebooted Android. It then mounts binfmt_misc and registers the package's handlers.
   `make-image.py` refuses a build that already has files in those places, and `check-image.py`
-  checks them. `sepolicy/arm-translation.cil` lets init do so; dsa-channeld writes and removes the
-  user's image. Only an x86_64 image made with `--arm-translation` has the default package and
+  checks them. `sepolicy/arm-translation.cil` lets init do so. Only an x86_64 image made with
+  `--arm-translation` has the default package and
   its "default" file, so a boot told to use one on any other image stays x86_64 only.
 - With `--framework` (a folder from the "Framework build" workflow), SurfaceFlinger, libhwui
   and libEGL are builds of the image's own source with DSA's recovery from a GPU device loss
@@ -209,10 +209,10 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   the apps of a reset through `debug.dsa.gpu.resets`.
 - Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
   settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
-  and sends an erofs image of its apps, permission lists, system configuration and framework
-  files, which dsa-channeld keeps at `/data/vendor/dsa/gapps/system.img`. While one is installed
-  the host puts `androidboot.dsa.gapps=on` in the bootconfig. Then `dsa-gapps.rc` mounts the
-  image and lays each of its folders (`app`, `priv-app`, `framework`, and `etc`'s
+  and makes an erofs image of its apps, permission lists, system configuration and framework
+  files, `gapps.img` on the add-on disk. While one is installed the host puts
+  `androidboot.dsa.gapps=on` in the bootconfig. Then `dsa-gapps.rc` mounts the image and lays
+  each of its folders (`app`, `priv-app`, `framework`, and `etc`'s
   `permissions`, `sysconfig`, `default-permissions` and `preferred-apps`) over the same folder
   of `/product` and `/system_ext` before the zygote starts, so each app's privileged permission
   list stays in its own partition, where the package manager reads it. A partition's root is
@@ -227,6 +227,20 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   permission its privileged apps ask for (`dsa-gapps-privapp-permissions.xml` in each
   partition's `etc/permissions`), so the log should stay empty. `sepolicy/gapps.cil` lets init
   lay the image over.
+- The add-on images a user installs (the Google apps, an ARM translation package) are on the
+  user's add-on disk, which the host builds, one per user, and attaches to the VM read only.
+  Its one partition, `dsa_addons`, is an erofs file system holding each image as a plain,
+  uncompressed file (`gapps.img`, `arm-translation.img`). While the host attaches it, it puts
+  `androidboot.dsa.addon_disk=on` in the bootconfig, and `dsa-addons.rc` mounts the partition
+  at `/mnt/dsa-addons` at `post-fs`, before the scripts above mount the images from it with
+  `directio`. The images used to be in the encrypted `/data`, where ext4 gives an encrypted file
+  no direct I/O and every page read from an image was cached twice; on the add-on disk erofs
+  reads each one directly. For one boot after an update from a DSA that kept an image in
+  `/data` (`/data/vendor/dsa/gapps/system.img`, `/data/vendor/dsa/arm-translation/system.img`),
+  the host says `androidboot.dsa.gapps_image=data` or `androidboot.dsa.arm_translation_image=data`
+  and the scripts mount that copy; meanwhile the host reads it through dsa-channeld, puts it on
+  the add-on disk, and has dsa-channeld delete it, so the next boot mounts it from the disk.
+  `sepolicy/addons.cil` lets init mount the disk, and `check-image.py` checks the scripts.
 - Cuttlefish's `seriallogging.rc` is removed. Its logger writes to a virtio console Hyper-V
   does not have, and init would restart it every five seconds for as long as the guest runs.
 - `sepolicy/memory.cil` lets the audio HAL and the software codecs share memory through

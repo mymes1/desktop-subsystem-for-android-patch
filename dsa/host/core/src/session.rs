@@ -680,6 +680,11 @@ struct Shared {
     gapps: Mutex<Option<Sender<control::GappsState>>>,
     /// Held for the length of an exchange about the Google apps, so they go one at a time.
     gapps_turn: Mutex<()>,
+    /// Who waits for the control daemon's part of an add-on image an older DSA left on the
+    /// user's disk, while one read is under way.
+    addon_image: Mutex<Option<Sender<control::AddonImagePart>>>,
+    /// Held for the length of one read of an add-on image, so they go one at a time.
+    addon_image_turn: Mutex<()>,
     /// Who waits for the agent's word on the Google Services Framework Android ID.
     device_id: Mutex<Option<Sender<String>>>,
     /// The widgets the agent hosts and who is watching them.
@@ -1079,6 +1084,17 @@ impl Shared {
         }
     }
 
+    /// Hands the control daemon's part of an add-on image to whoever reads it.
+    fn addon_image_event(&self, part: control::AddonImagePart) {
+        let waiting = self.addon_image.lock().unwrap_or_else(|e| e.into_inner());
+        match waiting.as_ref() {
+            Some(waiting) => {
+                let _ = waiting.send(part);
+            }
+            None => eprintln!("add-ons: dropped a part of an image, which nobody reads"),
+        }
+    }
+
     /// Hands the agent's Google Services Framework Android ID to whoever asked for it.
     fn device_id_event(&self, id: String) {
         if let Some(waiting) = self
@@ -1299,6 +1315,8 @@ impl Session {
             arm_translation_turn: Mutex::new(()),
             gapps: Mutex::new(None),
             gapps_turn: Mutex::new(()),
+            addon_image: Mutex::new(None),
+            addon_image_turn: Mutex::new(()),
             device_id: Mutex::new(None),
             widgets: Mutex::new(WidgetHub::default()),
             widget_requests: Mutex::new(HashMap::new()),
@@ -2076,174 +2094,8 @@ impl Session {
         }
     }
 
-    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
-    /// SHA-256 is `sha256`, to the guest's control daemon, which keeps it on the user's disk
-    /// for the next boot. Returns where translation stands once the image is in place, or why
-    /// it is not. Needs a running guest. The image goes in chunks of [`apk::CHUNK_BYTES`],
-    /// never more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
-    pub fn install_arm_translation(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestArmTranslation, SessionError> {
-        let _turn = self
-            .shared
-            .arm_translation_turn
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let state = self.state();
-        if !matches!(
-            state,
-            SessionState::Active | SessionState::Dozing | SessionState::Frozen
-        ) {
-            return Err(SessionError::NotActive(state));
-        }
-        let transfer_id = self
-            .shared
-            .last_install
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1);
-        let (tx, events) = mpsc::channel();
-        *self
-            .shared
-            .arm_translation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        eprintln!(
-            "arm translation: sending a {size} byte image to Android as transfer {transfer_id}"
-        );
-        let result = self.send_arm_translation(transfer_id, size, sha256, content, &events);
-        *self
-            .shared
-            .arm_translation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = None;
-        match &result {
-            Ok(guest) => eprintln!(
-                "arm translation: the image is in place; this boot's ABIs are {}",
-                guest.abilist
-            ),
-            Err(why) => eprintln!("arm translation: the image did not reach Android: {why}"),
-        }
-        result
-    }
-
-    fn send_arm_translation(
-        &self,
-        transfer_id: u32,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-        events: &Receiver<control::ArmTranslationState>,
-    ) -> Result<GuestArmTranslation, SessionError> {
-        let begin = Body::ArmTranslationInstall(control::ArmTranslationInstall {
-            transfer_id,
-            size,
-            sha256: sha256.to_vec(),
-        });
-        let state = self.send_image(
-            "the ARM translation image",
-            transfer_id,
-            size,
-            content,
-            begin,
-            &|offset, data| {
-                Body::ArmTranslationChunk(control::ArmTranslationChunk {
-                    transfer_id,
-                    offset,
-                    data,
-                })
-            },
-            events,
-            &|state: &control::ArmTranslationState| {
-                (
-                    state.transfer_id,
-                    state.received,
-                    state.done,
-                    state.error.clone(),
-                )
-            },
-        )?;
-        Ok(guest_arm_translation(state))
-    }
-
-    /// Sends an image the control daemon keeps on the user's disk: `begin`, then `size` bytes
-    /// of `content` as the chunks `chunk` makes, in pieces of [`apk::CHUNK_BYTES`] and never
-    /// more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
-    /// `answer` reads the daemon's answers as (transfer, bytes written, done, error). Returns
-    /// the answer that says the image is in place.
-    #[allow(clippy::too_many_arguments)]
-    fn send_image<S>(
-        &self,
-        what: &str,
-        transfer_id: u32,
-        size: u64,
-        content: &mut dyn Read,
-        begin: Body,
-        chunk: &dyn Fn(u64, Vec<u8>) -> Body,
-        events: &Receiver<S>,
-        answer: &dyn Fn(&S) -> (u32, u64, bool, String),
-    ) -> Result<S, SessionError> {
-        self.send(dsa_protocol::encode(&control::Envelope {
-            body: Some(begin),
-        }))?;
-        let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
-        let mut sent = 0u64;
-        let mut written = 0u64;
-        let mut waited = Duration::ZERO;
-        loop {
-            while sent < size && sent < written + window {
-                let length = (size - sent).min(apk::CHUNK_BYTES as u64) as usize;
-                let mut data = vec![0u8; length];
-                if let Err(error) = content.read_exact(&mut data) {
-                    return Err(SessionError::InstallRefused(format!(
-                        "{what} did not arrive whole: {error}"
-                    )));
-                }
-                self.send(dsa_protocol::encode(&control::Envelope {
-                    body: Some(chunk(sent, data)),
-                }))?;
-                sent += length as u64;
-            }
-            match events.recv_timeout(INSTALL_POLL) {
-                Ok(state) => {
-                    let (id, received, done, error) = answer(&state);
-                    if id != transfer_id {
-                        continue;
-                    }
-                    if !error.is_empty() {
-                        return Err(SessionError::InstallRefused(error));
-                    }
-                    if done {
-                        return Ok(state);
-                    }
-                    written = written.max(received);
-                    waited = Duration::ZERO;
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    let state = self.state();
-                    if !matches!(
-                        state,
-                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
-                    ) {
-                        return Err(SessionError::NotActive(state));
-                    }
-                    waited += INSTALL_POLL;
-                    if waited >= CHUNK_TIMEOUT {
-                        return Err(SessionError::InstallRefused(format!(
-                            "Android has not answered about {what} for {} s; it may be busy, \
-                             try again",
-                            CHUNK_TIMEOUT.as_secs()
-                        )));
-                    }
-                }
-                Err(RecvTimeoutError::Disconnected) => return Err(SessionError::Gone),
-            }
-        }
-    }
-
-    /// Asks the guest's control daemon to remove the ARM translation package's image.
+    /// Asks the guest's control daemon to remove the ARM translation package's image an older
+    /// DSA left on the user's disk.
     pub fn remove_arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
         let state = self.arm_translation_exchange(Body::ArmTranslationRemove(
             control::ArmTranslationRemove {},
@@ -2298,73 +2150,8 @@ impl Session {
         answer
     }
 
-    /// Sends the Google apps' system image, `size` bytes read from `content` whose SHA-256 is
-    /// `sha256`, to the guest's control daemon, which keeps it on the user's disk for the next
-    /// boot. Returns where the Google apps stand once the image is in place, or why it is not.
-    /// Needs a running guest.
-    pub fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestGapps, SessionError> {
-        let _turn = self
-            .shared
-            .gapps_turn
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let state = self.state();
-        if !matches!(
-            state,
-            SessionState::Active | SessionState::Dozing | SessionState::Frozen
-        ) {
-            return Err(SessionError::NotActive(state));
-        }
-        let transfer_id = self
-            .shared
-            .last_install
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1);
-        let (tx, events) = mpsc::channel();
-        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        eprintln!("gapps: sending a {size} byte image to Android as transfer {transfer_id}");
-        let begin = Body::GappsInstall(control::GappsInstall {
-            transfer_id,
-            size,
-            sha256: sha256.to_vec(),
-        });
-        let result = self.send_image(
-            "the Google apps image",
-            transfer_id,
-            size,
-            content,
-            begin,
-            &|offset, data| {
-                Body::GappsChunk(control::GappsChunk {
-                    transfer_id,
-                    offset,
-                    data,
-                })
-            },
-            &events,
-            &|state: &control::GappsState| {
-                (
-                    state.transfer_id,
-                    state.received,
-                    state.done,
-                    state.error.clone(),
-                )
-            },
-        );
-        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        match &result {
-            Ok(_) => eprintln!("gapps: the image is in place for the next start of Android"),
-            Err(why) => eprintln!("gapps: the image did not reach Android: {why}"),
-        }
-        result.map(guest_gapps)
-    }
-
-    /// Asks the guest's control daemon to remove the Google apps' image.
+    /// Asks the guest's control daemon to remove the Google apps' image an older DSA left on
+    /// the user's disk.
     pub fn remove_gapps(&self) -> Result<GuestGapps, SessionError> {
         let state = self.gapps_exchange(Body::GappsRemove(control::GappsRemove {}))?;
         if state.error.is_empty() {
@@ -2413,6 +2200,60 @@ impl Session {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
         id
+    }
+
+    /// Reads up to `length` bytes from `offset` of the add-on image `image` that an older DSA
+    /// left on the user's disk, which the host moves onto the add-on disk. Says why when the
+    /// guest cannot read it. Needs a guest that is active or dozing.
+    pub fn read_addon_image(
+        &self,
+        image: control::AddonImage,
+        offset: u64,
+        length: u32,
+    ) -> Result<control::AddonImagePart, SessionError> {
+        let state = self.state();
+        if !matches!(state, SessionState::Active | SessionState::Dozing) {
+            return Err(SessionError::NotActive(state));
+        }
+        let _turn = self
+            .shared
+            .addon_image_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (tx, parts) = mpsc::channel();
+        *self
+            .shared
+            .addon_image
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::AddonImageRead(control::AddonImageRead {
+                image: image as i32,
+                offset,
+                length,
+            })),
+        }));
+        let answer = sent.and_then(|()| loop {
+            match parts.recv_timeout(CHUNK_TIMEOUT) {
+                // An answer to an earlier read that gave up waiting is not this one's.
+                Ok(part) if part.image() != image || part.offset != offset => continue,
+                Ok(part) if !part.error.is_empty() => {
+                    break Err(SessionError::InstallRefused(part.error))
+                }
+                Ok(part) => break Ok(part),
+                Err(_) => {
+                    break Err(SessionError::NoAnswer(
+                        "Android did not send the part of the add-on image it was asked for".into(),
+                    ))
+                }
+            }
+        });
+        *self
+            .shared
+            .addon_image
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        answer
     }
 
     /// Sends `body` to the control daemon and waits for its GappsState.
@@ -3850,7 +3691,8 @@ const DEVICE_ID_WAIT: Duration = Duration::from_secs(2);
 /// What the guest's control daemon says of the Google apps, as the host keeps it.
 fn guest_gapps(state: control::GappsState) -> GuestGapps {
     GuestGapps {
-        installed: state.installed,
+        installed: false,
+        left_on_data: state.installed,
         active: state.active,
         sdk: state.sdk,
         abi: state.abi,
@@ -3862,7 +3704,8 @@ fn guest_gapps(state: control::GappsState) -> GuestGapps {
 /// What the guest's control daemon says of ARM translation, as the host keeps it.
 fn guest_arm_translation(state: control::ArmTranslationState) -> GuestArmTranslation {
     GuestArmTranslation {
-        installed: state.installed,
+        installed: false,
+        left_on_data: state.installed,
         active: state.active,
         abilist: state.abilist,
     }
@@ -6110,6 +5953,7 @@ impl Worker {
             ),
             Some(Body::ArmTranslationState(state)) => self.shared.arm_translation_event(state),
             Some(Body::GappsState(state)) => self.shared.gapps_event(state),
+            Some(Body::AddonImagePart(part)) => self.shared.addon_image_event(part),
             Some(Body::GoogleDeviceId(id)) => self.shared.device_id_event(id.id),
             Some(Body::InstallResult(result)) => self.shared.install_event(
                 result.transfer_id,
@@ -6254,13 +6098,10 @@ impl Worker {
             | Some(Body::DragOut(_))
             | Some(Body::DragRead(_))
             | Some(Body::DragEnd(_))
-            | Some(Body::ArmTranslationInstall(_))
-            | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))
             | Some(Body::ArmTranslationQuery(_))
-            | Some(Body::GappsInstall(_))
-            | Some(Body::GappsChunk(_))
             | Some(Body::GappsRemove(_))
+            | Some(Body::AddonImageRead(_))
             | Some(Body::GappsQuery(_))
             | Some(Body::GoogleDeviceIdQuery(_))
             | Some(Body::NotificationClicked(_))

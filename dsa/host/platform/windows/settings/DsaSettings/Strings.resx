@@ -542,7 +542,7 @@
     <value>Remove the ARM translation package</value>
   </data>
   <data name="ArmRemoveCard.Description" xml:space="preserve">
-    <value>Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts.</value>
+    <value>Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts.</value>
   </data>
   <data name="ArmRemoveButton.Content" xml:space="preserve">
     <value>Remove</value>
@@ -620,7 +620,7 @@
     <value>Remove Google Play</value>
   </data>
   <data name="GappsRemoveCard.Description" xml:space="preserve">
-    <value>Deletes Google's apps from Android's disk. They are gone from the next start of Android. Apps you installed from the Play Store stay, but those that need Google Play services may stop working.</value>
+    <value>Deletes Google's apps from your add-on disk. They are gone from the next start of Android. Apps you installed from the Play Store stay, but those that need Google Play services may stop working.</value>
   </data>
   <data name="GappsRemoveButton.Content" xml:space="preserve">
     <value>Remove</value>

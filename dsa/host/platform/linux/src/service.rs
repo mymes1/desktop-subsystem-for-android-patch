@@ -134,6 +134,8 @@ pub fn user_disk(root: &Path) -> PathBuf {
 pub struct UserFiles {
     pub data_disk: PathBuf,
     pub pstore_disk: PathBuf,
+    /// The disk of the add-ons the user installed, which their VM attaches read only.
+    pub addon_disk: PathBuf,
     pub console_log: PathBuf,
     pub run_dir: PathBuf,
 }
@@ -144,6 +146,7 @@ impl UserFiles {
         Ok(UserFiles {
             data_disk: user_disk(&root),
             pstore_disk: root.join("pstore.img"),
+            addon_disk: root.join("addons.img"),
             console_log: paths.user_logs(user)?.join("android-console.log"),
             run_dir: paths.user_tmp(user)?,
         })
@@ -372,6 +375,7 @@ pub fn create_user_android(
             page_reporting_order: config.page_reporting_order,
             data_disk: files.data_disk.clone(),
             pstore_disk: Some(files.pstore_disk.clone()),
+            addon_disk: Some(files.addon_disk.clone()),
             run_dir: files.run_dir.clone(),
             console_log: files.console_log.clone(),
             grow_memory: config.grow_memory,
@@ -381,12 +385,17 @@ pub fn create_user_android(
     .with_bootconfig({
         // An ARM translator (the package the user installed, else the image's default one) is
         // used only while the user's setting is on; the Google apps the user installed, while
-        // they are installed.
+        // they are installed. Their images are on the add-on disk this boot attaches, which
+        // the launcher has readied by now.
         let (store, user) = (Arc::clone(&store), user.to_string());
+        let addons = files.addon_disk.clone();
         Box::new(move |image: &ImageFiles| {
+            use dsa_host_core::addon_disk::{self, AddonDisk, Format};
             let dir = image.initrd.as_deref().and_then(Path::parent);
-            dsa_host_core::arm_translation::bootconfig_for(&*store, &user, dir)
-                + &dsa_host_core::gapps::bootconfig_for(&*store, &user)
+            let attached = AddonDisk::new(&addons, Format::Raw).attached();
+            addon_disk::bootconfig(&attached).to_string()
+                + &dsa_host_core::arm_translation::bootconfig_for(&*store, &user, dir, &attached)
+                + &dsa_host_core::gapps::bootconfig_for(&*store, &user, &attached)
         })
     })
     .with_boot_properties({
@@ -955,6 +964,15 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         gapps = gapps.with_project(project);
     }
     service = service.with_gapps(gapps);
+    // Each user's add-ons, on the add-on disk in their data folder, which their VM attaches
+    // read only.
+    service = service.with_addon_disks(Arc::new(|user: &str| {
+        let files = UserFiles::of(&host_paths(), user)?;
+        Ok(dsa_host_core::addon_disk::AddonDisk::new(
+            files.addon_disk,
+            dsa_host_core::addon_disk::Format::Raw,
+        ))
+    }));
     if let Some(updates) = &updates {
         service = service.with_android_versions(Arc::new(StoreVersions {
             store: Arc::clone(&updates.store),

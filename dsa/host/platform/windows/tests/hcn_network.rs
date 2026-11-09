@@ -89,6 +89,7 @@ fn unbootable(dir: &std::path::Path) -> AndroidVmConfig {
         system_image: Some(dir.join("system.vhdx")),
         data_disk: dir.join("data.vhdx"),
         pstore_disk: None,
+        addon_disk: None,
         socket_sids: Vec::new(),
         page_reporting_order: 9,
         console_pipe: None,

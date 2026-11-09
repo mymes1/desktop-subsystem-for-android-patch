@@ -5,8 +5,11 @@ package io.github.thisisthepy.dsa.control.v1;
 
 /**
  * <pre>
- * Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
- * an image it has mounted until it restarts. Answered with GappsState.
+ * Host to guest, to the control daemon: remove the Google apps image that a DSA from before
+ * the add-on disk left on the user's disk (/data/vendor/dsa/gapps). The host keeps installed
+ * Google apps on the add-on disk, which only the host writes; this removes the old copy once
+ * the host has moved it there, or once the user removed Google Play. The guest goes on using an
+ * image it has mounted until it restarts. Answered with GappsState.
  * </pre>
  *
  * Protobuf type {@code dsa.control.v1.GappsRemove}
@@ -101,8 +104,11 @@ public  final class GappsRemove extends
 
   /**
    * <pre>
-   * Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
-   * an image it has mounted until it restarts. Answered with GappsState.
+   * Host to guest, to the control daemon: remove the Google apps image that a DSA from before
+   * the add-on disk left on the user's disk (/data/vendor/dsa/gapps). The host keeps installed
+   * Google apps on the add-on disk, which only the host writes; this removes the old copy once
+   * the host has moved it there, or once the user removed Google Play. The guest goes on using an
+   * image it has mounted until it restarts. Answered with GappsState.
    * </pre>
    *
    * Protobuf type {@code dsa.control.v1.GappsRemove}

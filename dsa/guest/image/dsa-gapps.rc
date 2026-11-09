@@ -1,13 +1,18 @@
 # Google Play, when the user installed it (dsa gapps install). The host adds
 # androidboot.dsa.gapps=on to the boot's bootconfig only while a Google apps image is
-# installed. The image (erofs) is on the user's disk, where dsa-channeld wrote it. Here init
-# mounts it straight from its file and lays each of its folders over the same folder of /product
-# and /system_ext, before the zygote starts: the apps (app, priv-app), the framework files, and
-# the privileged permission lists, system configuration, default permissions and preferred
-# apps in etc. The package manager reads a partition's lists only for that partition's apps,
-# so each stays in its own partition. The fingerprint that makes the boot an upgrade comes from
-# /system/etc/dsa/gapps-on.prop, which the product build.prop imports on the same condition. A
-# system script, because only init itself may lay anything over a partition.
+# installed, with androidboot.dsa.gapps_image saying where the image is: "disk" when it is
+# gapps.img on the user's add-on disk, which dsa-addons.rc mounts at /mnt/dsa-addons before
+# this runs, and "data" for one boot after an update from a DSA that sent the image to the
+# user's disk, /data/vendor/dsa/gapps/system.img. In that boot the host moves the image onto the
+# add-on disk and has dsa-channeld delete it from /data, so the next boot mounts it from the
+# disk and nothing of it stays in /data. Here init mounts the image straight from its file and
+# lays each of its folders over the same folder of /product and /system_ext, before the zygote
+# starts: the apps (app, priv-app), the framework files, and the privileged permission lists,
+# system configuration, default permissions and preferred apps in etc. The package manager
+# reads a partition's lists only for that partition's apps, so each stays in its own partition.
+# The fingerprint that makes the boot an upgrade comes from /system/etc/dsa/gapps-on.prop, which
+# the product build.prop imports on the same condition. A system script, because only init
+# itself may lay anything over a partition.
 #
 # Only those folders are laid over, never a partition's root: overlayfs looks every file up
 # with init's credentials, and init may not read the attributes of the services' programs in
@@ -19,9 +24,11 @@
 # erofs reads the image file itself (file-backed erofs), not through a loop device. A loop
 # device kept a second copy of every page read from the image in the file's own page cache,
 # beside the one erofs keeps. directio asks erofs to read the file's data without that copy;
-# the file's filesystem decides whether it can, and where it cannot (an encrypted file without
-# inline encryption) the read is an ordinary cached one, as before. erofs opens the file with
-# init's credentials and reads it with them, whichever process asked for the page.
+# the file's filesystem decides whether it can. The add-on disk's erofs can for its
+# uncompressed files, so a page read from the image is cached once. The encrypted /data cannot
+# without inline encryption, which is why the image no longer lives there; there the read is an
+# ordinary cached one. erofs opens the file with init's credentials and reads it with them,
+# whichever process asked for the page.
 #
 # The image's files are labelled system files (context=), and its superblock gets a filesystem
 # type of its own (fscontext=, sepolicy/gapps.cil), which every domain may statfs: statfs on an
@@ -30,11 +37,18 @@
 # to the kernel and drops any other, and context= alone relabels the superblock to a file type,
 # which the kernel refuses ("denied { relabelto } ... system_file ... tclass=filesystem"). The
 # overlays are not nosuid, as the partitions are not.
-on post-fs-data && property:ro.boot.dsa.gapps=on
-    mkdir /data/vendor/dsa 0771 system system
-    mkdir /data/vendor/dsa/gapps 0770 system system
+#
+# init runs the actions of one trigger in the order this file gives them, so the image is
+# mounted, from wherever it is, before it is laid over.
+on post-fs-data && property:ro.boot.dsa.gapps=on && property:ro.boot.dsa.gapps_image=disk
+    mkdir /mnt/dsa-gapps 0755 root root
+    mount erofs /mnt/dsa-addons/gapps.img /mnt/dsa-gapps ro nodev nosuid directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0
+
+on post-fs-data && property:ro.boot.dsa.gapps=on && property:ro.boot.dsa.gapps_image=data
     mkdir /mnt/dsa-gapps 0755 root root
     mount erofs /data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0
+
+on post-fs-data && property:ro.boot.dsa.gapps=on
     mount overlay overlay /product/app ro nodev lowerdir=/mnt/dsa-gapps/product/app:/product/app
     mount overlay overlay /product/priv-app ro nodev lowerdir=/mnt/dsa-gapps/product/priv-app:/product/priv-app
     mount overlay overlay /product/framework ro nodev lowerdir=/mnt/dsa-gapps/product/framework:/product/framework
@@ -49,12 +63,6 @@ on post-fs-data && property:ro.boot.dsa.gapps=on
     mount overlay overlay /system_ext/etc/sysconfig ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/sysconfig:/system_ext/etc/sysconfig
     mount overlay overlay /system_ext/etc/default-permissions ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/default-permissions:/system_ext/etc/default-permissions
     mount overlay overlay /system_ext/etc/preferred-apps ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/preferred-apps:/system_ext/etc/preferred-apps
-
-# Without the image the directory still exists, so dsa-channeld can write one the user installs
-# while Android runs; it takes effect at the next start.
-on post-fs-data
-    mkdir /data/vendor/dsa 0771 system system
-    mkdir /data/vendor/dsa/gapps 0770 system system
 
 # Google Play services and the Play Store without an app image. ART compiles an app the Play
 # Store installs or updates with its cloud profile (speed-profile) and an app image: the classes

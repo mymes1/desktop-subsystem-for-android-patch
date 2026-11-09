@@ -664,6 +664,7 @@ impl HostConfig {
     ) -> AndroidVmConfig {
         let files = self.image_files(None);
         let pstore_disk = Some(crate::paths::pstore_disk_beside(&data_disk));
+        let addon_disk = Some(crate::paths::addon_disk_beside(&data_disk));
         AndroidVmConfig {
             owner: format!("DSA ({vm_name})"),
             kernel: files.kernel,
@@ -674,6 +675,7 @@ impl HostConfig {
             system_image: files.system_image,
             data_disk,
             pstore_disk,
+            addon_disk,
             socket_sids,
             page_reporting_order: self.page_reporting_order,
             console_pipe: Some(console_pipe_path(vm_name)),

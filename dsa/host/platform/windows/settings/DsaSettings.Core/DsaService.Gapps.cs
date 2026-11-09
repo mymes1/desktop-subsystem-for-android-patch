@@ -70,8 +70,8 @@ public sealed record GappsPackageInfo(
     string Source,
     string Md5);
 
-/// <summary>What the running Android says of Google Play: whether the image is on its disk,
-/// whether this boot has it, and the ID Google's registration page asks for.</summary>
+/// <summary>What the running Android says of Google Play: whether the image is on the add-on
+/// disk, whether this boot has it, and the ID Google's registration page asks for.</summary>
 public sealed record GappsGuestInfo(
     bool Installed,
     bool Active,
