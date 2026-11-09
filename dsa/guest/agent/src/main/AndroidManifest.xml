@@ -12,7 +12,9 @@
   is enabled only while a host accessibility client watches a task. It is also the guest's
   widget host (platform/AndroidWidgets.kt), which draws the widgets the user placed on the
   host's desktop. Its print service (platform/HostPrintService.kt) sends what apps print to the
-  host's printers.
+  host's printers. Its backup transport (platform/HostBackupTransport.kt) keeps app data in the
+  host's backup folder, and its credential provider (platform/HostCredentialProvider.kt) makes
+  and uses passkeys with the host's authenticator.
   Every permission here is also in privapp-permissions-dsa-agent.xml, but for the runtime
   permissions, which default-permissions-dsa-agent.xml grants instead.
 -->
@@ -131,6 +133,16 @@
     -->
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
     <uses-permission android:name="android.permission.WRITE_DEVICE_CONFIG" />
+    <!--
+      Making the agent's backup transport Android's, turning backup and automatic restore on,
+      and running the backups and restores the host asks for.
+    -->
+    <uses-permission android:name="android.permission.BACKUP" />
+    <!--
+      Being a system credential provider, which the credential manager lists whatever other
+      providers write into its settings.
+    -->
+    <uses-permission android:name="android.permission.PROVIDE_DEFAULT_ENABLED_CREDENTIAL_SERVICE" />
 
     <application
         android:name=".platform.AgentApplication"
@@ -271,5 +283,53 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/host_accessibility_service" />
         </service>
+
+        <!--
+          The guest's backup transport (platform/HostBackupTransport.kt): app data backups go
+          to the host's backup folder and come back from it. The backup manager binds it with
+          android.backup.TRANSPORT_HOST, and uses it only because the image's sysconfig
+          (sysconfig-dsa-agent.xml) lists it and the agent is privileged. Not exported: only the
+          system binds it.
+        -->
+        <service
+            android:name=".platform.HostBackupTransportService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.backup.TRANSPORT_HOST" />
+            </intent-filter>
+        </service>
+
+        <!--
+          The guest's passkey provider (platform/HostCredentialProvider.kt): the host's
+          authenticator makes and uses passkeys. Only the credential manager may bind it. The
+          second action makes it a system provider, which the credential manager lists without
+          the user enabling it.
+        -->
+        <service
+            android:name=".platform.HostCredentialProvider"
+            android:exported="true"
+            android:label="@string/passkey_provider_name"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.credentials.CredentialProviderService" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.credentials.system.CredentialProviderService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.credentials.provider"
+                android:resource="@xml/host_credential_provider" />
+        </service>
+
+        <!--
+          Hands a passkey request the person sent to "this computer" to the host and returns
+          the result (platform/PasskeyActivity.kt). It shows nothing, and only the credential
+          provider's pending intents start it.
+        -->
+        <activity
+            android:name=".platform.PasskeyActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 </manifest>
