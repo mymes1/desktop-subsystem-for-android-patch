@@ -6,8 +6,9 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
-    GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network, NetworkMode, Outcome,
+    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Backup, BackupJob,
+    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network,
+    NetworkMode, Outcome,
     ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
 };
 
@@ -841,6 +842,82 @@ pub fn gapps_device_id(gapps: &Gapps) -> String {
     match &gapps.device_id {
         Some(_) => tr("Enter this number on Google's registration page."),
         None => tr("It shows here once Google Play is installed and Android has started."),
+    }
+}
+
+/// When something last happened to the backup, in local time through `local` (which takes
+/// milliseconds since 1970), or "Never".
+pub fn backup_when(unix_ms: Option<i64>, local: impl Fn(i64) -> String) -> String {
+    match unix_ms {
+        Some(ms) => local(ms),
+        None => tr("Never"),
+    }
+}
+
+/// What the backup holds: how many apps, and how much of their data.
+pub fn backup_contents(backup: &Backup) -> String {
+    if backup.packages == 0 {
+        return tr("No apps yet");
+    }
+    trf(
+        "{0} apps, {1}",
+        &[&backup.packages.to_string(), &size_bytes(backup.size)],
+    )
+}
+
+/// What the backup section says while `job` runs; empty for a request that ends at once.
+pub fn backup_busy_text(job: BackupJob) -> String {
+    match job {
+        BackupJob::BackUp => tr(
+            "Backing up every app. Android starts if it is not running. This can take a while.",
+        ),
+        BackupJob::Restore => tr(
+            "Restoring apps and their data from the backup. Android starts if it is not running. This can take a while.",
+        ),
+        BackupJob::Read | BackupJob::ShowKey | BackupJob::ImportKey => String::new(),
+    }
+}
+
+/// How a backup or a restore ended, from the report it answered with.
+pub fn backup_result(job: BackupJob, backup: &Backup) -> String {
+    let (ok, failed, installed) = (
+        backup.succeeded.to_string(),
+        backup.failed.to_string(),
+        backup.installed.to_string(),
+    );
+    match (job, backup.failed) {
+        (BackupJob::Restore, 0) => trf(
+            "Apps restored: {0}. Apps installed first: {1}.",
+            &[&ok, &installed],
+        ),
+        (BackupJob::Restore, _) => trf(
+            "Apps restored: {0}. Apps installed first: {1}. Apps that could not be restored: {2}.",
+            &[&ok, &installed, &failed],
+        ),
+        (_, 0) => trf("Apps backed up: {0}.", &[&ok]),
+        (_, _) => trf(
+            "Apps backed up: {0}. Apps that could not be backed up: {1}.",
+            &[&ok, &failed],
+        ),
+    }
+}
+
+/// What the question before a restore says: what it installs and what it replaces.
+pub fn backup_restore_warning() -> String {
+    tr("Apps in the backup that Android does not have are installed, and the data of every app in the backup is replaced with the backup's. What those apps saved since the backup is lost. Android starts if it is not running.")
+}
+
+/// What the recovery key dialog says under its title.
+pub fn backup_key_advice() -> String {
+    tr("Write this key down and keep it somewhere safe, away from this computer. Anyone with it can read the backup. Without it, the backup cannot be opened on another computer or after this computer's keyring is lost.")
+}
+
+/// Why a recovery key was not used, from the service's reason; empty is no key at all.
+pub fn backup_key_refusal(reason: &str) -> String {
+    if reason.is_empty() {
+        tr("Enter the recovery key.")
+    } else {
+        trf("The key was not used: {0}", &[reason])
     }
 }
 

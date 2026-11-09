@@ -1059,6 +1059,155 @@ impl Gapps {
     }
 }
 
+/// Where the user's app data backup stands, as `dsa backup --json` reports it. The backup is
+/// encrypted, in a folder of the user's home; the key that opens it is kept in the desktop's
+/// credential store, and its recovery key opens it anywhere else.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Backup {
+    /// Whether backups can be made and read here.
+    pub available: bool,
+    /// Why they cannot, when they cannot.
+    pub problem: Option<String>,
+    /// The backup folder.
+    pub folder: String,
+    /// When the last backup ended, in milliseconds since 1970; 0 is never.
+    pub last_backup_unix_ms: i64,
+    /// When the last restore ended, in milliseconds since 1970; 0 is never.
+    pub last_restore_unix_ms: i64,
+    /// How many apps the backup holds.
+    pub packages: u32,
+    /// How many bytes of app data it holds, before encryption.
+    pub size: u64,
+    /// What went wrong last, when something did.
+    pub last_error: Option<String>,
+    /// After a backup or a restore: the apps it worked for, the apps it failed for, and the
+    /// apps a restore installed first.
+    pub succeeded: u32,
+    pub failed: u32,
+    pub installed: u32,
+}
+
+impl Backup {
+    pub fn read(json: &Value) -> Backup {
+        let count = |name: &str| u32::try_from(number(json, name)).unwrap_or(u32::MAX);
+        Backup {
+            available: flag(json, "available", false),
+            problem: optional_text(json, "problem"),
+            folder: text(json, "folder"),
+            last_backup_unix_ms: signed(json, "last_backup_unix_ms"),
+            last_restore_unix_ms: signed(json, "last_restore_unix_ms"),
+            packages: count("packages"),
+            size: number(json, "size"),
+            last_error: optional_text(json, "last_error"),
+            succeeded: count("succeeded"),
+            failed: count("failed"),
+            installed: count("installed"),
+        }
+    }
+
+    /// When the last backup ended, in milliseconds since 1970; `None` when there was none.
+    pub fn last_backup(&self) -> Option<i64> {
+        (self.last_backup_unix_ms > 0).then_some(self.last_backup_unix_ms)
+    }
+
+    /// When the last restore ended, in milliseconds since 1970; `None` when there was none.
+    pub fn last_restore(&self) -> Option<i64> {
+        (self.last_restore_unix_ms > 0).then_some(self.last_restore_unix_ms)
+    }
+
+    /// The problem to show: why backups cannot be made here, or nothing while they can.
+    pub fn shown_problem(&self) -> Option<&str> {
+        if self.available {
+            None
+        } else {
+            Some(self.problem.as_deref().unwrap_or_default())
+        }
+    }
+}
+
+/// A request of the backup section that is under way. Only one runs at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupJob {
+    /// Reading where the backup stands.
+    Read,
+    /// Backing up every app now, which waits for Android.
+    BackUp,
+    /// Installing the backup's apps Android lacks and restoring every app's data, which waits
+    /// for Android.
+    Restore,
+    /// Reading the recovery key.
+    ShowKey,
+    /// Keeping a recovery key the user entered.
+    ImportKey,
+}
+
+impl BackupJob {
+    /// Whether the request waits for Android, which can take long, so the section shows that
+    /// it is under way.
+    pub fn is_long(self) -> bool {
+        matches!(self, BackupJob::BackUp | BackupJob::Restore)
+    }
+}
+
+/// Which of the backup section's buttons can be pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BackupActions {
+    pub back_up: bool,
+    pub restore: bool,
+    pub show_key: bool,
+    pub import_key: bool,
+}
+
+/// The buttons that work for `backup` (`None` before it is read) while `running` is under
+/// way: none while a request runs; backing up and the recovery key only where backups can be
+/// made; restoring only from a backup that holds apps. A recovery key can always be entered,
+/// since it is what makes a backup from another computer readable.
+pub fn backup_actions(backup: Option<&Backup>, running: Option<BackupJob>) -> BackupActions {
+    let Some(backup) = backup.filter(|_| running.is_none()) else {
+        return BackupActions::default();
+    };
+    BackupActions {
+        back_up: backup.available,
+        restore: backup.available && backup.packages > 0,
+        show_key: backup.available,
+        import_key: true,
+    }
+}
+
+/// The words of a recovery key as the user typed or pasted it, as `dsa backup key import`
+/// takes them: split at spaces, with dashes at the ends of a word dropped (they only group
+/// the letters), so nothing reads as an option.
+pub fn backup_key_words(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|word| word.trim_matches('-'))
+        .filter(|word| !word.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// How entering a recovery key ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyImport {
+    /// The key is kept, and the backup reads as it now stands.
+    Kept(Backup),
+    /// The key was refused; the reason is the service's words, empty when no key was entered.
+    Refused(String),
+}
+
+impl KeyImport {
+    /// Reads a refusal of the key from what the client said: the service's reason, or the
+    /// client's own when it did not take the key. `None` for a failure that is not about the
+    /// key, such as a service that cannot be reached.
+    pub fn refusal(failure: &Failure) -> Option<KeyImport> {
+        if failure.problem != Problem::Refused {
+            return None;
+        }
+        let detail = failure.detail.lines().next().unwrap_or_default().trim();
+        let detail = detail.strip_prefix("the DSA service: ").unwrap_or(detail);
+        Some(KeyImport::Refused(detail.to_string()))
+    }
+}
+
 /// The device identity: what the user chose (empty where they chose nothing), what Android
 /// reports, and where each default came from (`computer` or `dsa`), keyed by the names
 /// `dsa settings set device.<name>` takes. `computer` holds the values that follow the
@@ -1508,6 +1657,47 @@ impl Client {
     /// Google's apps keep Android from starting; Android goes without them from its next start.
     pub fn remove_gapps(&self) -> Result<Gapps, Failure> {
         Ok(Gapps::read(&self.json(&["gapps", "remove"])?))
+    }
+
+    /// Where the app data backup stands. It never starts Android.
+    pub fn backup(&self) -> Result<Backup, Failure> {
+        Ok(Backup::read(&self.json(&["backup", "status"])?))
+    }
+
+    /// Has Android back up every app now, starting Android first when it is not running, and
+    /// waits until it has. It can take long.
+    pub fn back_up_now(&self) -> Result<Backup, Failure> {
+        Ok(Backup::read(&self.json(&["backup", "now"])?))
+    }
+
+    /// Installs the backup's apps that Android lacks, then replaces every app's data with the
+    /// backup's, starting Android first when it is not running. It can take long.
+    pub fn restore_backup(&self) -> Result<Backup, Failure> {
+        Ok(Backup::read(&self.json(&["backup", "restore"])?))
+    }
+
+    /// The backup's recovery key, to write down.
+    pub fn backup_recovery_key(&self) -> Result<String, Failure> {
+        Ok(text(
+            &self.json(&["backup", "key", "show"])?,
+            "recovery_key",
+        ))
+    }
+
+    /// Keeps the key the recovery key `text` carries as the backup key. A key the service or
+    /// the client refuses, such as one that does not open the backup folder, is a refusal with
+    /// its reason; nothing is asked when `text` holds no key.
+    pub fn import_backup_key(&self, text: &str) -> Result<KeyImport, Failure> {
+        let words = backup_key_words(text);
+        if words.is_empty() {
+            return Ok(KeyImport::Refused(String::new()));
+        }
+        let mut args = vec!["backup", "key", "import"];
+        args.extend(words.iter().map(String::as_str));
+        match self.json(&args) {
+            Ok(json) => Ok(KeyImport::Kept(Backup::read(&json))),
+            Err(failure) => KeyImport::refusal(&failure).ok_or(failure),
+        }
     }
 
     /// Every app installed in Android; Android is started first when it is not running.

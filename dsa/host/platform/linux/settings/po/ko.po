@@ -1442,3 +1442,126 @@ msgstr "DSA 업데이트 중"
 
 msgid "Update of DSA"
 msgstr "DSA 업데이트"
+
+msgid "Backup"
+msgstr "백업"
+
+msgid "DSA keeps an encrypted backup of your Android apps' data in a folder of your home folder, so the apps and their data can come back after Android's data is reset, or on another computer. The key that opens it is kept in your keyring."
+msgstr "DSA는 Android 앱의 데이터를 홈 폴더 안의 폴더에 암호화해 백업합니다. 그래서 Android 데이터를 초기화한 뒤에도, 다른 컴퓨터에서도 앱과 데이터를 되살릴 수 있습니다. 백업을 여는 키는 키링에 보관합니다."
+
+msgid "Folder"
+msgstr "폴더"
+
+msgid "Backups are unavailable"
+msgstr "백업을 사용할 수 없습니다"
+
+msgid "Last backup"
+msgstr "마지막 백업"
+
+msgid "In the backup"
+msgstr "백업 내용"
+
+msgid "Last restore"
+msgstr "마지막 복원"
+
+msgid "Last problem"
+msgstr "마지막 문제"
+
+msgid "Back up now"
+msgstr "지금 백업"
+
+msgid "Has Android back up the data of every app into the folder now. Android starts if it is not running."
+msgstr "Android가 지금 모든 앱의 데이터를 폴더에 백업합니다. Android가 실행 중이 아니면 시작합니다."
+
+msgid "Back up"
+msgstr "백업"
+
+msgid "Restore"
+msgstr "복원"
+
+msgid "Installs the apps of the backup that Android does not have, then replaces every app's data with the backup's."
+msgstr "백업에는 있지만 Android에 없는 앱을 설치한 뒤, 모든 앱의 데이터를 백업의 데이터로 바꿉니다."
+
+msgid "Show recovery key"
+msgstr "복구 키 보기"
+
+msgid "The key that opens the backup anywhere else. Write it down and keep it safe."
+msgstr "다른 곳에서 백업을 여는 키입니다. 적어서 안전하게 보관하십시오."
+
+msgid "Show"
+msgstr "보기"
+
+msgid "Use a recovery key"
+msgstr "복구 키 사용"
+
+msgid "Opens a backup folder brought from another computer, or kept from before this computer's keyring was reset."
+msgstr "다른 컴퓨터에서 가져온 백업 폴더나, 이 컴퓨터의 키링을 초기화하기 전부터 있던 백업 폴더를 엽니다."
+
+msgid "Enter"
+msgstr "입력"
+
+msgid "The backup was not restored"
+msgstr "백업을 복원하지 못했습니다"
+
+msgid "The apps were not backed up"
+msgstr "앱을 백업하지 못했습니다"
+
+msgid "Restore from the backup?"
+msgstr "백업에서 복원할까요?"
+
+msgid "The recovery key could not be shown"
+msgstr "복구 키를 보여 줄 수 없습니다"
+
+msgid "The recovery key is kept. The backup folder is read with it."
+msgstr "복구 키를 보관했습니다. 이제 이 키로 백업 폴더를 읽습니다."
+
+msgid "The recovery key was not used"
+msgstr "복구 키를 사용하지 않았습니다"
+
+msgid "Where the backup stands could not be read"
+msgstr "백업 상태를 읽을 수 없습니다"
+
+msgid "Recovery key"
+msgstr "복구 키"
+
+msgid "Enter the recovery key of the backup folder, as it was written down. Spaces, dashes and capitals do not matter. A key that does not open the folder is refused, and the key kept now stays."
+msgstr "적어 둔 그대로 백업 폴더의 복구 키를 입력하십시오. 띄어쓰기, 대시, 대소문자는 상관없습니다. 폴더를 열지 못하는 키는 거부하며, 지금 보관한 키는 그대로 둡니다."
+
+msgid "Never"
+msgstr "없음"
+
+msgid "No apps yet"
+msgstr "아직 앱이 없습니다"
+
+msgid "{0} apps, {1}"
+msgstr "앱 {0}개, {1}"
+
+msgid "Backing up every app. Android starts if it is not running. This can take a while."
+msgstr "모든 앱을 백업하고 있습니다. Android가 실행 중이 아니면 시작합니다. 시간이 걸릴 수 있습니다."
+
+msgid "Restoring apps and their data from the backup. Android starts if it is not running. This can take a while."
+msgstr "백업에서 앱과 데이터를 복원하고 있습니다. Android가 실행 중이 아니면 시작합니다. 시간이 걸릴 수 있습니다."
+
+msgid "Apps restored: {0}. Apps installed first: {1}."
+msgstr "앱 {0}개를 복원했습니다. 먼저 설치한 앱은 {1}개입니다."
+
+msgid "Apps restored: {0}. Apps installed first: {1}. Apps that could not be restored: {2}."
+msgstr "앱 {0}개를 복원했습니다. 먼저 설치한 앱은 {1}개이고, 앱 {2}개는 복원하지 못했습니다."
+
+msgid "Apps backed up: {0}."
+msgstr "앱 {0}개를 백업했습니다."
+
+msgid "Apps backed up: {0}. Apps that could not be backed up: {1}."
+msgstr "앱 {0}개를 백업했습니다. 앱 {1}개는 백업하지 못했습니다."
+
+msgid "Apps in the backup that Android does not have are installed, and the data of every app in the backup is replaced with the backup's. What those apps saved since the backup is lost. Android starts if it is not running."
+msgstr "백업에는 있지만 Android에 없는 앱을 설치하고, 백업에 있는 모든 앱의 데이터를 백업의 데이터로 바꿉니다. 그 앱들이 백업한 뒤에 저장한 내용은 사라집니다. Android가 실행 중이 아니면 시작합니다."
+
+msgid "Write this key down and keep it somewhere safe, away from this computer. Anyone with it can read the backup. Without it, the backup cannot be opened on another computer or after this computer's keyring is lost."
+msgstr "이 키를 적어 이 컴퓨터와 떨어진 안전한 곳에 보관하십시오. 이 키가 있으면 누구나 백업을 읽을 수 있습니다. 키가 없으면 다른 컴퓨터에서나 이 컴퓨터의 키링을 잃은 뒤에는 백업을 열 수 없습니다."
+
+msgid "Enter the recovery key."
+msgstr "복구 키를 입력하십시오."
+
+msgid "The key was not used: {0}"
+msgstr "키를 사용하지 않았습니다: {0}"
