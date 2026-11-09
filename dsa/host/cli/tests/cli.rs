@@ -3354,6 +3354,50 @@ fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
 }
 
 #[test]
+fn fr36_dsa_backup_commands_are_parsed() {
+    assert_eq!(parse(&args("backup")).unwrap().command, Cmd::BackupStatus);
+    assert_eq!(
+        parse(&args("backup --json")).unwrap().command,
+        Cmd::BackupStatus
+    );
+    assert_eq!(parse(&args("backup now")).unwrap().command, Cmd::BackupNow);
+    assert_eq!(
+        parse(&args("backup restore")).unwrap().command,
+        Cmd::BackupRestore
+    );
+    assert_eq!(
+        parse(&args("backup key show")).unwrap().command,
+        Cmd::BackupKeyShow
+    );
+    let import = parse(&args("backup key import ABCDE FGHJK --json")).unwrap();
+    assert_eq!(import.command, Cmd::BackupKeyImport);
+    assert_eq!(import.backup_key.as_deref(), Some("ABCDE FGHJK"));
+    assert!(import.json);
+    assert!(parse(&args("backup key import")).is_err());
+    assert!(parse(&args("backup key forget")).is_err());
+    assert!(parse(&args("backup everything")).is_err());
+}
+
+#[test]
+fn fr36_dsa_backup_describes_where_the_backup_stands() {
+    let report = dsa_host_core::backup::BackupReport {
+        available: true,
+        folder: "C:\\Users\\ada\\DSA Backup".into(),
+        last_backup_ms: 86_400_000 * 365,
+        packages: 3,
+        size: 5 * 1024 * 1024,
+        ..Default::default()
+    };
+    let text = dsa_cli::describe_backup(Cmd::BackupStatus, &report);
+    assert!(text.contains("DSA Backup"), "{text}");
+    assert!(text.contains("1971-01-01 00:00 UTC"), "{text}");
+    assert!(text.contains("Apps: 3 (5 MiB"), "{text}");
+    let json = dsa_cli::backup_json(&report);
+    assert_eq!(json["packages"], 3);
+    assert_eq!(json["available"], true);
+}
+
+#[test]
 fn fr32_dsa_gapps_commands_are_parsed() {
     assert_eq!(parse(&args("gapps")).unwrap().command, Cmd::GappsStatus);
     assert_eq!(
