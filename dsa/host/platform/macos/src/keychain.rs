@@ -1,5 +1,6 @@
-//! The keys DSA keeps for the user (their backup key and their Android's KeyMint root key) in
-//! the user's login keychain.
+//! The keys DSA keeps for the user in the user's login keychain: their backup key, and their
+//! Android's KeyMint root key where the Secure Enclave cannot seal it
+//! ([`crate::secure_enclave`]).
 //!
 //! Each key is a generic password item: service `io.github.thisisthepy.DSA`, account the key's
 //! name (`backup-key`, `keymint-root-key`). It is made accessible after the first unlock and
@@ -60,7 +61,11 @@ pub fn status_error(status: i32, purpose: KeyPurpose, doing: &str, message: &str
         )),
         _ => KeyError::Failed(format!(
             "the keychain failed to {} the {what}: {said}",
-            if doing == "kept" { "keep" } else { "read" }
+            match doing {
+                "kept" => "keep",
+                "removed" => "remove",
+                _ => "read",
+            }
         )),
     }
 }
@@ -194,6 +199,23 @@ mod mac {
                     }
                 }
                 status => Err(fail(status, purpose, "kept")),
+            }
+        }
+
+        fn remove(&self, purpose: KeyPurpose) -> Result<(), KeyError> {
+            let (service, account) = item(purpose);
+            // SAFETY: the keychain's constants are CFStrings; every value is a live object.
+            let query = unsafe {
+                Cf::dictionary(&[
+                    (kSecClass, kSecClassGenericPassword),
+                    (kSecAttrService, service.get()),
+                    (kSecAttrAccount, account.get()),
+                ])
+            };
+            // SAFETY: a query dictionary of live objects.
+            match unsafe { SecItemDelete(query.get()) } {
+                OK | ITEM_NOT_FOUND => Ok(()),
+                status => Err(fail(status, purpose, "removed")),
             }
         }
     }

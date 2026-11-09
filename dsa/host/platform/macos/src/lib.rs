@@ -29,8 +29,9 @@
 //!   one window host per app, each given its tasks' frames.
 //! - [`root_approval`]: the administrator dialog an Android app's root request waits for,
 //!   through Authorization Services.
-//! - [`keychain`] and `host_services`: the app data backup in `~/DSA Backup`, the passkey check
-//!   and KeyMint's root key, with their keys in the user's login keychain.
+//! - [`keychain`], [`secure_enclave`] and `host_services`: the app data backup in `~/DSA Backup`,
+//!   the passkey check and KeyMint's root key: the backup key in the user's login keychain, the
+//!   KeyMint root key sealed by the Secure Enclave first.
 //!
 //! What can be checked anywhere (the kernel command line, the disk formats, the
 //! configuration, the launchd agent, key tables, sizes, bundle layouts, value conversions) is
@@ -48,6 +49,7 @@ pub mod keychain;
 pub mod launchd;
 pub mod power;
 pub mod root_approval;
+pub mod secure_enclave;
 pub mod shell;
 pub mod user_disk;
 /// The image's VHDX disks read into raw images, shared with the Linux host.

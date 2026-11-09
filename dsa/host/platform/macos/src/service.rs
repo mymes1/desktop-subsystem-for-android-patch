@@ -543,8 +543,8 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     // The Mac's name becomes the guest's device name.
     session.set_device_name_source(Arc::new(move || boot_identity.device_name()));
     session.serve_file_shares(Box::new(share), Arc::new(user_folders()));
-    // App data backups in ~/DSA Backup, the passkey check, and KeyMint's root key, with the
-    // keys in the user's login keychain.
+    // App data backups in ~/DSA Backup (once the user turns backup on), the passkey check,
+    // and KeyMint's root key, sealed by the Secure Enclave first.
     let keymint = VsockListener::new(
         channels.receiver(dsa_host_core::keymint_root::KEYMINT_PORT),
         Framing::Framed,
@@ -554,6 +554,8 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
         &user_folders().home,
         Box::new(keymint),
         &shared.build,
+        &config.settings_dir(&shared.user),
+        name,
     );
     let dial = |port: u32| {
         let slot = slot.clone();

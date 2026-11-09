@@ -66,6 +66,32 @@ extern "C" {
     fn CFBooleanGetTypeID() -> usize;
     fn CFBooleanGetValue(boolean: CFTypeRef) -> u8;
     fn CFRelease(object: CFTypeRef);
+    fn CFErrorGetCode(error: CFTypeRef) -> isize;
+    fn CFErrorCopyDescription(error: CFTypeRef) -> CFTypeRef;
+    fn CFNumberCreate(alloc: CFTypeRef, kind: isize, value: *const std::ffi::c_void) -> CFTypeRef;
+}
+
+/// What a `CFError` a call gave says: its code and its description.
+pub fn error_of(error: &Cf) -> (i64, String) {
+    if error.is_null() {
+        return (0, String::new());
+    }
+    // SAFETY: a CFError this code owns; the description is a CFString it then owns.
+    unsafe {
+        let code = CFErrorGetCode(error.get()) as i64;
+        let description = Cf::owned(CFErrorCopyDescription(error.get())).text();
+        (code, description)
+    }
+}
+
+impl Cf {
+    /// A `CFNumber` of `value`.
+    pub fn number(value: i32) -> Cf {
+        /// `kCFNumberSInt32Type`.
+        const SINT32: isize = 3;
+        // SAFETY: a pointer to an i32 that outlives the call, which copies it.
+        Cf(unsafe { CFNumberCreate(std::ptr::null(), SINT32, (&value as *const i32).cast()) })
+    }
 }
 
 #[link(name = "Security", kind = "framework")]
@@ -85,6 +111,41 @@ extern "C" {
     pub fn SecItemCopyMatching(query: CFTypeRef, result: *mut CFTypeRef) -> i32;
     pub fn SecItemAdd(attributes: CFTypeRef, result: *mut CFTypeRef) -> i32;
     pub fn SecItemUpdate(query: CFTypeRef, update: CFTypeRef) -> i32;
+    pub fn SecItemDelete(query: CFTypeRef) -> i32;
+    // The Secure Enclave's keys.
+    pub static kSecClassKey: CFTypeRef;
+    pub static kSecAttrKeyType: CFTypeRef;
+    pub static kSecAttrKeyTypeECSECPrimeRandom: CFTypeRef;
+    pub static kSecAttrKeySizeInBits: CFTypeRef;
+    pub static kSecAttrTokenID: CFTypeRef;
+    pub static kSecAttrTokenIDSecureEnclave: CFTypeRef;
+    pub static kSecAttrIsPermanent: CFTypeRef;
+    pub static kSecAttrApplicationTag: CFTypeRef;
+    pub static kSecAttrAccessControl: CFTypeRef;
+    pub static kSecPrivateKeyAttrs: CFTypeRef;
+    pub static kSecReturnRef: CFTypeRef;
+    pub static kSecUseDataProtectionKeychain: CFTypeRef;
+    pub static kSecKeyAlgorithmECIESEncryptionCofactorVariableIVX963SHA256AESGCM: CFTypeRef;
+    pub fn SecAccessControlCreateWithFlags(
+        alloc: CFTypeRef,
+        protection: CFTypeRef,
+        flags: usize,
+        error: *mut CFTypeRef,
+    ) -> CFTypeRef;
+    pub fn SecKeyCreateRandomKey(parameters: CFTypeRef, error: *mut CFTypeRef) -> CFTypeRef;
+    pub fn SecKeyCopyPublicKey(key: CFTypeRef) -> CFTypeRef;
+    pub fn SecKeyCreateEncryptedData(
+        key: CFTypeRef,
+        algorithm: CFTypeRef,
+        plaintext: CFTypeRef,
+        error: *mut CFTypeRef,
+    ) -> CFTypeRef;
+    pub fn SecKeyCreateDecryptedData(
+        key: CFTypeRef,
+        algorithm: CFTypeRef,
+        ciphertext: CFTypeRef,
+        error: *mut CFTypeRef,
+    ) -> CFTypeRef;
     fn SecCopyErrorMessageString(status: i32, reserved: *mut c_void) -> CFTypeRef;
     fn SecTaskCreateFromSelf(alloc: CFTypeRef) -> CFTypeRef;
     fn SecTaskCopyValueForEntitlement(
