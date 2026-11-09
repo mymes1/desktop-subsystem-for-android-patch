@@ -11,7 +11,7 @@
     MinWidth="640"
     MinHeight="360"
     FontFamily="{StaticResource TextFont}"
-    WindowStartupLocation="CenterScreen"
+    WindowStartupLocation="Manual"
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica"
     WindowCornerPreference="Round"
