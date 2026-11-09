@@ -59,6 +59,16 @@
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
 //! checked fails with those refusals in its message.
 //!
+//! A second boot check measures the idle reclaim with Google apps installed and no app window
+//! open, for the decision on backing off its interval (`idle_reclaim`). It installs LiteGapps'
+//! own newest build for the guest, downloaded into the mirror (the small stand-in build holds
+//! no Play services that run, so it is used only when LiteGapps cannot be reached, and the
+//! report says so), starts Android again, and samples the guest once a second for five
+//! minutes: each run of the reclaim, the kernel time init spends in it, the guest's processor
+//! time, the refaults and reads around each run, and which processes faulted file pages in
+//! between. The report goes to `idle-reclaim.md` and `idle-reclaim.json` in the check's folder,
+//! with the raw samples and the guest log beside them. It fails only when it cannot measure.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
 //! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
@@ -69,6 +79,7 @@
 #![cfg(target_os = "linux")]
 
 mod boot_check;
+mod idle_reclaim;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1834,5 +1845,351 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     if !problems.is_empty() {
         problems.dedup();
         fail(problems.join("\n"), &service, &log);
+    }
+}
+
+/// How long the idle reclaim is watched for, with Google apps installed and no app window.
+const IDLE_WINDOW: Duration = Duration::from_secs(300);
+/// Every how many of the sampler's looks (one a second) it also reads every process and cgroup.
+const IDLE_SNAPSHOT_EVERY: u32 = 10;
+/// The whole measurement, both boots, LiteGapps' download and the window included, stays under
+/// twenty-two minutes.
+const IDLE_BUDGET: Duration = Duration::from_secs(1320);
+/// How long LiteGapps' build (120 to 260 MiB) may take to download.
+const LITEGAPPS_DOWNLOAD: Duration = Duration::from_secs(420);
+/// Where the sampler is put in the guest: the one place the shell may run a file it wrote.
+const SAMPLER_GUEST: &str = "/data/local/tmp/dsa-idle-sampler.sh";
+/// The guest's memory and processors while the idle reclaim is measured.
+const IDLE_MEMORY_MB: u64 = 4096;
+const IDLE_PROCESSORS: u64 = 2;
+
+/// Puts LiteGapps' newest Core build for `arch` at API level `sdk` into the mirror at `mirror`,
+/// in place of the small stand-in build, so the service installs the build a user gets.
+/// Returns its file name.
+fn mirror_litegapps(mirror: &Path, arch: &str, sdk: u32) -> Result<String, String> {
+    use dsa_host_core::gapps::{listing, Target};
+    let abi = if arch == "x86_64" {
+        "x86_64"
+    } else {
+        "arm64-v8a"
+    };
+    let target = Target::for_guest(sdk, abi)?;
+    let build = listing::newest(&dsa_host_linux::fetch::CurlFetch, listing::PROJECT, &target)?;
+    let folder = format!("/litegapps/{}/{}/core", target.arch, target.sdk);
+    let path = format!("{folder}/{}/{}", build.folder, build.file);
+    let download = mirror.join(format!("files{path}/download"));
+    std::fs::create_dir_all(download.parent().unwrap())
+        .map_err(|why| format!("making {}: {why}", download.display()))?;
+    let out = run_bounded(
+        Command::new("curl")
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=https",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "30",
+                "--max-time",
+            ])
+            .arg(LITEGAPPS_DOWNLOAD.as_secs().to_string())
+            .arg("--output")
+            .arg(&download)
+            .arg(listing::download_url(listing::PROJECT, &target, &build)),
+        LITEGAPPS_DOWNLOAD + Duration::from_secs(30),
+        usize::MAX,
+    )?;
+    if !out.status.is_some_and(|status| status.success()) {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "downloading {}: {}",
+            build.file,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let mut file = std::fs::File::open(&download)
+        .map_err(|why| format!("reading {}: {why}", download.display()))?;
+    let mut md5 = Md5::new();
+    let mut size = 0u64;
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|why| format!("reading {}: {why}", download.display()))?;
+        if read == 0 {
+            break;
+        }
+        md5.update(&buffer[..read]);
+        size += read as u64;
+    }
+    let digest = hex(&md5.finish());
+    if size != build.size || digest != build.md5 {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "{} arrived as {size} bytes with MD5 {digest}; LiteGapps lists {} bytes with {}",
+            build.file, build.size, build.md5
+        ));
+    }
+    std::fs::write(
+        mirror.join(format!("rss?path={folder}")),
+        feed::feed(&[feed::item(&path, size, &digest)]),
+    )
+    .map_err(|why| format!("writing the mirror's list: {why}"))?;
+    Ok(build.file)
+}
+
+#[test]
+fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
+    let (Some(crosvm), Some(image)) = (
+        std::env::var_os("DSA_CROSVM").map(PathBuf::from),
+        std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
+    ) else {
+        eprintln!("skipped: DSA_CROSVM and DSA_WIDGET_TEST_IMAGE name no crosvm and image");
+        return;
+    };
+    let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
+    let adb_program = std::env::var_os("DSA_ADB")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("adb"));
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(image.join("image.json")).expect("reading the image's image.json"),
+    )
+    .expect("the image's image.json is JSON");
+    let arch = manifest["arch"].as_str().unwrap_or("x86_64").to_string();
+
+    let started = Instant::now();
+    let deadline = started + IDLE_BUDGET;
+    let _watchdog = Watchdog::start("the idle reclaim measurement", IDLE_BUDGET + OVERRUN);
+    let dir = scratch();
+    let mirror = dir.join("mirror");
+    write_mirror(&mirror, &arch).unwrap();
+    let socket = dir.join("host.sock");
+    let config = dir.join("dsa-hostd.json");
+    let settings = serde_json::json!({
+        "image_dir": image,
+        "kernel": kernel,
+        "crosvm": crosvm,
+        "socket": socket,
+        "machine_dir": dir.join("machine"),
+        "network": false,
+        "memory_mb": IDLE_MEMORY_MB,
+        "processors": IDLE_PROCESSORS,
+        "data_disk_size_gb": 8,
+        "gapps_project": format!("file://{}", mirror.display()),
+    });
+    std::fs::write(&config, settings.to_string()).unwrap();
+    let service = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
+            .arg("--config")
+            .arg(&config),
+        dir.join("hostd.log"),
+    );
+    let _compositor = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-compositor")).env("DSA_SOCKET", &socket),
+        dir.join("compositor.log"),
+    );
+    let mut api = client(&socket, Duration::from_secs(30));
+    let log: Arc<Mutex<Vec<String>>> = Arc::default();
+    read_log(&socket, &log);
+    let boot = (deadline.saturating_duration_since(Instant::now())) / 4;
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // Developer mode, so adb reaches the guest through the service's loopback port.
+    let mut wanted = match api.settings() {
+        Ok(report) => report.settings,
+        Err(why) => fail(format!("reading the settings: {why}"), &service, &log),
+    };
+    wanted.developer_mode = true;
+    wanted.adb_auto_connect = false;
+    let port = wanted.adb_port;
+    if let Err(why) = api.set_settings(&wanted) {
+        fail(format!("turning developer mode on: {why}"), &service, &log);
+    }
+    let adb = Adb {
+        program: adb_program,
+        serial: format!("127.0.0.1:{port}"),
+    };
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // LiteGapps' own build, which a user's Android runs, wherever it can be had.
+    let sdk = adb
+        .shell("getprop ro.build.version.sdk")
+        .ok()
+        .and_then(|sdk| sdk.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    let gapps = match mirror_litegapps(&mirror, &arch, sdk) {
+        Ok(file) => format!("LiteGapps' {file}"),
+        Err(why) => {
+            println!(
+                "::warning::the idle reclaim is measured with the check's small stand-in Google apps build, not LiteGapps' own: {why}"
+            );
+            format!(
+                "the check's small stand-in build, because LiteGapps' own could not be had ({why}); \
+                 it holds no Google Play services that run, so this measures only the system with \
+                 the image laid over"
+            )
+        }
+    };
+    eprintln!("{} s: installing {gapps}", started.elapsed().as_secs());
+    let install_until = Instant::now() + Duration::from_secs(240);
+    let installed = loop {
+        let result = client(&socket, Duration::from_secs(10)).install_gapps(&mut |news| {
+            eprintln!("Google Play: {news:?}");
+        });
+        match result {
+            Ok(status) => break status,
+            Err(why) if Instant::now() >= install_until => fail(
+                format!("installing the Google apps from the mirror: {why}"),
+                &service,
+                &log,
+            ),
+            Err(why) => {
+                eprintln!("installing the Google apps from the mirror: {why}; trying again");
+                std::thread::sleep(Duration::from_secs(3));
+            }
+        }
+    };
+    if installed.package.is_none() || !installed.restart_needed {
+        fail(
+            format!(
+                "the service took the Google apps but does not say they apply from the next start: {:?}",
+                installed.package
+            ),
+            &service,
+            &log,
+        );
+    }
+
+    // Android starts again, with the Google apps.
+    if let Err(why) = api.stop() {
+        fail(format!("stopping Android: {why}"), &service, &log);
+    }
+    let stop_until = Instant::now() + Duration::from_secs(120);
+    let mut left = false;
+    loop {
+        use dsa_host_core::session::SessionState;
+        match api.status() {
+            Ok(status) if status.state == SessionState::Stopped => break,
+            Ok(status) if left && status.state == SessionState::Starting => break,
+            Ok(status) if Instant::now() < stop_until => {
+                left |= status.state == SessionState::Stopping;
+                std::thread::sleep(Duration::from_secs(1))
+            }
+            Ok(status) => fail(
+                format!("Android did not stop: it is {:?}", status.state),
+                &service,
+                &log,
+            ),
+            Err(why) => fail(format!("reading the status: {why}"), &service, &log),
+        }
+    }
+    let boot = deadline
+        .saturating_duration_since(Instant::now())
+        .saturating_sub(IDLE_WINDOW + Duration::from_secs(180));
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready again with the Google apps: {why}"),
+            &service,
+            &log,
+        );
+    }
+    read_log(&socket, &log);
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest after the restart: {why}"),
+            &service,
+            &log,
+        );
+    }
+    let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-mounts.txt"), &table);
+    let Some(mounted) = mounts(&table)
+        .iter()
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .map(|m| format!("{} ({})", m.source, m.super_options))
+    else {
+        fail(
+            format!(
+                "no Google apps image is mounted at {GAPPS_POINT}, so there is nothing to measure"
+            ),
+            &service,
+            &log,
+        );
+    };
+
+    // Five minutes with no app window open, sampled from inside the guest.
+    let sampler = dir.join("idle-sampler.sh");
+    std::fs::write(&sampler, idle_reclaim::SAMPLER).unwrap();
+    if let Err(why) = adb.run(&["push", &sampler.to_string_lossy(), SAMPLER_GUEST]) {
+        fail(
+            format!("putting the sampler in the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+    eprintln!(
+        "{} s: watching the idle reclaim for {} s",
+        started.elapsed().as_secs(),
+        IDLE_WINDOW.as_secs()
+    );
+    let command = format!(
+        "sh {SAMPLER_GUEST} {} {IDLE_SNAPSHOT_EVERY}",
+        IDLE_WINDOW.as_secs()
+    );
+    let raw = match adb.run_for(&["shell", &command], IDLE_WINDOW + Duration::from_secs(120)) {
+        Ok(out) => String::from_utf8_lossy(&out).into_owned(),
+        Err(why) => fail(format!("the idle sampler: {why}"), &service, &log),
+    };
+    let _ = std::fs::write(dir.join("idle-reclaim-samples.txt"), &raw);
+    let guest_log = adb
+        .shell("logcat -d -b kernel -b main -b system -v monotonic")
+        .unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-log.txt"), &guest_log);
+
+    let record = idle_reclaim::parse(&raw);
+    let events = idle_reclaim::log_events(&guest_log);
+    let report = idle_reclaim::report(
+        &record,
+        &events,
+        &format!("{gapps}, its image mounted from {mounted}"),
+        IDLE_MEMORY_MB,
+        IDLE_PROCESSORS,
+    );
+    let _ = std::fs::write(dir.join("idle-reclaim.md"), &report.markdown);
+    let _ = std::fs::write(
+        dir.join("idle-reclaim.json"),
+        serde_json::to_string_pretty(&report.json).unwrap_or_default(),
+    );
+    println!("{}", report.markdown);
+    if record.looks.len() < 10 {
+        fail(
+            format!(
+                "the idle sampler gave {} looks in {} s, too few to measure; its output is in idle-reclaim-samples.txt",
+                record.looks.len(),
+                IDLE_WINDOW.as_secs()
+            ),
+            &service,
+            &log,
+        );
     }
 }
