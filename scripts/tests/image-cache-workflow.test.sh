@@ -17,6 +17,14 @@ for input in "'dsa/guest/image/**'" "'dsa/guest/framework/**'" "'dsa/guest/*/*.r
     'sgdisk --version' 'qemu-img --version' '$ImageOS'; do
   grep -Fq -- "$input" <<<"$key" || { echo "the image's cache key does not name $input"; exit 1; }
 done
+# The key keeps its prefix once the runner has put the expressions in. The file hash is hex,
+# so "$prefix<hash>" would read as one unset variable and leave only "-<inputs>".
+rendered="$(grep -E '^ +(prefix|key)=' <<<"$key" \
+  | sed -e 's/\${{ matrix.android }}/17/g' -e 's/\${{ matrix.arch }}/x86_64/g' \
+        -e 's/\${{ hashFiles([^}]*) }}/40455b6b65898e49/g')"
+expanded="$(inputs=aa551940637083dd bash -c "$rendered"$'\n''printf %s "$key"')"
+[[ "$expanded" == "guest-image-android-17-x86_64-40455b6b65898e49-aa551940637083dd" ]] \
+  || { echo "the image's cache key expands to '$expanded'"; exit 1; }
 # The image is made with exactly the arguments the key names.
 grep -Fq 'mapfile -t args < .scratch/image-args' <<<"$(step 'Make the image')"
 
