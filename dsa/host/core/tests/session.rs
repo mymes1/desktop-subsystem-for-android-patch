@@ -63,6 +63,10 @@ struct Guest {
     /// The memory range the launcher offers, and each size the session set.
     memory_range: Option<(u64, u64)>,
     memory_sizes: Vec<u64>,
+    /// Sizes the platform fails to set once each, as Hyper-V timed out taking 1.5 GiB back,
+    /// and how many times the session told the launcher growing failed for good.
+    refuse_memory: Vec<u64>,
+    growth_failed: usize,
     /// What the launcher tells about a guest that is late.
     stall: Option<String>,
 }
@@ -146,8 +150,19 @@ impl GuestLauncher for FakeLauncher {
     }
 
     fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
-        self.0.lock().unwrap().memory_sizes.push(mb);
+        let mut guest = self.0.lock().unwrap();
+        guest.memory_sizes.push(mb);
+        if let Some(at) = guest.refuse_memory.iter().position(|&size| size == mb) {
+            guest.refuse_memory.remove(at);
+            return Err(format!(
+                "HcsModifyComputeSystem failed (HRESULT 0x800705b4) setting {mb} MiB"
+            ));
+        }
         Ok(())
+    }
+
+    fn memory_growth_failed(&mut self, _why: &str) {
+        self.0.lock().unwrap().growth_failed += 1;
     }
 
     fn explain_stall(&mut self, _stall: GuestStall) -> Option<String> {
@@ -1157,6 +1172,43 @@ fn nfr2_the_guest_memory_grows_when_its_daemon_says_it_is_short() {
     wait_until("the memory is grown", || {
         launcher.0.lock().unwrap().memory_sizes == vec![4608]
     });
+}
+
+#[test]
+fn nfr2_a_resize_that_times_out_is_tried_again_smaller_and_later_resizes_still_happen() {
+    let launcher = FakeLauncher::default();
+    {
+        let mut guest = launcher.0.lock().unwrap();
+        guest.memory_range = Some((3072, 16384));
+        guest.refuse_memory = vec![4608];
+    }
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    let short = || {
+        Body::GuestMemoryPressure(dsa_protocol::control::GuestMemoryPressure {
+            mem_total_kb: 2900 * 1024,
+            mem_available_kb: 200 * 1024,
+            stall_centipercent: 0,
+        })
+    };
+    send_body(&mut agent, short());
+    wait_until("the growth is asked for", || {
+        launcher.0.lock().unwrap().memory_sizes == vec![4608]
+    });
+    // Within the retry wait nothing more is asked.
+    send_body(&mut agent, short());
+    thread::sleep(Duration::from_millis(200));
+    assert_eq!(launcher.0.lock().unwrap().memory_sizes, vec![4608]);
+    // After it, the growth is tried again in a step half the size of the one that failed.
+    thread::sleep(Duration::from_millis(5100));
+    send_body(&mut agent, short());
+    wait_until("the growth is tried again, smaller", || {
+        launcher.0.lock().unwrap().memory_sizes == vec![4608, 3840]
+    });
+    // The failure never told the launcher to stop growing.
+    assert_eq!(launcher.0.lock().unwrap().growth_failed, 0);
 }
 
 #[test]

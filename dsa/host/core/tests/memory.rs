@@ -91,6 +91,96 @@ fn nfr2_growing_stops_when_added_memory_never_reaches_the_guest() {
 }
 
 #[test]
+fn nfr2_a_timed_out_shrink_is_retried_in_smaller_steps_until_the_vm_is_back_at_its_base() {
+    use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
+    let start = Instant::now();
+    let mut growth = MemoryGrowth::new(3072, 16384);
+    assert_eq!(
+        growth.on_pressure(&pressure(2900, 100, 0.0), start),
+        Some(GrowthAction::Resize(4608))
+    );
+    growth.applied();
+    // The apps closed: all 1.5 GiB is asked back at once, and Hyper-V times out.
+    let t = start + Duration::from_secs(5);
+    assert_eq!(
+        growth.on_pressure(&pressure(4400, 3600, 0.0), t),
+        Some(GrowthAction::Resize(3072))
+    );
+    growth.refused(t);
+    assert_eq!(
+        growth.current_mb(),
+        4608,
+        "the VM counts as still at its size"
+    );
+    assert!(!growth.stopped(), "a failure does not stop later resizes");
+    assert_eq!(growth.retry_in(t), Some(Duration::from_secs(5)));
+    // Nothing during the wait.
+    let t = t + Duration::from_secs(2);
+    assert_eq!(growth.on_pressure(&pressure(4400, 3600, 0.0), t), None);
+    // Then half the step that failed.
+    let t = t + Duration::from_secs(3);
+    assert_eq!(
+        growth.on_pressure(&pressure(4400, 3600, 0.0), t),
+        Some(GrowthAction::Resize(3840))
+    );
+    // It times out again: half again, after twice the wait.
+    growth.refused(t);
+    assert_eq!(growth.retry_in(t), Some(Duration::from_secs(10)));
+    let t = t + Duration::from_secs(10);
+    assert_eq!(
+        growth.on_pressure(&pressure(4400, 3600, 0.0), t),
+        Some(GrowthAction::Resize(4224))
+    );
+    growth.applied();
+    // Each step that goes through lets the next double, down to the base.
+    let t = t + Duration::from_secs(5);
+    assert_eq!(
+        growth.on_pressure(&pressure(4200, 3400, 0.0), t),
+        Some(GrowthAction::Resize(3456))
+    );
+    growth.applied();
+    let t = t + Duration::from_secs(5);
+    assert_eq!(
+        growth.on_pressure(&pressure(3400, 2600, 0.0), t),
+        Some(GrowthAction::Resize(3072))
+    );
+    growth.applied();
+    assert_eq!(growth.current_mb(), 3072);
+    // And it still grows when the guest runs short again.
+    let t = t + Duration::from_secs(5);
+    assert_eq!(
+        growth.on_pressure(&pressure(2900, 100, 0.0), t),
+        Some(GrowthAction::Resize(4608))
+    );
+}
+
+#[test]
+fn nfr2_a_refused_growth_is_retried_smaller_and_the_wait_never_passes_five_minutes() {
+    use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
+    let start = Instant::now();
+    let mut growth = MemoryGrowth::new(3072, 16384);
+    let mut t = start;
+    let mut asked = Vec::new();
+    for _ in 0..12 {
+        match growth.on_pressure(&pressure(2900, 100, 0.0), t) {
+            Some(GrowthAction::Resize(mb)) => {
+                asked.push(mb);
+                growth.refused(t);
+                assert_eq!(growth.current_mb(), 3072);
+                let wait = growth.retry_in(t).expect("a wait after a failure");
+                assert!(wait <= Duration::from_secs(300), "{wait:?}");
+                t += wait;
+            }
+            other => panic!("expected another try, got {other:?}"),
+        }
+    }
+    // Each try half the one before, down to the guest's 128 MiB blocks.
+    assert_eq!(&asked[..5], &[4608, 3840, 3456, 3328, 3200]);
+    assert!(asked[5..].iter().all(|&mb| mb == 3200), "{asked:?}");
+    assert!(!growth.stopped());
+}
+
+#[test]
 fn nfr2_the_vm_is_sized_to_the_host_less_what_the_host_keeps() {
     use dsa_host_core::memory::{automatic_vm_memory_mb, vm_memory_mb};
     // A tenth of a large host, at least 2 GiB of a small one.
