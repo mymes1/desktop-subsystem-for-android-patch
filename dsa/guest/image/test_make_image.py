@@ -5781,12 +5781,29 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertEqual(product.count(product[-2]), 1)
             on = archive.read("SYSTEM/etc/dsa/gapps-on.prop").decode().splitlines()
             props = [line for line in on if line and not line.startswith("#")]
-            self.assertEqual([line.split("=", 1)[0] for line in props], ["ro.oem.build.fingerprint"])
+            self.assertEqual([line.split("=", 1)[0] for line in props],
+                             ["ro.oem.build.fingerprint", "ro.control_privapp_permissions"])
             off = archive.read("SYSTEM/etc/dsa/gapps-off.prop").decode().splitlines()
             self.assertEqual([line for line in off if line and not line.startswith("#")], [])
             config = archive.read("META/filesystem_config.txt").decode()
             for rule in make_image.GAPPS_FS_CONFIG:
                 self.assertIn(rule, config)
+
+    def test_fr32_a_boot_with_the_google_apps_logs_a_missing_privileged_permission(self):
+        # LiteGapps' lists for Android 17 left out ACCESS_COMPANION_INFO, and with the allowlist
+        # enforced system_server stopped at systemReady every ten seconds: Android never started.
+        on = (Path(make_image.__file__).with_name("gapps-on.prop")).read_text().splitlines()
+        self.assertIn(make_image.GAPPS_PRIVAPP_LOG, on)
+        self.assertEqual(make_image.GAPPS_PRIVAPP_LOG, "ro.control_privapp_permissions=log")
+        off = (Path(make_image.__file__).with_name("gapps-off.prop")).read_text()
+        self.assertNotIn("ro.control_privapp_permissions", off)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertIn(make_image.GAPPS_PRIVAPP_LOG,
+                          archive.read("SYSTEM/etc/dsa/gapps-on.prop").decode().splitlines())
+            # Nothing the product properties read after the import sets it back.
+            product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
+            after = product[product.index(make_image.GAPPS_IMPORT) + 1:]
+            self.assertFalse([line for line in after if "control_privapp_permissions" in line])
 
     def test_fr32_the_google_apps_are_laid_over_only_when_the_host_says_they_are_installed(self):
         rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
@@ -5848,7 +5865,11 @@ class ArmTranslationImageTests(unittest.TestCase):
                     else:
                         rc = gapps_rc if case != "always" else "on post-fs-data\n    mount overlay overlay /product ro\n"
                         archive.writestr("SYSTEM/etc/init/dsa-gapps.rc", rc)
-                        archive.writestr("SYSTEM/etc/dsa/gapps-on.prop", "ro.oem.build.fingerprint=x\n")
+                        # The "always" image also has 0.2.0's "on" file, which enforced the
+                        # allowlist.
+                        on = ("ro.oem.build.fingerprint=x\n" if case == "always"
+                              else (Path(make_image.__file__).with_name("gapps-on.prop")).read_text())
+                        archive.writestr("SYSTEM/etc/dsa/gapps-on.prop", on)
                         archive.writestr("SYSTEM/etc/dsa/gapps-off.prop", "# nothing\n")
                         archive.writestr("PRODUCT/etc/build.prop",
                                          make_image.add_arm_translation_import(make_image.add_gapps_import("")))
@@ -5862,6 +5883,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertNotIn(problem, good)
         self.assertIn("without waiting for the host", always)
         self.assertNotIn("without waiting for the host", good)
+        self.assertIn("stops Android at every boot", always)
+        self.assertNotIn("stops Android at every boot", good)
         self.assertIn("x86_64 is not the ABI apps are installed for first", arm_first)
         self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
 

@@ -220,7 +220,12 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   `/system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop` just before the ARM translation
   import: the "on" file sets the fingerprint of the oem partition, which the image does not
   have, so the boot is an upgrade and the package manager installs the new system apps for every
-  user and grants their default permissions. `sepolicy/gapps.cil` lets init do so.
+  user and grants their default permissions. It also sets `ro.control_privapp_permissions=log`:
+  a privileged permission that no `privapp-permissions` list names is then logged and granted,
+  where `enforce` stops `system_server` at every boot. The host's image carries a list of every
+  permission its privileged apps ask for (`dsa-gapps-privapp-permissions.xml` in each
+  partition's `etc/permissions`), so the log should stay empty. `sepolicy/gapps.cil` lets init
+  lay the image over.
 - Cuttlefish's `seriallogging.rc` is removed. Its logger writes to a virtio console Hyper-V
   does not have, and init would restart it every five seconds for as long as the guest runs.
 - `sepolicy/memory.cil` lets the audio HAL and the software codecs share memory through

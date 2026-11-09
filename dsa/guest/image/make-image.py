@@ -3251,6 +3251,12 @@ GAPPS_PROPS = {
     "SYSTEM/etc/dsa/gapps-off.prop": HERE / "gapps-off.prop",
 }
 GAPPS_IMPORT = "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop"
+# What the "on" file sets so that a privileged permission no list names is logged and granted
+# rather than stopping system_server at every boot. The product build.prop imports the file
+# last (before only the ARM translation import, which sets no such property), and the product
+# partition's properties are read after every other partition's, so this wins over an
+# "enforce" set anywhere else.
+GAPPS_PRIVAPP_LOG = "ro.control_privapp_permissions=log"
 GAPPS_FS_CONFIG = [
     "system/etc/init/dsa-gapps.rc 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
