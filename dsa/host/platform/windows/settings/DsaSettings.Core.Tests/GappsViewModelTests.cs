@@ -128,6 +128,43 @@ public class GappsViewModelTests
     }
 
     [Fact]
+    public async Task Fr32_an_image_made_by_an_older_dsa_asks_for_google_play_to_be_installed_again()
+    {
+        var old = Status(Package, "null", false).Replace("{\"package\":", "{\"reinstall_needed\":true,\"package\":");
+        var cli = Cli(old).Answer("gapps install --json", InstalledPending);
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.Gapps!.ReinstallNeeded);
+        Assert.Equal(GappsState.ReinstallNeeded, vm.GappsState);
+        Assert.Equal("Gapps_ReinstallNeeded", vm.GappsStatus);
+        Assert.True(vm.GappsReinstallNeeded);
+        Assert.False(vm.GappsRestartNeeded, "a restart would not bring them back");
+        Assert.True(vm.CanInstallGapps, "installing again is the way back");
+        Assert.True(vm.CanRemoveGapps);
+        await vm.InstallGappsAsync();
+        Assert.Contains("gapps install --json", cli.Calls);
+        Assert.Equal(GappsState.RestartPending, vm.GappsState);
+        Assert.False(vm.CanInstallGapps);
+    }
+
+    [Fact]
+    public async Task Fr32_remove_works_while_android_is_stopped()
+    {
+        // dsa gapps remove no longer starts Android: the service forgets the package and Android
+        // starts without it, which is how a user gets out of a boot that never finishes.
+        var stopped = Status(Package, "null", false);
+        var cli = Cli(stopped).Answer("gapps remove --json", Status("null", "null", false));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.CanRemoveGapps);
+        await vm.RemoveGappsAsync();
+        Assert.Contains("gapps remove --json", cli.Calls);
+        Assert.False(vm.HasError);
+        Assert.Equal(GappsState.NotInstalled, vm.GappsState);
+        Assert.True(vm.CanInstallGapps);
+    }
+
+    [Fact]
     public async Task Fr32_a_failed_install_shows_why_and_leaves_the_section_as_it_was()
     {
         var cli = Cli(NotInstalled)
@@ -185,6 +222,7 @@ public class GappsViewModelTests
         Assert.Null(info.Package);
         Assert.Null(info.Android);
         Assert.False(info.RestartNeeded);
+        Assert.False(info.ReinstallNeeded, "a service from before it existed does not print it");
     }
 
     /// <summary>Answers as <see cref="FakeCli"/>, except one command line, whose answer comes

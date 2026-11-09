@@ -39,6 +39,20 @@ final class GappsViewModelTests: XCTestCase {
         XCTAssertTrue(full.android?.active ?? false)
     }
 
+    func test_fr32_an_image_made_by_an_older_dsa_asks_for_google_play_to_be_installed_again() async {
+        let (cli, vm) = make()
+        let old = installed.replacingOccurrences(of: #""restart_needed":false"#,
+                                                 with: #""restart_needed":false,"reinstall_needed":true"#)
+        cli.answer("gapps status --json", old)
+        await vm.load()
+        XCTAssertTrue(vm.info?.reinstallNeeded ?? false)
+        XCTAssertEqual(vm.state, .reinstallNeeded)
+        XCTAssertEqual(vm.statusText, "Gapps_ReinstallNeeded")
+        XCTAssertTrue(vm.canInstall, "installing again is the way back")
+        XCTAssertTrue(vm.canRemove)
+        XCTAssertFalse(DsaService.readGapps(try! Json.parse(installed)).reinstallNeeded)
+    }
+
     func test_fr32_before_install_the_item_offers_install_only() async {
         let (cli, vm) = make()
         XCTAssertFalse(vm.canInstall, "nothing is offered before the service has answered")

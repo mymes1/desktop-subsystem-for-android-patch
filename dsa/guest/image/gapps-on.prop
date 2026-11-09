@@ -7,3 +7,11 @@
 # fingerprint is DSA's to set: it changes the digest the package manager compares and nothing an
 # app reads. Removing Google Play changes it back, which is an upgrade too.
 ro.oem.build.fingerprint=DSA/gapps/on:user/release-keys
+# A privileged app asking for a privileged permission that no privapp-permissions list names
+# stops system_server once the system is ready while this is "enforce", at every boot, so
+# Android never finishes starting: LiteGapps' lists, made for a phone's Android, can miss one
+# the Android here asks for (Google Play services and ACCESS_COMPANION_INFO on Android 17 did).
+# The image the host makes carries a list of every permission its privileged apps ask for, so
+# nothing should be missing; "log" makes a miss a line in the log, with the permission granted,
+# instead of a boot that never ends. Only a boot with the Google apps laid over sets it.
+ro.control_privapp_permissions=log

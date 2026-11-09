@@ -21,13 +21,19 @@
 //! wizard would take over as the home screen. Every path is checked before anything is used:
 //! one that leaves the build refuses it whole, as does a build for another architecture or
 //! Android version.
+//!
+//! Each partition's `etc/permissions` also gets the privileged permission allowlist
+//! ([`super::privapp`]) of the privileged apps the image puts there, made from what their
+//! manifests ask for, so the guest grants them and never stops at a permission LiteGapps'
+//! lists left out.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::io::{BufReader, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 use super::tar::{Tar, TarSink};
-use super::{xz, Target, VARIANT};
+use super::{privapp, xz, Target, VARIANT};
 use crate::apk_info::zip::Archive;
 use crate::erofs::Stream;
 
@@ -82,6 +88,98 @@ pub struct Built {
     pub files: usize,
     /// How many files of the build were left out.
     pub left_out: usize,
+    /// How many permissions the allowlists DSA adds grant, over every package.
+    pub allowlisted: usize,
+    /// The privileged apps whose manifest could not be read, so the allowlists say nothing for
+    /// them.
+    pub unread: Vec<String>,
+}
+
+/// The largest permission list read for the allowlists.
+const MAX_LIST: usize = 4 << 20;
+
+/// Whether the image file `path` is a privileged app's APK, whose manifest the allowlist reads.
+fn privileged_apk(path: &str) -> bool {
+    PARTITIONS
+        .iter()
+        .any(|partition| path.starts_with(&format!("{partition}/priv-app/")))
+        && path.to_ascii_lowercase().ends_with(".apk")
+}
+
+/// Whether the image file `path` is a list Android reads `privapp-permissions` from: the XML
+/// files of a partition's `etc/permissions` and `etc/sysconfig`.
+fn permission_list(path: &str) -> bool {
+    PARTITIONS.iter().any(|partition| {
+        ["permissions", "sysconfig"]
+            .iter()
+            .any(|folder| path.starts_with(&format!("{partition}/etc/{folder}/")))
+    }) && path.to_ascii_lowercase().ends_with(".xml")
+}
+
+/// What the image's privileged apps ask for and what the build's lists decide, by image path:
+/// a later file at the same path replaces an earlier one in the image, and here too.
+#[derive(Default)]
+struct Permissions {
+    /// A privileged app's APK: its package and the permissions it asks for.
+    apps: BTreeMap<String, (String, Vec<String>)>,
+    /// A permission list's text.
+    lists: BTreeMap<String, String>,
+    unread: Vec<String>,
+}
+
+impl Permissions {
+    /// Takes note of the image file `path` holding `data`, when the allowlist needs it.
+    fn note(&mut self, path: &str, data: &[u8]) {
+        if privileged_apk(path) {
+            self.read_apk(path, Cursor::new(data));
+        } else if permission_list(path) && data.len() <= MAX_LIST {
+            self.lists
+                .insert(path.to_string(), String::from_utf8_lossy(data).into_owned());
+        }
+    }
+
+    fn read_apk<R: Read + Seek>(&mut self, path: &str, reader: R) {
+        match crate::apk_info::requested_permissions(reader) {
+            Ok(read) => {
+                self.unread.retain(|unread| unread != path);
+                self.apps.insert(path.to_string(), read);
+            }
+            Err(why) => {
+                eprintln!("gapps: {path}: {why}; the allowlist says nothing for it");
+                self.apps.remove(path);
+                if !self.unread.iter().any(|unread| unread == path) {
+                    self.unread.push(path.to_string());
+                }
+            }
+        }
+    }
+
+    /// Adds each partition's allowlist to the image, returning how many permissions they grant.
+    fn write<W: Write + Seek>(&self, builder: &mut Stream<W>) -> Result<usize, String> {
+        let mut granted = 0;
+        for partition in PARTITIONS {
+            let mut requested: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+            for (path, (package, permissions)) in &self.apps {
+                if path.starts_with(&format!("{partition}/")) {
+                    requested
+                        .entry(package.clone())
+                        .or_default()
+                        .extend(permissions.iter().cloned());
+                }
+            }
+            let own = format!("{partition}/etc/permissions/{}", privapp::FILE_NAME);
+            let mut shipped = BTreeMap::new();
+            for (path, text) in &self.lists {
+                if path.starts_with(&format!("{partition}/")) && *path != own {
+                    privapp::read_list(text, &mut shipped);
+                }
+            }
+            let grants = privapp::missing(&requested, &shipped);
+            granted += grants.values().map(BTreeSet::len).sum::<usize>();
+            builder.add_file(&own, privapp::write_list(&grants).as_bytes())?;
+        }
+        Ok(granted)
+    }
 }
 
 /// The `key=value` lines of a `module.prop`.
@@ -147,6 +245,14 @@ struct IntoImage<'a, W: std::io::Write + Seek> {
     open: bool,
     kept: Vec<String>,
     left_out: usize,
+    permissions: &'a mut Permissions,
+    /// Where a privileged app's APK is copied as it streams past, so its manifest can be read
+    /// (an APK's directory is at its end); removed once read.
+    scan_path: PathBuf,
+    /// The file being copied there: the APK's image path, and the copy.
+    scan: Option<(String, BufWriter<File>)>,
+    /// A permission list being collected: its image path and its bytes so far.
+    list: Option<(String, Vec<u8>)>,
 }
 
 impl<W: std::io::Write + Seek> TarSink for IntoImage<'_, W> {
@@ -156,6 +262,14 @@ impl<W: std::io::Write + Seek> TarSink for IntoImage<'_, W> {
         match target {
             Some(target) => {
                 self.builder.begin_file(&target, size)?;
+                if privileged_apk(&target) {
+                    let copy = File::create(&self.scan_path).map_err(|e| {
+                        format!("{} cannot be written: {e}", self.scan_path.display())
+                    })?;
+                    self.scan = Some((target.clone(), BufWriter::new(copy)));
+                } else if permission_list(&target) && size <= MAX_LIST as u64 {
+                    self.list = Some((target.clone(), Vec::new()));
+                }
                 self.kept.push(target);
                 self.open = true;
             }
@@ -170,6 +284,13 @@ impl<W: std::io::Write + Seek> TarSink for IntoImage<'_, W> {
     fn data(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.open {
             self.builder.write_data(bytes)?;
+            if let Some((_, copy)) = &mut self.scan {
+                copy.write_all(bytes)
+                    .map_err(|e| format!("{} cannot be written: {e}", self.scan_path.display()))?;
+            }
+            if let Some((_, list)) = &mut self.list {
+                list.extend_from_slice(bytes);
+            }
         }
         Ok(())
     }
@@ -178,6 +299,20 @@ impl<W: std::io::Write + Seek> TarSink for IntoImage<'_, W> {
         if self.open {
             self.open = false;
             self.builder.end_file()?;
+        }
+        if let Some((target, copy)) = self.scan.take() {
+            let scan_path = self.scan_path.clone();
+            // Flushed and closed before it is read.
+            drop(copy.into_inner().map_err(|e| {
+                format!("{} cannot be written: {}", scan_path.display(), e.error())
+            })?);
+            let copy = File::open(&scan_path)
+                .map_err(|e| format!("{} cannot be read: {e}", scan_path.display()))?;
+            self.permissions.read_apk(&target, BufReader::new(copy));
+            let _ = std::fs::remove_file(&scan_path);
+        }
+        if let Some((target, list)) = self.list.take() {
+            self.permissions.note(&target, &list);
         }
         Ok(())
     }
@@ -229,6 +364,7 @@ fn add_addon<W: std::io::Write + Seek>(
     target: &Target,
     builder: &mut Stream<W>,
     built: &mut (Vec<String>, usize),
+    permissions: &mut Permissions,
 ) -> Result<(), String> {
     let mut addon = Archive::open(Cursor::new(data))
         .map_err(|why| format!("the build's add-on {name} is damaged: {why}"))?;
@@ -261,6 +397,7 @@ fn add_addon<W: std::io::Write + Seek>(
         };
         let data = addon.read(&entry, MAX_FILE)?;
         builder.add_file(&target_path, &data)?;
+        permissions.note(&target_path, &data);
         built.0.push(target_path);
     }
     Ok(())
@@ -339,20 +476,32 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
         .cloned()
         .ok_or("the build has no files/files.tar.xz, where LiteGapps keeps its apps")?;
     let packed = read_large(&mut archive, &tar_entry, zip)?;
+    let mut permissions = Permissions::default();
+    let scan_path = image.with_extension("scan.apk");
     let mut sink = IntoImage {
         builder: &mut builder,
         prefix: format!("{}/{}/system/", target.arch, target.sdk),
         open: false,
         kept: Vec::new(),
         left_out: 0,
+        permissions: &mut permissions,
+        scan_path: scan_path.clone(),
+        scan: None,
+        list: None,
     };
-    {
+    let streamed = {
         let mut tar = Tar::new(&mut sink);
         xz::decode(&packed, &mut tar, MAX_TAR)
-            .map_err(|why| format!("the build's files.tar.xz cannot be read: {why}"))?;
-        tar.finish()
-            .map_err(|why| format!("the build's files.tar.xz cannot be read: {why}"))?;
-    }
+            .map_err(|why| format!("the build's files.tar.xz cannot be read: {why}"))
+            .and_then(|_| {
+                tar.finish()
+                    .map_err(|why| format!("the build's files.tar.xz cannot be read: {why}"))
+            })
+    };
+    // A copy left open by a build that broke off is closed before it is removed.
+    sink.scan = None;
+    let _ = std::fs::remove_file(&scan_path);
+    streamed?;
     drop(packed);
     let mut built = (std::mem::take(&mut sink.kept), sink.left_out);
     let addons: Vec<_> = archive
@@ -366,7 +515,14 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
             continue;
         }
         let data = archive.read(&entry, MAX_ADDON)?;
-        add_addon(data, &name, target, &mut builder, &mut built)?;
+        add_addon(
+            data,
+            &name,
+            target,
+            &mut builder,
+            &mut built,
+            &mut permissions,
+        )?;
     }
     for required in REQUIRED {
         let found = built.0.iter().any(|path| {
@@ -388,15 +544,24 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
             ));
         }
     }
+    let allowlisted = permissions.write(&mut builder)?;
     let mut out = builder.finish()?;
-    std::io::Write::flush(&mut out)
+    out.flush()
         .map_err(|e| format!("{} cannot be written: {e}", image.display()))?;
     let mut kept = built.0;
+    for partition in PARTITIONS {
+        kept.push(format!(
+            "{partition}/etc/permissions/{}",
+            privapp::FILE_NAME
+        ));
+    }
     kept.sort();
     kept.dedup();
     Ok(Built {
         files: kept.len(),
         left_out: built.1,
+        allowlisted,
+        unread: permissions.unread,
     })
 }
 
@@ -404,8 +569,36 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
 pub mod fixture {
     //! LiteGapps builds for the tests: the layout of a real one, with small files.
 
-    use crate::apk_info::fixture::archive;
+    use crate::apk_info::fixture::{archive, document, Attr, El};
     use crate::gapps::tar::fixture as tar;
+
+    /// What the sample's Google Play services asks for: one permission LiteGapps' list in the
+    /// sample grants, and one privileged permission it leaves out, as LiteGapps' list for
+    /// Android 17 left out `ACCESS_COMPANION_INFO`.
+    pub const GMS_PERMISSIONS: [&str; 2] = [
+        "android.permission.BACKUP",
+        "android.permission.ACCESS_COMPANION_INFO",
+    ];
+    /// What the sample's services framework (in `system_ext`) asks for, which no list grants.
+    pub const GSF_PERMISSIONS: [&str; 1] = ["android.permission.WRITE_SECURE_SETTINGS"];
+
+    /// An APK, unsigned, whose manifest names `package` and asks for `permissions`.
+    pub fn apk(package: &str, permissions: &[&str]) -> Vec<u8> {
+        let mut elements = vec![El(
+            "manifest",
+            vec![Attr::Str("package", 0, package)],
+            false,
+        )];
+        for permission in permissions {
+            elements.push(El(
+                "uses-permission",
+                vec![Attr::Str("name", crate::apk_info::attr::NAME, permission)],
+                true,
+            ));
+        }
+        let manifest = document(&elements);
+        archive(&[("AndroidManifest.xml", &manifest[..])], b"")
+    }
 
     /// An xz file holding `data` in uncompressed LZMA2 chunks, as `xz` writes data it cannot
     /// compress.
@@ -479,34 +672,45 @@ pub mod fixture {
     /// The files a Core build's tar holds for `arch` and `sdk`, small.
     pub fn core_files(arch: &str, sdk: u32) -> Vec<(String, Vec<u8>)> {
         let system = format!("{arch}/{sdk}/system");
+        let gms = apk("com.google.android.gms", &GMS_PERMISSIONS);
+        let gsf = apk("com.google.android.gsf", &GSF_PERMISSIONS);
+        let google_list = format!(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<permissions>\n    \
+             <privapp-permissions package=\"com.google.android.gms\">\n        \
+             <permission name=\"{}\"/>\n    </privapp-permissions>\n</permissions>\n",
+            GMS_PERMISSIONS[0]
+        );
         [
-            ("product/priv-app/GmsCore/GmsCore.apk", "gms"),
-            ("product/priv-app/Phonesky/Phonesky.apk", "vending"),
+            ("product/priv-app/GmsCore/GmsCore.apk", gms),
+            (
+                "product/priv-app/Phonesky/Phonesky.apk",
+                b"vending".to_vec(),
+            ),
             (
                 "product/app/GoogleCalendarSyncAdapter/GoogleCalendarSyncAdapter.apk",
-                "calendar",
+                b"calendar".to_vec(),
             ),
             (
                 "product/etc/permissions/privapp-permissions-google.xml",
-                "<permissions/>",
+                google_list.into_bytes(),
             ),
             (
                 "system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk",
-                "gsf",
+                gsf,
             ),
             (
                 "system_ext/etc/permissions/privapp-permissions-google-se.xml",
-                "<permissions/>",
+                b"<permissions/>".to_vec(),
             ),
             (
                 "product/framework/com.google.android.dialer.support.jar",
-                "jar",
+                b"jar".to_vec(),
             ),
-            ("vendor/etc/left-out.xml", "x"),
-            ("product/lib64/left-out.so", "x"),
+            ("vendor/etc/left-out.xml", b"x".to_vec()),
+            ("product/lib64/left-out.so", b"x".to_vec()),
         ]
-        .iter()
-        .map(|(path, data)| (format!("{system}/{path}"), data.as_bytes().to_vec()))
+        .into_iter()
+        .map(|(path, data)| (format!("{system}/{path}"), data))
         .collect()
     }
 
@@ -577,6 +781,8 @@ mod tests {
         if result.is_err() {
             assert!(!image.exists(), "a refused build leaves no image");
         }
+        // No copy made to read a privileged app's manifest is left beside the image.
+        assert!(!image.with_extension("scan.apk").exists(), "{name}");
         let _ = std::fs::remove_dir_all(&dir);
         result
     }
@@ -590,19 +796,102 @@ mod tests {
             paths,
             [
                 "product/app/GoogleCalendarSyncAdapter/GoogleCalendarSyncAdapter.apk",
+                "product/etc/permissions/dsa-gapps-privapp-permissions.xml",
                 "product/etc/permissions/privapp-permissions-google.xml",
                 "product/etc/sysconfig/google.xml",
                 "product/framework/com.google.android.dialer.support.jar",
                 "product/priv-app/GmsCore/GmsCore.apk",
                 "product/priv-app/Phonesky/Phonesky.apk",
+                "system_ext/etc/permissions/dsa-gapps-privapp-permissions.xml",
                 "system_ext/etc/permissions/privapp-permissions-google-se.xml",
                 "system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk",
             ]
         );
-        assert_eq!(files["product/priv-app/GmsCore/GmsCore.apk"], b"gms");
-        assert_eq!(built.files, 8);
+        assert_eq!(files["product/priv-app/Phonesky/Phonesky.apk"], b"vending");
+        assert_eq!(built.files, 10);
         // vendor/, lib64/, the setup wizard, and the installer's own files.
         assert!(built.left_out >= 3, "{built:?}");
+    }
+
+    /// The grants of the allowlist DSA adds to `partition`, by package.
+    fn allowlist(
+        files: &std::collections::BTreeMap<String, Vec<u8>>,
+        partition: &str,
+    ) -> BTreeMap<String, BTreeSet<String>> {
+        let path = format!("{partition}/etc/permissions/{}", privapp::FILE_NAME);
+        let mut read = BTreeMap::new();
+        privapp::read_list(&String::from_utf8_lossy(&files[&path]), &mut read);
+        read.into_iter()
+            .map(|(package, decisions)| (package, decisions.granted))
+            .collect()
+    }
+
+    #[test]
+    fn fr32_the_image_allowlists_every_permission_its_privileged_apps_ask_for() {
+        use super::fixture::{GMS_PERMISSIONS, GSF_PERMISSIONS};
+        let (built, image) = make(&sample(), &X86_36, "allowlist").unwrap();
+        let files = read::files(&image);
+        // Google Play services asks for two; LiteGapps' list grants the first, so DSA's grants
+        // the other, the one an Android 17 system_server stopped at.
+        assert_eq!(
+            allowlist(&files, "product"),
+            BTreeMap::from([(
+                "com.google.android.gms".to_string(),
+                BTreeSet::from([GMS_PERMISSIONS[1].to_string()])
+            )])
+        );
+        // The services framework is in system_ext, whose lists alone Android reads for it.
+        assert_eq!(
+            allowlist(&files, "system_ext"),
+            BTreeMap::from([(
+                "com.google.android.gsf".to_string(),
+                BTreeSet::from([GSF_PERMISSIONS[0].to_string()])
+            )])
+        );
+        assert_eq!(built.allowlisted, 2);
+        // The sample's Play Store is no APK, so nothing can be said for it.
+        assert_eq!(built.unread, ["product/priv-app/Phonesky/Phonesky.apk"]);
+    }
+
+    #[test]
+    fn fr32_an_add_on_app_replacing_a_build_app_is_allowlisted_for_what_it_asks() {
+        use super::fixture::apk;
+        let old = apk("com.google.android.gms", &["android.permission.OLD"]);
+        let new = apk("com.google.android.gms", &["android.permission.NEW"]);
+        let vending = apk("com.android.vending", &[]);
+        let zip = build(
+            "x86_64",
+            36,
+            &[(GMS, &old[..]), (VENDING, &vending[..])],
+            &[(
+                "Common",
+                addon(
+                    "x86_64",
+                    36,
+                    &[
+                        ("system/product/priv-app/GmsCore/GmsCore.apk", &new[..]),
+                        (
+                            "system/product/etc/permissions/deny.xml",
+                            b"<permissions><privapp-permissions package=\"com.android.vending\">\
+                              <deny-permission name=\"android.permission.X\"/>\
+                              </privapp-permissions></permissions>",
+                        ),
+                    ],
+                ),
+            )],
+        );
+        let (built, image) = make(&zip, &X86_36, "replaced").unwrap();
+        let files = read::files(&image);
+        assert_eq!(
+            allowlist(&files, "product"),
+            BTreeMap::from([(
+                "com.google.android.gms".to_string(),
+                BTreeSet::from(["android.permission.NEW".to_string()])
+            )])
+        );
+        assert_eq!(built.allowlisted, 1);
+        assert!(built.unread.is_empty(), "{built:?}");
+        assert_eq!(allowlist(&files, "system_ext"), BTreeMap::new());
     }
 
     #[test]

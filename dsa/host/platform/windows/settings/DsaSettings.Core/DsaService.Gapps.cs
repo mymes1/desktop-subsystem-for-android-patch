@@ -38,7 +38,10 @@ public sealed partial class DsaService
         }
         return new GappsInfo(package, android, Bool(json, "restart_needed"),
             WebAddress(json, "terms_url", DefaultGappsTermsUrl),
-            WebAddress(json, "registration_url", DefaultGappsRegistrationUrl));
+            WebAddress(json, "registration_url", DefaultGappsRegistrationUrl))
+        {
+            ReinstallNeeded = Bool(json, "reinstall_needed"),
+        };
     }
 
     /// <summary>Whether Google Play is installed, and what the running Android has.</summary>
@@ -50,7 +53,8 @@ public sealed partial class DsaService
     public async Task<GappsInfo> InstallGappsAsync() =>
         ReadGapps(await RunJsonAsync("gapps", "install").ConfigureAwait(true));
 
-    /// <summary>Removes Google Play; Android goes without it from its next start.</summary>
+    /// <summary>Removes Google Play; Android goes without it from its next start. It never starts
+    /// Android, so it also works while Google's apps keep Android from starting.</summary>
     public async Task<GappsInfo> RemoveGappsAsync() =>
         ReadGapps(await RunJsonAsync("gapps", "remove").ConfigureAwait(true));
 }
@@ -82,4 +86,9 @@ public sealed record GappsInfo(
     GappsGuestInfo? Android,
     bool RestartNeeded,
     string TermsUrl,
-    string RegistrationUrl);
+    string RegistrationUrl)
+{
+    /// <summary>The package's image was made by an older DSA and cannot be made again, so
+    /// Android starts without Google's apps until the user installs Google Play again.</summary>
+    public bool ReinstallNeeded { get; init; }
+}

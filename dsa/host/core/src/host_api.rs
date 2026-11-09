@@ -1577,6 +1577,9 @@ pub struct GappsStatus {
     pub guest: Option<GuestGapps>,
     /// What is installed applies only once Android starts again.
     pub restart_needed: bool,
+    /// The installed package's image was made by an older DSA and cannot be made again here,
+    /// so Android starts without Google's apps until the user installs Google Play again.
+    pub reinstall_needed: bool,
 }
 
 impl GappsStatus {
@@ -1592,7 +1595,9 @@ impl GappsStatus {
                 file: package.file.clone(),
                 source: package.source.clone(),
                 md5: package.md5.clone(),
+                image_format: package.image_format,
             }),
+            reinstall_needed: self.reinstall_needed,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
             guest_active: guest.active,
@@ -1615,6 +1620,7 @@ impl GappsStatus {
                 file: package.file,
                 source: package.source,
                 md5: package.md5,
+                image_format: package.image_format,
             }),
             guest: status.guest_known.then_some(GuestGapps {
                 installed: status.guest_installed,
@@ -1625,7 +1631,55 @@ impl GappsStatus {
                 device_id: status.device_id,
             }),
             restart_needed: status.restart_needed,
+            reinstall_needed: status.reinstall_needed,
         }
+    }
+}
+
+/// How often the service looks for a user's Android that has just reached its desktop, for the
+/// Google apps' upkeep of that boot.
+const GAPPS_UPKEEP_POLL: Duration = Duration::from_secs(2);
+/// How many times one boot's upkeep is tried while the guest has not said where its Google apps
+/// stand, before that boot goes without it.
+const GAPPS_UPKEEP_TRIES: u32 = 30;
+
+/// Runs each boot's upkeep of the Google apps ([`HostApiService::gapps_upkeep`]) once that boot
+/// reaches its desktop, until `stop` is set or the service is gone. A user's boot counts as new
+/// again once their Android leaves the running states.
+fn gapps_upkeep_loop(service: std::sync::Weak<HostApiService>, stop: Arc<AtomicBool>) {
+    let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut tries: HashMap<String, u32> = HashMap::new();
+    while !stop.load(Ordering::Relaxed) {
+        let Some(running) = service.upgrade() else {
+            return;
+        };
+        let users = running.androids.running();
+        let up = |user: &str| {
+            users.iter().any(|(u, state)| {
+                u == user
+                    && matches!(
+                        state,
+                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
+                    )
+            })
+        };
+        done.retain(|user| up(user));
+        tries.retain(|user, _| up(user));
+        for (user, state) in &users {
+            if *state != SessionState::Active || done.contains(user) {
+                continue;
+            }
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                running.gapps_upkeep(user)
+            }));
+            let tried = tries.entry(user.clone()).or_insert(0);
+            *tried += 1;
+            if caught.unwrap_or(true) || *tried >= GAPPS_UPKEEP_TRIES {
+                done.insert(user.clone());
+            }
+        }
+        drop(running);
+        thread::sleep(GAPPS_UPKEEP_POLL);
     }
 }
 
@@ -1712,7 +1766,11 @@ pub struct HostApiService {
     /// Which Android version runs, and choosing another.
     versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
     /// Where Google Play is downloaded from, and where it is made ready.
-    gapps: Option<gapps::Source>,
+    gapps: Option<Arc<gapps::Source>>,
+    /// Held while one change to a user's Google apps is made (an install, a removal, or what a
+    /// boot needs done for them), so a boot's upkeep never takes an image another change just
+    /// sent for one it must remove.
+    gapps_change: Mutex<()>,
     /// The default ARM translation package of the image each user's Android starts from.
     default_arm_translation: Option<DefaultArmTranslationSource>,
     /// What each user's window manager last said about the host's touch gestures, by user.
@@ -1754,6 +1812,7 @@ impl HostApiService {
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
             gapps: None,
+            gapps_change: Mutex::new(()),
             default_arm_translation: None,
             touch_gestures: Mutex::new(HashMap::new()),
         }
@@ -1771,7 +1830,7 @@ impl HostApiService {
 
     /// Installs Google Play for users who ask, downloading it through `source`.
     pub fn with_gapps(mut self, source: gapps::Source) -> HostApiService {
-        self.gapps = Some(source);
+        self.gapps = Some(Arc::new(source));
         self
     }
 
@@ -1897,6 +1956,15 @@ impl HostApiService {
     /// Accepts connections until `stop` is set, serving each on its own thread. A failed
     /// accept is logged and the loop goes on; only `stop` ends it.
     pub fn serve(self: Arc<Self>, mut listener: Box<dyn LocalListener>, stop: Arc<AtomicBool>) {
+        if self.gapps.is_some() && self.settings.is_some() {
+            let (service, stop) = (Arc::downgrade(&self), Arc::clone(&stop));
+            if let Err(error) = thread::Builder::new()
+                .name("dsa-gapps-upkeep".into())
+                .spawn(move || gapps_upkeep_loop(service, stop))
+            {
+                eprintln!("gapps: cannot look after the Google apps of each boot: {error}");
+            }
+        }
         while !stop.load(Ordering::Relaxed) {
             match listener.accept(Duration::from_millis(200)) {
                 Ok((connection, peer)) => {
@@ -4453,11 +4521,117 @@ impl HostApiService {
                 .ok()
                 .and_then(|android| android.gapps())
         });
+        let kept = self
+            .gapps
+            .as_ref()
+            .is_some_and(|source| source.is_kept(&peer.user));
         Ok(GappsStatus {
             restart_needed: gapps::restart_needed(package.as_ref(), guest.as_ref()),
+            reinstall_needed: gapps::reinstall_needed(package.as_ref(), kept),
             package,
             guest,
         })
+    }
+
+    /// Does what `user`'s Android, which has just reached its desktop, needs done for the Google
+    /// apps ([`gapps::upkeep`]): removes the image of Google apps they removed while it could not
+    /// hear of it, and makes an image an older DSA made again from the kept package. `false`
+    /// when it is to be tried again: another change is being made, or the guest has not said
+    /// yet where its Google apps stand.
+    fn gapps_upkeep(&self, user: &str) -> bool {
+        let (Some((store, _)), Some(source)) = (&self.settings, &self.gapps) else {
+            return true;
+        };
+        let _change = match self.gapps_change.try_lock() {
+            Ok(held) => held,
+            Err(std::sync::TryLockError::Poisoned(held)) => held.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        let Ok(android) = self.androids.android(user) else {
+            return true;
+        };
+        if android.state() != SessionState::Active {
+            return false;
+        }
+        let Some(guest) = android.gapps() else {
+            return false;
+        };
+        let installed = match store.gapps(user) {
+            Ok(installed) => installed,
+            Err(why) => {
+                eprintln!("gapps: {user}'s Google apps are not known ({why})");
+                return true;
+            }
+        };
+        match gapps::upkeep(installed.as_ref(), &guest, source.is_kept(user)) {
+            gapps::Upkeep::Nothing => {}
+            gapps::Upkeep::RemoveImage => match android.remove_gapps() {
+                Ok(_) => eprintln!(
+                    "gapps: removed the Google apps image from {user}'s Android, as they removed \
+                     Google Play while it could not hear of it"
+                ),
+                Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                    "gapps: {user}'s Android did not remove the Google apps image ({why}); it \
+                     starts without them all the same"
+                ),
+            },
+            gapps::Upkeep::Rebuild => {
+                if let Some(package) = &installed {
+                    self.rebuild_gapps(user, package, &**store, source, &*android);
+                }
+            }
+            gapps::Upkeep::Reinstall => eprintln!(
+                "gapps: {user}'s Google apps image was made by an older DSA and its package is \
+                 not kept; Android runs without Google's apps until they install Google Play \
+                 again"
+            ),
+        }
+        true
+    }
+
+    /// Makes `user`'s Google apps image again from their kept `package` and sends it to their
+    /// running Android, which lays it over its system from its next start. A kept package that
+    /// cannot be made into an image is removed, so the user is told to install Google Play
+    /// again.
+    fn rebuild_gapps(
+        &self,
+        user: &str,
+        package: &GappsPackage,
+        store: &dyn SettingsStore,
+        source: &gapps::Source,
+        android: &dyn UserAndroid,
+    ) {
+        eprintln!(
+            "gapps: {user}'s Google apps image (LiteGapps {} {}) was made by an older DSA; making \
+             it again from the kept package",
+            package.variant, package.version
+        );
+        let prepared = match source.rebuild(user, package) {
+            Ok(prepared) => prepared,
+            Err(why) => {
+                eprintln!("gapps: {user}'s Google apps image cannot be made again: {why}");
+                source.forget(user);
+                return;
+            }
+        };
+        let sent = std::fs::File::open(&prepared.image)
+            .map_err(|e| format!("the Google apps image cannot be read: {e}"))
+            .and_then(|mut image| {
+                android
+                    .install_gapps(prepared.size, &prepared.sha256, &mut image)
+                    .map_err(|(InstallError::NotRunning(why) | InstallError::Refused(why))| why)
+            });
+        match sent.and_then(|_| store.set_gapps(user, Some(&prepared.package))) {
+            Ok(()) => eprintln!(
+                "gapps: {user}'s Google apps image is made again ({} privileged permissions \
+                 allowlisted); Android lays it over from its next start",
+                prepared.built.allowlisted
+            ),
+            Err(why) => eprintln!(
+                "gapps: {user}'s Google apps image did not reach Android ({why}); it is made \
+                 again at the next start"
+            ),
+        }
     }
 
     fn get_gapps(&self, peer: &Peer) -> response::Body {
@@ -4470,29 +4644,46 @@ impl HostApiService {
         }
     }
 
-    /// Removes the caller's Google apps: from their Android's disk when it runs, and from
-    /// their settings, so no later boot lays them over the system.
+    /// Removes the caller's Google apps: from their settings first, so no later boot lays them
+    /// over the system, then from their Android's disk when it runs and answers. An Android that
+    /// is stopped, still starting, or cannot finish starting (as one whose Google apps stop it
+    /// at every boot) loses the image at its next boot that reaches the desktop
+    /// ([`gapps::Upkeep::RemoveImage`]).
     fn remove_gapps(&self, peer: &Peer) -> response::Body {
         let Some((store, _)) = &self.settings else {
             return Self::no_settings();
         };
+        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(why) = store.set_gapps(&peer.user, None) {
+            return error(ErrorCode::Unavailable, why);
+        }
+        if let Some(source) = &self.gapps {
+            source.forget(&peer.user);
+        }
+        eprintln!("gapps: {} removed Google Play", peer.user);
         let mut guest = None;
         if let Ok(android) = self.androids.android(&peer.user) {
+            let state = android.state();
             if matches!(
-                android.state(),
+                state,
                 SessionState::Active | SessionState::Dozing | SessionState::Frozen
             ) {
                 match android.remove_gapps() {
                     Ok(state) => guest = Some(state),
-                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
-                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
+                    Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                        "gapps: {}'s Android did not remove the image now ({why}); it goes at \
+                         the next start",
+                        peer.user
+                    ),
                 }
+            } else if state != SessionState::Stopped {
+                eprintln!(
+                    "gapps: {}'s Android is {state}; the image goes at its next start, which \
+                     starts without Google's apps",
+                    peer.user
+                );
             }
         }
-        if let Err(why) = store.set_gapps(&peer.user, None) {
-            return error(ErrorCode::Unavailable, why);
-        }
-        eprintln!("gapps: {} removed Google Play", peer.user);
         match self.gapps_status(peer, &**store, guest) {
             Ok(status) => response::Body::Gapps(status.to_wire()),
             Err(why) => error(ErrorCode::Unavailable, why),
@@ -4552,13 +4743,14 @@ impl HostApiService {
             "gapps: {} is installing Google Play for {} Android at API level {}",
             peer.user, target.arch, target.sdk
         );
+        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
         let prepared = source.prepare(&peer.user, &target, &mut |progress| {
             answer(
                 &mut *connection,
                 response::Body::GappsProgress(gapps_progress_to_wire(progress)),
             )
         });
-        let prepared = match prepared {
+        let mut prepared = match prepared {
             Ok(prepared) => prepared,
             Err(why) => {
                 eprintln!("gapps: refused the build for {}: {why}", peer.user);
@@ -4592,10 +4784,15 @@ impl HostApiService {
         let body = match installed {
             Ok(guest) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
                 Ok(()) => {
+                    // Kept so that a later DSA can make the image again in a new format.
+                    if let Err(why) = source.keep(&peer.user, &mut prepared) {
+                        eprintln!("gapps: the package is not kept for {}: {why}", peer.user);
+                    }
                     let package = &prepared.package;
-                    let files = prepared.built.files;
+                    let (files, allowlisted) = (prepared.built.files, prepared.built.allowlisted);
                     eprintln!(
-                        "gapps: {} installed LiteGapps {} {} ({files} files)",
+                        "gapps: {} installed LiteGapps {} {} ({files} files, {allowlisted} \
+                         privileged permissions allowlisted beside LiteGapps' own lists)",
                         peer.user, package.variant, package.version
                     );
                     match self.gapps_status(peer, &**store, Some(guest)) {

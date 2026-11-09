@@ -1299,6 +1299,20 @@ macro_rules! host_api_conformance {
             );
         }
         #[test]
+        fn fr32_an_image_made_by_an_older_host_is_made_again_or_installed_again() {
+            $crate::host_api_conformance::old_gapps_images_are_never_laid_over(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
+        }
+        #[test]
+        fn fr32_google_play_is_removed_while_android_is_stopped() {
+            $crate::host_api_conformance::gapps_are_removed_while_android_cannot_start(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
+        }
+        #[test]
         fn fr32_a_build_that_is_refused_leaves_the_settings_as_they_were() {
             $crate::host_api_conformance::refused_gapps_leave_nothing(
                 &mut || $make,
@@ -3374,6 +3388,134 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
     assert!(!removed.restart_needed, "this boot never had them");
     assert!(android.gapps_image.lock().unwrap().is_none());
     assert_eq!(store.gapps(&user).unwrap(), None);
+}
+
+/// Waits up to ten seconds for `done`.
+fn eventually(mut done: impl FnMut() -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < until {
+        if done() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    done()
+}
+
+/// What 0.2.0 recorded for the sample build: no image format, since its image had none.
+fn old_gapps_record(zip: &[u8]) -> gapps::GappsPackage {
+    gapps::GappsPackage {
+        variant: "core".into(),
+        version: "20261001".into(),
+        android_version: "16.0".into(),
+        sdk: 36,
+        arch: "x86_64".into(),
+        file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
+        source: format!("{FAKE_PROJECT}/files/LiteGapps-core-x86_64-16.0-20261001-official.zip"),
+        md5: md5_of(zip),
+        image_format: 0,
+    }
+}
+
+pub fn old_gapps_images_are_never_laid_over(make: MakeLocal<'_>, scratch: &std::path::Path) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    store
+        .set_gapps(&user, Some(&old_gapps_record(&zip)))
+        .unwrap();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let work = scratch.join(format!("dsa-conformance-gapps-old-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    let kept = gapps::Source::new(Arc::new(crate::update::store::FileFetch), &work)
+        .kept_package(&user)
+        .unwrap();
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), facts())
+        .with_gapps(gapps::Source::new(Arc::new(lite), &work).with_project(FAKE_PROJECT));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+
+    // The package was not kept, so the image cannot be made again: the user installs it again,
+    // and no boot lays the old image over.
+    let status = client.gapps().unwrap();
+    assert_eq!(status.package.as_ref().map(|p| p.image_format), Some(0));
+    assert!(status.reinstall_needed);
+    assert!(!status.restart_needed);
+    assert_eq!(gapps::bootconfig_for(&*store, &user), "");
+
+    // With the package kept, the first boot that reaches the desktop makes the image again and
+    // sends it, and the next boot lays it over.
+    std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    std::fs::write(&kept, &zip).unwrap();
+    assert!(!client.gapps().unwrap().reinstall_needed);
+    client.start().unwrap();
+    let android = androids.of(&user).unwrap();
+    assert!(
+        eventually(|| android.gapps_image.lock().unwrap().is_some()),
+        "the image was not made again"
+    );
+    assert!(eventually(|| store
+        .gapps(&user)
+        .unwrap()
+        .is_some_and(|p| p.image_format == gapps::IMAGE_FORMAT)));
+    let image = android.gapps_image.lock().unwrap().clone().unwrap();
+    let files = crate::erofs::read::files(&image);
+    for partition in ["product", "system_ext"] {
+        let allowlist = format!("{partition}/etc/permissions/{}", gapps::privapp::FILE_NAME);
+        assert!(files.contains_key(&allowlist), "{allowlist}");
+    }
+    let status = client.gapps().unwrap();
+    assert!(!status.reinstall_needed);
+    assert!(status.restart_needed, "it is laid over from the next start");
+    assert_eq!(gapps::bootconfig_for(&*store, &user), gapps::BOOTCONFIG_ON);
+    let _ = std::fs::remove_dir_all(&work);
+}
+
+pub fn gapps_are_removed_while_android_cannot_start(
+    make: MakeLocal<'_>,
+    scratch: &std::path::Path,
+) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    let installed = gapps::GappsPackage {
+        image_format: gapps::IMAGE_FORMAT,
+        ..old_gapps_record(&zip)
+    };
+    store.set_gapps(&user, Some(&installed)).unwrap();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let service = gapps_service(androids.clone(), store.clone(), lite, "stopped", scratch);
+    let _service = RunningService::start_service(listener, service);
+    // The image is on the stopped Android's disk, as after a boot that never finished.
+    let android = {
+        let _ = androids.android(&user).unwrap();
+        androids.of(&user).unwrap()
+    };
+    *android.gapps_image.lock().unwrap() = Some(b"an image".to_vec());
+
+    let mut client = connect(&mut *connector);
+    let removed = client
+        .remove_gapps()
+        .expect("removing Google Play while Android is stopped");
+    assert_eq!(removed.package, None);
+    assert!(removed.guest.is_none(), "Android was not started for it");
+    assert_eq!(android.state(), SessionState::Stopped);
+    assert_eq!(store.gapps(&user).unwrap(), None);
+    assert_eq!(
+        gapps::bootconfig_for(&*store, &user),
+        "",
+        "the next start goes without Google's apps"
+    );
+
+    // The next boot that reaches the desktop takes the image off the disk.
+    client.start().unwrap();
+    assert!(
+        eventually(|| android.gapps_image.lock().unwrap().is_none()),
+        "the image stayed on the disk"
+    );
 }
 
 pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>, scratch: &std::path::Path) {

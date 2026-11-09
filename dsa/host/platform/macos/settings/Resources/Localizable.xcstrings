@@ -2551,6 +2551,23 @@
         }
       }
     },
+    "Gapps_ReinstallNeeded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LiteGapps Core {0} for Android {1} ({2}) was installed by an older DSA and is no longer used, so Android starts without Google's apps. Install Google Play again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이전 DSA가 설치한 Android {1}({2})용 LiteGapps Core {0}은(는) 더 이상 쓰이지 않아 Android가 Google 앱 없이 시작합니다. Google Play를 다시 설치하세요."
+          }
+        }
+      }
+    },
     "Gapps_RemovedRestart": {
       "extractionState": "manual",
       "localizations": {
