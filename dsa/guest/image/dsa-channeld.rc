@@ -102,8 +102,9 @@ on property:vendor.dsa.files=* && property:sys.boot_completed=1
 # administrator approves it on the host (su.cil). The kernel's su guard makes the su binary
 # exist only for the uids the host allows, and it is driven through securityfs, which nothing
 # else in Android mounts. init hides su from every task here, before any app starts and after
-# the ARM translation overlay is laid over /system/bin (system scripts run first), because the
-# guard watches the inode a path names at the time it is written. A path the image lacks is
+# the system scripts' mounts (system scripts run first; the ARM translation package is bound
+# beside /system/bin's own files, never over them), because the guard watches the inode a path
+# names at the time it is written. A path the image lacks is
 # refused and the rest still apply.
 on post-fs-data
     mount securityfs securityfs /sys/kernel/security nodev noexec nosuid

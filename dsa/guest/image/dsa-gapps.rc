@@ -1,30 +1,47 @@
 # Google Play, when the user installed it (dsa gapps install). The host adds
 # androidboot.dsa.gapps=on to the boot's bootconfig only while a Google apps image is
 # installed. The image (erofs) is on the user's disk, where dsa-channeld wrote it. Here init
-# mounts it through a loop device and lays its product and system_ext folders over /product and
-# /system_ext, before the zygote starts. The package manager then finds Google's apps in those
-# partitions' app and priv-app folders, and each app's privileged permission list, default
-# permissions and system configuration in the same partition's etc folder, which is the only
-# place it reads them from for that partition's apps. The fingerprint that makes the boot an
-# upgrade comes from /system/etc/dsa/gapps-on.prop, which the product build.prop imports on the
-# same condition. A system script, because only init itself may lay anything over a partition.
+# mounts it through a loop device and lays each of its folders over the same folder of /product
+# and /system_ext, before the zygote starts: the apps (app, priv-app), the framework files, and
+# the privileged permission lists, system configuration, default permissions and preferred
+# apps in etc. The package manager reads a partition's lists only for that partition's apps,
+# so each stays in its own partition. The fingerprint that makes the boot an upgrade comes from
+# /system/etc/dsa/gapps-on.prop, which the product build.prop imports on the same condition. A
+# system script, because only init itself may lay anything over a partition.
+#
+# Only those folders are laid over, never a partition's root: overlayfs looks every file up
+# with init's credentials, and init may not read the attributes of the services' programs in
+# /system_ext/bin and /product/bin, so a service started from an overlaid partition fails to
+# start (bpfloader did, through /system/bin). The folders laid over hold apps and their
+# configuration, which init may read. The image carries every one of them, empty when the
+# build has nothing there, and so does the system, so each overlay finds both layers.
 #
 # The image's files are labelled system files (context=), and its superblock gets a filesystem
-# type of its own (fscontext=, sepolicy/gapps.cil). statfs on /product or /system_ext reports
-# the image's superblock, the overlay's top lower layer, so a superblock labelled as files
-# would refuse that to every program but init. Both go in one comma-separated argument: init
-# passes only the last argument that is not a flag to the kernel and drops any other, and
-# context= alone relabels the superblock to a file type, which the kernel refuses
-# ("denied { relabelto } ... system_file ... tclass=filesystem"). The overlays are not nosuid, as the partitions
-# are not: where nosuid is set, the kernel refuses init's domain change into every service it
-# starts from them.
+# type of its own (fscontext=, sepolicy/gapps.cil), which every domain may statfs: statfs on an
+# overlaid folder reports the image's superblock, the overlay's top lower layer. Both go in one
+# comma-separated argument: init passes only the last argument that is not a flag to the kernel
+# and drops any other, and context= alone relabels the superblock to a file type, which the
+# kernel refuses ("denied { relabelto } ... system_file ... tclass=filesystem"). The overlays
+# are not nosuid, as the partitions are not.
 on post-fs-data && property:ro.boot.dsa.gapps=on
     mkdir /data/vendor/dsa 0771 system system
     mkdir /data/vendor/dsa/gapps 0770 system system
     mkdir /mnt/dsa-gapps 0755 root root
     mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0
-    mount overlay overlay /product ro nodev lowerdir=/mnt/dsa-gapps/product:/product
-    mount overlay overlay /system_ext ro nodev lowerdir=/mnt/dsa-gapps/system_ext:/system_ext
+    mount overlay overlay /product/app ro nodev lowerdir=/mnt/dsa-gapps/product/app:/product/app
+    mount overlay overlay /product/priv-app ro nodev lowerdir=/mnt/dsa-gapps/product/priv-app:/product/priv-app
+    mount overlay overlay /product/framework ro nodev lowerdir=/mnt/dsa-gapps/product/framework:/product/framework
+    mount overlay overlay /product/etc/permissions ro nodev lowerdir=/mnt/dsa-gapps/product/etc/permissions:/product/etc/permissions
+    mount overlay overlay /product/etc/sysconfig ro nodev lowerdir=/mnt/dsa-gapps/product/etc/sysconfig:/product/etc/sysconfig
+    mount overlay overlay /product/etc/default-permissions ro nodev lowerdir=/mnt/dsa-gapps/product/etc/default-permissions:/product/etc/default-permissions
+    mount overlay overlay /product/etc/preferred-apps ro nodev lowerdir=/mnt/dsa-gapps/product/etc/preferred-apps:/product/etc/preferred-apps
+    mount overlay overlay /system_ext/app ro nodev lowerdir=/mnt/dsa-gapps/system_ext/app:/system_ext/app
+    mount overlay overlay /system_ext/priv-app ro nodev lowerdir=/mnt/dsa-gapps/system_ext/priv-app:/system_ext/priv-app
+    mount overlay overlay /system_ext/framework ro nodev lowerdir=/mnt/dsa-gapps/system_ext/framework:/system_ext/framework
+    mount overlay overlay /system_ext/etc/permissions ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/permissions:/system_ext/etc/permissions
+    mount overlay overlay /system_ext/etc/sysconfig ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/sysconfig:/system_ext/etc/sysconfig
+    mount overlay overlay /system_ext/etc/default-permissions ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/default-permissions:/system_ext/etc/default-permissions
+    mount overlay overlay /system_ext/etc/preferred-apps ro nodev lowerdir=/mnt/dsa-gapps/system_ext/etc/preferred-apps:/system_ext/etc/preferred-apps
 
 # Without the image the directory still exists, so dsa-channeld can write one the user installs
 # while Android runs; it takes effect at the next start.
