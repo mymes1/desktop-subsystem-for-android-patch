@@ -12,9 +12,9 @@
 # The image's files are labelled system files (context=), and its superblock gets a filesystem
 # type of its own (fscontext=, sepolicy/gapps.cil). statfs on /product or /system_ext reports
 # the image's superblock, the overlay's top lower layer, so a superblock labelled as files
-# would refuse that to every program but init. Both go in one comma-separated argument: init's
-# mount passes only its last argument that is not a flag to the kernel and drops any other, and
-# a mount given context= alone relabels the superblock to a file type, which the kernel refuses
+# would refuse that to every program but init. Both go in one comma-separated argument: init
+# passes only the last argument that is not a flag to the kernel and drops any other, and
+# context= alone relabels the superblock to a file type, which the kernel refuses
 # ("denied { relabelto } ... system_file ... tclass=filesystem"). The overlays are not nosuid, as the partitions
 # are not: where nosuid is set, the kernel refuses init's domain change into every service it
 # starts from them.

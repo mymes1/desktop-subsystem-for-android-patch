@@ -490,6 +490,10 @@ jobs:
           path: .scratch/vm-programs
           key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
 
+      # crosvm's build script runs a uv script; a cache miss is the only time it runs here.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Build crosvm, passt and gfxstream's renderer
         run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
 
