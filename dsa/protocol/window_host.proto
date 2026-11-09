@@ -316,6 +316,19 @@ message AppMenu {
   bool new_window = 1;
 }
 
+// Window manager to window host: the app's icon changed since the window host's program was
+// made with it (the app was updated, or its icon could not be drawn before). Every window of
+// the app shows it at once: on the taskbar, in Alt+Tab and in the title bar. The program's
+// own icon takes it the next time the program is made.
+message AppIcon {
+  // The app's launcher icon, as a square PNG image. Never empty.
+  bytes icon_png = 1;
+  // The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+  // square PNG image. Empty for an app whose icon is not adaptive, which shows `icon_png`
+  // there too.
+  bytes caption_icon_png = 2;
+}
+
 // An item of a task window's system menu that the window manager carries out.
 enum MenuAction {
   MENU_ACTION_UNSPECIFIED = 0;
@@ -403,5 +416,6 @@ message Envelope {
     SetCaptionBack set_caption_back = 36;
     SetWindowMode set_window_mode = 60;
     ImeEditor ime_editor = 61;
+    AppIcon app_icon = 62;
   }
 }

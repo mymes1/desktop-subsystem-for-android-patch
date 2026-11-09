@@ -44,7 +44,12 @@ pub fn image(icon_id: usize, dpi: u32) -> SplashImage {
 /// The app's icon PNG this program carries for its splash, decoded at its own size, as rows of
 /// premultiplied BGRA pixels. `None` when it carries none or it cannot be read.
 fn full_icon() -> Option<(Vec<u8>, (u32, u32))> {
-    let png = splash_png()?;
+    // The icon the window manager sent since the program started, else the program's own.
+    let live = super::live_icon::current();
+    let png = match &live {
+        Some(icon) => icon.icon_png.as_slice(),
+        None => splash_png()?,
+    };
     let (width, height) = crate::compositor::widgets::png::size(png)?;
     if width > MAX_SPLASH_SOURCE || height > MAX_SPLASH_SOURCE {
         return None;
