@@ -25,9 +25,13 @@
 //!
 //! The service boots the image, which carries its default translator: the package must be
 //! mounted, each part of it bound where it belongs, nothing mounted on `/system/bin`,
-//! `/system/lib64` or `/system/etc`, binfmt_misc mounted with the package's rules registered
-//! and naming a runner that is there, the bridge library where the zygote looks, and the ARM64
-//! ABI offered, with no native bridge failure in the log. Then a small Google apps build, laid
+//! `/system/lib64` or `/system/etc`, binfmt_misc mounted, an ARM64 program of each kind the
+//! package's two rules take (a fixed-address executable and a position-independent one)
+//! running through the translator and writing what it was made to write, the bridge library
+//! where the zygote looks, and the ARM64 ABI offered, with no native bridge failure in the log.
+//! The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
+//! registered rules; a program that runs proves its rule is registered, enabled, and starts a
+//! runner that is there and works, which reading the rule never did. Then a small Google apps build, laid
 //! out as LiteGapps publishes one, is installed through the local API from a mirror in the
 //! test's folder, and Android starts again: the image must be mounted and laid over each of
 //! its folders, with the translator still in place. Across both boots, the guest log and the
@@ -105,16 +109,13 @@ const TRANSLATION_FILES: &[&str] = &[
     "/system_ext/lib64/libdsa_native_bridge.so",
     "/system/bin/arm64/linker64",
 ];
-/// The binfmt_misc rules init registers from the package.
-const TRANSLATION_RULES: &[&str] = &["arm64_exe", "arm64_dyn"];
-/// Where the package's runners are bound, which every rule must start.
-const RUNNERS: &str = "/system/bin/dsa-arm-translation/";
-/// The runners an older package's rules name, which the image links to the bound ones (a
-/// release's default translator may be such a package).
-const RUNNER_LINKS: &[&str] = &[
-    "/system/bin/berberis_program_runner_binfmt_misc_arm64",
-    "/system/bin/ndk_translation_program_runner_binfmt_misc_arm64",
-];
+/// The binfmt_misc rules init registers from the package, each with the ELF type of the ARM64
+/// programs it takes: `arm64_exe` matches a fixed-address executable (`ET_EXEC`), `arm64_dyn`
+/// a position-independent one (`ET_DYN`).
+const TRANSLATION_RULES: &[(&str, u16)] = &[("arm64_exe", 2), ("arm64_dyn", 3)];
+/// Where the check puts its ARM64 programs in the guest: the one place the shell may run a
+/// file it wrote.
+const PROGRAM_DIR: &str = "/data/local/tmp";
 /// The places of the translator, as an audit line names them.
 const TRANSLATION_PLACES: &[&str] = &[
     "/mnt/dsa-arm-translation",
@@ -474,31 +475,133 @@ fn binfmt_mounted(table: &str) -> bool {
         .any(|m| m.point == "/proc/sys/fs/binfmt_misc" && m.kind == "binfmt_misc")
 }
 
-/// What is wrong with a registered binfmt_misc rule, as `/proc/sys/fs/binfmt_misc/<name>`
-/// shows it: it must be enabled and start a runner where the package's runners are bound, or
-/// one of the image's links to them. Returns the runner too, so its presence can be checked
-/// (a link whose runner the package lacks leads nowhere).
-fn rule_problems(name: &str, shown: &str) -> (Vec<String>, Option<String>) {
-    let mut problems = Vec::new();
-    if !shown.lines().any(|line| line.trim() == "enabled") {
-        problems.push(format!(
-            "the binfmt_misc rule {name} is not enabled: {shown:?}"
-        ));
+/// A movz instruction of AArch64: `rd` = `imm`.
+fn movz(rd: u32, imm: u16) -> u32 {
+    0xD280_0000 | (u32::from(imm) << 5) | rd
+}
+
+/// An adr instruction of AArch64: `rd` = its own address + `offset`.
+fn adr(rd: u32, offset: u32) -> u32 {
+    0x1000_0000 | ((offset & 3) << 29) | (((offset >> 2) & 0x7_FFFF) << 5) | rd
+}
+
+/// What the ARM64 program for `rule` writes when it runs.
+fn program_output(rule: &str) -> String {
+    format!("DSA ran an ARM64 program through {rule}\n")
+}
+
+/// A small ARM64 Linux program of ELF type `e_type` (2, a fixed-address executable, or 3, a
+/// position-independent one) that writes [program_output] for `rule` to its standard output
+/// and exits with 0. It needs no library and no linker: no x86_64 kernel runs it, so only a
+/// registered binfmt_misc rule and the translator's runner can make it do anything. It
+/// carries the dynamic section (an empty symbol table and its hash) the translator's loader
+/// reads from every position-independent file, and its code addresses its message relative to
+/// itself, so it runs wherever it is loaded.
+fn arm64_program(rule: &str, e_type: u16) -> Vec<u8> {
+    const EHDR: usize = 64;
+    const PHDR: usize = 56;
+    const CODE: usize = EHDR + 2 * PHDR;
+    const CODE_LEN: usize = 8 * 4;
+    let message = program_output(rule).into_bytes();
+    let message_at = CODE + CODE_LEN;
+    let align8 = |n: usize| n.div_ceil(8) * 8;
+    let hash_at = align8(message_at + message.len());
+    let symtab_at = hash_at + 16;
+    let strtab_at = symtab_at + 24;
+    let dynamic_at = align8(strtab_at + 1);
+    let dynamic_len = 6 * 16;
+    let size = dynamic_at + dynamic_len;
+    // A fixed-address executable is loaded where it says: the usual place for one.
+    let base: u64 = if e_type == 2 { 0x40_0000 } else { 0 };
+    let at = |offset: usize| base + offset as u64;
+
+    let mut elf = Vec::with_capacity(size);
+    // The ELF header: 64-bit, little-endian, version 1, System V, AArch64 (0xb7).
+    elf.extend_from_slice(b"\x7fELF\x02\x01\x01\x00");
+    elf.extend_from_slice(&[0; 8]);
+    elf.extend_from_slice(&e_type.to_le_bytes());
+    elf.extend_from_slice(&0xb7u16.to_le_bytes());
+    elf.extend_from_slice(&1u32.to_le_bytes());
+    elf.extend_from_slice(&at(CODE).to_le_bytes()); // e_entry
+    elf.extend_from_slice(&(EHDR as u64).to_le_bytes()); // e_phoff
+    elf.extend_from_slice(&0u64.to_le_bytes()); // e_shoff: no sections
+    elf.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+    elf.extend_from_slice(&(EHDR as u16).to_le_bytes());
+    elf.extend_from_slice(&(PHDR as u16).to_le_bytes());
+    elf.extend_from_slice(&2u16.to_le_bytes()); // e_phnum
+                                                // The translator's loader refuses a section header size other than ELF64's and a section
+                                                // name table index of 0, even with no sections.
+    elf.extend_from_slice(&64u16.to_le_bytes()); // e_shentsize
+    elf.extend_from_slice(&0u16.to_le_bytes()); // e_shnum
+    elf.extend_from_slice(&1u16.to_le_bytes()); // e_shstrndx
+    let mut phdr = |kind: u32, flags: u32, offset: usize, len: usize, align: u64| {
+        elf.extend_from_slice(&kind.to_le_bytes());
+        elf.extend_from_slice(&flags.to_le_bytes());
+        elf.extend_from_slice(&(offset as u64).to_le_bytes());
+        elf.extend_from_slice(&at(offset).to_le_bytes()); // p_vaddr
+        elf.extend_from_slice(&at(offset).to_le_bytes()); // p_paddr
+        elf.extend_from_slice(&(len as u64).to_le_bytes()); // p_filesz
+        elf.extend_from_slice(&(len as u64).to_le_bytes()); // p_memsz
+        elf.extend_from_slice(&align.to_le_bytes());
+    };
+    // The whole file, readable and executable (the loader refuses one that is writable too),
+    // and its dynamic section.
+    phdr(1, 5, 0, size, 0x1000);
+    phdr(2, 4, dynamic_at, dynamic_len, 8);
+    // write(1, message, len); exit_group(0), AArch64 Linux's system calls 64 and 94.
+    let code = [
+        movz(0, 1),
+        adr(1, (message_at - (CODE + 4)) as u32),
+        movz(2, message.len() as u16),
+        movz(8, 64),
+        0xD400_0001, // svc #0
+        movz(0, 0),
+        movz(8, 94),
+        0xD400_0001,
+    ];
+    for instruction in code {
+        elf.extend_from_slice(&instruction.to_le_bytes());
     }
-    let runner = shown
+    elf.extend_from_slice(&message);
+    elf.resize(hash_at, 0);
+    // A System V hash of one bucket and one chain, both empty; the null symbol; an empty name.
+    for word in [1u32, 1, 0, 0] {
+        elf.extend_from_slice(&word.to_le_bytes());
+    }
+    elf.extend_from_slice(&[0; 24]);
+    elf.push(0);
+    elf.resize(dynamic_at, 0);
+    let dynamic: [(u64, u64); 6] = [
+        (4, at(hash_at)),   // DT_HASH
+        (5, at(strtab_at)), // DT_STRTAB
+        (6, at(symtab_at)), // DT_SYMTAB
+        (10, 1),            // DT_STRSZ
+        (11, 24),           // DT_SYMENT
+        (0, 0),             // DT_NULL
+    ];
+    for (tag, value) in dynamic {
+        elf.extend_from_slice(&tag.to_le_bytes());
+        elf.extend_from_slice(&value.to_le_bytes());
+    }
+    assert_eq!(elf.len(), size);
+    elf
+}
+
+/// What is wrong with what the guest's shell printed running the ARM64 program for `rule`,
+/// which ends with the line `exit <status>` the check adds.
+fn run_problems(rule: &str, shown: &str) -> Vec<String> {
+    let status = shown
         .lines()
-        .find_map(|line| line.trim().strip_prefix("interpreter "))
-        .map(str::to_string);
-    match &runner {
-        Some(runner) if runner.starts_with(RUNNERS) || RUNNER_LINKS.contains(&runner.as_str()) => {}
-        Some(runner) => problems.push(format!(
-            "the binfmt_misc rule {name} starts {runner}, outside {RUNNERS}, where the package's runners are"
-        )),
-        None => problems.push(format!(
-            "the binfmt_misc rule {name} is not registered: {shown:?}"
-        )),
+        .rev()
+        .find_map(|line| line.trim().strip_prefix("exit "))
+        .map(str::trim);
+    let wrote = shown.contains(program_output(rule).trim_end());
+    match (wrote, status) {
+        (true, Some("0")) => Vec::new(),
+        _ => vec![format!(
+            "an ARM64 program that {rule} takes did not run through the translator: {shown:?}"
+        )],
     }
-    (problems, runner)
 }
 
 /// The lines of `log` where libnativebridge says it could not load the bridge.
@@ -579,11 +682,23 @@ fn nosuid_denials(log: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Whether an audit line records a refusal of the shell, the domain of every command this check
+/// runs through adb. Nothing of the translator runs as the shell but the check's own ARM64
+/// programs, and when one of those is refused, its run fails and is reported with what the
+/// shell printed. Any other refusal of the shell is the check looking where it may not (it
+/// once read binfmt_misc, which the platform lets no domain but init search), not the
+/// translator failing.
+fn own_command(line: &str) -> bool {
+    line.contains("scontext=u:r:shell:s0")
+}
+
 /// The lines of `log` that record SELinux refusing anything of the translator: its superblock,
-/// one of its places, or init a mount onto a file or folder.
+/// one of its places, or init a mount onto a file or folder. The check's own commands are
+/// left out ([own_command]).
 fn translator_denials(log: &str) -> Vec<&str> {
     log.lines()
         .filter(|line| line.contains("avc:") && line.contains("denied"))
+        .filter(|line| !own_command(line))
         .filter(|line| {
             line.contains("tcontext=u:object_r:dsa_arm_translation_fs:")
                 || TRANSLATION_PLACES.iter().any(|place| line.contains(place))
@@ -724,32 +839,96 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
 }
 
 #[test]
-fn fr25_a_rule_that_starts_no_bound_runner_is_found() {
-    let shown = "enabled\ninterpreter /system/bin/dsa-arm-translation/berberis_program_runner_binfmt_misc_arm64\nflags: P\noffset 0\nmagic 7f454c46\n";
-    let (problems, runner) = rule_problems("arm64_dyn", shown);
-    assert!(problems.is_empty(), "{problems:?}");
-    assert_eq!(
-        runner.as_deref(),
-        Some("/system/bin/dsa-arm-translation/berberis_program_runner_binfmt_misc_arm64")
+fn fr25_the_arm64_programs_match_their_rules_and_write_their_message() {
+    for (rule, e_type) in TRANSLATION_RULES {
+        let elf = arm64_program(rule, *e_type);
+        let u16_at = |at: usize| u16::from_le_bytes([elf[at], elf[at + 1]]);
+        let u32_at = |at: usize| u32::from_le_bytes(elf[at..at + 4].try_into().unwrap());
+        let u64_at = |at: usize| u64::from_le_bytes(elf[at..at + 8].try_into().unwrap());
+        // What the package's rule compares: the ELF identification, the type and AArch64.
+        let mut magic = b"\x7fELF\x02\x01\x01\x00".to_vec();
+        magic.extend_from_slice(&[0; 8]);
+        magic.extend_from_slice(&[*e_type as u8, 0, 0xb7]);
+        assert_eq!(&elf[..magic.len()], &magic[..], "{rule}");
+        // What the translator's loader checks in the header.
+        assert_eq!(u32_at(20), 1, "{rule}: e_version");
+        assert_eq!(u16_at(58), 64, "{rule}: e_shentsize");
+        assert_ne!(u16_at(62), 0, "{rule}: e_shstrndx");
+        assert_eq!(u16_at(56), 2, "{rule}: e_phnum");
+        // The one loaded segment covers the file, readable and executable, not writable.
+        assert_eq!(u32_at(64), 1, "{rule}: PT_LOAD");
+        assert_eq!(u32_at(68), 5, "{rule}: R+X");
+        assert_eq!(u64_at(64 + 32), elf.len() as u64, "{rule}: p_filesz");
+        let base = u64_at(64 + 16);
+        assert_eq!(base, if *e_type == 2 { 0x40_0000 } else { 0 }, "{rule}");
+        // The code at the entry: the adr names the message, and the length is its length.
+        let entry = (u64_at(24) - base) as usize;
+        let code: Vec<u32> = (0..8).map(|i| u32_at(entry + 4 * i)).collect();
+        assert_eq!(code[0], 0xD280_0020, "{rule}: mov x0, #1");
+        let adr = code[1];
+        assert_eq!(adr & 0x9F00_001F, 0x1000_0001, "{rule}: adr x1");
+        let offset = ((adr >> 29) & 3) | (((adr >> 5) & 0x7_FFFF) << 2);
+        let message = entry + 4 + offset as usize;
+        let len = ((code[2] >> 5) & 0xFFFF) as usize;
+        assert_eq!(
+            &elf[message..message + len],
+            program_output(rule).as_bytes(),
+            "{rule}"
+        );
+        assert_eq!(code[3], 0xD280_0808, "{rule}: mov x8, #64 (write)");
+        assert_eq!(code[4], 0xD400_0001, "{rule}: svc #0");
+        assert_eq!(code[6], 0xD280_0BC8, "{rule}: mov x8, #94 (exit_group)");
+        // The dynamic section names a hash, the names, the symbol table and their sizes.
+        assert_eq!(u32_at(64 + 56), 2, "{rule}: PT_DYNAMIC");
+        let dynamic = u64_at(64 + 56 + 8) as usize;
+        let tags: Vec<u64> = (0..6).map(|i| u64_at(dynamic + 16 * i)).collect();
+        assert_eq!(tags, [4, 5, 6, 10, 11, 0], "{rule}");
+    }
+}
+
+#[test]
+fn fr25_an_arm64_program_that_did_not_run_is_found() {
+    let ran = format!("{}exit 0\n", program_output("arm64_exe"));
+    assert!(run_problems("arm64_exe", &ran).is_empty());
+    // No rule took it: the kernel found no handler for an AArch64 file.
+    let unregistered =
+        "/system/bin/sh: /data/local/tmp/dsa-arm64_exe: can't execute: Exec format error\nexit 126\n";
+    assert_eq!(run_problems("arm64_exe", unregistered).len(), 1);
+    // The rule names a runner that is not there.
+    let no_runner =
+        "/system/bin/sh: /data/local/tmp/dsa-arm64_dyn: No such file or directory\nexit 127\n";
+    assert_eq!(run_problems("arm64_dyn", no_runner).len(), 1);
+    // The translator failed it after the message, or refused to load it.
+    let crashed = format!("{}exit 139\n", program_output("arm64_dyn"));
+    assert_eq!(run_problems("arm64_dyn", &crashed).len(), 1);
+    let refused =
+        "Error running /data/local/tmp/dsa-arm64_dyn: \"x\" has invalid e_shstrndx\nexit 255\n";
+    assert_eq!(run_problems("arm64_dyn", refused).len(), 1);
+    // The other rule's message does not count.
+    assert_eq!(run_problems("arm64_dyn", &ran).len(), 1);
+}
+
+#[test]
+fn fr25_a_refusal_of_the_checks_own_commands_is_not_the_translators() {
+    // What the check's own read of binfmt_misc caused in develop 97ef3caf's run.
+    let log = "11-09 05:04:14.662  2635  2635 I auditd  : type=1400 audit(0.0:6): avc:  denied  { search } for  comm=\"cat\" name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n\
+               11-09 05:04:14.662  2635  2635 W cat     : type=1400 audit(0.0:6): avc:  denied  { search } for  name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n\
+               [   43.674664] type=1400 audit(1794200654.662:6): avc:  denied  { search } for  comm=\"cat\" name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n";
+    assert!(
+        translator_denials(log).is_empty(),
+        "{:?}",
+        translator_denials(log)
     );
-    // A package made before its rules named the bound runners: the image links that name to
-    // the bound runner, and the link is then checked to lead somewhere.
-    let old = shown.replace("/system/bin/dsa-arm-translation/", "/system/bin/");
-    let (problems, runner) = rule_problems("arm64_dyn", &old);
+    let mut problems = Vec::new();
+    refusal_problems(log, "guest log", &mut problems);
     assert!(problems.is_empty(), "{problems:?}");
-    assert_eq!(runner.as_deref(), Some(RUNNER_LINKS[0]));
-    // A runner the image neither binds nor links to.
-    let elsewhere = shown.replace("/system/bin/dsa-arm-translation/", "/system/xbin/");
-    assert_eq!(rule_problems("arm64_dyn", &elsewhere).0.len(), 1);
-    let disabled = shown.replace("enabled", "disabled");
-    assert_eq!(rule_problems("arm64_dyn", &disabled).0.len(), 1);
-    // Not registered at all: the file is not there, and cat says so.
-    let missing = rule_problems(
-        "arm64_exe",
-        "cat: /proc/sys/fs/binfmt_misc/arm64_exe: No such file or directory\n",
-    );
-    assert_eq!(missing.0.len(), 2, "{:?}", missing.0);
-    assert!(missing.1.is_none());
+    // The same refusal of an app is the translator's.
+    let app = log.replace("u:r:shell:s0", "u:r:untrusted_app:s0:c512,c768");
+    assert_eq!(translator_denials(&app).len(), 3);
+    // And init's, which registers the rules, is a mount denial too.
+    let init = "avc:  denied  { search } for  comm=\"init\" name=\"/\" dev=\"binfmt_misc\" scontext=u:r:init:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n";
+    assert_eq!(translator_denials(init).len(), 1);
+    assert_eq!(mount_denials(init).len(), 1);
 }
 
 #[test]
@@ -896,9 +1075,10 @@ fn fr32_the_mirror_holds_a_build_the_service_takes() {
 
 /// Reads the running boot through adb and adds what is wrong with the translation package to
 /// `problems`: its mounts (`table`, the guest's `/proc/self/mountinfo`), its files where the
-/// runtime and the translator look, the rules init registered and the runners they start, the
-/// ABIs the package manager installs for, and whether the zygote loaded the bridge.
-fn translation_problems(adb: &Adb, table: &str, problems: &mut Vec<String>) {
+/// runtime and the translator look, an ARM64 program of each rule init registered running
+/// through the translator (written to `dir` first), the ABIs the package manager installs for,
+/// and whether the zygote loaded the bridge.
+fn translation_problems(adb: &Adb, dir: &Path, table: &str, problems: &mut Vec<String>) {
     for problem in translation_mount_problems(table) {
         problems.push(format!("ARM translation: {problem}"));
     }
@@ -908,25 +1088,27 @@ fn translation_problems(adb: &Adb, table: &str, problems: &mut Vec<String>) {
                 .into(),
         );
     }
-    let mut wanted: Vec<String> = TRANSLATION_FILES.iter().map(|f| f.to_string()).collect();
-    for name in TRANSLATION_RULES {
-        let shown = adb
-            .shell(&format!("cat /proc/sys/fs/binfmt_misc/{name} 2>&1"))
-            .unwrap_or_else(|why| why);
-        let (rule, runner) = rule_problems(name, &shown);
-        for problem in rule {
-            problems.push(format!("ARM translation: {problem}"));
-        }
-        wanted.extend(runner);
-    }
-    let wanted: Vec<&str> = wanted.iter().map(String::as_str).collect();
-    match adb.missing(&wanted) {
+    match adb.missing(TRANSLATION_FILES) {
         Ok(missing) => {
             for path in missing {
                 problems.push(format!("ARM translation: {path} is not in the system"));
             }
         }
         Err(why) => problems.push(why),
+    }
+    // Each rule is judged by an ARM64 program it takes running through the translator: the
+    // shell may not read binfmt_misc.
+    for (rule, e_type) in TRANSLATION_RULES {
+        let program = dir.join(format!("dsa-{rule}"));
+        let guest = format!("{PROGRAM_DIR}/dsa-{rule}");
+        let shown = std::fs::write(&program, arm64_program(rule, *e_type))
+            .map_err(|why| format!("writing {}: {why}", program.display()))
+            .and_then(|()| adb.run(&["push", &program.to_string_lossy(), &guest]))
+            .and_then(|_| adb.shell(&format!("chmod 755 {guest} && {guest} 2>&1; echo exit $?")))
+            .unwrap_or_else(|why| why);
+        for problem in run_problems(rule, &shown) {
+            problems.push(format!("ARM translation: {problem}"));
+        }
     }
     // The ARM64 linker reads its namespaces from this path only; the image's own is empty.
     match adb.shell("[ -s /system/etc/ld.config.arm64.txt ] && echo full || echo empty") {
@@ -1093,7 +1275,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     let mut problems = Vec::new();
     let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
     let _ = std::fs::write(dir.join("mounts-first.txt"), &table);
-    translation_problems(&adb, &table, &mut problems);
+    translation_problems(&adb, &dir, &table, &mut problems);
     match api.arm_translation() {
         Ok(status) if status.guest.as_ref().is_some_and(|guest| guest.active) => {}
         Ok(status) => problems.push(format!(
@@ -1207,7 +1389,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         )),
         Err(why) => problems.push(format!("reading where Google Play stands: {why}")),
     }
-    translation_problems(&adb, &table, &mut problems);
+    translation_problems(&adb, &dir, &table, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
 
     // The service's own copy of the guest log, across both boots.

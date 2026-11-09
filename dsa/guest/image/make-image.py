@@ -452,11 +452,21 @@ MEMORY_PROPS = {
     "dalvik.vm.heapmaxfree": "8m",
 }
 
+# The density of the freeform display every task window lives on: the host's at 100% scale,
+# which the hwcomposer reports (ro.boot.dsa.display_dpi) and the host asks a task on such a
+# monitor to draw at. SurfaceFlinger takes the display's density from ro.sf.lcd_density
+# alone, and without it falls back to 213 dpi ("ro.sf.lcd_density must be defined as a build
+# property"): every app then started at 213 and the host's 160 a moment later, a density
+# change, which relaunches every activity that does not handle one itself. hello-vulkan was
+# destroyed before its first window that way and crashed in its own clean-up.
+DISPLAY_DPI = 160
+
 GRAPHICS_PROPS = {
     "ro.hardware.egl": "angle",
     "ro.hardware.vulkan": "ranchu",
     "ro.hardware.gralloc": "minigbm",
     "ro.cpuvulkan.version": "0",
+    "ro.sf.lcd_density": str(DISPLAY_DPI),
 }
 
 # ro.vulkan.apex makes the Vulkan loader take Cuttlefish's driver from its APEX, which
@@ -2760,7 +2770,7 @@ CUTTLEFISH_CAMERA_APEXES = [
 DISPLAY_BOOTCONFIG = {
     "display_width": 1920,
     "display_height": 1080,
-    "display_dpi": 160,
+    "display_dpi": DISPLAY_DPI,
 }
 
 # Turns on the zram swap fstab.dsa declares, and tunes the kernel for it.

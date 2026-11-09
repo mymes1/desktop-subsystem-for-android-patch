@@ -9,6 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PATCH = next((HERE / "patches/guest/mesa").glob("0002-*.patch"))
+LOCK_PATCH = next((HERE / "patches/guest/mesa").glob("0006-*.patch"))
 FETCH = HERE / "fetch.sh"
 HEADER = HERE / "include/dsa_cpu_readback.h"
 TESTS = HERE / "tests/test.sh"
@@ -53,6 +54,33 @@ class CpuReadbackPatchTests(unittest.TestCase):
         self.assertIn("DMA_BUF_IOCTL_SYNC", read)
         self.assertIn("munmap(mapped, mapSize);", read)
         self.assertIn('#include "dsa_cpu_readback.h"', added)
+
+    def test_pr3_the_drawing_is_written_through_the_lock_screencap_reads_with(self):
+        # Image test run 42562909966: the read back ran for SurfaceFlinger's capture, but the
+        # dma-buf mmap failed ("cannot map buffer 18 to write the GPU's drawing into it:
+        # Invalid argument") at every screencap, which locked the same buffer and read zeros.
+        added, removed = file_hunks(LOCK_PATCH, "src/gfxstream/guest/android/GrallocMinigbm.cpp")
+        write = function(added, "static int writeThroughGralloc(")
+        # The buffer wrapped as it was allocated, from a clone of the handle.
+        self.assertIn("desc.format = static_cast<uint32_t>(cros_handle->droid_format);", write)
+        self.assertIn("desc.usage = static_cast<uint64_t>(cros_handle->usage);", write)
+        self.assertIn("AHARDWAREBUFFER_CREATE_FROM_HANDLE_METHOD_CLONE", write)
+        self.assertIn("AHardwareBuffer_lock(ahb, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &mapped);",
+                      write)
+        self.assertIn("const size_t stride = cros_handle->strides[0];", write)
+        self.assertIn("dsa::copyReadbackRows(", write)
+        self.assertLess(write.index("AHardwareBuffer_unlock(ahb, nullptr);"),
+                        write.index("AHardwareBuffer_release(ahb);"))
+        # Tried first; the dma-buf mapping stays for a gralloc that cannot lock it.
+        text = "\n".join(added)
+        self.assertIn("    const int locked = writeThroughGralloc(cros_handle, handle, format, pixels);\n"
+                      "    if (locked == 0) {\n        return 0;\n    }", text)
+        self.assertTrue(any("cannot map buffer" in line for line in removed))
+        # The driver links against a stub of libnativewindow that has the vendor-only call.
+        stub = (HERE / "cmake/nativewindow_stub.c").read_text(encoding="utf-8")
+        self.assertIn("int AHardwareBuffer_createFromHandle(", stub)
+        names = sorted(p.name for p in (HERE / "patches/guest/mesa").glob("*.patch"))
+        self.assertGreater(names.index(LOCK_PATCH.name), names.index(PATCH.name))
 
     def test_pr3_every_gralloc_offers_the_read_back_and_only_minigbm_does_it(self):
         added, _ = file_hunks(PATCH, "src/gfxstream/guest/android/include/gfxstream/guest/GfxStreamGralloc.h")
