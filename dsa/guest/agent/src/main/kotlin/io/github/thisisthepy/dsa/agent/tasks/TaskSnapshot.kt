@@ -154,3 +154,35 @@ const val CONFIG_DENSITY = 0x1000
  * changes.
  */
 fun handlesDensityChange(configChanges: Int): Boolean = (configChanges and CONFIG_DENSITY) != 0
+
+/**
+ * Whether a task's app asked to fill the screen, in any of the ways an app asks: its task left
+ * the freeform windowing mode for fullscreen ([fullscreenMode]), it hides both its status and
+ * navigation bars ([requestedVisibleTypes], see [hidesBothSystemBars]), or its top activity's
+ * theme sets android:windowFullscreen ([fullscreenTheme]). The theme is read from the app's
+ * manifest before any of its code runs, so a task that asks this way is known to fill the
+ * screen from the moment it is created, before its activity has a window.
+ */
+fun asksForFullScreen(fullscreenMode: Boolean, requestedVisibleTypes: Int?, fullscreenTheme: Boolean): Boolean =
+    fullscreenMode || fullscreenTheme || hidesBothSystemBars(requestedVisibleTypes)
+
+/**
+ * The bounds the agent starts an app at, on a display of [displayWidth] by [displayHeight]
+ * guest pixels: the whole display when the activity it starts sets android:windowFullscreen
+ * in its theme ([fullscreenTheme]), else null for the framework's own freeform default.
+ *
+ * The host fills its monitor with the window of a task whose app asks for full screen. Started
+ * at the framework's phone-sized default, such a task would be resized to the monitor right
+ * after its activity was created, across Android's size classes (smallest width, screen
+ * layout size), and Android relaunches an activity that does not declare it handles those,
+ * so the app would lose its state and draw its first frames twice. Started at the whole
+ * display, which is at least as large as the main monitor, fitting the task to its monitor
+ * keeps it in the size classes of a large screen, and where the monitor is the display's size
+ * it is not resized at all. Null when the display's size is not known.
+ */
+fun launchBounds(fullscreenTheme: Boolean, displayWidth: Int, displayHeight: Int): TaskBounds? =
+    if (fullscreenTheme && displayWidth > 0 && displayHeight > 0) {
+        TaskBounds(0, 0, displayWidth, displayHeight)
+    } else {
+        null
+    }
