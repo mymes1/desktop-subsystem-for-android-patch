@@ -7,8 +7,9 @@
 //!   Apple silicon (the framework's Linux boot loader takes no compressed kernel there), the
 //!   `bzImage` on Intel Macs;
 //! - the disks, in the order the guest names them: the image's system disk read only
-//!   (`vda`), the user's disk (`vdb`), the pstore disk (`vdc`). Android finds its partitions
-//!   by their GPT names, not by these names;
+//!   (`vda`), the user's disk (`vdb`), the pstore disk (`vdc`), and the user's add-on disk read
+//!   only (`vdd`) while they have add-ons. Android finds its partitions by their GPT names, not
+//!   by these names;
 //! - the vsock ports the host listens on and the memory the balloon leaves the guest.
 
 use std::path::{Path, PathBuf};
