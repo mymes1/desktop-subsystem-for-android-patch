@@ -29,9 +29,9 @@ entry in the list of installed apps, as it did with the Windows Subsystem for An
 (WSA), which Microsoft ended on March 5, 2025. Every part of DSA is open source, so anyone
 can carry it on.
 
-**Status: preview.** DSA v0.1 runs on Windows 11 x64. The features below are implemented
-and tested in CI; checking them by hand on real hardware is still in progress, so expect
-rough edges. Linux, macOS and ARM64 Windows are in progress (see
+**Status: preview.** DSA v0.2 runs on Windows 11, x64 and ARM64. The features below are
+implemented and tested in CI; checking them by hand on real hardware is still in progress,
+so expect rough edges. Linux and macOS are in progress (see
 [Supported platforms](#supported-platforms)).
 
 ## Features
@@ -44,6 +44,12 @@ rough edges. Linux, macOS and ARM64 Windows are in progress (see
   the app, and sharp output at every monitor scale.
 - Mouse, touch and pen (pressure, eraser, barrel button), keyboard with every layout, and
   the Windows input method, including Korean, through the Android editor.
+- Text input through the Windows text services framework, so reconversion, prediction,
+  dictation, handwriting and the emoji panel work on the Android editor's own text.
+- Each app scales across monitors without restarting: it takes the new monitor's density or
+  its window is scaled, as chosen in DSA Settings or with `dsa app-window --dpi-scaling`.
+- Windows 11's three- and four-finger touch gestures turned off while a DSA window is in
+  front, if you choose, so the app gets them.
 - Windows exposed to UI Automation, so screen readers can reach them.
 
 **Shell integration**
@@ -68,7 +74,11 @@ rough edges. Linux, macOS and ARM64 Windows are in progress (see
 - An ARM translation layer for ARM-only apps on x64: the open source translator Digitalis
   comes with the x64 image, and Google's translator or another package can replace it.
 - Signed automatic updates of both the Android image and DSA itself, with a failed image
-  rolled back to the last good one.
+  rolled back to the last good one, and a notification when an update is ready, applied or
+  failed.
+- Root access, off by default. Once it is on, an app or `adb shell` set to ask gets `su`
+  after an administrator approves it in a prompt under the app's name; other apps cannot
+  see `su` at all.
 - Each Windows user gets their own Android and data disk, in their own profile.
 - DSA Settings: apps, background apps, widgets, display and GPU, memory, network, device
   identity, updates, developer mode with adb, Android's live log and diagnostics.
@@ -76,14 +86,16 @@ rough edges. Linux, macOS and ARM64 Windows are in progress (see
 **Not shipped:** Google Play services or an app store (their licences make them a user's
 choice), and any of Microsoft's WSA binaries. A user who wants Google Play installs it from
 DSA Settings or with `dsa gapps install`: DSA then downloads the public LiteGapps Core package
-for that user's Android and lays it over the system. Google's apps follow Google's terms.
+for that user's Android and lays it over the system. Google Play never keeps Android from
+starting, and removing it works even while Android is stopped. Google's apps follow
+Google's terms.
 
 ## Supported platforms
 
 | Host | Status |
 |---|---|
 | Windows 11, x64 | Preview. Released as `DSA-v<version>-win-x64-setup.exe` |
-| Windows 11, ARM64 | In progress. Builds and installs in CI; not released yet |
+| Windows 11, ARM64 | Preview. Released as `DSA-v<version>-win-arm64-setup.exe` |
 | Linux (x64, ARM64) | In progress. The KVM host, Wayland compositor and `.deb`/`.rpm` packages build and run in CI; not released yet |
 | macOS (Apple silicon) | In progress. The host on Apple's Virtualization framework and its app bundle build in CI; not released yet |
 
@@ -105,8 +117,8 @@ Dates after today are expected dates, not releases.
 ## Install
 
 1. Turn on the Windows feature **Virtual Machine Platform** and restart.
-2. Download `DSA-v<version>-win-x64-setup.exe` from the
-   [latest release](https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest)
+2. Download `DSA-v<version>-win-x64-setup.exe`, or `DSA-v<version>-win-arm64-setup.exe` on
+   an ARM64 PC, from the [latest release](https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest)
    and check it against `SHA256SUMS.txt`.
 3. Run it. Setup installs the `DsaHost` service, the `dsa` command, DSA Settings, and the
    first Android image (downloaded when setup does not carry one). Android starts when you
