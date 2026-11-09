@@ -12,7 +12,10 @@
 //! Neither app may be relaunched after it opens (the events log's `wm_relaunch_activity` and
 //! `wm_relaunch_resume_activity`): Android starts at the density its window asks for, and
 //! hello-vulkan, which does not handle a change of density, was relaunched before it had a
-//! window when the two differed.
+//! window when the two differed. hello-vulkan's theme also asks for full screen, so the agent
+//! starts it at the whole display: started at the framework's phone-sized default, the
+//! window filling the monitor resized it across Android's size classes (smallest width and
+//! screen layout) right after it opened, and Android relaunched it for that.
 //!
 //! The CTS subset runs through `dsa/graphics/verify/verify.py cts --software-vulkan`, the same
 //! command a PC runs, which keeps each case's result and the dEQP log in the test's folder.

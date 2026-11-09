@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class AndroidNotifications(private val context: Context, private val log: Log) : NotificationSource {
     private val shown = ConcurrentHashMap<String, StatusBarNotification>()
+    private val themes = FullScreenThemes(context, log)
 
     @Volatile
     private var listener: NoticeListener? = null
@@ -143,6 +144,8 @@ class AndroidNotifications(private val context: Context, private val log: Log) :
             return
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // An app that asks for full screen in its theme starts at its window's final size.
+        themes.startBounds(intent)?.let { options.setLaunchBounds(it) }
         context.startActivity(intent, options.toBundle())
     }
 

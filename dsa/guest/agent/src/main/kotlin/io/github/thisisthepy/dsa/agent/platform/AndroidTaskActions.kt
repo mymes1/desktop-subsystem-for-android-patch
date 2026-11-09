@@ -29,6 +29,7 @@ class AndroidTaskActions(
     private val context: Context,
     private val log: Log,
 ) : TaskActions {
+    private val themes = FullScreenThemes(context, log)
     private var warnedNoDensity = false
     private var warnedNoInsets = false
 
@@ -60,6 +61,7 @@ class AndroidTaskActions(
         intent.addFlags(flags)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
         freeform(options)
+        themes.startBounds(intent)?.let { options.setLaunchBounds(it) }
         return try {
             context.startActivity(intent, options.toBundle())
             true
