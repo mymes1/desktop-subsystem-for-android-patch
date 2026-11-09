@@ -32,6 +32,10 @@ mkdir -p "$out"
     "$here/frame_crop_test.cpp" -o "$out/frame_crop_test"
 "$out/frame_crop_test"
 
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../host" \
+    "$here/copy_wait_test.cpp" -o "$out/copy_wait_test"
+"$out/copy_wait_test"
+
 # The upstream headers are not ours to warn about.
 upstream=(
     -isystem "$scratch/gfxstream/guest/OpenglSystemCommon"

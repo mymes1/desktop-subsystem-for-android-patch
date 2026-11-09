@@ -31,10 +31,67 @@
 #include <vector>
 
 #include "FrameBuffer.h"
+#include "dsa_copy_wait.h"
+#include "host-common/logging.h"
 #include "host-common/misc.h"
 #include "host-common/multi_display_agent.h"
 #include "vulkan/BorrowedImageVk.h"
 #include "vulkan/VkCommonOperations.h"
+
+namespace {
+
+/* Waits for the copy `fence` follows, never without an end (dsa_copy_wait.h), and says how
+ * long it took in `took_ns`. A finished copy's fence is reset for the next one; a hung one's
+ * is left alone, and the device is suspected lost, so the renderer checks it before its next
+ * operation. */
+dsa::CopyEnd finish_copy(gfxstream::vk::VkEmulation& emu, VkFence fence, uint64_t* took_ns) {
+    gfxstream::vk::VulkanDispatch* vk = emu.getDeviceDispatch();
+    VkDevice device = emu.getDevice();
+    const auto started = std::chrono::steady_clock::now();
+    const dsa::CopyEnd end = dsa::wait_for_copy([&](uint64_t timeout_ns) {
+        switch (vk->vkWaitForFences(device, 1, &fence, VK_TRUE, timeout_ns)) {
+            case VK_SUCCESS:
+                return dsa::FenceWait::Signaled;
+            case VK_TIMEOUT:
+                return dsa::FenceWait::Timeout;
+            case VK_ERROR_DEVICE_LOST:
+                return dsa::FenceWait::DeviceLost;
+            default:
+                return dsa::FenceWait::Failed;
+        }
+    });
+    *took_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                         std::chrono::steady_clock::now() - started)
+                                         .count());
+    switch (end) {
+        case dsa::CopyEnd::Done:
+            vk->vkResetFences(device, 1, &fence);
+            break;
+        case dsa::CopyEnd::DeviceLost:
+            emu.noteDeviceLost();
+            break;
+        case dsa::CopyEnd::Hung:
+            emu.suspectDeviceLost();
+            break;
+    }
+    return end;
+}
+
+/* Whether a slow copy may be logged now: at most one line every two seconds, so a GPU that
+ * stays slow does not fill the log. */
+[[maybe_unused]] bool slow_copy_may_log() {
+    static std::mutex mutex;
+    static std::chrono::steady_clock::time_point last;
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto now = std::chrono::steady_clock::now();
+    if (last.time_since_epoch().count() != 0 && now - last < std::chrono::seconds(2)) {
+        return false;
+    }
+    last = now;
+    return true;
+}
+
+}  // namespace
 
 #ifdef _WIN32
 
@@ -44,9 +101,6 @@ using gfxstream::FrameBuffer;
 using gfxstream::vk::BorrowedImageInfoVk;
 using gfxstream::vk::VkEmulation;
 using gfxstream::vk::VulkanDispatch;
-
-/* How long one copy may take on the GPU before the frame is given up. */
-constexpr uint64_t kCopyTimeoutNs = 1000ull * 1000ull * 1000ull;
 
 /* A texture of the embedder's, imported into Vulkan. */
 struct Target {
@@ -368,9 +422,15 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         presenter.targets.erase(display_id);
         return;
     }
-    if (target.image == VK_NULL_HANDLE && !import_target(*emu, handle, width, height, &target)) {
-        presenter.targets.erase(display_id);
-        return;
+    if (target.image == VK_NULL_HANDLE) {
+        if (!import_target(*emu, handle, width, height, &target)) {
+            presenter.targets.erase(display_id);
+            return;
+        }
+        /* Once per texture: a resize that remakes the guest's buffers remakes it, so the log
+         * shows each size a window's frames were copied at. */
+        WARN("Display %u's frames go to a new %ux%u task window texture (frame %ux%u).",
+             display_id, width, height, frame.width, frame.height);
     }
     if (!ensure_commands(*emu, presenter)) {
         log_once("could not set up the Vulkan commands that copy frames into task windows");
@@ -396,8 +456,14 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
     const int32_t copy_width = static_cast<int32_t>(content_width);
     const int32_t copy_height = static_cast<int32_t>(content_height);
 
+    if (image_width != width || image_height != height) {
+        /* The buffer and its Vulkan image disagree on the size: the copy is cut to the smaller,
+         * and the line says so, since a mismatch is one way a copy can reach past an image. */
+        WARN("ColorBuffer %u of display %u is %ux%u, but its Vulkan image is %ux%u.",
+             color_buffer, display_id, width, height, image_width, image_height);
+    }
+
     VulkanDispatch* vk = emu->getDeviceDispatch();
-    VkDevice device = emu->getDevice();
     const uint32_t family = emu->getQueueFamilyIndex();
 
     std::vector<VkImageMemoryBarrier> acquire_transfers;
@@ -460,24 +526,36 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         log_once("submitting the copy of a frame into a task window failed");
         return;
     }
-    VkResult waited = vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, kCopyTimeoutNs);
-    if (waited == VK_ERROR_DEVICE_LOST) {
-        emu->noteDeviceLost();
-        log_once("the GPU was reset while a frame was copied into a task window");
-        return;
-    }
-    if (waited != VK_SUCCESS) {
-        /* The fence stays pending; wait for it before the next submit reuses the buffer. */
-        log_once("copying a frame into a task window took longer than a second");
-        if (vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, UINT64_MAX) ==
-            VK_ERROR_DEVICE_LOST) {
-            emu->noteDeviceLost();
+    uint64_t took_ns = 0;
+    switch (finish_copy(*emu, presenter.fence, &took_ns)) {
+        case dsa::CopyEnd::Done:
+            break;
+        case dsa::CopyEnd::DeviceLost:
+            ERR("The GPU was reset while a frame of display %u (ColorBuffer %u, %ux%u, frame "
+                "%ux%u) was copied into its task window's %ux%u texture.",
+                display_id, color_buffer, width, height, content_width, content_height,
+                target.width, target.height);
             return;
-        }
-        vk->vkResetFences(device, 1, &presenter.fence);
-        return;
+        case dsa::CopyEnd::Hung:
+            /* The GPU may still run the command buffer: it and its fence are never used again,
+             * and the next frame makes new ones. */
+            ERR("Copying a frame of display %u (ColorBuffer %u, %ux%u, frame %ux%u) into its "
+                "task window's %ux%u texture has not finished in %llu ms; the GPU may have "
+                "hung. The copy is given up and the device is checked.",
+                display_id, color_buffer, width, height, content_width, content_height,
+                target.width, target.height,
+                static_cast<unsigned long long>(took_ns / 1000000ull));
+            presenter.pool = VK_NULL_HANDLE;
+            presenter.commands = VK_NULL_HANDLE;
+            presenter.fence = VK_NULL_HANDLE;
+            return;
     }
-    vk->vkResetFences(device, 1, &presenter.fence);
+    if (took_ns > dsa::kCopySlowNs && slow_copy_may_log()) {
+        WARN("Copying a frame of display %u (ColorBuffer %u, %ux%u, frame %ux%u) into its task "
+             "window's %ux%u texture took %llu ms.",
+             display_id, color_buffer, width, height, content_width, content_height,
+             target.width, target.height, static_cast<unsigned long long>(took_ns / 1000000ull));
+    }
     presenter.frame_cb(presenter.context, display_id, content_width, content_height);
 }
 
@@ -656,9 +734,6 @@ constexpr uint32_t kGlUnsignedByte = 0x1401;
 
 /* The largest frame shown, in pixels on a side. A size beyond it is a broken guest. */
 constexpr uint32_t kMaxSide = 16384;
-
-/* How long one copy may take on the GPU before the frame is given up. */
-constexpr uint64_t kCopyTimeoutNs = 1000ull * 1000ull * 1000ull;
 
 /* How many images each display cycles through, so the compositor reads one while the next
  * frame is copied into another. */
@@ -1029,7 +1104,6 @@ bool present_dmabuf(PixelPresenter& presenter, uint32_t display_id, const Pendin
         return true;
     }
     VulkanDispatch* vk = emu->getDeviceDispatch();
-    VkDevice device = emu->getDevice();
     const uint32_t family = emu->getQueueFamilyIndex();
 
     std::vector<VkImageMemoryBarrier> acquire_transfers;
@@ -1085,18 +1159,23 @@ bool present_dmabuf(PixelPresenter& presenter, uint32_t display_id, const Pendin
         log_once("submitting the copy of a frame into a task window failed");
         return true;
     }
-    const VkResult waited =
-        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, kCopyTimeoutNs);
-    if (waited == VK_ERROR_DEVICE_LOST) {
-        emu->noteDeviceLost();
-        log_once("the GPU was reset while a frame was copied into a task window");
-        return true;
+    uint64_t took_ns = 0;
+    switch (finish_copy(*emu, presenter.fence, &took_ns)) {
+        case dsa::CopyEnd::Done:
+            break;
+        case dsa::CopyEnd::DeviceLost:
+            log_once("the GPU was reset while a frame was copied into a task window");
+            return true;
+        case dsa::CopyEnd::Hung:
+            /* The GPU may still run the command buffer: it and its fence are never used again. */
+            ERR("Copying a frame of display %u into its task window has not finished in %llu ms; "
+                "the GPU may have hung. The copy is given up and the device is checked.",
+                display_id, static_cast<unsigned long long>(took_ns / 1000000ull));
+            presenter.pool = VK_NULL_HANDLE;
+            presenter.commands = VK_NULL_HANDLE;
+            presenter.fence = VK_NULL_HANDLE;
+            return true;
     }
-    if (waited != VK_SUCCESS) {
-        log_once("copying a frame into a task window took longer than a second");
-        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, UINT64_MAX);
-    }
-    vk->vkResetFences(device, 1, &presenter.fence);
     display.next = (index + 1) % kSlots;
     presenter.dmabuf_frame_cb(presenter.context, display_id, index, content_width,
                               content_height);
@@ -1309,7 +1388,6 @@ bool present_iosurface(PixelPresenter& presenter, uint32_t display_id, const Pen
         return true;
     }
     VulkanDispatch* vk = emu->getDeviceDispatch();
-    VkDevice device = emu->getDevice();
     const uint32_t family = emu->getQueueFamilyIndex();
 
     std::vector<VkImageMemoryBarrier> acquire_transfers;
@@ -1370,18 +1448,23 @@ bool present_iosurface(PixelPresenter& presenter, uint32_t display_id, const Pen
         log_once("submitting the copy of a frame into a task window failed");
         return true;
     }
-    const VkResult waited =
-        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, kCopyTimeoutNs);
-    if (waited == VK_ERROR_DEVICE_LOST) {
-        emu->noteDeviceLost();
-        log_once("the GPU was reset while a frame was copied into a task window");
-        return true;
+    uint64_t took_ns = 0;
+    switch (finish_copy(*emu, presenter.fence, &took_ns)) {
+        case dsa::CopyEnd::Done:
+            break;
+        case dsa::CopyEnd::DeviceLost:
+            log_once("the GPU was reset while a frame was copied into a task window");
+            return true;
+        case dsa::CopyEnd::Hung:
+            /* The GPU may still run the command buffer: it and its fence are never used again. */
+            ERR("Copying a frame of display %u into its task window has not finished in %llu ms; "
+                "the GPU may have hung. The copy is given up and the device is checked.",
+                display_id, static_cast<unsigned long long>(took_ns / 1000000ull));
+            presenter.pool = VK_NULL_HANDLE;
+            presenter.commands = VK_NULL_HANDLE;
+            presenter.fence = VK_NULL_HANDLE;
+            return true;
     }
-    if (waited != VK_SUCCESS) {
-        log_once("copying a frame into a task window took longer than a second");
-        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, UINT64_MAX);
-    }
-    vk->vkResetFences(device, 1, &presenter.fence);
     presenter.iosurface_frame_cb(presenter.context, display_id, content_width, content_height);
     return true;
 }

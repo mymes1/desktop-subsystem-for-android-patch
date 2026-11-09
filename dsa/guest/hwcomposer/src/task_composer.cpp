@@ -311,6 +311,17 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
             const BufferSize buffers = taskBufferSize(output.buffers, frame.display, width, height);
             if (buffers != output.buffers) {
                 // The first frame, a task past its buffers, or one far smaller than them.
+                // Said in the log: each size the host's buffers take is a step a GPU problem
+                // during a resize can be matched against.
+                HWC_LOGI("task %d's buffers are now %lldx%lld (were %lldx%lld) for a %lldx%lld "
+                         "task on a %dx%d display",
+                         task.task, static_cast<long long>(buffers.width),
+                         static_cast<long long>(buffers.height),
+                         static_cast<long long>(output.buffers.width),
+                         static_cast<long long>(output.buffers.height),
+                         static_cast<long long>(width), static_cast<long long>(height),
+                         static_cast<int>(frame.display.width()),
+                         static_cast<int>(frame.display.height()));
                 for (uint32_t& target : output.targets) {
                     mHost.closeColorBuffer(target);
                     target = 0;

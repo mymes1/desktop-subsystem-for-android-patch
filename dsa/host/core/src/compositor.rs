@@ -21,6 +21,7 @@ pub mod caption;
 pub mod early_frames;
 pub mod frame_buffers;
 pub mod frame_follow;
+pub mod gpu_reset;
 pub mod present_watch;
 pub mod resize_latency;
 pub mod resize_pacing;
