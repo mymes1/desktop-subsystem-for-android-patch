@@ -31,3 +31,18 @@
 (allow init labeledfs (filesystem (relabelfrom)))
 (allow init dsa_gapps_fs (filesystem (mount relabelfrom relabelto)))
 (allow system_file dsa_gapps_fs (filesystem (associate)))
+
+; Google Play services and the Play Store compiled again without an app image (dsa-gapps.rc,
+; gapps-compile.sh). vendor.dsa.gapps.compile (vendor_property_contexts) is the agent's request
+; to look at them again, which it sets when either is installed or updated and when the
+; screen goes off; vendor.dsa.gapps.appimageformat is where init keeps the build's app
+; image format while it clears it for the compile. init runs the script as the shell, which may
+; already ask the package manager to compile, and the script reads the request to see whether
+; another came while it ran.
+(type dsa_gapps_compile_prop)
+(roletype object_r dsa_gapps_compile_prop)
+(typeattributeset property_type (dsa_gapps_compile_prop))
+(typeattributeset vendor_property_type (dsa_gapps_compile_prop))
+(allow platform_app dsa_gapps_compile_prop (property_service (set)))
+(allow platform_app dsa_gapps_compile_prop (file (read open getattr map)))
+(allow shell dsa_gapps_compile_prop (file (read open getattr map)))

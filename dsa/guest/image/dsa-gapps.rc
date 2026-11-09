@@ -55,3 +55,45 @@ on post-fs-data && property:ro.boot.dsa.gapps=on
 on post-fs-data
     mkdir /data/vendor/dsa 0771 system system
     mkdir /data/vendor/dsa/gapps 0770 system system
+
+# Google Play services and the Play Store without an app image. ART compiles an app the Play
+# Store installs or updates with its cloud profile (speed-profile) and an app image: the classes
+# of the profile, laid out ready to use, which every process of the app loads into memory of its
+# own. Play services runs several processes at once (com.google.android.gms,
+# com.google.android.gms.unstable, com.google.android.gms.ui, ...); on a PC the first two held a
+# 25-30 MiB copy each, of every class in the profile, used by that process or not. Without it a
+# process loads only the classes it uses, as it runs. gapps-compile.sh compiles the two
+# again with the same profile, so their code stays compiled ahead of time and shared, but with
+# no app image: ART makes an app image only while dalvik.vm.appimageformat names a format, so
+# init clears it for the length of the compile and puts it back when the script ends. An app
+# the package manager compiles in that window gets no app image either, until its next compile.
+#
+# The script runs at each boot and whenever the agent asks (vendor.dsa.gapps.compile), which it
+# does when either package is installed or updated and each time the screen goes off: ART's
+# background job compiles apps again while the device is idle, with an app image, and the next
+# screen off finds that, at a time no window is shown. The script compiles a package only while
+# its code comes from a compile other than its own, at the background priority. It runs as the
+# shell, which may ask the package manager to compile; the processes already running keep the
+# app image they loaded until they start again.
+service dsa_gapps_compile /system/bin/sh /system/etc/dsa/gapps-compile.sh
+    user shell
+    group shell
+    seclabel u:r:shell:s0
+    oneshot
+    disabled
+
+on post-fs-data && property:ro.boot.dsa.gapps=on
+    setprop vendor.dsa.gapps.appimageformat ${dalvik.vm.appimageformat}
+
+on property:sys.boot_completed=1 && property:ro.boot.dsa.gapps=on
+    setprop dalvik.vm.appimageformat ""
+    start dsa_gapps_compile
+
+on property:vendor.dsa.gapps.compile=* && property:ro.boot.dsa.gapps=on
+    setprop dalvik.vm.appimageformat ""
+    start dsa_gapps_compile
+
+# The format the image's build gives, which the first action above kept; lz4, the image's own,
+# should that keeping have failed, so no app is left without an app image for the whole boot.
+on property:init.svc.dsa_gapps_compile=stopped
+    setprop dalvik.vm.appimageformat ${vendor.dsa.gapps.appimageformat:-lz4}

@@ -3287,10 +3287,23 @@ GAPPS_IMPORT = "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop"
 # partition's properties are read after every other partition's, so this wins over an
 # "enforce" set anywhere else.
 GAPPS_PRIVAPP_LOG = "ro.control_privapp_permissions=log"
+# Google Play services and the Play Store compiled again without an app image, which each of
+# their processes would otherwise load into memory of its own (dsa-gapps.rc). The script runs
+# as the shell; the agent asks for it through the first property, and init keeps the build's
+# app image format in the second while it clears it for the compile (sepolicy/gapps.cil).
+GAPPS_COMPILE_SCRIPT = "SYSTEM/etc/dsa/gapps-compile.sh"
+GAPPS_COMPILE_PACKAGES = ["com.google.android.gms", "com.android.vending"]
+GAPPS_COMPILE_PROPERTY = "vendor.dsa.gapps.compile"
+GAPPS_IMAGE_FORMAT_PROPERTY = "vendor.dsa.gapps.appimageformat"
+GAPPS_COMPILE_PROPERTY_CONTEXTS = {
+    GAPPS_COMPILE_PROPERTY: f"{GAPPS_COMPILE_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+    GAPPS_IMAGE_FORMAT_PROPERTY: f"{GAPPS_IMAGE_FORMAT_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+}
 GAPPS_FS_CONFIG = [
     "system/etc/init/dsa-gapps.rc 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-off.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/gapps-compile.sh 0 0 644 capabilities=0x0",
 ]
 
 
@@ -3840,6 +3853,9 @@ def update_vendor_property_contexts(text):
         lines.append(FILES_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ROOT_ELEVATION_PROPERTY] for line in lines):
         lines.append(ROOT_ELEVATION_PROPERTY_CONTEXT)
+    for name, context in GAPPS_COMPILE_PROPERTY_CONTEXTS.items():
+        if not any(line.split()[:1] == [name] for line in lines):
+            lines.append(context)
     return "\n".join(lines) + "\n"
 
 
@@ -4676,6 +4692,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
+        zout.writestr(GAPPS_COMPILE_SCRIPT, (HERE / "gapps-compile.sh").read_bytes())
         for folder in added_gapps_folders:
             zout.writestr(directory_entry(folder + "/"), b"")
         if VENDOR_PROPERTY_CONTEXTS not in names:
