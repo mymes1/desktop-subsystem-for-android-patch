@@ -4,8 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import io.github.thisisthepy.dsa.agent.install.GoogleAppsCompile
-import io.github.thisisthepy.dsa.agent.install.GoogleAppsCompilePort
+import io.github.thisisthepy.dsa.agent.gapps.GoogleAppsCompile
+import io.github.thisisthepy.dsa.agent.gapps.GoogleAppsCompilePort
 
 /**
  * The package manager's and the power manager's broadcasts, and the request property, which

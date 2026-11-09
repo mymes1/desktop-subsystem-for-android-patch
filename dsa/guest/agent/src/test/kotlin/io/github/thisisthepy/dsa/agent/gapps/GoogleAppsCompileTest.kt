@@ -1,4 +1,4 @@
-package io.github.thisisthepy.dsa.agent.install
+package io.github.thisisthepy.dsa.agent.gapps
 
 import io.github.thisisthepy.dsa.agent.RecordingLog
 import org.junit.Assert.assertEquals

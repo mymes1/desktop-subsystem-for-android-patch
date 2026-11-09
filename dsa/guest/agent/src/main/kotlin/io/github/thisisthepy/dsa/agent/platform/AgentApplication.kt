@@ -107,7 +107,7 @@ class AgentApplication : Application() {
         HostInputMethod.onEditor = { state -> agent.editorChanged(state) }
         agent.start()
         dragCatcher.start()
-        io.github.thisisthepy.dsa.agent.install.GoogleAppsCompile(
+        io.github.thisisthepy.dsa.agent.gapps.GoogleAppsCompile(
             AndroidGoogleAppsCompile(this),
             android.os.SystemClock::elapsedRealtime,
             log,
