@@ -1,10 +1,13 @@
 //! The images init puts in the system on the real image, with SELinux enforcing: the default
 //! ARM translation package and a user's Google apps.
 //!
-//! Each is an erofs image that init mounts through a loop device with `context=` (the
-//! translation labelled as system libraries, the Google apps as system files), before the
-//! zygote starts. A `context=` mount is checked against the type it names as well as the
-//! filesystem's own, and when the policy allowed only the latter every boot refused both mounts
+//! Each is an erofs image that init mounts with `context=` (the translation labelled as system
+//! libraries, the Google apps as system files), before the zygote starts. erofs reads each
+//! image file itself, with `directio`: no loop device may back either mount, and the mount's
+//! source must be the image file, because a loop device kept every page read from the image
+//! twice, once in erofs's cache and once in the image file's. A `context=` mount is checked
+//! against the type it names as well as the filesystem's own, and when the policy allowed only
+//! the latter every boot refused both mounts
 //! ("avc: denied { relabelfrom } ... tclass=filesystem"): Android started with no translator and
 //! no Google Play, and nothing but the log said so.
 //!
@@ -46,7 +49,11 @@
 //! its folders, with the translator still in place, the host's privileged permission allowlist
 //! granting the privileged permission the build's Google Play services asks for and the build's
 //! own list leaves out, and `ro.control_privapp_permissions` at `log`, so that a permission no
-//! list names is logged rather than stopping Android at every boot; no boot may log one. The
+//! list names is logged rather than stopping Android at every boot; no boot may log one. In
+//! that boot the framework must name Google Play services its device configurator, the compile
+//! of the Google apps without an app image must run to its end and leave the app image format
+//! at lz4, and no alarm may fire as a storm (60 times or more, more than once per 10 s on average
+//! since boot). The
 //! small build's APKs are not signed, so the package manager does not install them; the
 //! allowlist is read from the system as the package manager would read it. Across both boots,
 //! the guest log and the Android console log must show no init command of either script
@@ -54,18 +61,41 @@
 //! mounts, no denial that names the translator or one of its places, no overlayfs failure, no
 //! program of any domain refused filesystem getattr on an image's superblock, and no service
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
-//! checked fails with those refusals in its message.
+//! checked fails with those refusals in its message. Both boots must also keep at most 8 cached
+//! app processes, as `dumpsys activity settings` reports the limit the activity manager applies
+//! (`CUR_MAX_CACHED_PROCESSES`): Android 17 reads it from the device configuration and the
+//! framework's resource, not from the global setting it once read, and with the limit only in
+//! that setting it applied 1024. Google Play services must not change that.
+//!
+//! With the Google apps in place, the agent must keep Play services' desktop-irrelevant
+//! services off. The small build's Play services is not installed (it is not signed), so an app
+//! named as Play services that declares those services stands in for it (the Play services
+//! probe): once it is installed they must be off and its push service on, and after they are
+//! turned back on and the probe is installed over itself, as an update is, off again.
+//!
+//! A second boot check measures the idle reclaim with Google apps installed and no app window
+//! open, for the decision on backing off its interval (`idle_reclaim`). It installs LiteGapps'
+//! own newest build for the guest, downloaded into the mirror (the small stand-in build holds
+//! no Play services that run, so it is used only when LiteGapps cannot be reached, and the
+//! report says so), starts Android again, and samples the guest once a second for five
+//! minutes: each run of the reclaim, the kernel time init spends in it, the guest's processor
+//! time, the refaults and reads around each run, and which processes faulted file pages in
+//! between. The report goes to `idle-reclaim.md` and `idle-reclaim.json` in the check's folder,
+//! with the raw samples and the guest log beside them. It fails when it cannot measure, and
+//! when an alarm fired as a storm in that boot, the one with a Play services that runs.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
 //! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
-//! (`dsa/guest/arm-probe/build.sh`), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
+//! (`dsa/guest/arm-probe/build.sh`), `DSA_GMS_PROBE` the Play services probe APK
+//! (`dsa/guest/gms-probe/build.sh`), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
 //! the folder carries none, and `DSA_ADB` the adb to reach the guest with (`adb` on the path
 //! when not set). It needs `/dev/kvm` and `/dev/vhost-vsock`. What it read stays in its folder
 //! (`/tmp/overlays-test-<pid>`) for the job to keep.
 #![cfg(target_os = "linux")]
 
 mod boot_check;
+mod idle_reclaim;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -85,6 +115,16 @@ use dsa_host_unix::socket::UnixLocalConnector;
 const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc"];
 /// Where the translation package is mounted.
 const TRANSLATION_POINT: &str = "/mnt/dsa-arm-translation";
+/// The files the translation package is mounted from: a package the user installed, or the
+/// image's default one.
+const TRANSLATION_IMAGES: &[&str] = &[
+    "/data/vendor/dsa/arm-translation/system.img",
+    "/system/etc/dsa/arm-translation/default.img",
+];
+/// The file the Google apps image is mounted from.
+const GAPPS_IMAGE: &str = "/data/vendor/dsa/gapps/system.img";
+/// The major number of loop devices.
+const LOOP_MAJOR: &str = "7";
 /// Where each part of the package is bound, and the part, as a path inside the image.
 const TRANSLATION_BINDS: &[(&str, &str)] = &[
     ("/system_ext/lib64", "/system/lib64"),
@@ -223,10 +263,19 @@ const PLAY_FEATURES: &[&str] = &[
     "android.software.home_screen",
     "android.software.input_methods",
 ];
+/// The Play services probe (`dsa/guest/gms-probe`): an app named as Google Play services that
+/// declares the services the agent keeps off on a desktop, and [GMS_KEPT], which it leaves on.
+const GMS_PROBE_MANIFEST: &str = include_str!("../../../../guest/gms-probe/AndroidManifest.xml");
+const GMS_PACKAGE: &str = "com.google.android.gms";
+/// Play services' push service, which the agent must leave on.
+const GMS_KEPT: &str = "com.google.android.gms.gcm.GcmService";
+/// How long the agent may take to turn the services off after Android announces a change:
+/// it waits two seconds for a burst of changes to end, then makes one call.
+const GMS_WAIT: Duration = Duration::from_secs(30);
 /// The API levels the mirror carries a build for, with the Android version LiteGapps names.
 const MIRROR_SDKS: &[(u32, &str)] = &[(36, "16.0"), (37, "17.0")];
-/// The whole test, both boots included, stays under fourteen minutes.
-const BUDGET: Duration = Duration::from_secs(840);
+/// The whole test, both boots included, stays under fifteen minutes.
+const BUDGET: Duration = Duration::from_secs(900);
 /// How long past its budget the test may run before it stops everything it started and
 /// ends: inside the job step's 16 minutes, so the step never kills it with its VM running.
 const OVERRUN: Duration = Duration::from_secs(60);
@@ -331,12 +380,17 @@ struct Adb {
 impl Adb {
     /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most.
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
+        self.run_for(args, ADB_LIMIT)
+    }
+
+    /// Runs adb with `args` against the guest, for `limit` at most.
+    fn run_for(&self, args: &[&str], limit: Duration) -> Result<Vec<u8>, String> {
         let out = run_bounded(
             Command::new(&self.program)
                 .arg("-s")
                 .arg(&self.serial)
                 .args(args),
-            ADB_LIMIT,
+            limit,
             usize::MAX,
         )?;
         match out.status {
@@ -350,7 +404,7 @@ impl Adb {
             None => Err(format!(
                 "adb {} did not finish within {} s and was stopped",
                 args.join(" "),
-                ADB_LIMIT.as_secs()
+                limit.as_secs()
             )),
         }
     }
@@ -411,13 +465,14 @@ impl Adb {
 
 /// One line of `/proc/self/mountinfo`: the device, the folder of its filesystem that is
 /// mounted (`/` for the whole of it, a folder for a bind), where, the mount's own options, the
-/// filesystem type and the filesystem's options.
+/// filesystem type, what it was mounted from and the filesystem's options.
 struct Mount<'a> {
     device: &'a str,
     root: &'a str,
     point: &'a str,
     options: &'a str,
     kind: &'a str,
+    source: &'a str,
     super_options: &'a str,
 }
 
@@ -435,7 +490,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
             let options = fields.next().unwrap_or("");
             let mut fields = theirs.split_whitespace();
             let kind = fields.next()?;
-            let _source = fields.next();
+            let source = fields.next().unwrap_or("");
             let super_options = fields.next().unwrap_or("");
             Some(Mount {
                 device,
@@ -443,6 +498,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
                 point,
                 options,
                 kind,
+                source,
                 super_options,
             })
         })
@@ -453,8 +509,40 @@ fn has_option(options: &str, wanted: &str) -> bool {
     options.split(',').any(|option| option == wanted)
 }
 
+/// What is wrong with how the erofs image mounted at `image.point` reads its file: no loop
+/// device may back it (its device is not a loop device, and it was not mounted from one), it
+/// must be mounted from one of `files`, and with `directio`. A loop device keeps every page
+/// read from the image a second time, in the image file's own page cache.
+fn file_backed_problems(image: &Mount<'_>, files: &[&str]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let loop_device = image.device.split(':').next() == Some(LOOP_MAJOR)
+        || image.source.starts_with("/dev/block/loop")
+        || image.source.starts_with("/dev/loop");
+    if loop_device {
+        problems.push(format!(
+            "a loop device ({}, device {}) backs {}, so every page read from the image is cached twice",
+            image.source, image.device, image.point
+        ));
+    } else if !files.contains(&image.source) {
+        problems.push(format!(
+            "{} is mounted from {:?}, not from the image file ({})",
+            image.point,
+            image.source,
+            files.join(" or ")
+        ));
+    }
+    if !has_option(image.super_options, "directio") {
+        problems.push(format!(
+            "{} is mounted without directio ({}), so erofs reads its file through the file's page cache",
+            image.point, image.super_options
+        ));
+    }
+    problems
+}
+
 /// What is wrong with the mount table `table` for the translation package: it must be mounted
-/// at [`TRANSLATION_POINT`] and each part bound where [`TRANSLATION_BINDS`] says, from that
+/// at [`TRANSLATION_POINT`] from one of [`TRANSLATION_IMAGES`] itself (see
+/// [`file_backed_problems`]) and each part bound where [`TRANSLATION_BINDS`] says, from that
 /// same image; nothing may be mounted on [`PROGRAM_FOLDERS`] or laid over a partition.
 fn translation_mount_problems(table: &str) -> Vec<String> {
     let table = mounts(table);
@@ -465,6 +553,7 @@ fn translation_mount_problems(table: &str) -> Vec<String> {
     match image {
         None => problems.push(format!("no erofs image is mounted at {TRANSLATION_POINT}")),
         Some(image) => {
+            problems.extend(file_backed_problems(image, TRANSLATION_IMAGES));
             for (point, part) in TRANSLATION_BINDS {
                 let bound = table.iter().find(|m| m.point == *point);
                 match bound {
@@ -505,16 +594,18 @@ fn program_folder_problems(table: &[Mount<'_>]) -> Vec<String> {
 }
 
 /// What is wrong with the mount table `table` for the Google apps image: it must be mounted at
-/// [`GAPPS_POINT`] and laid over each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder
-/// as the upper of the lower layers, and not nosuid, as the partitions are not.
+/// [`GAPPS_POINT`] from [`GAPPS_IMAGE`] itself (see [`file_backed_problems`]) and laid over
+/// each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder as the upper of the lower
+/// layers, and not nosuid, as the partitions are not.
 fn gapps_mount_problems(table: &str) -> Vec<String> {
     let parsed = mounts(table);
     let mut problems = Vec::new();
-    if !parsed
+    match parsed
         .iter()
-        .any(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
     {
-        problems.push(format!("no erofs image is mounted at {GAPPS_POINT}"));
+        None => problems.push(format!("no erofs image is mounted at {GAPPS_POINT}")),
+        Some(image) => problems.extend(file_backed_problems(image, &[GAPPS_IMAGE])),
     }
     for folder in GAPPS_FOLDERS {
         let layer = format!("{GAPPS_POINT}{folder}");
@@ -847,13 +938,13 @@ const BOUND: &str = "\
 20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n\
 21 1 254:3 / /system_ext ro,relatime shared:2 - erofs /dev/block/dm-3 ro,seclabel\n\
 22 1 254:2 / /product ro,relatime shared:3 - erofs /dev/block/dm-2 ro,seclabel\n\
-90 30 7:8 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-91 21 7:8 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-92 20 7:8 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-93 20 7:8 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-94 20 7:8 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-95 20 7:8 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-98 20 7:8 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+90 30 0:48 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+91 21 0:48 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+92 20 0:48 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+93 20 0:48 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+94 20 0:48 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+95 20 0:48 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+98 20 0:48 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
 96 31 0:41 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:41 - binfmt_misc binfmt_misc rw\n";
 
 #[test]
@@ -894,13 +985,13 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
 
     // A part bound onto the wrong place, or from another image, does not count.
     let crossed = BOUND.replace(
-        "7:8 /system/bin /system/bin/dsa-arm-translation",
-        "7:8 /system/etc /system/bin/dsa-arm-translation",
+        "0:48 /system/bin /system/bin/dsa-arm-translation",
+        "0:48 /system/etc /system/bin/dsa-arm-translation",
     );
     assert_eq!(translation_mount_problems(&crossed).len(), 1);
     let other = BOUND.replace(
-        "7:8 /system/lib64 /system_ext/lib64",
-        "7:9 /system/lib64 /system_ext/lib64",
+        "0:48 /system/lib64 /system_ext/lib64",
+        "0:49 /system/lib64 /system_ext/lib64",
     );
     assert_eq!(translation_mount_problems(&other).len(), 1);
     // A partition laid over is found too.
@@ -908,6 +999,59 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
         "{BOUND}97 20 0:43 / /system_ext ro,relatime - overlay overlay ro,lowerdir=/a:/system_ext\n"
     );
     assert_eq!(translation_mount_problems(&partition).len(), 1);
+}
+
+#[test]
+fn nfr2_fr25_fr32_an_image_mounted_through_a_loop_device_is_found_in_the_mount_table() {
+    // What v0.2.1 mounted: both images through loop devices, every page read from them kept
+    // twice. The translation's binds share its device, so they still match.
+    let looped = BOUND.replace("0:48 ", "7:8 ").replace(
+        "erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio",
+        "erofs /dev/block/loop8 ro,seclabel",
+    );
+    let problems = translation_mount_problems(&looped);
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0]
+        .contains("a loop device (/dev/block/loop8, device 7:8) backs /mnt/dsa-arm-translation"));
+    assert!(problems[1].contains("without directio"));
+    // A loop device is found by its device number too, whatever the source says.
+    let numbered = BOUND.replace(
+        "0:48 / /mnt/dsa-arm-translation",
+        "7:8 / /mnt/dsa-arm-translation",
+    );
+    assert!(translation_mount_problems(&numbered)
+        .iter()
+        .any(|p| p.contains("a loop device")));
+    // A package the user installed is mounted from its own file.
+    let installed = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/vendor/dsa/arm-translation/system.img",
+    );
+    assert_eq!(translation_mount_problems(&installed), Vec::<String>::new());
+    // A file that is not the package's is not it.
+    let elsewhere = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/local/tmp/other.img",
+    );
+    let problems = translation_mount_problems(&elsewhere);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("not from the image file"));
+
+    let gapps = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n";
+    let problems = gapps_mount_problems(gapps);
+    assert!(
+        problems.iter().any(
+            |p| p.contains("a loop device (/dev/block/loop9, device 7:9) backs /mnt/dsa-gapps")
+        ),
+        "{problems:?}"
+    );
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("/mnt/dsa-gapps is mounted without directio")));
+    let gapps = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n";
+    assert!(!gapps_mount_problems(gapps)
+        .iter()
+        .any(|p| p.contains("loop device") || p.contains("directio") || p.contains("image file")));
 }
 
 #[test]
@@ -1131,7 +1275,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(mount_denials(log).len(), 1);
 
     let mut good =
-        String::from("80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n");
+        String::from("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n");
     for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
         good.push_str(&format!(
             "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
@@ -1147,7 +1291,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     );
     assert_eq!(gapps_mount_problems(&nosuid).len(), GAPPS_FOLDERS.len());
     // What develop 3b9b304c laid over: the partitions' roots, whose services then fail.
-    let roots = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n\
+    let roots = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n\
                  81 1 0:50 / /product ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/product:/product\n\
                  82 1 0:51 / /system_ext ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n";
     let problems = gapps_mount_problems(roots);
@@ -1402,6 +1546,390 @@ fn fr32_pr3_a_device_without_opengles_or_a_feature_play_needs_is_found() {
     assert_eq!(play_feature_problems("", "").len(), 1 + PLAY_FEATURES.len());
 }
 
+/// The most cached app processes the image keeps, as the agent and the framework overlay set it.
+const MAX_CACHED_PROCESSES: u32 = 8;
+
+/// The cached process limit the activity manager applies, from `dumpsys activity settings`:
+/// `CUR_MAX_CACHED_PROCESSES`, not the `max_cached_processes` line, which shows a constant the
+/// limit is only compared with.
+fn applied_cached_limit(settings: &str) -> Option<u32> {
+    settings.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("CUR_MAX_CACHED_PROCESSES=")
+            .and_then(|value| value.trim().parse().ok())
+    })
+}
+
+/// What is wrong with the cached process limit of the running boot.
+fn cached_limit_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
+    match adb.shell("dumpsys activity settings") {
+        Ok(settings) => {
+            let _ = std::fs::write(dir.join(format!("activity-settings-{boot}.txt")), &settings);
+            match applied_cached_limit(&settings) {
+                Some(MAX_CACHED_PROCESSES) => {}
+                Some(limit) => problems.push(format!(
+                    "{boot}: the activity manager keeps up to {limit} cached processes, not \
+                     {MAX_CACHED_PROCESSES} (CUR_MAX_CACHED_PROCESSES in dumpsys activity settings)"
+                )),
+                None => problems.push(format!(
+                    "{boot}: dumpsys activity settings shows no CUR_MAX_CACHED_PROCESSES line"
+                )),
+            }
+        }
+        Err(why) => problems.push(format!("{boot}: reading dumpsys activity settings: {why}")),
+    }
+}
+
+#[test]
+fn nfr2_the_cached_process_limit_is_read_as_the_activity_manager_applies_it() {
+    // Android 17 on the owner's PC: the setting said 8, the activity manager applied 1024.
+    let ignored =
+        "ACTIVITY MANAGER SETTINGS (dumpsys activity settings) activity_manager_constants:\n  \
+                   max_cached_processes=1024\n  background_settle_time=60000\n\n  \
+                   mCustomizedMaxCachedProcesses=1024\n  CUR_MAX_CACHED_PROCESSES=1024\n  \
+                   CUR_MAX_EMPTY_PROCESSES=512\n";
+    assert_eq!(applied_cached_limit(ignored), Some(1024));
+    let applied = ignored.replace(
+        "CUR_MAX_CACHED_PROCESSES=1024",
+        "CUR_MAX_CACHED_PROCESSES=8",
+    );
+    assert_eq!(applied_cached_limit(&applied), Some(MAX_CACHED_PROCESSES));
+    assert_eq!(applied_cached_limit("max_cached_processes=8\n"), None);
+}
+
+/// The services the Play services probe declares, by class name.
+fn probe_services(manifest: &str) -> Vec<&str> {
+    manifest
+        .split("<service ")
+        .skip(1)
+        .filter_map(|element| {
+            let rest = element.split("android:name=\"").nth(1)?;
+            rest.split('"').next()
+        })
+        .collect()
+}
+
+/// The components `dumpsys package` lists as turned off for each user, across the package's
+/// entries (an updated system app has two).
+fn disabled_components(dump: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut header: Option<usize> = None;
+    for line in dump.lines() {
+        let indent = line.len() - line.trim_start().len();
+        let text = line.trim();
+        if text == "disabledComponents:" {
+            header = Some(indent);
+            continue;
+        }
+        match header {
+            Some(level) if indent > level && !text.is_empty() && !text.contains([' ', ':']) => {
+                found.push(text)
+            }
+            Some(_) => header = None,
+            None => {}
+        }
+    }
+    found
+}
+
+/// What is wrong with the probe's components in `dump`, `when` naming the step.
+fn play_services_component_problems(dump: &str, when: &str) -> Vec<String> {
+    let off = disabled_components(dump);
+    let mut problems = Vec::new();
+    for service in probe_services(GMS_PROBE_MANIFEST) {
+        let is_off = off.contains(&service);
+        if service == GMS_KEPT && is_off {
+            problems.push(format!(
+                "{when}: the agent turned off {service}, which carries push messages"
+            ));
+        } else if service != GMS_KEPT && !is_off {
+            problems.push(format!(
+                "{when}: {service} is still on {} s after Android announced the change",
+                GMS_WAIT.as_secs()
+            ));
+        }
+    }
+    problems
+}
+
+#[test]
+fn fr32_the_play_services_components_turned_off_are_read_from_the_package_dump() {
+    let services = probe_services(GMS_PROBE_MANIFEST);
+    assert!(services.contains(&GMS_KEPT), "{services:?}");
+    assert!(
+        services
+            .contains(&"com.google.android.gms.crisisalerts.init.CrisisAlertsPersistentService"),
+        "{services:?}"
+    );
+    let turned_off: Vec<&str> = services
+        .iter()
+        .copied()
+        .filter(|service| *service != GMS_KEPT)
+        .collect();
+    let dump = format!(
+        "  Package [{GMS_PACKAGE}] (1a2b3c):\n    User 0: installed=true enabled=0\n      \
+         disabledComponents:\n{}\n      enabledComponents:\n        {GMS_KEPT}\n    \
+         User 10: installed=false\n",
+        turned_off
+            .iter()
+            .map(|service| format!("        {service}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert_eq!(disabled_components(&dump), turned_off);
+    assert!(play_services_component_problems(&dump, "after install").is_empty());
+
+    // One left on, and the push service turned off.
+    let one_on = dump.replace(&format!("        {}\n", turned_off[0]), "");
+    let problems = play_services_component_problems(&one_on, "after install");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains(turned_off[0]), "{problems:?}");
+    let push_off = dump.replace(
+        "      enabledComponents:\n",
+        &format!("        {GMS_KEPT}\n      enabledComponents:\n"),
+    );
+    let problems = play_services_component_problems(&push_off, "after install");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("push"), "{problems:?}");
+    // Nothing turned off at all.
+    assert_eq!(
+        play_services_component_problems("", "after install").len(),
+        turned_off.len()
+    );
+}
+
+/// Waits until every service the probe declares but [GMS_KEPT] is off, for [GMS_WAIT] at
+/// most, and returns the last package dump.
+fn wait_for_off(adb: &Adb) -> String {
+    let until = Instant::now() + GMS_WAIT;
+    loop {
+        let dump = adb
+            .shell(&format!("dumpsys package {GMS_PACKAGE}"))
+            .unwrap_or_default();
+        if play_services_component_problems(&dump, "").is_empty() || Instant::now() >= until {
+            return dump;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
+/// The agent with Play services installed. The probe stands in for it, since the small Google
+/// apps build is not signed and the package manager does not install it. After the install the
+/// services the agent keeps off must be off and the push service on. Then each is turned on
+/// again from the shell, as Play services' own setup does after an update, and the probe is
+/// installed over itself, which Android announces as an update: a moment later they must be
+/// off again.
+fn play_services_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<String>) {
+    let _ = adb.shell("logcat -c -b main");
+    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+        problems.push(format!("Google Play services: installing the probe: {why}"));
+        return;
+    }
+    let dump = wait_for_off(adb);
+    let _ = std::fs::write(dir.join("gms-probe-installed.txt"), &dump);
+    for problem in play_services_component_problems(&dump, "after install") {
+        problems.push(format!("Google Play services: {problem}"));
+    }
+
+    let enable = probe_services(GMS_PROBE_MANIFEST)
+        .iter()
+        .map(|service| format!("pm enable {GMS_PACKAGE}/{service} >/dev/null"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    if let Err(why) = adb.shell(&enable) {
+        problems.push(format!(
+            "Google Play services: turning the probe's services back on: {why}"
+        ));
+        return;
+    }
+    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+        problems.push(format!("Google Play services: updating the probe: {why}"));
+        return;
+    }
+    let dump = wait_for_off(adb);
+    let _ = std::fs::write(dir.join("gms-probe-updated.txt"), &dump);
+    for problem in play_services_component_problems(&dump, "after an update") {
+        problems.push(format!("Google Play services: {problem}"));
+    }
+    let log = adb.shell("logcat -d -s DsaAgent").unwrap_or_default();
+    let _ = std::fs::write(dir.join("gms-probe-agent-log.txt"), &log);
+    if !log.contains("turned off Google Play services components a desktop does not use") {
+        problems.push(
+            "Google Play services: the agent did not log which components it turned off"
+                .to_string(),
+        );
+    }
+}
+
+/// An alarm that fires at least this many times since boot, and more often on average than
+/// once per [STORM_INTERVAL], is retrying something it never gets. Google Play services'
+/// `platformconfigurator.RETRY_UPDATE` fired 720 times in the first ten minutes of a boot on a
+/// PC while the image named no device configurator; the clock's TIME_TICK fires once a minute.
+const STORM_ALARMS: u64 = 60;
+const STORM_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Each alarm of `dumpsys alarm`'s "Alarm Stats" that fired as a storm in the `uptime` the
+/// guest has been running, as "<owner> <alarm>: <count> alarms in <seconds> s".
+fn alarm_storms(dump: &str, uptime: Duration) -> Vec<String> {
+    let mut storms = Vec::new();
+    let mut in_stats = false;
+    let mut owner = "";
+    let mut count: Option<u64> = None;
+    for line in dump.lines() {
+        let text = line.trim();
+        if text == "Alarm Stats:" {
+            in_stats = true;
+            continue;
+        }
+        if !in_stats || text.is_empty() {
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        if indent <= 2 {
+            // An owner ("u0a110:com.google.android.gms +3s578ms running, 1 wakeups:"), or
+            // the next section, which ends the stats.
+            if text.ends_with(" wakeups:") && text.contains(" running, ") {
+                owner = text.split_whitespace().next().unwrap_or("");
+                count = None;
+                continue;
+            }
+            break;
+        }
+        // An alarm's line ("+2s704ms 0 wakes 720 alarms, last -53m21s222ms:") and then its
+        // name ("*alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE").
+        if let Some(fired) = count.take() {
+            let seconds = uptime.as_secs_f64();
+            if fired >= STORM_ALARMS && seconds / (fired as f64) < STORM_INTERVAL.as_secs_f64() {
+                storms.push(format!(
+                    "{owner} {text}: {fired} alarms in {} s",
+                    uptime.as_secs()
+                ));
+            }
+            continue;
+        }
+        let words: Vec<&str> = text.split_whitespace().collect();
+        if words.len() >= 5
+            && words[0].starts_with('+')
+            && words[2] == "wakes"
+            && words[4].trim_end_matches(',') == "alarms"
+        {
+            count = words[3].parse().ok();
+        }
+    }
+    storms
+}
+
+#[test]
+fn nfr2_an_alarm_retried_every_second_after_boot_is_a_storm() {
+    // What the PC's guest reported while Google Play services could not write DeviceConfig.
+    let dump = "  Top Alarms:\n\
+                \x20   +2s704ms running, 0 wakeups, 720 alarms: u0a110:com.google.android.gms\n\
+                \x20     *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE\n\
+                \x20 \n\
+                \x20 Alarm Stats:\n\
+                \x20 1000:android +2s822ms running, 13 wakeups:\n\
+                \x20   +1s33ms 0 wakes 32 alarms, last -3m24s655ms:\n\
+                \x20     *alarm*:TIME_TICK\n\
+                \x20 u0a110:com.google.android.gms +3s578ms running, 1 wakeups:\n\
+                \x20   +2s704ms 0 wakes 720 alarms, last -53m21s222ms:\n\
+                \x20     *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE\n\
+                \x20   +864ms 0 wakes 8 alarms, last -45m21s98ms:\n\
+                \x20     *alarm*:com.google.android.gms.gcm.ACTION_CHECK_QUEUE\n\
+                \x20 \n\
+                \x20 Alarm manager stats:\n\
+                \x20   +5s 0 wakes 900 alarms, last -1s:\n\
+                \x20     *alarm*:not an alarm of the stats\n";
+    let storms = alarm_storms(dump, Duration::from_secs(600));
+    assert_eq!(
+        storms,
+        vec!["u0a110:com.google.android.gms *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE: 720 alarms in 600 s".to_string()]
+    );
+    // The same counts over a long session are alarms at their usual pace.
+    assert_eq!(
+        alarm_storms(dump, Duration::from_secs(3 * 3600)),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        alarm_storms("", Duration::from_secs(60)),
+        Vec::<String>::new()
+    );
+}
+
+/// What `cmd overlay lookup` must answer for the device configurator, without which Google Play
+/// services is never granted WRITE_DEVICE_CONFIG and retries its flag sync every second.
+const CONFIGURATOR_RESOURCE: &str = "android:string/config_deviceConfiguratorPackageName";
+const CONFIGURATOR: &str = "com.google.android.gms";
+
+/// What is wrong with the device configurator, the compile of the Google apps without an app
+/// image, and the alarms of the boot with the Google apps. The compile runs at boot completion
+/// and clears the app image format while it runs; it must end, log that it looked, and leave
+/// the format as the build gave it.
+fn gapps_boot_problems(adb: &Adb, dir: &Path, problems: &mut Vec<String>) {
+    match adb.shell(&format!(
+        "cmd overlay lookup android {CONFIGURATOR_RESOURCE}"
+    )) {
+        Ok(value) if value.trim() == CONFIGURATOR => {}
+        Ok(value) => problems.push(format!(
+            "Google Play: the framework's device configurator is {:?}, not {CONFIGURATOR}, so \
+             Play services may not write the flags it syncs and retries every second",
+            value.trim()
+        )),
+        Err(why) => problems.push(format!("reading the device configurator: {why}")),
+    }
+    let until = Instant::now() + Duration::from_secs(120);
+    loop {
+        let state = adb
+            .shell("getprop init.svc.dsa_gapps_compile")
+            .unwrap_or_default();
+        let logged = adb
+            .shell("logcat -d -s DsaGappsCompile")
+            .unwrap_or_default();
+        if state.trim() == "stopped" && logged.contains("checked ") {
+            let _ = std::fs::write(dir.join("gapps-compile.txt"), &logged);
+            break;
+        }
+        if Instant::now() >= until {
+            problems.push(format!(
+                "Google Play: the compile without an app image did not run to its end after boot \
+                 (dsa_gapps_compile is {:?}; its log: {:?})",
+                state.trim(),
+                logged.trim()
+            ));
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    match adb.shell("getprop dalvik.vm.appimageformat") {
+        Ok(format) if format.trim() == "lz4" => {}
+        Ok(format) => problems.push(format!(
+            "Google Play: dalvik.vm.appimageformat is {:?} after the compile, not lz4, so no app \
+             compiled from now on gets an app image",
+            format.trim()
+        )),
+        Err(why) => problems.push(format!("reading dalvik.vm.appimageformat: {why}")),
+    }
+    alarm_storm_problems(adb, &dir.join("alarms.txt"), problems);
+}
+
+/// The alarms of the running boot that fire as a storm, read through `adb` and kept in `keep`.
+fn alarm_storm_problems(adb: &Adb, keep: &Path, problems: &mut Vec<String>) {
+    let uptime = adb
+        .shell("cat /proc/uptime")
+        .ok()
+        .and_then(|text| text.split_whitespace().next()?.parse::<f64>().ok())
+        .map(Duration::from_secs_f64);
+    match (adb.shell("dumpsys alarm"), uptime) {
+        (Ok(dump), Some(uptime)) => {
+            let _ = std::fs::write(keep, &dump);
+            for storm in alarm_storms(&dump, uptime) {
+                problems.push(format!("an alarm fires as a storm after boot: {storm}"));
+            }
+        }
+        (Err(why), _) => problems.push(format!("reading the alarms: {why}")),
+        (_, None) => problems.push("reading how long the guest has been up".to_string()),
+    }
+}
+
 /// What the guest's own log of the running boot says went wrong with the overlay scripts.
 fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     // Init's messages are in the kernel's buffer, which logd reads, with the audit messages.
@@ -1440,6 +1968,12 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         .filter(|apk| apk.is_file())
         .expect(
             "DSA_ARM_PROBE names no ARM probe APK (dsa/guest/arm-probe/build.sh), so no ARM app can be started",
+        );
+    let gms_probe = std::env::var_os("DSA_GMS_PROBE")
+        .map(PathBuf::from)
+        .filter(|apk| apk.is_file())
+        .expect(
+            "DSA_GMS_PROBE names no Play services probe APK (dsa/guest/gms-probe/build.sh), so the agent's handling of Play services cannot be checked",
         );
     let adb_program = std::env::var_os("DSA_ADB")
         .map(PathBuf::from)
@@ -1555,6 +2089,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(format!("reading where ARM translation stands: {why}")),
     }
     log_problems(&adb, &dir, "first boot", &mut problems);
+    cached_limit_problems(&adb, &dir, "first boot", &mut problems);
     // An ARM app, after the boot's log is read: the probe clears the log to read its own start.
     arm_app_run_problems(&adb, &probe, &dir, &mut problems);
     // What Google Play compares each app's manifest with, which the Google apps do not change.
@@ -1632,7 +2167,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     eprintln!("{} s: Android stopped", started.elapsed().as_secs());
     let boot = deadline
         .saturating_duration_since(Instant::now())
-        .saturating_sub(Duration::from_secs(120));
+        .saturating_sub(Duration::from_secs(180));
     if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
         eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
     }) {
@@ -1697,7 +2232,10 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(format!("reading ro.control_privapp_permissions: {why}")),
     }
     translation_problems(&adb, &dir, &table, &mut problems);
+    gapps_boot_problems(&adb, &dir, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
+    cached_limit_problems(&adb, &dir, "second boot", &mut problems);
+    play_services_problems(&adb, &gms_probe, &dir, &mut problems);
 
     // The service's own copy of the guest log, across both boots.
     let whole = lock(&log).join("\n");
@@ -1726,5 +2264,358 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     if !problems.is_empty() {
         problems.dedup();
         fail(problems.join("\n"), &service, &log);
+    }
+}
+
+/// How long the idle reclaim is watched for, with Google apps installed and no app window.
+const IDLE_WINDOW: Duration = Duration::from_secs(300);
+/// Every how many of the sampler's looks (one a second) it also reads every process and cgroup.
+const IDLE_SNAPSHOT_EVERY: u32 = 10;
+/// The whole measurement, both boots, LiteGapps' download and the window included, stays under
+/// twenty-two minutes.
+const IDLE_BUDGET: Duration = Duration::from_secs(1320);
+/// How long LiteGapps' build (120 to 260 MiB) may take to download.
+const LITEGAPPS_DOWNLOAD: Duration = Duration::from_secs(420);
+/// Where the sampler is put in the guest: the one place the shell may run a file it wrote.
+const SAMPLER_GUEST: &str = "/data/local/tmp/dsa-idle-sampler.sh";
+/// The guest's memory and processors while the idle reclaim is measured.
+const IDLE_MEMORY_MB: u64 = 4096;
+const IDLE_PROCESSORS: u64 = 2;
+
+/// Puts LiteGapps' newest Core build for `arch` at API level `sdk` into the mirror at `mirror`,
+/// in place of the small stand-in build, so the service installs the build a user gets.
+/// Returns its file name.
+fn mirror_litegapps(mirror: &Path, arch: &str, sdk: u32) -> Result<String, String> {
+    use dsa_host_core::gapps::{listing, Target};
+    let abi = if arch == "x86_64" {
+        "x86_64"
+    } else {
+        "arm64-v8a"
+    };
+    let target = Target::for_guest(sdk, abi)?;
+    let build = listing::newest(&dsa_host_linux::fetch::CurlFetch, listing::PROJECT, &target)?;
+    let folder = format!("/litegapps/{}/{}/core", target.arch, target.sdk);
+    let path = format!("{folder}/{}/{}", build.folder, build.file);
+    let download = mirror.join(format!("files{path}/download"));
+    std::fs::create_dir_all(download.parent().unwrap())
+        .map_err(|why| format!("making {}: {why}", download.display()))?;
+    let out = run_bounded(
+        Command::new("curl")
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=https",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "30",
+                "--max-time",
+            ])
+            .arg(LITEGAPPS_DOWNLOAD.as_secs().to_string())
+            .arg("--output")
+            .arg(&download)
+            .arg(listing::download_url(listing::PROJECT, &target, &build)),
+        LITEGAPPS_DOWNLOAD + Duration::from_secs(30),
+        usize::MAX,
+    )?;
+    if !out.status.is_some_and(|status| status.success()) {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "downloading {}: {}",
+            build.file,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let mut file = std::fs::File::open(&download)
+        .map_err(|why| format!("reading {}: {why}", download.display()))?;
+    let mut md5 = Md5::new();
+    let mut size = 0u64;
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|why| format!("reading {}: {why}", download.display()))?;
+        if read == 0 {
+            break;
+        }
+        md5.update(&buffer[..read]);
+        size += read as u64;
+    }
+    let digest = hex(&md5.finish());
+    if size != build.size || digest != build.md5 {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "{} arrived as {size} bytes with MD5 {digest}; LiteGapps lists {} bytes with {}",
+            build.file, build.size, build.md5
+        ));
+    }
+    std::fs::write(
+        mirror.join(format!("rss?path={folder}")),
+        feed::feed(&[feed::item(&path, size, &digest)]),
+    )
+    .map_err(|why| format!("writing the mirror's list: {why}"))?;
+    Ok(build.file)
+}
+
+#[test]
+fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
+    let (Some(crosvm), Some(image)) = (
+        std::env::var_os("DSA_CROSVM").map(PathBuf::from),
+        std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
+    ) else {
+        eprintln!("skipped: DSA_CROSVM and DSA_WIDGET_TEST_IMAGE name no crosvm and image");
+        return;
+    };
+    let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
+    let adb_program = std::env::var_os("DSA_ADB")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("adb"));
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(image.join("image.json")).expect("reading the image's image.json"),
+    )
+    .expect("the image's image.json is JSON");
+    let arch = manifest["arch"].as_str().unwrap_or("x86_64").to_string();
+
+    let started = Instant::now();
+    let deadline = started + IDLE_BUDGET;
+    let _watchdog = Watchdog::start("the idle reclaim measurement", IDLE_BUDGET + OVERRUN);
+    let dir = scratch();
+    let mirror = dir.join("mirror");
+    write_mirror(&mirror, &arch).unwrap();
+    let socket = dir.join("host.sock");
+    let config = dir.join("dsa-hostd.json");
+    let settings = serde_json::json!({
+        "image_dir": image,
+        "kernel": kernel,
+        "crosvm": crosvm,
+        "socket": socket,
+        "machine_dir": dir.join("machine"),
+        "network": false,
+        "memory_mb": IDLE_MEMORY_MB,
+        "processors": IDLE_PROCESSORS,
+        "data_disk_size_gb": 8,
+        "gapps_project": format!("file://{}", mirror.display()),
+    });
+    std::fs::write(&config, settings.to_string()).unwrap();
+    let service = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
+            .arg("--config")
+            .arg(&config),
+        dir.join("hostd.log"),
+    );
+    let _compositor = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-compositor")).env("DSA_SOCKET", &socket),
+        dir.join("compositor.log"),
+    );
+    let mut api = client(&socket, Duration::from_secs(30));
+    let log: Arc<Mutex<Vec<String>>> = Arc::default();
+    read_log(&socket, &log);
+    let boot = (deadline.saturating_duration_since(Instant::now())) / 4;
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // Developer mode, so adb reaches the guest through the service's loopback port.
+    let mut wanted = match api.settings() {
+        Ok(report) => report.settings,
+        Err(why) => fail(format!("reading the settings: {why}"), &service, &log),
+    };
+    wanted.developer_mode = true;
+    wanted.adb_auto_connect = false;
+    let port = wanted.adb_port;
+    if let Err(why) = api.set_settings(&wanted) {
+        fail(format!("turning developer mode on: {why}"), &service, &log);
+    }
+    let adb = Adb {
+        program: adb_program,
+        serial: format!("127.0.0.1:{port}"),
+    };
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // LiteGapps' own build, which a user's Android runs, wherever it can be had.
+    let sdk = adb
+        .shell("getprop ro.build.version.sdk")
+        .ok()
+        .and_then(|sdk| sdk.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    let gapps = match mirror_litegapps(&mirror, &arch, sdk) {
+        Ok(file) => format!("LiteGapps' {file}"),
+        Err(why) => {
+            println!(
+                "::warning::the idle reclaim is measured with the check's small stand-in Google apps build, not LiteGapps' own: {why}"
+            );
+            format!(
+                "the check's small stand-in build, because LiteGapps' own could not be had ({why}); \
+                 it holds no Google Play services that run, so this measures only the system with \
+                 the image laid over"
+            )
+        }
+    };
+    eprintln!("{} s: installing {gapps}", started.elapsed().as_secs());
+    let install_until = Instant::now() + Duration::from_secs(240);
+    let installed = loop {
+        let result = client(&socket, Duration::from_secs(10)).install_gapps(&mut |news| {
+            eprintln!("Google Play: {news:?}");
+        });
+        match result {
+            Ok(status) => break status,
+            Err(why) if Instant::now() >= install_until => fail(
+                format!("installing the Google apps from the mirror: {why}"),
+                &service,
+                &log,
+            ),
+            Err(why) => {
+                eprintln!("installing the Google apps from the mirror: {why}; trying again");
+                std::thread::sleep(Duration::from_secs(3));
+            }
+        }
+    };
+    if installed.package.is_none() || !installed.restart_needed {
+        fail(
+            format!(
+                "the service took the Google apps but does not say they apply from the next start: {:?}",
+                installed.package
+            ),
+            &service,
+            &log,
+        );
+    }
+
+    // Android starts again, with the Google apps.
+    if let Err(why) = api.stop() {
+        fail(format!("stopping Android: {why}"), &service, &log);
+    }
+    let stop_until = Instant::now() + Duration::from_secs(120);
+    let mut left = false;
+    loop {
+        use dsa_host_core::session::SessionState;
+        match api.status() {
+            Ok(status) if status.state == SessionState::Stopped => break,
+            Ok(status) if left && status.state == SessionState::Starting => break,
+            Ok(status) if Instant::now() < stop_until => {
+                left |= status.state == SessionState::Stopping;
+                std::thread::sleep(Duration::from_secs(1))
+            }
+            Ok(status) => fail(
+                format!("Android did not stop: it is {:?}", status.state),
+                &service,
+                &log,
+            ),
+            Err(why) => fail(format!("reading the status: {why}"), &service, &log),
+        }
+    }
+    let boot = deadline
+        .saturating_duration_since(Instant::now())
+        .saturating_sub(IDLE_WINDOW + Duration::from_secs(180));
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready again with the Google apps: {why}"),
+            &service,
+            &log,
+        );
+    }
+    read_log(&socket, &log);
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest after the restart: {why}"),
+            &service,
+            &log,
+        );
+    }
+    let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-mounts.txt"), &table);
+    let Some(mounted) = mounts(&table)
+        .iter()
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .map(|m| format!("{} ({})", m.source, m.super_options))
+    else {
+        fail(
+            format!(
+                "no Google apps image is mounted at {GAPPS_POINT}, so there is nothing to measure"
+            ),
+            &service,
+            &log,
+        );
+    };
+
+    // Five minutes with no app window open, sampled from inside the guest.
+    let sampler = dir.join("idle-sampler.sh");
+    std::fs::write(&sampler, idle_reclaim::SAMPLER).unwrap();
+    if let Err(why) = adb.run(&["push", &sampler.to_string_lossy(), SAMPLER_GUEST]) {
+        fail(
+            format!("putting the sampler in the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+    eprintln!(
+        "{} s: watching the idle reclaim for {} s",
+        started.elapsed().as_secs(),
+        IDLE_WINDOW.as_secs()
+    );
+    let command = format!(
+        "sh {SAMPLER_GUEST} {} {IDLE_SNAPSHOT_EVERY}",
+        IDLE_WINDOW.as_secs()
+    );
+    let raw = match adb.run_for(&["shell", &command], IDLE_WINDOW + Duration::from_secs(120)) {
+        Ok(out) => String::from_utf8_lossy(&out).into_owned(),
+        Err(why) => fail(format!("the idle sampler: {why}"), &service, &log),
+    };
+    let _ = std::fs::write(dir.join("idle-reclaim-samples.txt"), &raw);
+    let guest_log = adb
+        .shell("logcat -d -b kernel -b main -b system -v monotonic")
+        .unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-log.txt"), &guest_log);
+
+    let record = idle_reclaim::parse(&raw);
+    let events = idle_reclaim::log_events(&guest_log);
+    let report = idle_reclaim::report(
+        &record,
+        &events,
+        &format!("{gapps}, its image mounted from {mounted}"),
+        IDLE_MEMORY_MB,
+        IDLE_PROCESSORS,
+    );
+    let _ = std::fs::write(dir.join("idle-reclaim.md"), &report.markdown);
+    let _ = std::fs::write(
+        dir.join("idle-reclaim.json"),
+        serde_json::to_string_pretty(&report.json).unwrap_or_default(),
+    );
+    println!("{}", report.markdown);
+    if record.looks.len() < 10 {
+        fail(
+            format!(
+                "the idle sampler gave {} looks in {} s, too few to measure; its output is in idle-reclaim-samples.txt",
+                record.looks.len(),
+                IDLE_WINDOW.as_secs()
+            ),
+            &service,
+            &log,
+        );
+    }
+    // The one boot with a Play services that runs: none of its alarms, nor any other, may
+    // retry as Play services' flag sync did while it could not write DeviceConfig.
+    let mut storms = Vec::new();
+    alarm_storm_problems(&adb, &dir.join("idle-reclaim-alarms.txt"), &mut storms);
+    if !storms.is_empty() {
+        fail(storms.join("\n"), &service, &log);
     }
 }

@@ -340,6 +340,58 @@ fn fr17_the_general_page_offers_what_the_state_allows() {
 }
 
 #[test]
+fn nfr2_the_memory_page_counts_zram_compressed_and_google_play_services_apart() {
+    let memory = Memory::read(&json!({
+        "host": [], "host_total_kb": 0,
+        "guest": {
+            "mem_total_kb": 4194304, "mem_free_kb": 1048576, "total_pss_kb": 512000,
+            "swap_pss_kb": 307200, "zram_original_kb": 307200, "zram_used_kb": 102400,
+            "apps": { "resident_kb": 204800, "compressed_kb": 102400, "swapped_out_kb": 307200,
+                      "total_kb": 307200 },
+            "google_play": { "processes": 2, "pss_kb": 138240, "swap_pss_kb": 125952,
+                             "resident_kb": 12288, "compressed_kb": 41984,
+                             "swapped_out_kb": 125952, "total_kb": 54272 },
+            "top_processes": [
+                { "pid": 700, "name": "com.google.android.gms", "pss_kb": 82944,
+                  "swap_pss_kb": 76800, "google_play": true, "resident_kb": 6144,
+                  "compressed_kb": 25600 },
+                { "pid": 42, "name": "system_server", "pss_kb": 153600, "swap_pss_kb": 0,
+                  "google_play": false, "resident_kb": 153600, "compressed_kb": 0 }
+            ],
+            "age_seconds": 12
+        }
+    }));
+    let guest = memory.guest.as_ref().unwrap();
+    let rows = view::guest_rows(guest);
+    assert_eq!(rows[0].size, "300 MB");
+    assert_eq!(rows[0].detail, "200 MB in memory, 100 MB compressed");
+    assert_eq!(rows[1].label, "Google Play services");
+    assert_eq!(rows[1].size, "53 MB");
+    assert_eq!(
+        rows[1].detail,
+        "The Google apps you installed, 2 processes: 12 MB in memory, 41 MB compressed"
+    );
+    let processes = view::process_rows(guest);
+    assert_eq!(processes[0].size, "31 MB");
+    assert_eq!(processes[0].detail, "Process 700, Google Play services");
+    assert_eq!(processes[1].detail, "Process 42");
+
+    let unmeasured = Memory::read(&json!({
+        "host": [], "host_total_kb": 0,
+        "guest": {
+            "mem_total_kb": 4194304, "total_pss_kb": 204800, "swap_pss_kb": 102400,
+            "apps": { "resident_kb": 102400, "compressed_kb": null, "swapped_out_kb": 102400,
+                      "total_kb": 102400 },
+            "google_play": null, "top_processes": [], "age_seconds": 1
+        }
+    }));
+    let rows = view::guest_rows(unmeasured.guest.as_ref().unwrap());
+    assert_eq!(rows[0].size, "100 MB");
+    assert_eq!(rows[0].detail, "100 MB in memory, unknown compressed");
+    assert!(rows.iter().all(|row| row.label != "Google Play services"));
+}
+
+#[test]
 fn fr17_the_memory_page_shows_the_vm_and_the_guest_breakdown() {
     let memory = Memory::read(&json!({
         "host": [

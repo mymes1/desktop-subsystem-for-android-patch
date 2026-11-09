@@ -76,8 +76,11 @@ public final class MemoryViewModel: ObservableObject {
         guard let g = report?.guest else {
             return []
         }
-        return [
-            MemoryRow(label: text.get("Memory_Apps"), detail: text.get("Memory_AppsDetail"), size: Format.size(g.totalPssKb)),
+        // What the processes cost: in memory, plus their compressed share of zram. A service that
+        // does not say counts their PSS as in memory.
+        let apps = g.apps ?? MemoryShare(residentKb: g.totalPssKb, compressedKb: 0)
+        var rows = [
+            MemoryRow(label: text.get("Memory_Apps"), detail: shareDetail(apps), size: Format.size(apps.totalKb)),
             MemoryRow(label: text.get("Memory_Cache"), detail: text.get("Memory_CacheDetail"), size: Format.size(g.cachedKb + g.buffersKb)),
             MemoryRow(label: text.get("Memory_Kernel"), detail: text.get("Memory_KernelDetail"), size: Format.size(g.slabReclaimableKb)),
             MemoryRow(label: text.get("Memory_Shared"), detail: "", size: Format.size(g.shmemKb)),
@@ -85,6 +88,20 @@ public final class MemoryViewModel: ObservableObject {
                       size: Format.size(g.zramUsedKb)),
             MemoryRow(label: text.get("Memory_Free"), detail: "", size: Format.size(g.freeKb)),
         ]
+        // Google Play services, which the user chose to install, on a row of its own, so what
+        // it costs is not taken for what Android and DSA cost.
+        if let play = g.googlePlay {
+            rows.insert(MemoryRow(label: text.get("Memory_GooglePlay"),
+                                  detail: text.format("Memory_GooglePlayDetail", play.processes, shareDetail(play.cost)),
+                                  size: Format.size(play.cost.totalKb)), at: 1)
+        }
+        return rows
+    }
+
+    /// "N in memory, M compressed", the compressed part unknown when zram could not measure it.
+    private func shareDetail(_ share: MemoryShare) -> String {
+        text.format("Memory_AppsDetail", Format.size(share.residentKb),
+                    share.compressedKb.map { Format.size($0) } ?? text.get("Memory_Unknown"))
     }
 
     /// The kernel's own memory, part by part, as `dsa memory` shows it.
@@ -111,7 +128,11 @@ public final class MemoryViewModel: ObservableObject {
 
     public var guestProcessRows: [MemoryRow] {
         (report?.guest?.topProcesses ?? []).map {
-            MemoryRow(label: $0.name, detail: text.format("Memory_GuestProcessDetail", $0.pid), size: Format.size($0.pssKb))
+            MemoryRow(label: $0.name,
+                      detail: $0.googlePlay
+                          ? text.format("Memory_GuestProcessGooglePlay", $0.pid)
+                          : text.format("Memory_GuestProcessDetail", $0.pid),
+                      size: Format.size($0.cost?.totalKb ?? $0.pssKb))
         }
     }
 

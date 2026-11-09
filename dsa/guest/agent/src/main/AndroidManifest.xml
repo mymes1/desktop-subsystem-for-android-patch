@@ -134,6 +134,12 @@
       host. It is a runtime permission, which the image grants by default.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!--
+      Keeping the activity manager's cached process limit, which it reads from the device
+      configuration (DeviceConfig), and setting it again when something else changes it.
+    -->
+    <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
+    <uses-permission android:name="android.permission.WRITE_DEVICE_CONFIG" />
 
     <application
         android:name=".platform.AgentApplication"

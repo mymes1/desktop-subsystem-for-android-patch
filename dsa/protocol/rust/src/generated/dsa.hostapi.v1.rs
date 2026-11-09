@@ -1339,9 +1339,13 @@ pub struct GuestProcessMemory {
     /// Its proportional set size in KiB: its private pages plus its share of shared pages.
     #[prost(uint64, tag = "3")]
     pub pss_kb: u64,
-    /// How much of it is swapped out to compressed memory, proportionally, in KiB.
+    /// How much of it is swapped out to compressed memory, proportionally, in KiB, at the size
+    /// before compression; it is counted in pss_kb.
     #[prost(uint64, tag = "4")]
     pub swap_pss_kb: u64,
+    /// The process belongs to Google Play services (the Google apps the user installed).
+    #[prost(bool, tag = "5")]
+    pub google_play: bool,
 }
 /// How Android uses the guest's memory, as it last reported it. Sizes in KiB; 0 when Android
 /// could not read the value.
@@ -1399,6 +1403,17 @@ pub struct GuestMemory {
     pub hugetlb_kb: u64,
     #[prost(uint64, tag = "23")]
     pub mem_online_kb: u64,
+    /// How much of total_pss_kb is swapped out to zram, at the size before compression.
+    #[prost(uint64, tag = "24")]
+    pub swap_pss_kb: u64,
+    /// Every process of Google Play services: how many, their proportional set size, and how
+    /// much of it is swapped out to zram at the size before compression.
+    #[prost(uint32, tag = "25")]
+    pub google_play_processes: u32,
+    #[prost(uint64, tag = "26")]
+    pub google_play_pss_kb: u64,
+    #[prost(uint64, tag = "27")]
+    pub google_play_swap_pss_kb: u64,
 }
 /// One host process that runs the caller's Android: its VM's memory process, the window
 /// manager, an app window.

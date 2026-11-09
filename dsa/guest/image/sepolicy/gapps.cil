@@ -1,12 +1,12 @@
 ; Desktop Subsystem for Android (DSA)
 ; Google Play, when the user installed it (dsa-gapps.rc). When the host says a Google apps image
-; is installed, init mounts the image from /data/vendor/dsa/gapps through a loop device, its
+; is installed, init mounts the image straight from its file in /data/vendor/dsa/gapps, its
 ; files labelled as system files, as the folders it lays it over are, and lays each of its
 ; folders (apps, framework files, permission lists and configuration) over the same folder of
 ; /product and /system_ext with overlayfs. No partition's root is laid over.
+; erofs opens the image file with init's credentials as init mounts it, and reads it with them
+; afterwards, so reading the file is all init needs; there is no loop device to open.
 (allow init vendor_data_file (file (read open getattr)))
-(allow init loop_control_device (chr_file (read write open ioctl getattr)))
-(allow init loop_device (blk_file (read open ioctl getattr)))
 (allow init tmpfs (dir (mounton)))
 (allow init system_file (dir (mounton)))
 
@@ -31,3 +31,18 @@
 (allow init labeledfs (filesystem (relabelfrom)))
 (allow init dsa_gapps_fs (filesystem (mount relabelfrom relabelto)))
 (allow system_file dsa_gapps_fs (filesystem (associate)))
+
+; Google Play services and the Play Store compiled again without an app image (dsa-gapps.rc,
+; gapps-compile.sh). vendor.dsa.gapps.compile (vendor_property_contexts) is the agent's request
+; to look at them again, which it sets when either is installed or updated and when the
+; screen goes off; vendor.dsa.gapps.appimageformat is where init keeps the build's app
+; image format while it clears it for the compile. init runs the script as the shell, which may
+; already ask the package manager to compile, and the script reads the request to see whether
+; another came while it ran.
+(type dsa_gapps_compile_prop)
+(roletype object_r dsa_gapps_compile_prop)
+(typeattributeset property_type (dsa_gapps_compile_prop))
+(typeattributeset vendor_property_type (dsa_gapps_compile_prop))
+(allow platform_app dsa_gapps_compile_prop (property_service (set)))
+(allow platform_app dsa_gapps_compile_prop (file (read open getattr map)))
+(allow shell dsa_gapps_compile_prop (file (read open getattr map)))

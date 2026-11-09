@@ -108,8 +108,18 @@
 ; appdomain (the rules for system_app and platform_app above are part of this). Every other
 ; domain's process is of no interest to it, so those reads are refused without being logged.
 (allow dsa_channeld proc (dir (search read open getattr)))
-(allow dsa_channeld appdomain (dir (search)))
+(allow dsa_channeld appdomain (dir (search getattr)))
 (allow dsa_channeld appdomain (file (read open getattr)))
+;
+; After something wakes an app that no window shows, the daemon pages its anonymous memory back
+; to zram (process_madvise with MADV_PAGEOUT on the private anonymous ranges of
+; /proc/<pid>/maps). It tells an app's process by the owner of its /proc entry (dir getattr
+; above), reads its oom_score_adj, stat and status, and never touches the foreground app or one
+; with a window. The kernel checks the advice against the target as a read of its address
+; space, which SELinux checks as the file read above; the capabilities are the ones the kernel
+; asks for: sys_nice for advising another process, sys_ptrace for reading the address space of
+; a process of another user. init gives the daemon both (dsa-channeld.rc).
+(allow dsa_channeld self (capability (sys_nice sys_ptrace)))
 (dontaudit dsa_channeld domain (dir (search getattr)))
 (dontaudit dsa_channeld domain (file (read open getattr)))
 

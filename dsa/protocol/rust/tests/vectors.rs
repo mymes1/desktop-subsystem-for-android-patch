@@ -747,6 +747,7 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                     name: "system".into(),
                     pss_kb: 180000,
                     swap_pss_kb: 1000,
+                    google_play: false,
                 }],
                 ..GuestMemory::default()
             })),

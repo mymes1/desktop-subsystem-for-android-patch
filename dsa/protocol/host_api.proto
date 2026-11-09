@@ -1292,8 +1292,11 @@ message GuestProcessMemory {
   string name = 2;
   // Its proportional set size in KiB: its private pages plus its share of shared pages.
   uint64 pss_kb = 3;
-  // How much of it is swapped out to compressed memory, proportionally, in KiB.
+  // How much of it is swapped out to compressed memory, proportionally, in KiB, at the size
+  // before compression; it is counted in pss_kb.
   uint64 swap_pss_kb = 4;
+  // The process belongs to Google Play services (the Google apps the user installed).
+  bool google_play = 5;
 }
 
 // How Android uses the guest's memory, as it last reported it. Sizes in KiB; 0 when Android
@@ -1328,6 +1331,13 @@ message GuestMemory {
   uint64 cma_total_kb = 21;
   uint64 hugetlb_kb = 22;
   uint64 mem_online_kb = 23;
+  // How much of total_pss_kb is swapped out to zram, at the size before compression.
+  uint64 swap_pss_kb = 24;
+  // Every process of Google Play services: how many, their proportional set size, and how
+  // much of it is swapped out to zram at the size before compression.
+  uint32 google_play_processes = 25;
+  uint64 google_play_pss_kb = 26;
+  uint64 google_play_swap_pss_kb = 27;
 }
 
 // One host process that runs the caller's Android: its VM's memory process, the window

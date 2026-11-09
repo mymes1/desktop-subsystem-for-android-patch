@@ -14057,8 +14057,9 @@ class ProcessMemory final :
   enum : int {
     kNameFieldNumber = 2,
     kPssKbFieldNumber = 3,
-    kSwapPssKbFieldNumber = 4,
     kPidFieldNumber = 1,
+    kGooglePlayFieldNumber = 5,
+    kSwapPssKbFieldNumber = 4,
   };
   // string name = 2;
   void clear_name();
@@ -14083,15 +14084,6 @@ class ProcessMemory final :
   void _internal_set_pss_kb(uint64_t value);
   public:
 
-  // uint64 swap_pss_kb = 4;
-  void clear_swap_pss_kb();
-  uint64_t swap_pss_kb() const;
-  void set_swap_pss_kb(uint64_t value);
-  private:
-  uint64_t _internal_swap_pss_kb() const;
-  void _internal_set_swap_pss_kb(uint64_t value);
-  public:
-
   // int32 pid = 1;
   void clear_pid();
   int32_t pid() const;
@@ -14099,6 +14091,24 @@ class ProcessMemory final :
   private:
   int32_t _internal_pid() const;
   void _internal_set_pid(int32_t value);
+  public:
+
+  // bool google_play = 5;
+  void clear_google_play();
+  bool google_play() const;
+  void set_google_play(bool value);
+  private:
+  bool _internal_google_play() const;
+  void _internal_set_google_play(bool value);
+  public:
+
+  // uint64 swap_pss_kb = 4;
+  void clear_swap_pss_kb();
+  uint64_t swap_pss_kb() const;
+  void set_swap_pss_kb(uint64_t value);
+  private:
+  uint64_t _internal_swap_pss_kb() const;
+  void _internal_set_swap_pss_kb(uint64_t value);
   public:
 
   // @@protoc_insertion_point(class_scope:dsa.control.v1.ProcessMemory)
@@ -14111,8 +14121,9 @@ class ProcessMemory final :
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
     uint64_t pss_kb_;
-    uint64_t swap_pss_kb_;
     int32_t pid_;
+    bool google_play_;
+    uint64_t swap_pss_kb_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -14245,6 +14256,10 @@ class GuestMemory final :
     kCmaTotalKbFieldNumber = 20,
     kHugetlbKbFieldNumber = 21,
     kMemOnlineKbFieldNumber = 22,
+    kSwapPssKbFieldNumber = 23,
+    kGooglePlayPssKbFieldNumber = 25,
+    kGooglePlaySwapPssKbFieldNumber = 26,
+    kGooglePlayProcessesFieldNumber = 24,
   };
   // repeated .dsa.control.v1.ProcessMemory top_processes = 14;
   int top_processes_size() const;
@@ -14453,6 +14468,42 @@ class GuestMemory final :
   void _internal_set_mem_online_kb(uint64_t value);
   public:
 
+  // uint64 swap_pss_kb = 23;
+  void clear_swap_pss_kb();
+  uint64_t swap_pss_kb() const;
+  void set_swap_pss_kb(uint64_t value);
+  private:
+  uint64_t _internal_swap_pss_kb() const;
+  void _internal_set_swap_pss_kb(uint64_t value);
+  public:
+
+  // uint64 google_play_pss_kb = 25;
+  void clear_google_play_pss_kb();
+  uint64_t google_play_pss_kb() const;
+  void set_google_play_pss_kb(uint64_t value);
+  private:
+  uint64_t _internal_google_play_pss_kb() const;
+  void _internal_set_google_play_pss_kb(uint64_t value);
+  public:
+
+  // uint64 google_play_swap_pss_kb = 26;
+  void clear_google_play_swap_pss_kb();
+  uint64_t google_play_swap_pss_kb() const;
+  void set_google_play_swap_pss_kb(uint64_t value);
+  private:
+  uint64_t _internal_google_play_swap_pss_kb() const;
+  void _internal_set_google_play_swap_pss_kb(uint64_t value);
+  public:
+
+  // uint32 google_play_processes = 24;
+  void clear_google_play_processes();
+  uint32_t google_play_processes() const;
+  void set_google_play_processes(uint32_t value);
+  private:
+  uint32_t _internal_google_play_processes() const;
+  void _internal_set_google_play_processes(uint32_t value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.GuestMemory)
  private:
   class _Internal;
@@ -14483,6 +14534,10 @@ class GuestMemory final :
     uint64_t cma_total_kb_;
     uint64_t hugetlb_kb_;
     uint64_t mem_online_kb_;
+    uint64_t swap_pss_kb_;
+    uint64_t google_play_pss_kb_;
+    uint64_t google_play_swap_pss_kb_;
+    uint32_t google_play_processes_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -43530,6 +43585,26 @@ inline void ProcessMemory::set_swap_pss_kb(uint64_t value) {
   // @@protoc_insertion_point(field_set:dsa.control.v1.ProcessMemory.swap_pss_kb)
 }
 
+// bool google_play = 5;
+inline void ProcessMemory::clear_google_play() {
+  _impl_.google_play_ = false;
+}
+inline bool ProcessMemory::_internal_google_play() const {
+  return _impl_.google_play_;
+}
+inline bool ProcessMemory::google_play() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ProcessMemory.google_play)
+  return _internal_google_play();
+}
+inline void ProcessMemory::_internal_set_google_play(bool value) {
+  
+  _impl_.google_play_ = value;
+}
+inline void ProcessMemory::set_google_play(bool value) {
+  _internal_set_google_play(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ProcessMemory.google_play)
+}
+
 // -------------------------------------------------------------------
 
 // GuestMemory
@@ -43992,6 +44067,86 @@ inline void GuestMemory::_internal_set_mem_online_kb(uint64_t value) {
 inline void GuestMemory::set_mem_online_kb(uint64_t value) {
   _internal_set_mem_online_kb(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.GuestMemory.mem_online_kb)
+}
+
+// uint64 swap_pss_kb = 23;
+inline void GuestMemory::clear_swap_pss_kb() {
+  _impl_.swap_pss_kb_ = uint64_t{0u};
+}
+inline uint64_t GuestMemory::_internal_swap_pss_kb() const {
+  return _impl_.swap_pss_kb_;
+}
+inline uint64_t GuestMemory::swap_pss_kb() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GuestMemory.swap_pss_kb)
+  return _internal_swap_pss_kb();
+}
+inline void GuestMemory::_internal_set_swap_pss_kb(uint64_t value) {
+  
+  _impl_.swap_pss_kb_ = value;
+}
+inline void GuestMemory::set_swap_pss_kb(uint64_t value) {
+  _internal_set_swap_pss_kb(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GuestMemory.swap_pss_kb)
+}
+
+// uint32 google_play_processes = 24;
+inline void GuestMemory::clear_google_play_processes() {
+  _impl_.google_play_processes_ = 0u;
+}
+inline uint32_t GuestMemory::_internal_google_play_processes() const {
+  return _impl_.google_play_processes_;
+}
+inline uint32_t GuestMemory::google_play_processes() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GuestMemory.google_play_processes)
+  return _internal_google_play_processes();
+}
+inline void GuestMemory::_internal_set_google_play_processes(uint32_t value) {
+  
+  _impl_.google_play_processes_ = value;
+}
+inline void GuestMemory::set_google_play_processes(uint32_t value) {
+  _internal_set_google_play_processes(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GuestMemory.google_play_processes)
+}
+
+// uint64 google_play_pss_kb = 25;
+inline void GuestMemory::clear_google_play_pss_kb() {
+  _impl_.google_play_pss_kb_ = uint64_t{0u};
+}
+inline uint64_t GuestMemory::_internal_google_play_pss_kb() const {
+  return _impl_.google_play_pss_kb_;
+}
+inline uint64_t GuestMemory::google_play_pss_kb() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GuestMemory.google_play_pss_kb)
+  return _internal_google_play_pss_kb();
+}
+inline void GuestMemory::_internal_set_google_play_pss_kb(uint64_t value) {
+  
+  _impl_.google_play_pss_kb_ = value;
+}
+inline void GuestMemory::set_google_play_pss_kb(uint64_t value) {
+  _internal_set_google_play_pss_kb(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GuestMemory.google_play_pss_kb)
+}
+
+// uint64 google_play_swap_pss_kb = 26;
+inline void GuestMemory::clear_google_play_swap_pss_kb() {
+  _impl_.google_play_swap_pss_kb_ = uint64_t{0u};
+}
+inline uint64_t GuestMemory::_internal_google_play_swap_pss_kb() const {
+  return _impl_.google_play_swap_pss_kb_;
+}
+inline uint64_t GuestMemory::google_play_swap_pss_kb() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GuestMemory.google_play_swap_pss_kb)
+  return _internal_google_play_swap_pss_kb();
+}
+inline void GuestMemory::_internal_set_google_play_swap_pss_kb(uint64_t value) {
+  
+  _impl_.google_play_swap_pss_kb_ = value;
+}
+inline void GuestMemory::set_google_play_swap_pss_kb(uint64_t value) {
+  _internal_set_google_play_swap_pss_kb(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GuestMemory.google_play_swap_pss_kb)
 }
 
 // -------------------------------------------------------------------

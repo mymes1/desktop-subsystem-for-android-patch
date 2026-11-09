@@ -3,6 +3,7 @@ package io.github.thisisthepy.dsa.agent.platform
 import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.provider.DeviceConfig
 import android.provider.Settings
 import io.github.thisisthepy.dsa.agent.memory.AppProcesses
 import java.io.File
@@ -18,8 +19,12 @@ class AndroidAppProcesses(context: Context) : AppProcesses {
     private val packages = context.packageManager
     private val resolver = context.contentResolver
 
+    private val mainExecutor = context.mainExecutor
+    private var watching = false
+
     private companion object {
         const val AM_CONSTANTS = "activity_manager_constants"
+        const val NAMESPACE = "activity_manager"
         const val MAX_CACHED = "max_cached_processes"
     }
 
@@ -46,13 +51,33 @@ class AndroidAppProcesses(context: Context) : AppProcesses {
     }
 
     /**
-     * The activity manager reads its limits from this global setting (a list of key=value);
-     * only the cached process limit is set, and only when nothing else has set the setting.
+     * The activity manager reads the cached process limit from the device configuration
+     * (namespace activity_manager, key max_cached_processes), and only without one from the
+     * framework's config_customizedMaxCachedProcesses, which the image's framework overlay sets
+     * to the same limit. The global setting activity_manager_constants no longer carries it:
+     * Android 17 parses that setting for its other limits and ignores this key, so the limit
+     * written there before never applied and the activity manager kept up to 1024.
+     *
+     * The flag is set now, takes effect at once, and is set again whenever something else
+     * changes it (Google Play services' flag sync may), so the limit holds for as long as the
+     * agent runs. What earlier agents wrote to the global setting is taken back.
      */
     override fun limitCachedProcesses(max: Int) {
-        val current = Settings.Global.getString(resolver, AM_CONSTANTS)
-        if (current.isNullOrEmpty() || current.startsWith("$MAX_CACHED=")) {
-            Settings.Global.putString(resolver, AM_CONSTANTS, "$MAX_CACHED=$max")
+        val wanted = max.toString()
+        if (DeviceConfig.getProperty(NAMESPACE, MAX_CACHED) != wanted) {
+            DeviceConfig.setProperty(NAMESPACE, MAX_CACHED, wanted, false)
+        }
+        if (!watching) {
+            watching = true
+            DeviceConfig.addOnPropertiesChangedListener(NAMESPACE, mainExecutor) { changed ->
+                if (MAX_CACHED in changed.keyset && changed.getString(MAX_CACHED, null) != wanted) {
+                    DeviceConfig.setProperty(NAMESPACE, MAX_CACHED, wanted, false)
+                }
+            }
+        }
+        val legacy = Settings.Global.getString(resolver, AM_CONSTANTS)
+        if (legacy != null && legacy.matches(Regex("$MAX_CACHED=\\d+"))) {
+            Settings.Global.putString(resolver, AM_CONSTANTS, null)
         }
     }
 

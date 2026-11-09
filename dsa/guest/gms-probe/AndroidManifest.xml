@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Play services probe: an app named as Google Play services that declares the services the
+  agent keeps off on a desktop, and one it must leave on (the push service, GcmService). It has
+  no code; nothing starts it. The image boot check (dsa/host/platform/linux/tests/overlays.rs)
+  installs it, makes Android announce an update and component changes of it, and reads the
+  package manager's states. It stands in for Play services because the Google apps build that
+  check installs is a small unsigned one, which the package manager does not install. The
+  agent's own tests check that this list and the agent's stay the same.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.google.android.gms">
+
+    <application android:label="DSA Play services probe" android:hasCode="false">
+        <!-- Left on: push messages. -->
+        <service android:name="com.google.android.gms.gcm.GcmService" />
+        <!-- Turned off by the agent. -->
+        <service android:name="com.google.android.gms.crisisalerts.init.CrisisAlertsPersistentService" />
+        <service android:name="com.google.android.gms.thunderbird.EmergencyPersistentService" />
+        <service android:name="com.google.android.gms.thunderbird.EmergencyLocationService" />
+        <service android:name="com.google.android.gms.motionsicknessassist.persistent.MotionSicknessAssistPersistentService" />
+        <service android:name="com.google.android.gms.motionsicknessassist.service.MotionSicknessAssistService" />
+        <service android:name="com.google.android.gms.motionsicknessassist.service.MotionAssistSysUiService" />
+        <service android:name="com.google.android.gms.motionsicknessassist.settings.MotionSicknessAssistTileService" />
+        <service android:name="com.google.android.gms.nearby.presence.service.LifeCycleService" />
+        <service android:name="com.google.android.gms.cast.devicesuggestions.SuggestionsProviderChimeraService" />
+        <service android:name="com.google.android.gms.remotegestures.api.RemoteGesturesService" />
+        <service android:name="com.google.android.location.internal.server.HardwareArProviderService" />
+        <service android:name="com.google.android.gms.mdm.services.SecureLockService" />
+        <service android:name="com.google.android.gms.dtdi.lifecycle.LifecycleService" />
+    </application>
+</manifest>
