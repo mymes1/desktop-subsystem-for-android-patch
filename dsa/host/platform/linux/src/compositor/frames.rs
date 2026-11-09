@@ -49,6 +49,36 @@ impl Frame {
         }
     }
 
+    /// The frame drawn `to` pixels large, each pixel taken from the nearest of the frame's: a
+    /// task that keeps its density on a monitor of another scale, in a window that cannot have
+    /// the desktop scale it. The same frame when it is that size already.
+    pub fn scaled(&self, to: (u32, u32)) -> Frame {
+        let (width, height) = (to.0.clamp(1, MAX_SIDE), to.1.clamp(1, MAX_SIDE));
+        if (width, height) == (self.width, self.height) {
+            return self.clone();
+        }
+        let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
+        let columns: Vec<usize> = (0..width)
+            .map(|x| {
+                let from = (u64::from(x) * u64::from(self.width) / u64::from(width)) as usize;
+                from.min(self.width.max(1) as usize - 1) * 4
+            })
+            .collect();
+        for y in 0..height {
+            let row = (u64::from(y) * u64::from(self.height) / u64::from(height)) as usize;
+            let row = row.min(self.height.max(1) as usize - 1) * self.width as usize * 4;
+            for column in &columns {
+                let at = row + column;
+                pixels.extend_from_slice(self.pixels.get(at..at + 4).unwrap_or(&[0, 0, 0, 0xff]));
+            }
+        }
+        Frame {
+            width,
+            height,
+            pixels,
+        }
+    }
+
     /// Draws `overlay` (premultiplied BGRA rows, `size` pixels) over the frame with its top
     /// left corner at `at`, clipped to the frame: the title bar's buttons over the app.
     pub fn blend(&mut self, overlay: &[u8], size: (u32, u32), at: (i32, i32)) {
@@ -197,6 +227,22 @@ mod tests {
             frame.pixels,
             vec![0x33, 0x22, 0x11, 0xff, 0xcc, 0xbb, 0xaa, 0xff]
         );
+    }
+
+    #[test]
+    fn fr4_a_frame_is_drawn_at_its_windows_scale() {
+        // Two pixels side by side, shown at two window pixels per task pixel.
+        let frame = Frame {
+            width: 2,
+            height: 1,
+            pixels: vec![1, 1, 1, 0xff, 2, 2, 2, 0xff],
+        };
+        let twice = frame.scaled((4, 2));
+        assert_eq!((twice.width, twice.height), (4, 2));
+        let row = [1, 1, 1, 0xff, 1, 1, 1, 0xff, 2, 2, 2, 0xff, 2, 2, 2, 0xff];
+        assert_eq!(twice.pixels, [row, row].concat());
+        assert_eq!(frame.scaled((2, 1)), frame);
+        assert_eq!(twice.scaled((2, 1)), frame);
     }
 
     #[test]
