@@ -1629,6 +1629,155 @@ message NetworkStatus {
 // they are. The answer is Done once the new disk is in place; the next start boots it.
 message ResetData {}
 
+// Backs up every app of the caller's Android now, into the caller's backup folder, encrypted
+// with the key the host's credential store keeps for them. Android has to be running
+// (ERROR_CODE_NOT_RUNNING otherwise). The answer is BackupReport once Android's backup
+// manager has finished.
+message BackupNow {}
+
+// Asks where the caller's backup stands. The service answers BackupReport. It reads only the
+// backup folder, so it answers while Android is stopped too.
+message GetBackup {}
+
+// Restores the caller's Android from their backup folder: installs each app the backup holds
+// the APKs of and Android does not have, then has Android restore every app's data. It is
+// how the data comes back after a data reset, or on another computer once the folder and
+// the recovery key are there. Android has to be running (ERROR_CODE_NOT_RUNNING otherwise).
+// Answered with BackupReport.
+message RestoreBackup {}
+
+// Asks for the caller's backup recovery key: the key their backup folder is encrypted with,
+// as text to write down. With it the folder can be restored on another computer or under
+// another user. Answered with BackupRecoveryKey.
+message GetBackupRecoveryKey {}
+
+message BackupRecoveryKey {
+  // Groups of letters and digits with a check at the end, such as `ABCD-EFGH-...`.
+  string key = 1;
+}
+
+// Keeps `key`, a recovery key GetBackupRecoveryKey gave, as the caller's backup key, so a
+// backup folder made on another computer or under another user can be read here. Text that
+// is not a recovery key, or one the folder was not made with, is ERROR_CODE_INVALID_SETTING.
+// Answered with BackupReport.
+message SetBackupRecoveryKey {
+  string key = 1;
+}
+
+// Where the caller's backup stands.
+message BackupReport {
+  // Whether backups can be made and read now.
+  bool available = 1;
+  // Why not, in words a person can act on; empty when they can.
+  string problem = 2;
+  // The backup folder.
+  string folder = 3;
+  // When an app was last backed up, in milliseconds since the Unix epoch; 0 for never.
+  int64 last_backup_unix_ms = 4;
+  // The apps the backup holds, and the bytes their data and APKs take before encryption.
+  uint32 packages = 5;
+  uint64 size = 6;
+  // What went wrong in the last backup or restore; empty when nothing did.
+  string last_error = 7;
+  // BackupNow and RestoreBackup: the apps backed up or restored, those that failed, and the
+  // apps a restore installed.
+  uint32 succeeded = 8;
+  uint32 failed = 9;
+  uint32 installed = 10;
+  // When the backup was last restored, in milliseconds since the Unix epoch; 0 for never.
+  int64 last_restore_unix_ms = 11;
+}
+
+// Turns the connection into a watch of the passkey ceremonies of the caller's Android: after
+// the answer (Done), the service sends a PasskeyCeremony for each request of an app that the
+// service has checked (the app's signature against the relying party's Digital Asset Links,
+// or a browser's origin against the relying party), and a PasskeyCeremonyWithdrawn when
+// Android no longer waits for one. Requests that fail the check never reach a watcher. The
+// watcher, which runs in the user's desktop session, brings up the host's passkey prompt and
+// answers each ceremony with ReportPasskeyCeremony, on another connection, and sends
+// nothing on this one.
+message WatchPasskeys {}
+
+// Which passkey ceremony.
+enum PasskeyOperation {
+  PASSKEY_OPERATION_UNSPECIFIED = 0;
+  // Make a new passkey.
+  PASSKEY_OPERATION_CREATE = 1;
+  // Sign in with a passkey.
+  PASSKEY_OPERATION_GET = 2;
+}
+
+// A passkey ceremony the host's authenticator is to perform, already checked.
+message PasskeyCeremony {
+  uint64 ceremony_id = 1;
+  PasskeyOperation operation = 2;
+  string rp_id = 3;
+  // CREATE only: the relying party's name and the account the passkey is for.
+  string rp_name = 4;
+  bytes user_id = 5;
+  string user_name = 6;
+  string user_display_name = 7;
+  // The client data the authenticator signs the hash of (WebAuthn's CollectedClientData
+  // JSON); empty when a browser gave only its hash.
+  bytes client_data_json = 8;
+  // SHA-256 of client_data_json, or the browser's own hash.
+  bytes client_data_hash = 9;
+  // CREATE only: the COSE algorithms the relying party takes, the one it prefers first.
+  repeated int32 algorithms = 10;
+  // CREATE: the passkeys the authenticator must not already hold. GET: the passkeys it may
+  // use; empty for any of the relying party's.
+  repeated bytes credential_ids = 11;
+  // CREATE only: "required", "preferred" or "discouraged".
+  string resident_key = 12;
+  // "required", "preferred" or "discouraged".
+  string user_verification = 13;
+  // How long the relying party waits; 0 for the authenticator's own default.
+  uint32 timeout_ms = 14;
+  // The app that asked, for the prompt.
+  string app_label = 15;
+  string package = 16;
+  // The origin the client data names: the browser's https origin, or the app's
+  // android:apk-key-hash origin.
+  string origin = 17;
+  // CREATE only: "none", "indirect", "direct" or "enterprise".
+  string attestation = 18;
+}
+
+// The ceremony is no longer wanted: its app went away, or Android stopped.
+message PasskeyCeremonyWithdrawn {
+  uint64 ceremony_id = 1;
+}
+
+// What became of a passkey ceremony on the host.
+enum PasskeyResult {
+  PASSKEY_RESULT_UNSPECIFIED = 0;
+  PASSKEY_RESULT_OK = 1;
+  // The person canceled the prompt, or it timed out.
+  PASSKEY_RESULT_CANCELED = 2;
+  // The host has no authenticator, or the person turned passkeys off.
+  PASSKEY_RESULT_UNAVAILABLE = 3;
+  // The authenticator failed; the message says why.
+  PASSKEY_RESULT_ERROR = 4;
+  // CREATE: the authenticator already holds an excluded passkey. GET: it holds none allowed.
+  PASSKEY_RESULT_NOT_ALLOWED = 5;
+}
+
+// Tells the caller's Android what became of a passkey ceremony. Answered with Done.
+message ReportPasskeyCeremony {
+  uint64 ceremony_id = 1;
+  PasskeyResult result = 2;
+  string message = 3;
+  bytes credential_id = 4;
+  // CREATE: the attestation object (CBOR), and the transports the passkey can be reached by.
+  bytes attestation_object = 5;
+  repeated string transports = 6;
+  // GET: the authenticator data, the signature over it and the client data hash, and the
+  // passkey's user handle.
+  bytes authenticator_data = 7;
+  bytes signature = 8;
+  bytes user_handle = 9;
+}
+
 // Asks which Android version runs and which can be chosen. The service answers
 // AndroidVersions.
 message GetAndroidVersions {}
@@ -2235,6 +2384,13 @@ message Request {
     SetRunAsArm set_run_as_arm = 340;
     SetAppRoot set_app_root = 341;
     ReportTouchGestures report_touch_gestures = 350;
+    BackupNow backup_now = 620;
+    GetBackup get_backup = 621;
+    RestoreBackup restore_backup = 622;
+    GetBackupRecoveryKey get_backup_recovery_key = 623;
+    SetBackupRecoveryKey set_backup_recovery_key = 624;
+    WatchPasskeys watch_passkeys = 625;
+    ReportPasskeyCeremony report_passkey_ceremony = 626;
   }
 }
 
@@ -2269,6 +2425,8 @@ message Response {
     GappsProgress gapps_progress = 401;
     RunAsArmResult run_as_arm_result = 340;
     AppRootResult app_root_result = 341;
+    BackupReport backup_report = 620;
+    BackupRecoveryKey backup_recovery_key = 621;
   }
 }
 
@@ -2309,5 +2467,7 @@ message Envelope {
     BackgroundAppEvent background_app_event = 21;
     GamepadEvent gamepad_event = 300;
     GamepadRumble gamepad_rumble = 301;
+    PasskeyCeremony passkey_ceremony = 620;
+    PasskeyCeremonyWithdrawn passkey_ceremony_withdrawn = 621;
   }
 }
