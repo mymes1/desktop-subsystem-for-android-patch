@@ -1726,6 +1726,7 @@ impl ArmTranslationStatus {
             enabled: self.enabled,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
+            guest_left_on_data: guest.left_on_data,
             guest_active: guest.active,
             abilist: guest.abilist,
             restart_needed: self.restart_needed,
@@ -1756,7 +1757,7 @@ impl ArmTranslationStatus {
             enabled: status.enabled,
             guest: status.guest_known.then_some(GuestArmTranslation {
                 installed: status.guest_installed,
-                left_on_data: false,
+                left_on_data: status.guest_left_on_data,
                 active: status.guest_active,
                 abilist: status.abilist,
             }),
@@ -1797,6 +1798,7 @@ impl GappsStatus {
             reinstall_needed: self.reinstall_needed,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
+            guest_left_on_data: guest.left_on_data,
             guest_active: guest.active,
             sdk: guest.sdk,
             abi: guest.abi,
@@ -1821,7 +1823,7 @@ impl GappsStatus {
             }),
             guest: status.guest_known.then_some(GuestGapps {
                 installed: status.guest_installed,
-                left_on_data: false,
+                left_on_data: status.guest_left_on_data,
                 active: status.guest_active,
                 sdk: status.sdk,
                 abi: status.abi,

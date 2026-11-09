@@ -1744,6 +1744,10 @@ message ArmTranslation {
   // (default_package), "user" (package, the caller's own), "google" (package, Google's
   // translator), or empty for none.
   string translator = 9;
+  // The running Android still has a package image a DSA from before the add-on disk sent to
+  // its own disk, which the service moves onto the add-on disk and then removes. Holds only
+  // when guest_known.
+  bool guest_left_on_data = 10;
 }
 
 // The Google apps package a user installed: LiteGapps' Core build for their Android, which the
@@ -1833,6 +1837,10 @@ message Gapps {
   // over the system, and the downloaded package is not kept to make it again: Android starts
   // without Google's apps until the user installs Google Play again.
   bool reinstall_needed = 10;
+  // The running Android still has a Google apps image a DSA from before the add-on disk sent
+  // to its own disk, which the service moves onto the add-on disk and then removes. Holds only
+  // when guest_known.
+  bool guest_left_on_data = 11;
 }
 
 // Asks for the device identity of the caller's Android.
