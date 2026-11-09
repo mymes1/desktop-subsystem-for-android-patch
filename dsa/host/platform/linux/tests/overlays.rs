@@ -34,8 +34,14 @@
 //! runner that is there and works, which reading the rule never did. Then a small Google apps build, laid
 //! out as LiteGapps publishes one, is installed through the local API from a mirror in the
 //! test's folder, and Android starts again: the image must be mounted and laid over each of
-//! its folders, with the translator still in place. Across both boots, the guest log and the
-//! Android console log must show no init command of either script failing, no denial of init's
+//! its folders, with the translator still in place, the host's privileged permission allowlist
+//! granting the privileged permission the build's Google Play services asks for and the build's
+//! own list leaves out, and `ro.control_privapp_permissions` at `log`, so that a permission no
+//! list names is logged rather than stopping Android at every boot; no boot may log one. The
+//! small build's APKs are not signed, so the package manager does not install them; the
+//! allowlist is read from the system as the package manager would read it. Across both boots,
+//! the guest log and the Android console log must show no init command of either script
+//! failing, no denial of init's
 //! mounts, no denial that names the translator or one of its places, no overlayfs failure, no
 //! program of any domain refused filesystem getattr on an image's superblock, and no service
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
@@ -135,12 +141,25 @@ const BRIDGE_FAILURES: &[&str] = &[
     "has been rejected for",
     "native bridge is expected to be opened",
 ];
-/// What the small Google apps build lays over the partitions.
+/// What the small Google apps build lays over the partitions, with the privileged permission
+/// allowlists the host adds to its image.
 const GAPPS_FILES: &[&str] = &[
     "/product/priv-app/GmsCore/GmsCore.apk",
     "/product/priv-app/Phonesky/Phonesky.apk",
     "/system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk",
+    "/product/etc/permissions/dsa-gapps-privapp-permissions.xml",
+    "/system_ext/etc/permissions/dsa-gapps-privapp-permissions.xml",
 ];
+/// Where the host's allowlist for the small build's Google Play services is, and the privileged
+/// permission it must grant that LiteGapps' list in the build leaves out, as the Android 17
+/// build left out `ACCESS_COMPANION_INFO`.
+const GAPPS_ALLOWLIST: (&str, &str) = (
+    "/product/etc/permissions/dsa-gapps-privapp-permissions.xml",
+    build::GMS_PERMISSIONS[1],
+);
+/// What system_server says when a privileged app asks for a privileged permission no list
+/// names; with the allowlist enforced it then stops at every boot.
+const ALLOWLIST_VIOLATION: &str = "not in privileged permission allowlist";
 /// The types of an erofs image's superblock while init mounts it and lays it over: the
 /// filesystem's own (an overlay's own superblock has it too), the ones init gives the images
 /// with `fscontext=`, and the file types they are labelled with, which a superblock carried
@@ -1158,6 +1177,15 @@ fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     for line in mount_denials(&log) {
         problems.push(format!("{boot}: SELinux refused init: {line}"));
     }
+    for line in log
+        .lines()
+        .filter(|line| line.contains(ALLOWLIST_VIOLATION))
+    {
+        problems.push(format!(
+            "{boot}: a privileged permission is in no allowlist: {}",
+            line.trim()
+        ));
+    }
     refusal_problems(&log, boot, problems);
 }
 
@@ -1389,6 +1417,26 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         )),
         Err(why) => problems.push(format!("reading where Google Play stands: {why}")),
     }
+    // The host's allowlist grants what the build's own list leaves out, and a boot with the
+    // Google apps logs a miss instead of stopping at it.
+    let (allowlist, permission) = GAPPS_ALLOWLIST;
+    match adb.shell(&format!("cat {allowlist}")) {
+        Ok(text) if text.contains(&format!("<permission name=\"{permission}\"/>")) => {}
+        Ok(text) => problems.push(format!(
+            "Google Play: {allowlist} does not grant {permission}: {}",
+            text.trim()
+        )),
+        Err(why) => problems.push(format!("reading {allowlist}: {why}")),
+    }
+    match adb.shell("getprop ro.control_privapp_permissions") {
+        Ok(mode) if mode.trim() == "log" => {}
+        Ok(mode) => problems.push(format!(
+            "Google Play: ro.control_privapp_permissions is {:?} with the Google apps, not \
+             \"log\", so a permission no list names stops Android at every boot",
+            mode.trim()
+        )),
+        Err(why) => problems.push(format!("reading ro.control_privapp_permissions: {why}")),
+    }
     translation_problems(&adb, &dir, &table, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
 
@@ -1400,6 +1448,15 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     }
     for line in mount_denials(&whole) {
         problems.push(format!("SELinux refused init: {line}"));
+    }
+    for line in whole
+        .lines()
+        .filter(|line| line.contains(ALLOWLIST_VIOLATION))
+    {
+        problems.push(format!(
+            "Google Play: a privileged permission is in no allowlist: {}",
+            line.trim()
+        ));
     }
     refusal_problems(&whole, "guest log", &mut problems);
     // The console logs of both boots, which hold what the kernel refused before logd ran.

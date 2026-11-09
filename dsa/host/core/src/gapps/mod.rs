@@ -26,6 +26,7 @@
 pub mod listing;
 pub mod md5;
 pub mod package;
+pub mod privapp;
 pub mod tar;
 pub mod xz;
 
