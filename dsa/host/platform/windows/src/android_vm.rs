@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime};
 
 use dsa_host_core::bootconfig;
 use dsa_host_core::device_identity::{append_overlay, ramdisk_overlay};
-use dsa_host_core::session::{GuestLauncher, GuestStall};
+use dsa_host_core::session::{GuestLauncher, GuestStall, MemoryResizer};
 use dsa_protocol::auth::{bootconfig_entry, BootSecret};
 
 use crate::console_log::{
@@ -48,7 +48,8 @@ pub type ConfigSource = Box<dyn FnMut() -> Result<AndroidVmConfig, String> + Sen
 pub struct AndroidVmLauncher {
     id: String,
     config: ConfigSource,
-    system: Option<ComputeSystem>,
+    /// Shared with the memory resizer's thread, which holds it only while it resizes.
+    system: Option<Arc<ComputeSystem>>,
     vm_id: VmIdSlot,
     /// Where each boot's console is kept. Without it the VM gets no serial port.
     console_log: Option<PathBuf>,
@@ -392,7 +393,7 @@ impl AndroidVmLauncher {
             .runtime_id(CALL_TIMEOUT)
             .map_err(|e| format!("the Android VM started but its ID could not be read: {e}"))?;
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = Some(vm_id);
-        self.system = Some(system);
+        self.system = Some(Arc::new(system));
         self.memory_base = Some(u64::from(config.memory_mb));
         Ok(())
     }
@@ -599,6 +600,11 @@ impl GuestLauncher for AndroidVmLauncher {
             .map_err(|e| format!("the Android VM's memory could not be set to {mb} MiB: {e}"))
     }
 
+    fn memory_resizer(&mut self) -> Option<Box<dyn MemoryResizer>> {
+        let system = self.system.as_ref()?;
+        Some(Box::new(VmMemoryResizer(Arc::downgrade(system))))
+    }
+
     fn memory_growth_failed(&mut self, why: &str) {
         // The guest keeps the memory it started with. Whether to start it larger instead is
         // a decision about idle memory, so it is reported rather than made here.
@@ -607,6 +613,23 @@ impl GuestLauncher for AndroidVmLauncher {
              it started with",
             self.memory_base.unwrap_or_default()
         );
+    }
+}
+
+/// Resizes the running VM's memory on the session's resize thread. HCS can take a minute over a
+/// resize (it answered one that took 1.5 GiB back after 45 s), and the session must not wait
+/// for it. It holds the VM weakly: a VM that stopped meanwhile is not kept open by it.
+struct VmMemoryResizer(std::sync::Weak<ComputeSystem>);
+
+impl MemoryResizer for VmMemoryResizer {
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        let system = self
+            .0
+            .upgrade()
+            .ok_or("the Android VM stopped before its memory could be set")?;
+        system
+            .modify(&crate::vm::memory_resize_request(mb), CALL_TIMEOUT)
+            .map_err(|e| format!("the Android VM's memory could not be set to {mb} MiB: {e}"))
     }
 }
 

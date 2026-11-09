@@ -38,12 +38,14 @@ fn nfr2_the_vm_grows_when_the_guest_runs_short_up_to_its_maximum() {
         growth.on_pressure(&pressure(2900, 300, 0.0), start),
         Some(GrowthAction::Resize(4608))
     );
+    growth.applied();
     // The guest sees it; still short a while later: grows to the maximum and no further.
     let later = start + Duration::from_secs(6);
     assert_eq!(
         growth.on_pressure(&pressure(4400, 400, 20.0), later),
         Some(GrowthAction::Resize(6144))
     );
+    growth.applied();
     let later = later + Duration::from_secs(6);
     assert_eq!(growth.on_pressure(&pressure(5900, 300, 20.0), later), None);
     assert_eq!(growth.current_mb(), 6144);
@@ -58,6 +60,7 @@ fn nfr2_the_vm_gives_memory_back_on_the_next_calm_report_but_not_below_its_base(
         growth.on_pressure(&pressure(2900, 100, 0.0), start),
         Some(GrowthAction::Resize(4608))
     );
+    growth.applied();
     // Still settling right after the growth.
     let t = start + Duration::from_secs(2);
     assert_eq!(growth.on_pressure(&pressure(4400, 3000, 0.0), t), None);
@@ -81,6 +84,7 @@ fn nfr2_growing_stops_when_added_memory_never_reaches_the_guest() {
         growth.on_pressure(&pressure(2900, 100, 0.0), start),
         Some(GrowthAction::Resize(_))
     ));
+    growth.applied();
     let t = start + Duration::from_secs(31);
     assert!(matches!(
         growth.on_pressure(&pressure(2900, 100, 0.0), t),
