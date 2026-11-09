@@ -11,15 +11,40 @@
 //! maximised, until the next start of Android.
 //!
 //! The display's density is the main monitor's, as a task's window gives it
-//! ([`density_for_dpi`]): 160 dpi at a scale of 100%, 240 at 150%. Every app starts at the
+//! ([`density_for_dpi`]): 96 dpi at a scale of 100%, 144 at 150%. Every app starts at the
 //! display's density. Android relaunches an activity whose density changes unless the app
 //! says it handles that itself, so an app that started at another density than its monitor's
 //! would be relaunched the moment its window asked for the right one. Starting at the main
 //! monitor's density means a window that opens there asks for nothing. SurfaceFlinger takes
 //! the density from `ro.sf.lcd_density`, which the guest sets from `androidboot.lcd_density`,
 //! and the hwcomposer reports `androidboot.dsa.display_dpi`; both carry the same number.
+//!
+//! A dp is 1/160 inch and a host DIP 1/96 inch, so at that density a dp is 0.6 DIP. Android
+//! scales text separately from everything else, by its font scale, and the guest's font
+//! scale keeps text the size of the host's ([`font_scale`]).
 
-use crate::compositor::window_sizing::{density_for_dpi, BASE_DPI};
+use crate::compositor::window_sizing::{
+    density_for_dpi, BASE_DENSITY, BASE_DPI, DENSITY_AT_BASE_DPI,
+};
+
+/// The smallest and the largest text size a host may ask for, in percent of its default.
+/// Windows' text size setting goes from 100 to 225; a Linux desktop's text scaling factor may
+/// go below 100 and up to 300.
+pub const MIN_TEXT_SCALE_PERCENT: u32 = 50;
+pub const MAX_TEXT_SCALE_PERCENT: u32 = 300;
+
+/// The guest's font scale for a host text size of `text_scale_percent` (0 is unknown and
+/// counts as 100): 160/96 times the text size, so text in an Android app is the size of the
+/// host's text although a dp is 0.6 DIP. About 1.667 at 100%, 2.5 at 150%, 3.75 at 225%.
+pub fn font_scale(text_scale_percent: u32) -> f32 {
+    let percent = if text_scale_percent == 0 {
+        100
+    } else {
+        text_scale_percent.clamp(MIN_TEXT_SCALE_PERCENT, MAX_TEXT_SCALE_PERCENT)
+    };
+    (f64::from(BASE_DENSITY) * f64::from(percent)
+        / (f64::from(DENSITY_AT_BASE_DPI) * 100.0)) as f32
+}
 
 /// The shortest side the display has, whatever the monitors.
 pub const MIN_SIDE: u32 = 1920;
@@ -181,11 +206,11 @@ mod tests {
     #[test]
     fn fr4_the_chosen_size_replaces_the_images_because_the_first_value_wins() {
         let cmdline = "init=/init androidboot.dsa.display_width=1920 \
-                       androidboot.dsa.display_height=1080 androidboot.dsa.display_dpi=160";
+                       androidboot.dsa.display_height=1080 androidboot.dsa.display_dpi=96";
         let out = with_display_size(cmdline, (2880, 2880));
         assert_eq!(
             out,
-            "init=/init androidboot.dsa.display_dpi=160 \
+            "init=/init androidboot.dsa.display_dpi=96 \
              androidboot.dsa.display_width=2880 androidboot.dsa.display_height=2880"
         );
     }
@@ -198,26 +223,52 @@ mod tests {
 
     #[test]
     fn fr4_android_starts_at_the_main_monitors_density() {
-        assert_eq!(boot_density(Some(96)), 160);
-        assert_eq!(boot_density(Some(144)), 240);
-        assert_eq!(boot_density(Some(192)), 320);
-        assert_eq!(boot_density(None), 160, "an unknown main monitor is 100%");
+        // A dp is 1/160 inch and a DIP 1/96 inch: Android draws at 96 x the scale.
+        assert_eq!(boot_density(Some(96)), 96);
+        assert_eq!(boot_density(Some(120)), 120);
+        assert_eq!(boot_density(Some(144)), 144);
+        assert_eq!(boot_density(Some(192)), 192);
+        assert_eq!(boot_density(Some(240)), 240);
+        assert_eq!(boot_density(None), 96, "an unknown main monitor is 100%");
         assert_eq!(boot_density(Some(1)), MIN_DENSITY);
         assert_eq!(boot_density(Some(2000)), MAX_DENSITY);
-        // The image's 160 is replaced, for the hwcomposer and for SurfaceFlinger both, so the
+        // Text keeps the host's size: at a text size of 100% the font scale is 160/96.
+        assert!((font_scale(100) - 160.0 / 96.0).abs() < 1e-6);
+        assert!((font_scale(0) - 160.0 / 96.0).abs() < 1e-6);
+        // The image's 96 is replaced, for the hwcomposer and for SurfaceFlinger both, so the
         // first value init reads is the main monitor's.
-        let cmdline = "init=/init androidboot.dsa.display_dpi=160 androidboot.lcd_density=160 \
+        let cmdline = "init=/init androidboot.dsa.display_dpi=96 androidboot.lcd_density=96 \
                        androidboot.dsa.display_dpi_x=1";
         assert_eq!(
             with_display_density(cmdline, boot_density(Some(144))),
-            "init=/init androidboot.dsa.display_dpi_x=1 androidboot.dsa.display_dpi=240 \
-             androidboot.lcd_density=240"
+            "init=/init androidboot.dsa.display_dpi_x=1 androidboot.dsa.display_dpi=144 \
+             androidboot.lcd_density=144"
         );
         // A record of the main monitor reads back, and nothing else counts as one.
         assert_eq!(parse_density_record(&density_record_text(144)), Some(144));
         assert_eq!(parse_density_record("junk\n"), None);
         assert_eq!(parse_density_record("0\n"), None);
         assert_eq!(parse_density_record("99999\n"), None);
+    }
+
+    #[test]
+    fn fr4_the_font_scale_is_160_over_96_times_the_text_size() {
+        for (percent, scale) in [
+            (100, 1.666_666_7),
+            (125, 2.083_333_3),
+            (150, 2.5),
+            (200, 3.333_333_3),
+            (225, 3.75),
+        ] {
+            assert!(
+                (font_scale(percent) - scale).abs() < 1e-5,
+                "{percent}%: {}",
+                font_scale(percent)
+            );
+        }
+        // What no desktop asks for is kept within what one may.
+        assert!((font_scale(1) - font_scale(MIN_TEXT_SCALE_PERCENT)).abs() < 1e-6);
+        assert!((font_scale(9999) - font_scale(MAX_TEXT_SCALE_PERCENT)).abs() < 1e-6);
     }
 
     #[test]

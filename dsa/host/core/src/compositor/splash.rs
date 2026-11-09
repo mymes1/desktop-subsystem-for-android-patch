@@ -31,15 +31,16 @@ pub fn background(dark: bool) -> u32 {
 
 /// The edge of the icon in a window of `view` client pixels on a monitor of `dpi` dots per inch
 /// (96 is 100 %), drawn from an image `source` pixels on its shorter side: 160 dp at the
-/// monitor's scale, rounded to the nearest pixel, and never more than two fifths of the shorter
-/// side, so a small window still shows its background around the icon.
+/// density a task draws at on that monitor (96 pixels at 100 %, as a dp is 1/160 inch and a
+/// pixel at 100 % 1/96 inch), rounded to the nearest pixel, and never more than two fifths of
+/// the shorter side, so a small window still shows its background around the icon.
 ///
 /// Nor is it ever larger than the image: an icon scaled up is blurred, and a sharp icon a
 /// little smaller is better than a blurred one at full size. The window programs carry an
-/// image large enough for 160 dp up to 320 %.
+/// image large enough for 160 dp up to 500 %.
 pub fn icon_edge(view: (u32, u32), dpi: u32, source: u32) -> u32 {
-    let dpi = dpi.max(96);
-    let scaled = (ICON_DP * dpi + 48) / 96;
+    let density = super::window_sizing::density_for_dpi(dpi.max(96));
+    let scaled = super::window_sizing::dp_to_px(ICON_DP, density);
     let limit = view.0.min(view.1) * ICON_SHARE_FIFTHS / 5;
     scaled.min(limit).min(source)
 }
@@ -249,22 +250,23 @@ mod tests {
 
     #[test]
     fn fr3_the_icon_keeps_its_size_to_the_eye_and_fits_a_small_window() {
-        // 160 dp, as the guest's splash shows the app's icon, at 100%, 125% and 200%.
-        assert_eq!(icon_edge((1000, 800), 96, 512), 160);
-        assert_eq!(icon_edge((1000, 800), 120, 512), 200);
-        assert_eq!(icon_edge((1000, 800), 192, 512), 320);
+        // 160 dp, as the guest's splash shows the app's icon, at 100%, 125% and 200%: 0.6 DIP
+        // a dp.
+        assert_eq!(icon_edge((1000, 800), 96, 512), 96);
+        assert_eq!(icon_edge((1000, 800), 120, 512), 120);
+        assert_eq!(icon_edge((1000, 800), 192, 512), 192);
         // Two fifths of the shorter side at most.
-        assert_eq!(icon_edge((400, 200), 96, 512), 80);
+        assert_eq!(icon_edge((200, 100), 96, 512), 40);
         // A window with no area draws no icon.
         assert_eq!(icon_edge((0, 0), 96, 512), 0);
     }
 
     #[test]
     fn fr3_the_splash_icon_is_never_scaled_up() {
-        // A program that carries only a 256 pixel icon shows it at 256 on a 200% monitor
-        // rather than blurred to 320.
-        assert_eq!(icon_edge((2000, 1600), 192, 256), 256);
-        assert_eq!(icon_edge((2000, 1600), 120, 256), 200);
+        // A program that carries only a 256 pixel icon shows it at 256 on a 300% monitor
+        // rather than blurred to 288.
+        assert_eq!(icon_edge((2000, 1600), 288, 256), 256);
+        assert_eq!(icon_edge((2000, 1600), 120, 256), 120);
         for dpi in [96, 120, 144, 192, 240, 288] {
             for source in [48, 256, 512] {
                 assert!(icon_edge((4000, 4000), dpi, source) <= source);
