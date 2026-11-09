@@ -5863,6 +5863,7 @@ impl Worker {
                         })
                         .collect(),
                     can_go_back: update.can_go_back,
+                    handles_density_change: update.handles_density_change,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {

@@ -76,13 +76,14 @@ pub enum ToHost {
         task_id: i32,
     },
     /// The task's size in the guest and the largest and smallest client areas the window may
-    /// have.
+    /// have, and how large the window shows each task pixel (window pixels per task pixels).
     TaskSize {
         task_id: i32,
         width: u32,
         height: u32,
         max: Option<(u32, u32)>,
         min: Option<(u32, u32)>,
+        scale: (u32, u32),
     },
     /// Where the cursor of the task's focused editor is, in the window's client pixels.
     ImeCursor {
@@ -463,12 +464,14 @@ impl WindowHosts {
                 height,
                 max,
                 min,
+                scale,
             } => self.forward(ToHost::TaskSize {
                 task_id: *task_id,
                 width: *width,
                 height: *height,
                 max: *max,
                 min: *min,
+                scale: *scale,
             }),
             WindowChange::ImeCursor { task_id, cursor } => self.forward(ToHost::ImeCursor {
                 task_id: *task_id,
@@ -818,6 +821,7 @@ pub fn to_wire(message: &ToHost) -> Body {
             height,
             max,
             min,
+            scale: (scale_numerator, scale_denominator),
         } => {
             let (max_width, max_height) = max.unwrap_or((0, 0));
             let (min_width, min_height) = min.unwrap_or((0, 0));
@@ -829,6 +833,8 @@ pub fn to_wire(message: &ToHost) -> Body {
                 max_height,
                 min_width,
                 min_height,
+                scale_numerator,
+                scale_denominator,
             })
         }
         ToHost::ImeCursor { task_id, cursor } => {
@@ -942,6 +948,12 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 .then_some((size.max_width, size.max_height)),
             min: (size.min_width > 0 || size.min_height > 0)
                 .then_some((size.min_width, size.min_height)),
+            // 0 by 0, or anything with a 0 in it, is 1:1.
+            scale: if size.scale_numerator > 0 && size.scale_denominator > 0 {
+                (size.scale_numerator, size.scale_denominator)
+            } else {
+                (1, 1)
+            },
         },
         Body::ImeCursor(cursor) => ToHost::ImeCursor {
             task_id: cursor.task_id,
@@ -1650,6 +1662,7 @@ mod tests {
                 height: 400,
                 max: Some((1920, 1080)),
                 min: Some((700, 500)),
+                scale: (1, 1),
             },
             ToHost::TaskSize {
                 task_id: 6,
@@ -1657,6 +1670,7 @@ mod tests {
                 height: 400,
                 max: None,
                 min: None,
+                scale: (3, 2),
             },
             ToHost::ImeCursor {
                 task_id: 7,
