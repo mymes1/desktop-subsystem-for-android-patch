@@ -593,8 +593,14 @@ mod tests {
         let default = default_package_of_image();
         // Bound before the closure, which takes one lifetime for every package it is given.
         let google = google_package();
-        let config =
-            |installed, default, enabled| bootconfig(choose(installed, default, enabled).as_ref());
+        // Where an installed package's image is comes on a line of its own, after this one.
+        let config = |installed, default, enabled| {
+            bootconfig(choose(installed, default, enabled).as_ref(), true)
+                .lines()
+                .next()
+                .map(|line| format!("{line}\n"))
+                .unwrap_or_default()
+        };
         assert_eq!(config(None, None, true), "");
         assert_eq!(config(Some(&installed), None, false), "");
         assert_eq!(
