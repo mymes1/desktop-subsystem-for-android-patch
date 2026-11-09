@@ -402,6 +402,32 @@ fn fr15_dsa_update_asks_the_service_to_install_now_and_prints_its_answer() {
 }
 
 #[test]
+fn fr15_dsa_update_json_says_which_version_setup_installs() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: Some("0.1.1".into()),
+        detail: "installing DSA 0.1.1".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert_eq!(answer["installing"], "0.1.1");
+    assert_eq!(answer["detail"], "installing DSA 0.1.1");
+    assert!(answer["status"].is_null());
+
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: None,
+        detail: "DSA 0.1.1 is up to date".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert!(answer["installing"].is_null(), "nothing newer: {answer}");
+    assert_eq!(answer["detail"], "DSA 0.1.1 is up to date");
+}
+
+#[test]
 fn fr15_dsa_update_reports_why_dsa_was_not_updated() {
     let ((listener, _, _), endpoint) = local_pair();
     let program = Arc::new(FakeProgramUpdates::answering(Err(

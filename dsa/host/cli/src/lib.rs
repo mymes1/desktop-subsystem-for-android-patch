@@ -2856,8 +2856,23 @@ fn update(
         .update_program(UPDATE_ANSWER_TIMEOUT)
         .map_err(|e| e.to_string())?;
     drop(client);
+    let answer = |status: Option<&Status>| {
+        if invocation.json {
+            json!({
+                "installing": update.installing,
+                "detail": update.detail,
+                "status": status.map(status_json),
+            })
+            .to_string()
+        } else {
+            match status {
+                Some(status) => format!("{}\n{}", update.detail, describe(status)),
+                None => update.detail.clone(),
+            }
+        }
+    };
     if !invocation.wait || update.installing.is_none() {
-        return Ok(update.detail);
+        return Ok(answer(None));
     }
     let deadline = Instant::now() + invocation.timeout;
     let mut went_away = false;
@@ -2866,9 +2881,7 @@ fn update(
         match connect(connector, None, false, Duration::from_secs(2))
             .and_then(|mut client| client.status().map_err(|e| e.to_string()))
         {
-            Ok(status) if went_away => {
-                return Ok(format!("{}\n{}", update.detail, describe(&status)))
-            }
+            Ok(status) if went_away => return Ok(answer(Some(&status))),
             Ok(status) => last = Some(status),
             Err(_) => went_away = true,
         }
