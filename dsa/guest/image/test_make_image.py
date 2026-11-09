@@ -976,6 +976,18 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("ro.hardware.gralloc=minigbm\n", props)
         self.assertIn("ro.cpuvulkan.version=0\n", props)
 
+    def test_pr3_the_display_density_is_the_one_the_hwcomposer_reports(self):
+        # Image test run 42562909966: without ro.sf.lcd_density SurfaceFlinger fell back to
+        # 213 dpi, the host then asked each task for 160, and that density change relaunched
+        # every app right after it opened; hello-vulkan crashed in the relaunch.
+        for vendor in (False, True):
+            props = make_image.edit_props("ro.debuggable=1\n", vendor=vendor)
+            self.assertIn("ro.sf.lcd_density=160\n", props)
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
+        self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
+        # vendor_init may set it (a system_vendor_config_prop), so the vendor file keeps it.
+        self.assertNotIn("ro.sf.lcd_density", make_image.VENDOR_FORBIDDEN_PROPS)
+
     def test_pr3_vulkan_loader_uses_the_vendor_driver_not_the_cuttlefish_apex(self):
         # With ro.vulkan.apex set, the loader takes Cuttlefish's driver from its APEX,
         # which reaches the host only through virtio-gpu or the goldfish pipe. The APEX's

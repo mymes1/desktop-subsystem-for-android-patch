@@ -1012,8 +1012,10 @@ jobs:
   #
   # overlays: SELinux enforcing, two boots. First with the image's default ARM translator: the
   # package must be mounted, each part of it bound onto its own empty place (nothing on
-  # /system/bin, /system/lib64 or /system/etc), binfmt_misc mounted with the package's rules
-  # registered, the bridge where the zygote loads it, and arm64-v8a offered. Then with a small
+  # /system/bin, /system/lib64 or /system/etc), binfmt_misc mounted, a small ARM64 program for
+  # each of the package's rules running through the translator (the shell may not read
+  # binfmt_misc, so a program that runs is what proves its rule registered), the bridge where
+  # the zygote loads it, and arm64-v8a offered. Then with a small
   # Google apps build, installed through the local API from a mirror in the check's folder:
   # after Android starts again the image must be mounted and laid over each folder of /product
   # and /system_ext it fills, never a partition's root. In neither boot may init log a failed

@@ -46,11 +46,15 @@ SUBSET = HERE / "vk-cts-subset.txt"
 
 # The Android CTS release the Vulkan CTS (dEQP) APK and its mustpass lists come from. Only the
 # members below are read from the archive, by HTTP range requests, not the whole archive.
-CTS_URL = "https://dl.google.com/dl/android/cts/android-cts-16_r2-linux_x86-x86.zip"
+# It is the newest Android release DSA ships an image of. The CTS fails every KHR extension it
+# does not know ("Unknown extension"), and each Android release's loader adds some of its own:
+# Android 17's offers VK_KHR_surface_maintenance1 and VK_KHR_present_id2, which Android 16's
+# CTS fails. A newer CTS knows every extension an older Android offers.
+CTS_URL = "https://dl.google.com/dl/android/cts/android-cts-17_r3-linux_x86-x86.zip"
 CTS_DIR = "android-cts/testcases/CtsDeqpTestCases/"
 DEQP_APK = CTS_DIR + "com.drawelements.deqp.apk"
-DEQP_APK_SIZE = 208486292
-DEQP_APK_CRC = 0xF8F5905F
+DEQP_APK_SIZE = 209769483
+DEQP_APK_CRC = 0x6142F2B5
 MUSTPASS = CTS_DIR + "vk-main-2019-03-01/"
 DEQP_PACKAGE = "com.drawelements.deqp"
 
