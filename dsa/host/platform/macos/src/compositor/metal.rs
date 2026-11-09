@@ -14,7 +14,7 @@ use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 
-use super::sizing::place;
+use super::sizing::{contents_scale, place};
 use super::surface::Surface;
 use crate::objc::{class, ns_string, CGSize};
 
@@ -107,6 +107,11 @@ pub struct Presenter {
     /// The texture over the frame surface last shown, by its texture ID.
     surface_texture: Option<(u64, Retained<AnyObject>)>,
     drawable: (u32, u32),
+    /// The display's backing scale.
+    backing: f64,
+    /// How large the window shows each of the task's pixels (window pixels per task pixels):
+    /// 1:1 unless the task keeps its density on a display of another scale.
+    frame_scale: (u32, u32),
 }
 
 impl Presenter {
@@ -141,6 +146,8 @@ impl Presenter {
                 staging: None,
                 surface_texture: None,
                 drawable: (0, 0),
+                backing: scale,
+                frame_scale: (1, 1),
             })
         }
     }
@@ -151,7 +158,21 @@ impl Presenter {
     }
 
     /// The display's backing scale changed (the window moved to another display).
-    pub fn set_scale(&self, scale: f64) {
+    pub fn set_scale(&mut self, scale: f64) {
+        self.backing = scale;
+        self.apply_scale();
+    }
+
+    /// The window shows each of the task's pixels at `frame_scale` (window pixels per task
+    /// pixels) from now on: the task keeps its density on a display of another scale, and is
+    /// shown the same size to the eye. The drawable on the screen takes it at once.
+    pub fn set_frame_scale(&mut self, frame_scale: (u32, u32)) {
+        self.frame_scale = frame_scale;
+        self.apply_scale();
+    }
+
+    fn apply_scale(&self) {
+        let scale = contents_scale(self.backing, self.frame_scale);
         unsafe {
             let _: () = msg_send![&*self.layer, setContentsScale: scale];
         }

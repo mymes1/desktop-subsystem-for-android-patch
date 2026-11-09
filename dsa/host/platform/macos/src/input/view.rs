@@ -80,6 +80,22 @@ struct ViewState {
 
 thread_local! {
     static VIEWS: RefCell<HashMap<usize, Rc<RefCell<ViewState>>>> = RefCell::new(HashMap::new());
+    /// How large each view shows its task's pixels (view pixels per task pixels), for a task
+    /// that keeps its density on a display of another scale. Kept apart from the views' state,
+    /// which is borrowed while their input is mapped.
+    static FRAME_SCALES: RefCell<HashMap<usize, (u32, u32)>> = RefCell::new(HashMap::new());
+}
+
+/// The view shows each of its task's pixels at `scale` (view pixels per task pixels) from now
+/// on, and maps its pointer input at it.
+pub fn set_frame_scale(view: &AnyObject, scale: (u32, u32)) {
+    let key = view as *const AnyObject as usize;
+    FRAME_SCALES.with(|scales| scales.borrow_mut().insert(key, scale));
+}
+
+fn frame_scale_of(view: &AnyObject) -> (u32, u32) {
+    let key = view as *const AnyObject as usize;
+    FRAME_SCALES.with(|scales| scales.borrow().get(&key).copied().unwrap_or((1, 1)))
 }
 
 fn state_of(view: &AnyObject) -> Option<Rc<RefCell<ViewState>>> {
@@ -113,7 +129,8 @@ unsafe fn view_scale(view: &AnyObject) -> f64 {
     }
 }
 
-/// The view's size in client pixels, which the task's frames fill one to one.
+/// The view's size in client pixels, which the task's frames fill one to one, or at the view's
+/// frame scale for a task that keeps its density on a display of another scale.
 unsafe fn geometry(view: &AnyObject) -> WindowGeometry {
     let bounds: CGRect = msg_send![view, bounds];
     let scale = view_scale(view);
@@ -121,7 +138,7 @@ unsafe fn geometry(view: &AnyObject) -> WindowGeometry {
         crate::compositor::sizing::task_pixels((bounds.size.width, bounds.size.height), scale);
     WindowGeometry {
         client,
-        task: client,
+        task: dsa_host_core::compositor::window_sizing::to_task_size(client, frame_scale_of(view)),
     }
 }
 
@@ -905,6 +922,7 @@ pub fn set_controls(view: &AnyObject, controls: Vec<Bounds>) {
 pub fn forget(view: &AnyObject) {
     let key = view as *const AnyObject as usize;
     VIEWS.with(|views| views.borrow_mut().remove(&key));
+    FRAME_SCALES.with(|scales| scales.borrow_mut().remove(&key));
 }
 
 /// Asks the input method to drop a composition the guest has ended on its own (the editor
