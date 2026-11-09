@@ -74,8 +74,9 @@ fi
 # is copied back from the host into the buffer's memory (through a gralloc lock, as the CPU
 # reads it), Android's loader gets every core
 # command it looks up, whatever Vulkan version the app asked for, the driver lists only
-# the device extensions its vkCreateDevice takes, and host-visible memory the guest keeps
-# in step with the host both ways is reported coherent.
+# the device extensions its vkCreateDevice takes, host-visible memory the guest keeps
+# in step with the host both ways is reported coherent, and only memory the app has mapped
+# is kept in step (the rest is never sent, read back or touched).
 for patch in "$patch_dir"/guest/mesa/*.patch; do
     git -C "$mesa_dir" apply --recount --check "$patch"
     git -C "$mesa_dir" apply --recount "$patch"

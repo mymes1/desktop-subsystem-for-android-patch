@@ -28119,6 +28119,7 @@ class SystemSettings final :
     kTime24HourFieldNumber = 4,
     kDarkModeFieldNumber = 6,
     kAccentColorFieldNumber = 7,
+    kFontScaleFieldNumber = 8,
   };
   // repeated string locales = 2;
   int locales_size() const;
@@ -28208,6 +28209,15 @@ class SystemSettings final :
   void _internal_set_accent_color(uint32_t value);
   public:
 
+  // float font_scale = 8;
+  void clear_font_scale();
+  float font_scale() const;
+  void set_font_scale(float value);
+  private:
+  float _internal_font_scale() const;
+  void _internal_set_font_scale(float value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.SystemSettings)
  private:
   class _Internal;
@@ -28223,6 +28233,7 @@ class SystemSettings final :
     bool time_24_hour_;
     bool dark_mode_;
     uint32_t accent_color_;
+    float font_scale_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -50262,6 +50273,26 @@ inline void SystemSettings::_internal_set_accent_color(uint32_t value) {
 inline void SystemSettings::set_accent_color(uint32_t value) {
   _internal_set_accent_color(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.accent_color)
+}
+
+// float font_scale = 8;
+inline void SystemSettings::clear_font_scale() {
+  _impl_.font_scale_ = 0;
+}
+inline float SystemSettings::_internal_font_scale() const {
+  return _impl_.font_scale_;
+}
+inline float SystemSettings::font_scale() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.font_scale)
+  return _internal_font_scale();
+}
+inline void SystemSettings::_internal_set_font_scale(float value) {
+  
+  _impl_.font_scale_ = value;
+}
+inline void SystemSettings::set_font_scale(float value) {
+  _internal_set_font_scale(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.font_scale)
 }
 
 // -------------------------------------------------------------------

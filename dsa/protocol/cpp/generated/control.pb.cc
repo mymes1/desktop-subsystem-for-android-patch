@@ -2547,6 +2547,7 @@ PROTOBUF_CONSTEXPR SystemSettings::SystemSettings(
   , /*decltype(_impl_.time_24_hour_)*/false
   , /*decltype(_impl_.dark_mode_)*/false
   , /*decltype(_impl_.accent_color_)*/0u
+  , /*decltype(_impl_.font_scale_)*/0
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct SystemSettingsDefaultTypeInternal {
   PROTOBUF_CONSTEXPR SystemSettingsDefaultTypeInternal()
@@ -48678,6 +48679,7 @@ SystemSettings::SystemSettings(const SystemSettings& from)
     , decltype(_impl_.time_24_hour_){}
     , decltype(_impl_.dark_mode_){}
     , decltype(_impl_.accent_color_){}
+    , decltype(_impl_.font_scale_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -48698,8 +48700,8 @@ SystemSettings::SystemSettings(const SystemSettings& from)
       _this->GetArenaForAllocation());
   }
   ::memcpy(&_impl_.first_day_of_week_, &from._impl_.first_day_of_week_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.accent_color_) -
-    reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.font_scale_) -
+    reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.font_scale_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.SystemSettings)
 }
 
@@ -48715,6 +48717,7 @@ inline void SystemSettings::SharedCtor(
     , decltype(_impl_.time_24_hour_){false}
     , decltype(_impl_.dark_mode_){false}
     , decltype(_impl_.accent_color_){0u}
+    , decltype(_impl_.font_scale_){0}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.time_zone_.InitDefault();
@@ -48757,8 +48760,8 @@ void SystemSettings::Clear() {
   _impl_.time_zone_.ClearToEmpty();
   _impl_.regional_format_.ClearToEmpty();
   ::memset(&_impl_.first_day_of_week_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.accent_color_) -
-      reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+      reinterpret_cast<char*>(&_impl_.font_scale_) -
+      reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.font_scale_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -48832,6 +48835,14 @@ const char* SystemSettings::_InternalParse(const char* ptr, ::_pbi::ParseContext
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 61)) {
           _impl_.accent_color_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<uint32_t>(ptr);
           ptr += sizeof(uint32_t);
+        } else
+          goto handle_unusual;
+        continue;
+      // float font_scale = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 69)) {
+          _impl_.font_scale_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
         } else
           goto handle_unusual;
         continue;
@@ -48918,6 +48929,16 @@ uint8_t* SystemSettings::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteFixed32ToArray(7, this->_internal_accent_color(), target);
   }
 
+  // float font_scale = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = this->_internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(8, this->_internal_font_scale(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -48976,6 +48997,15 @@ size_t SystemSettings::ByteSizeLong() const {
     total_size += 1 + 4;
   }
 
+  // float font_scale = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = this->_internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    total_size += 1 + 4;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -49016,6 +49046,13 @@ void SystemSettings::MergeFrom(const SystemSettings& from) {
   if (from._internal_accent_color() != 0) {
     _this->_internal_set_accent_color(from._internal_accent_color());
   }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = from._internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    _this->_internal_set_font_scale(from._internal_font_scale());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -49045,8 +49082,8 @@ void SystemSettings::InternalSwap(SystemSettings* other) {
       &other->_impl_.regional_format_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.accent_color_)
-      + sizeof(SystemSettings::_impl_.accent_color_)
+      PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.font_scale_)
+      + sizeof(SystemSettings::_impl_.font_scale_)
       - PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.first_day_of_week_)>(
           reinterpret_cast<char*>(&_impl_.first_day_of_week_),
           reinterpret_cast<char*>(&other->_impl_.first_day_of_week_));

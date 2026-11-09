@@ -135,7 +135,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// A task's window moved to a monitor of another scale: asks the caller's Android to draw
-/// the task at `density_dpi` (160 at a scale of 100%).
+/// the task at `density_dpi` (96 at a scale of 100%, where a dp is 0.6 of a host pixel).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
     #[prost(int32, tag = "1")]
@@ -771,7 +771,7 @@ pub struct PlaceWidget {
     pub widget_id: i32,
     #[prost(message, optional, tag = "2")]
     pub placement: ::core::option::Option<WidgetPlacement>,
-    /// The window's size in its monitor's pixels, and the monitor's density (160 at a scale of
+    /// The window's size in its monitor's pixels, and Android's density for it (96 at a scale of
     /// 100%).
     #[prost(uint32, tag = "3")]
     pub width: u32,
@@ -1072,7 +1072,7 @@ pub struct Task {
     /// Whether the task has input focus in Android.
     #[prost(bool, tag = "5")]
     pub focused: bool,
-    /// The density the task's app draws at, in dots per inch (160 at a scale of 100%). 0 when
+    /// The density the task's app draws at, in dots per inch (96 at a scale of 100%). 0 when
     /// unknown.
     #[prost(uint32, tag = "6")]
     pub density_dpi: u32,
@@ -2224,6 +2224,11 @@ pub struct SystemSettings {
     /// The accent color as 0xAARRGGBB; 0 when there is none.
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
+    /// The size of text the user asked for, in percent of the default: Windows' text size
+    /// setting (100 to 225), or the desktop's text scaling factor. 0 when unknown, which counts
+    /// as 100.
+    #[prost(uint32, tag = "8")]
+    pub text_scale_percent: u32,
 }
 /// Turns the connection into the caller's game controllers: after the answer (Done), the client
 /// sends a GamepadEvent each time a controller is connected, disconnected or changes state, and
