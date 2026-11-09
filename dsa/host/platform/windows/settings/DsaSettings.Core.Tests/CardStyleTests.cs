@@ -74,7 +74,7 @@ public class CardStyleTests
     // Korean text into Bold.
     [Theory]
     [InlineData("DsaSettings", "PageTitle")]
-    [InlineData("DsaSettings", "SubtitleText")]
+    [InlineData("DsaSettings", "CardValueSubtitle")]
     [InlineData("DsaSettings", "SectionHeader")]
     [InlineData("DsaSettings", "CardTitle")]
     [InlineData("DsaApkInstaller", "AppNameText")]
@@ -135,7 +135,7 @@ public class CardStyleTests
     // The WinUI type ramp: Title, Subtitle, Body Strong, Body, Caption. The strong ones get
     // their Latin weight from a Semibold face, not from FontWeight.
     [InlineData("PageTitle", "28", "36", "Normal")]
-    [InlineData("SubtitleText", "20", "28", "Normal")]
+    [InlineData("CardValueSubtitle", "20", "28", "Normal")]
     [InlineData("SectionHeader", "14", "20", "Normal")]
     [InlineData("CardTitle", "14", "20", "Normal")]
     [InlineData("CardDescription", "12", "16", "Normal")]

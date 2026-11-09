@@ -39,8 +39,7 @@
                             <TextBlock Text="{l:Text DisplayGpuCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <TextBlock Text="{Binding DisplayGpuName, Mode=OneWay}" TextWrapping="Wrap" MaxWidth="360"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding DisplayGpuName, Mode=OneWay}" Style="{StaticResource CardValue}" />
                 </ui:CardControl>
 
                 <ui:InfoBar Title="{l:Text RenderGpuAppliesBar.Title}" Message="{l:Text RenderGpuAppliesBar.Message}" Severity="Informational" IsClosable="False" IsOpen="True"

@@ -25,19 +25,19 @@
                             </StackPanel>
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <TextBlock x:Name="HeaderVersion" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HeaderVersion" Style="{StaticResource CardValue}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4">
                     <ui:CardControl.Header>
                         <TextBlock Text="{l:Text AboutAppVersionCard.Header}" Style="{StaticResource CardTitle}" />
                     </ui:CardControl.Header>
-                    <TextBlock x:Name="AppVersionText" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock x:Name="AppVersionText" Style="{StaticResource CardValue}" />
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4">
                     <ui:CardControl.Header>
                         <TextBlock Text="{l:Text AboutServiceVersionCard.Header}" Style="{StaticResource CardTitle}" />
                     </ui:CardControl.Header>
-                    <TextBlock Text="{Binding ServiceVersion, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding ServiceVersion, Mode=OneWay}" Style="{StaticResource CardValue}" />
                 </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" IsEnabled="{Binding HasAndroidVersion, Mode=OneWay}">
                     <ui:CardControl.Header>
@@ -46,7 +46,7 @@
                             <TextBlock Text="{l:Text AboutAndroidVersionCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <TextBlock Text="{Binding AndroidVersion, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding AndroidVersion, Mode=OneWay}" Style="{StaticResource CardValue}" />
                 </ui:CardControl>
                 <ui:CardAction Click="OnOpenLicenses" Margin="0,0,0,4">
                     <StackPanel>
