@@ -7,8 +7,8 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
-    GappsState, GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, ProgramUpdateAnswer,
-    ProgramUpdatePhase, State, Status, ALL_FOLDERS,
+    GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network, NetworkMode, Outcome,
+    ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -145,12 +145,14 @@ pub fn host_rows(memory: &Memory) -> Vec<MemoryRow> {
 /// Android's breakdown: the apps and the system, the caches, the kernel's reclaimable caches,
 /// shared memory, compressed memory and what is free.
 pub fn guest_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
-    vec![
-        row(
-            tr("Apps and system"),
-            tr("The apps and the system server, counted by their share (PSS)."),
-            guest.total_pss_kb,
-        ),
+    // What the processes cost: in memory, plus their compressed share of zram. A service that
+    // does not say counts their PSS as in memory.
+    let apps = guest.apps.unwrap_or(MemoryShare {
+        resident_kb: guest.total_pss_kb,
+        compressed_kb: Some(0),
+    });
+    let mut rows = vec![
+        row(tr("Apps and system"), share_detail(&apps), apps.total_kb()),
         row(
             tr("Cache"),
             tr("File contents kept in memory. Android drops them when it needs the memory."),
@@ -171,7 +173,32 @@ pub fn guest_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
             guest.zram_used_kb,
         ),
         row(tr("Free"), String::new(), guest.free_kb),
-    ]
+    ];
+    // Google Play services, which the user chose to install, on a row of its own, so what it
+    // costs is not taken for what Android and DSA cost.
+    if let Some(play) = &guest.google_play {
+        rows.insert(
+            1,
+            row(
+                tr("Google Play services"),
+                trf(
+                    "The Google apps you installed, {0} processes: {1}",
+                    &[&play.processes.to_string(), &share_detail(&play.cost)],
+                ),
+                play.cost.total_kb(),
+            ),
+        );
+    }
+    rows
+}
+
+/// "N in memory, M compressed", the compressed part unknown when zram could not measure it.
+fn share_detail(share: &MemoryShare) -> String {
+    let compressed = share.compressed_kb.map_or_else(|| tr("unknown"), size_kb);
+    trf(
+        "{0} in memory, {1} compressed",
+        &[&size_kb(share.resident_kb), &compressed],
+    )
 }
 
 pub fn kernel_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
@@ -216,10 +243,15 @@ pub fn process_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
         .top_processes
         .iter()
         .map(|p| {
+            let detail = if p.google_play {
+                trf("Process {0}, Google Play services", &[&p.pid.to_string()])
+            } else {
+                trf("Process {0}", &[&p.pid.to_string()])
+            };
             row(
                 p.name.clone(),
-                trf("Process {0}", &[&p.pid.to_string()]),
-                p.pss_kb,
+                detail,
+                p.cost.map_or(p.pss_kb, |cost| cost.total_kb()),
             )
         })
         .collect()
