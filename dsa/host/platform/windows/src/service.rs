@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
-use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
+use dsa_host_core::guest_display::{display_or_smallest, with_display_density, with_display_size};
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid, UserAndroids};
@@ -58,7 +58,7 @@ use crate::host_config::{local_app_data, HostConfig};
 use crate::host_memory::WindowsHostMemory;
 use crate::https::{UrlFetch, WinHttpFetch};
 use crate::hvsocket::HvSocketListener;
-use crate::monitors::recorded_display;
+use crate::monitors::{recorded_density, recorded_display};
 use crate::pipe::{NamedPipeListener, DEFAULT_PIPE_SDDL};
 use crate::render_gpu::previous_render_gpu;
 use crate::setup::SetupInstaller;
@@ -79,15 +79,20 @@ pub struct Updates {
     pub check_now: Arc<CheckNow>,
 }
 
-/// Sizes the guest's display for the monitors the user's session recorded. This process runs
-/// in session 0 and cannot see them itself. Without a record the display is the smallest
-/// square, so a window can still be taller than the image's default display.
+/// Sizes the guest's display for the monitors the user's session recorded, and gives it the
+/// main monitor's density, which every app starts at. This process runs in session 0 and
+/// cannot see them itself. Without a record the display is the smallest square, so a window
+/// can still be taller than the image's default display, at the density of a 100% monitor.
 fn follow_monitors(vm: &mut AndroidVmConfig, sid: &str) {
-    let display = local_app_data(sid)
-        .ok()
-        .and_then(|dir| recorded_display(&dir));
+    let dir = local_app_data(sid).ok();
+    let display = dir.as_deref().and_then(recorded_display);
     let size = display.unwrap_or_else(|| display_or_smallest(None));
     vm.kernel_cmdline = with_display_size(&vm.kernel_cmdline, size);
+    let density = match dir.as_deref() {
+        Some(dir) => recorded_density(dir),
+        None => dsa_host_core::guest_display::boot_density(None),
+    };
+    vm.kernel_cmdline = with_display_density(&vm.kernel_cmdline, density);
 }
 
 /// The kernel command line setting that turns the guest's input trace on.

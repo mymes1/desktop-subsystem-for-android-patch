@@ -143,6 +143,7 @@ fn fr19_every_file_has_its_place_in_one_of_the_two_roots() {
     assert_eq!(user.app_window_log(), under(r"logs\dsa-app-window.log"));
     assert_eq!(user.compositor_settings(), under("compositor.json"));
     assert_eq!(user.monitors(), under("monitors.txt"));
+    assert_eq!(user.monitor_density(), under("monitor-density.txt"));
     assert_eq!(user.start_menu_note(), under("start-menu.json"));
     assert_eq!(user.tmp(), under("tmp"));
     assert_eq!(user.print_spool(), under(r"tmp\print"));

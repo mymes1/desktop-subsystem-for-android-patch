@@ -50,6 +50,7 @@ pub mod input;
 pub mod launcher;
 #[cfg(target_os = "linux")]
 pub mod memory;
+pub mod monitor_density;
 pub mod monitor_refresh;
 pub mod network;
 pub mod package_updates;

@@ -159,6 +159,8 @@ pub struct State {
     pub(crate) output_refresh: HashMap<u32, i32>,
     /// Records the fastest output's rate for the service, which sets the guest display's.
     pub(crate) refresh_recorder: crate::monitor_refresh::RefreshRecorder,
+    /// Records the main output's DPI for the service, which starts Android at its density.
+    pub(crate) density_recorder: crate::monitor_density::DensityRecorder,
     pub(crate) windows: BTreeMap<i32, Window>,
     pub(crate) seat_state: seat::SeatState,
     pub(crate) data_state: data::DataState,
@@ -265,6 +267,9 @@ impl Desktop {
             outputs: HashMap::new(),
             output_refresh: HashMap::new(),
             refresh_recorder: crate::monitor_refresh::RefreshRecorder::new(
+                dsa_host_unix::paths::current_user_tmp(dsa_host_unix::paths::Layout::Linux).ok(),
+            ),
+            density_recorder: crate::monitor_density::DensityRecorder::new(
                 dsa_host_unix::paths::current_user_tmp(dsa_host_unix::paths::Layout::Linux).ok(),
             ),
             windows: BTreeMap::new(),
@@ -391,7 +396,9 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
                 let _ = registry.bind::<wl_output::WlOutput, _, _>(name, version.min(4), qh, name);
             }
             wl_registry::Event::GlobalRemove { name } => {
-                state.outputs.remove(&name);
+                if state.outputs.remove(&name).is_some() {
+                    state.record_density();
+                }
                 if state.output_refresh.remove(&name).is_some() {
                     state.record_refresh();
                 }
@@ -412,7 +419,10 @@ impl Dispatch<wl_output::WlOutput, u32> for State {
     ) {
         let entry = state.outputs.entry(*name).or_insert((1, (0, 0)));
         match event {
-            wl_output::Event::Scale { factor } => entry.0 = factor,
+            wl_output::Event::Scale { factor } => {
+                entry.0 = factor;
+                state.record_density();
+            }
             wl_output::Event::Mode {
                 flags: wayland_client::WEnum::Value(flags),
                 width,
@@ -420,6 +430,8 @@ impl Dispatch<wl_output::WlOutput, u32> for State {
                 refresh,
             } if flags.contains(wl_output::Mode::Current) => {
                 entry.1 = (width, height);
+                // An output that sends no scale has a scale of 1, known once it has a mode.
+                state.record_density();
                 if state.output_refresh.insert(*name, refresh) != Some(refresh) {
                     state.record_refresh();
                 }
@@ -434,6 +446,18 @@ impl State {
     fn record_refresh(&mut self) {
         let rates: Vec<i32> = self.output_refresh.values().copied().collect();
         if let Err(why) = self.refresh_recorder.record(rates) {
+            crate::compositor::session::log(&why);
+        }
+    }
+
+    /// Records the main output's DPI for the service.
+    fn record_density(&mut self) {
+        let outputs: Vec<(u32, i32)> = self
+            .outputs
+            .iter()
+            .map(|(name, (scale, _))| (*name, *scale))
+            .collect();
+        if let Err(why) = self.density_recorder.record(outputs) {
             crate::compositor::session::log(&why);
         }
     }
