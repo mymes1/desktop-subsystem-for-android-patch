@@ -1565,3 +1565,66 @@ msgstr "복구 키를 입력하십시오."
 
 msgid "The key was not used: {0}"
 msgstr "키를 사용하지 않았습니다: {0}"
+
+msgid "Keeps a second copy of your Android apps' user data on this computer, encrypted, so it can be restored after a data reset or on another computer. Off until you turn it on."
+msgstr "Android 앱의 사용자 데이터를 암호화해 이 컴퓨터에 한 벌 더 보관합니다. 데이터를 초기화한 뒤나 다른 컴퓨터에서 복원할 수 있습니다. 켜기 전까지는 꺼져 있습니다."
+
+msgid "Earlier backups of {0} apps ({1}) are still kept in your DSA Backup folder."
+msgstr "앞서 만든 앱 {0}개의 백업({1})이 DSA Backup 폴더에 아직 남아 있습니다."
+
+msgid "The backups of {0} apps ({1}) are still kept on this computer. Delete them and their key as well, or keep them for a later restore?"
+msgstr "앱 {0}개의 백업({1})이 이 컴퓨터에 아직 남아 있습니다. 백업과 그 키도 삭제하시겠습니까, 나중에 복원하도록 남겨 두시겠습니까?"
+
+msgid "Backup is on. Android backs up its apps' data to this computer from now on."
+msgstr "백업을 켰습니다. 이제부터 Android가 앱 데이터를 이 컴퓨터에 백업합니다."
+
+msgid "Backup is off, and the backups and their key were deleted."
+msgstr "백업을 끄고, 백업과 그 키를 삭제했습니다."
+
+msgid "Backup is off. The backups made so far are kept."
+msgstr "백업을 껐습니다. 지금까지 만든 백업은 남아 있습니다."
+
+msgid "Android's keys get their protection the first time Android starts."
+msgstr "Android를 처음 시작할 때 Android의 키 보호가 정해집니다."
+
+msgid "Sealed by this computer's TPM. A copy of Android's disk cannot open the apps' keys or Android's encrypted storage anywhere else."
+msgstr "이 컴퓨터의 TPM으로 봉인되어 있습니다. Android 디스크를 복사해도 다른 곳에서는 앱의 키와 Android의 암호화된 저장소를 열 수 없습니다."
+
+msgid "Kept by your keyring only, because this computer has no TPM 2.0 that can be used. Once one works, DSA seals the keys with it."
+msgstr "이 컴퓨터에 쓸 수 있는 TPM 2.0이 없어 키링에만 보관합니다. TPM을 쓸 수 있게 되면 DSA가 키를 TPM으로 봉인합니다."
+
+msgid "Protected by {0}."
+msgstr "{0}(으)로 보호됩니다."
+
+msgid "Why not the TPM: {0}"
+msgstr "TPM을 쓰지 않는 까닭: {0}"
+
+msgid "Back up apps' data to this computer"
+msgstr "이 컴퓨터에 앱 데이터 백업"
+
+msgid "Protection of Android's keys"
+msgstr "Android 키 보호"
+
+msgid "Android's keys"
+msgstr "Android의 키"
+
+msgid "Why not the TPM"
+msgstr "TPM을 쓰지 않는 까닭"
+
+msgid "Android's keys could not be opened"
+msgstr "Android의 키를 열지 못했습니다"
+
+msgid "Backup was not turned on"
+msgstr "백업을 켜지 못했습니다"
+
+msgid "Backup was not turned off"
+msgstr "백업을 끄지 못했습니다"
+
+msgid "Turn off backup?"
+msgstr "백업을 끄시겠습니까?"
+
+msgid "Keep them"
+msgstr "남겨 두기"
+
+msgid "Delete backups"
+msgstr "백업 삭제"

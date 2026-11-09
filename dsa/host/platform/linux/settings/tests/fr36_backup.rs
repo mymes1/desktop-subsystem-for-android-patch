@@ -55,6 +55,7 @@ fn client(fake: &Arc<Fake>) -> Client {
 /// What `dsa backup --json` prints for a backup of 12 apps made on 10 November 2026.
 fn report() -> serde_json::Value {
     json!({
+        "enabled": true,
         "available": true,
         "problem": "",
         "folder": "/home/ada/DSA Backup",
@@ -65,7 +66,15 @@ fn report() -> serde_json::Value {
         "last_error": "",
         "succeeded": 0,
         "failed": 0,
-        "installed": 0
+        "installed": 0,
+        "keymint_key": {
+            "kept": true,
+            "sealed_by": "tpm",
+            "hardware": true,
+            "description": "the computer's TPM 2.0",
+            "fallback_reason": "",
+            "problem": ""
+        }
     })
 }
 
@@ -111,6 +120,7 @@ fn fr36_an_unavailable_backup_shows_its_problem() {
     let why = "/home/ada/DSA Backup holds a backup, but this computer has no key for it; enter \
                its recovery key (dsa backup key import) to use it here";
     let backup = Backup::read(&json!({
+        "enabled": true,
         "available": false,
         "problem": why,
         "folder": "/home/ada/DSA Backup",
@@ -123,6 +133,7 @@ fn fr36_an_unavailable_backup_shows_its_problem() {
     assert_eq!(
         backup_actions(Some(&backup), None),
         BackupActions {
+            switch: true,
             back_up: false,
             restore: false,
             show_key: false,
@@ -229,6 +240,7 @@ fn fr36_no_backup_button_works_while_a_request_runs() {
     assert_eq!(
         backup_actions(Some(&backup), None),
         BackupActions {
+            switch: true,
             back_up: true,
             restore: true,
             show_key: true,
@@ -241,6 +253,7 @@ fn fr36_no_backup_button_works_while_a_request_runs() {
         BackupJob::Restore,
         BackupJob::ShowKey,
         BackupJob::ImportKey,
+        BackupJob::Switch,
     ] {
         assert_eq!(
             backup_actions(Some(&backup), Some(job)),
@@ -293,4 +306,97 @@ fn fr36_the_result_of_a_backup_and_a_restore_is_shown() {
     // The question before a restore says what it replaces.
     assert!(view::backup_restore_warning().contains("replaced"));
     assert!(view::backup_key_advice().contains("Write this key down"));
+}
+
+#[test]
+fn fr36_backup_is_off_until_turned_on_and_off_is_no_problem() {
+    let off = Backup::read(&json!({
+        "enabled": false,
+        "available": false,
+        "problem": "",
+        "folder": "/home/ada/DSA Backup",
+        "packages": 0,
+        "size": 0
+    }));
+    assert!(!off.enabled);
+    assert_eq!(off.shown_problem(), None, "off is the user's choice");
+    assert_eq!(
+        backup_actions(Some(&off), None),
+        BackupActions {
+            switch: true,
+            back_up: false,
+            restore: false,
+            show_key: false,
+            import_key: false,
+        }
+    );
+    assert!(view::backup_switch_subtitle(Some(&off)).contains("second copy"));
+    assert!(!off.has_backups_kept());
+    // An answer from a service that does not say reads as off.
+    assert!(!Backup::read(&json!({})).enabled);
+
+    let mut kept = report();
+    kept["enabled"] = json!(false);
+    kept["available"] = json!(false);
+    let kept = Backup::read(&kept);
+    assert!(kept.has_backups_kept());
+    assert!(view::backup_switch_subtitle(Some(&kept)).contains("Earlier backups of 12 apps"));
+    assert!(view::backup_delete_question(&kept).contains("12 apps"));
+}
+
+#[test]
+fn fr36_turning_backup_on_and_off_are_the_dsa_command_lines() {
+    let fake = Fake::new(report());
+    let c = client(&fake);
+    assert!(c.set_backup(true, false).unwrap().enabled);
+    c.set_backup(false, false).unwrap();
+    c.set_backup(false, true).unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec![
+            line(&["backup", "on", "--json"]),
+            line(&["backup", "off", "--json"]),
+            line(&["backup", "off", "--delete-backups", "--json"]),
+        ]
+    );
+    assert!(view::backup_switched(true, false).contains("Backup is on"));
+    assert!(view::backup_switched(false, true).contains("deleted"));
+    assert!(view::backup_switched(false, false).contains("kept"));
+}
+
+#[test]
+fn fr36_the_section_says_what_seals_androids_keys() {
+    use dsa_settings_linux::model::KeyProtectionShown;
+    let tpm = Backup::read(&report())
+        .keymint_key
+        .expect("the key's protection");
+    assert_eq!(tpm.shown(), KeyProtectionShown::Tpm);
+    assert!(view::key_protection_text(&tpm).contains("TPM"));
+    assert_eq!(view::key_protection_reason(&tpm), None);
+
+    let mut keyring = report();
+    keyring["keymint_key"] = json!({
+        "kept": true,
+        "sealed_by": "secret-service",
+        "hardware": false,
+        "description": "your Secret Service keyring",
+        "fallback_reason": "this computer has a TPM 1.2, which DSA uses only on Windows",
+        "problem": "the TPM is locked out"
+    });
+    let keyring = Backup::read(&keyring).keymint_key.unwrap();
+    assert_eq!(keyring.shown(), KeyProtectionShown::Keyring);
+    assert!(view::key_protection_text(&keyring).contains("keyring"));
+    assert!(view::key_protection_reason(&keyring)
+        .unwrap()
+        .contains("TPM 1.2"));
+    assert_eq!(keyring.problem.as_deref(), Some("the TPM is locked out"));
+
+    let mut none = report();
+    none["keymint_key"] = json!({ "kept": false });
+    let none = Backup::read(&none).keymint_key.unwrap();
+    assert_eq!(none.shown(), KeyProtectionShown::NotYet);
+
+    let mut old = report();
+    old["keymint_key"] = serde_json::Value::Null;
+    assert_eq!(Backup::read(&old).keymint_key, None);
 }

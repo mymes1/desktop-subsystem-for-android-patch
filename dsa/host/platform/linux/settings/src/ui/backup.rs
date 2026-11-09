@@ -1,6 +1,7 @@
-//! The Backup section of the Advanced page: where the encrypted backup of the user's app data
-//! stands, backing up and restoring now, and the recovery key that opens the backup on
-//! another computer.
+//! The Backup section of the Advanced page: whether backup is on (off until the user turns it
+//! on, since it keeps a second copy of the apps' user data on this computer), where the
+//! encrypted backup stands, backing up and restoring now, the recovery key that opens the
+//! backup on another computer, and how Android's own keys are protected here.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -28,6 +29,22 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
         &tr("Backup"),
         Some(&tr("DSA keeps an encrypted backup of your Android apps' data in a folder of your home folder, so the apps and their data can come back after Android's data is reset, or on another computer. The key that opens it is kept in your keyring.")),
     );
+    // The switch's changes are handled once the rest of the section exists.
+    let switched: Rc<RefCell<Option<Rc<dyn Fn(bool)>>>> = Rc::default();
+    let switch = {
+        let switched = switched.clone();
+        Switch::new(
+            &tr("Back up apps' data to this computer"),
+            &view::backup_switch_subtitle(None),
+            move |on| {
+                if let Some(switched) = switched.borrow().as_ref() {
+                    switched(on);
+                }
+            },
+        )
+    };
+    switch.row.set_sensitive(false);
+    backup_group.add(&switch.row);
     let (folder_row, folder) = value_row(&tr("Folder"), "");
     backup_group.add(&folder_row);
     let problem_row = action_row(&tr("Backups are unavailable"), "");
@@ -78,6 +95,29 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
     );
     backup_group.add(&import_row);
     page.add(&backup_group);
+    // Rows that mean something only while backup is on.
+    let on_rows = [
+        folder_row.clone(),
+        last_row.clone(),
+        contents_row.clone(),
+        now_row.clone(),
+        restore_row.clone(),
+        key_row.clone(),
+        import_row.clone(),
+    ];
+
+    let keys_group = group(&tr("Protection of Android's keys"), None);
+    let keys_row = action_row(&tr("Android's keys"), "");
+    keys_group.add(&keys_row);
+    let keys_reason_row = action_row(&tr("Why not the TPM"), "");
+    keys_reason_row.set_visible(false);
+    keys_group.add(&keys_reason_row);
+    let keys_problem_row = action_row(&tr("Android's keys could not be opened"), "");
+    keys_problem_row.add_css_class("error");
+    keys_problem_row.set_visible(false);
+    keys_group.add(&keys_problem_row);
+    keys_group.set_visible(false);
+    page.add(&keys_group);
 
     let now: Rc<RefCell<Option<Backup>>> = Rc::default();
     let running: Rc<Cell<Option<BackupJob>>> = Rc::default();
@@ -89,6 +129,7 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
             restore_row.clone(),
             key_row.clone(),
             import_row.clone(),
+            switch.row.clone(),
         );
         Rc::new(move || {
             let actions = backup_actions(now.borrow().as_ref(), running.get());
@@ -96,15 +137,36 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
             rows.1.set_sensitive(actions.restore);
             rows.2.set_sensitive(actions.show_key);
             rows.3.set_sensitive(actions.import_key);
+            rows.4.set_sensitive(actions.switch);
         })
     };
     buttons();
     // Shows the backup as the service reports it, or what went wrong.
     let show: Rc<dyn Fn(String, Result<Backup, Failure>)> = {
-        let (page, now, buttons) = (page.clone(), now.clone(), buttons.clone());
+        let (page, now, buttons, switch) =
+            (page.clone(), now.clone(), buttons.clone(), switch.clone());
         Rc::new(move |failed: String, r: Result<Backup, Failure>| {
             page.show_failure(&failed, r.as_ref().err());
             if let Ok(backup) = r {
+                switch.set(backup.enabled);
+                switch
+                    .row
+                    .set_subtitle(&view::backup_switch_subtitle(Some(&backup)));
+                for row in &on_rows {
+                    row.set_visible(backup.enabled);
+                }
+                match &backup.keymint_key {
+                    Some(key) => {
+                        keys_group.set_visible(true);
+                        keys_row.set_subtitle(&view::key_protection_text(key));
+                        let reason = view::key_protection_reason(key);
+                        keys_reason_row.set_visible(reason.is_some());
+                        keys_reason_row.set_subtitle(reason.as_deref().unwrap_or_default());
+                        keys_problem_row.set_visible(key.problem.is_some());
+                        keys_problem_row.set_subtitle(key.problem.as_deref().unwrap_or_default());
+                    }
+                    None => keys_group.set_visible(false),
+                }
                 folder.set_label(&backup.folder);
                 let problem = backup.shown_problem();
                 problem_row.set_visible(problem.is_some());
@@ -235,6 +297,68 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
             });
         });
     }
+    // Turning backup on, or off: off while backups are kept asks whether they go too.
+    {
+        let (ctx, show, running, buttons, now, result_row, switch) = (
+            ctx.clone(),
+            show.clone(),
+            running.clone(),
+            buttons.clone(),
+            now.clone(),
+            result_row.clone(),
+            switch.clone(),
+        );
+        let dialog_ctx = ctx.clone();
+        let set: Rc<dyn Fn(bool, bool)> = Rc::new(move |on: bool, delete: bool| {
+            running.set(Some(BackupJob::Switch));
+            buttons();
+            let (ctx2, show, running, result_row) = (
+                ctx.clone(),
+                show.clone(),
+                running.clone(),
+                result_row.clone(),
+            );
+            request(
+                &ctx,
+                move |c| c.set_backup(on, delete),
+                move |r| {
+                    running.set(None);
+                    if r.is_ok() {
+                        let result = view::backup_switched(on, delete);
+                        result_row.set_title(&result);
+                        result_row.set_visible(true);
+                        ctx2.toast(&result);
+                    }
+                    show(
+                        if on {
+                            tr("Backup was not turned on")
+                        } else {
+                            tr("Backup was not turned off")
+                        },
+                        r,
+                    );
+                },
+            );
+        });
+        *switched.borrow_mut() = Some(Rc::new(move |on: bool| {
+            let kept = now
+                .borrow()
+                .as_ref()
+                .filter(|b| !on && b.has_backups_kept())
+                .cloned();
+            match kept {
+                None => set(on, false),
+                Some(backup) => {
+                    let (set, switch) = (set.clone(), switch.clone());
+                    ask_delete(&dialog_ctx, &backup, move |answer| match answer {
+                        Some(delete) => set(false, delete),
+                        // Closed without an answer: backup stays on.
+                        None => switch.set(true),
+                    });
+                }
+            }
+        }));
+    }
     {
         let running = running.clone();
         running.set(Some(BackupJob::Read));
@@ -248,6 +372,30 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
             },
         );
     }
+}
+
+/// Asks, when backup is turned off while `backup` holds apps, whether its backups and key are
+/// deleted too (`Some(true)`), kept (`Some(false)`), or backup stays on (`None`).
+fn ask_delete(ctx: &Shared, backup: &Backup, then: impl Fn(Option<bool>) + 'static) {
+    let dialog = adw::MessageDialog::new(
+        Some(&ctx.window),
+        Some(&tr("Turn off backup?")),
+        Some(&view::backup_delete_question(backup)),
+    );
+    dialog.add_response("cancel", &tr("Cancel"));
+    dialog.add_response("keep", &tr("Keep them"));
+    dialog.add_response("delete", &tr("Delete backups"));
+    dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("keep"));
+    dialog.set_close_response("cancel");
+    dialog.connect_response(None, move |_, response| {
+        then(match response {
+            "delete" => Some(true),
+            "keep" => Some(false),
+            _ => None,
+        })
+    });
+    dialog.present();
 }
 
 /// Shows the recovery key in a dialog, in selectable text with a copy button, with the advice

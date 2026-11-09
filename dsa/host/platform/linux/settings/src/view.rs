@@ -7,9 +7,9 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Backup, BackupJob,
-    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network,
-    NetworkMode, Outcome,
-    ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
+    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, KeyProtection, KeyProtectionShown,
+    Memory, MemoryShare, Network, NetworkMode, Outcome, ProgramUpdateAnswer, ProgramUpdatePhase,
+    State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -874,8 +874,63 @@ pub fn backup_busy_text(job: BackupJob) -> String {
         BackupJob::Restore => tr(
             "Restoring apps and their data from the backup. Android starts if it is not running. This can take a while.",
         ),
-        BackupJob::Read | BackupJob::ShowKey | BackupJob::ImportKey => String::new(),
+        BackupJob::Read | BackupJob::ShowKey | BackupJob::ImportKey | BackupJob::Switch => {
+            String::new()
+        }
     }
+}
+
+/// What the backup switch says under its title: what backup keeps, and while it is off, what
+/// earlier backups are still kept.
+pub fn backup_switch_subtitle(backup: Option<&Backup>) -> String {
+    let what = tr("Keeps a second copy of your Android apps' user data on this computer, encrypted, so it can be restored after a data reset or on another computer. Off until you turn it on.");
+    match backup {
+        Some(backup) if !backup.enabled && backup.has_backups_kept() => format!(
+            "{what}\n{}",
+            trf(
+                "Earlier backups of {0} apps ({1}) are still kept in your DSA Backup folder.",
+                &[&backup.packages.to_string(), &size_bytes(backup.size)],
+            )
+        ),
+        _ => what,
+    }
+}
+
+/// What the question says when backup is turned off while backups are kept.
+pub fn backup_delete_question(backup: &Backup) -> String {
+    trf(
+        "The backups of {0} apps ({1}) are still kept on this computer. Delete them and their key as well, or keep them for a later restore?",
+        &[&backup.packages.to_string(), &size_bytes(backup.size)],
+    )
+}
+
+/// What turning backup on or off did.
+pub fn backup_switched(on: bool, deleted: bool) -> String {
+    match (on, deleted) {
+        (true, _) => {
+            tr("Backup is on. Android backs up its apps' data to this computer from now on.")
+        }
+        (false, true) => tr("Backup is off, and the backups and their key were deleted."),
+        (false, false) => tr("Backup is off. The backups made so far are kept."),
+    }
+}
+
+/// What protects Android's keys on this computer.
+pub fn key_protection_text(key: &KeyProtection) -> String {
+    match key.shown() {
+        KeyProtectionShown::NotYet => {
+            tr("Android's keys get their protection the first time Android starts.")
+        }
+        KeyProtectionShown::Tpm => tr("Sealed by this computer's TPM. A copy of Android's disk cannot open the apps' keys or Android's encrypted storage anywhere else."),
+        KeyProtectionShown::Keyring => tr("Kept by your keyring only, because this computer has no TPM 2.0 that can be used. Once one works, DSA seals the keys with it."),
+        KeyProtectionShown::Other => trf("Protected by {0}.", &[&key.description]),
+    }
+}
+
+/// Why no TPM seals Android's keys, when none does.
+pub fn key_protection_reason(key: &KeyProtection) -> Option<String> {
+    key.shown_reason()
+        .map(|reason| trf("Why not the TPM: {0}", &[reason]))
 }
 
 /// How a backup or a restore ended, from the report it answered with.
