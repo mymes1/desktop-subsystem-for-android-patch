@@ -3454,9 +3454,16 @@ FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0, "config_customizedMa
 # SystemUI's ImageWallpaper, and SystemUI is removed, so the window manager gave up only at
 # its 30 s boot timeout ("BOOT TIMEOUT: forcing display enabled"). Every boot was 30 s
 # longer, and the user's storage was unlocked, and widgets became available, 30 s later.
+#
+# The agent is the guest's network location provider and geocode provider, answered by the
+# host. With the overlay flags off, the location manager binds the package each string names
+# and no other, so the host's location and geocoder serve the apps whether or not Google Play,
+# whose own providers would otherwise win on their higher service version, is installed.
 FRAMEWORK_OVERLAY_BOOLEANS = {
     "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
     "config_checkWallpaperAtBoot": False,
+    "config_enableNetworkLocationOverlay": False,
+    "config_enableGeocoderOverlay": False,
 }
 # The device configurator: the package the framework lets write DeviceConfig, Android's server
 # flags (WRITE_DEVICE_CONFIG and WRITE_ALLOWLISTED_DEVICE_CONFIG are "configurator"
@@ -3467,7 +3474,11 @@ FRAMEWORK_OVERLAY_BOOLEANS = {
 # times in about ten minutes, each a run of the Play services process. Without Google Play
 # no package has this name, and the framework takes the configurator to be absent, as before.
 GAPPS_CONFIGURATOR = "com.google.android.gms"
-FRAMEWORK_OVERLAY_STRINGS = {"config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR}
+FRAMEWORK_OVERLAY_STRINGS = {
+    "config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR,
+    "config_networkLocationProviderPackageName": "io.github.thisisthepy.dsa.agent",
+    "config_geocoderProviderPackageName": "io.github.thisisthepy.dsa.agent",
+}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'

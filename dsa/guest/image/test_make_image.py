@@ -3227,8 +3227,8 @@ class TouchLatencyTests(unittest.TestCase):
         # WRITE_DEVICE_CONFIG is a "configurator" permission. With no configurator named, Play
         # services' platform configurator could never write the flags it syncs, and retried
         # about once a second after boot (its RETRY_UPDATE alarm).
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS,
-                         {"config_deviceConfiguratorPackageName": "com.google.android.gms"})
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS["config_deviceConfiguratorPackageName"],
+                         "com.google.android.gms")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_image.framework_overlay_sources(root / "src")
@@ -3238,6 +3238,23 @@ class TouchLatencyTests(unittest.TestCase):
         # The overlay is checked against the image's framework-res, so a renamed resource fails
         # the image check instead of leaving Play services without the permission again.
         self.assertIn("string/config_deviceConfiguratorPackageName", make_image.framework_overlaid())
+
+    def test_fr36_the_agent_is_the_network_location_and_geocode_provider_with_or_without_play(self):
+        # With the overlay flags on, the location manager picks the provider of the highest
+        # service version, which is Google Play's once it is installed.
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableNetworkLocationOverlay"], False)
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableGeocoderOverlay"], False)
+        agent = "io.github.thisisthepy.dsa.agent"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = (root / "src/res/values/dsa.xml").read_text()
+        self.assertIn(
+            f'<string name="config_networkLocationProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn(
+            f'<string name="config_geocoderProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn('<bool name="config_enableGeocoderOverlay">false</bool>', values)
+        self.assertIn("string/config_geocoderProviderPackageName", make_image.framework_overlaid())
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"
