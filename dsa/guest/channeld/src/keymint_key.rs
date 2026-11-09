@@ -2,8 +2,9 @@
 //!
 //! KeyMint wraps every key it makes (the apps' Keystore keys and the keys that encrypt
 //! Android's own storage) under a root key. DSA's KeyMint takes that key from the host, which
-//! keeps it sealed by the user's credential store, so a copy of the guest's disk alone opens
-//! none of those keys.
+//! keeps it sealed by the computer's TPM (or Secure Enclave), and by the user's credential
+//! store only where there is none, so a copy of the guest's disk alone opens none of those
+//! keys.
 //!
 //! `dsa-channeld --keymint-key` runs once, early in boot, before KeyMint is needed. It
 //! connects to the host's KeyMint port ([`PORT`]), passes the same handshake as the control

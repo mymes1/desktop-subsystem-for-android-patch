@@ -314,9 +314,10 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   the platform key. It tells the host about each app task, so each gets its own window.
   `sysconfig-dsa-agent.xml` goes with it to `/system_ext/etc/sysconfig/`: Android's backup
   manager uses a backup transport only when a sysconfig file lists it, and the agent's keeps
-  app data in the host's backup folder.
-- KeyMint's root key comes from the host, which keeps it sealed by the user's credential store,
-  so a copy of the guest's disk opens none of Android's keys. `dsa-keymint-key.rc` makes the
+  app data in the host's backup folder once the user turns backup on (it is off until then).
+- KeyMint's root key comes from the host, which keeps it sealed by the computer's TPM (the
+  Secure Enclave on a Mac), and by the user's credential store only where there is none, so a
+  copy of the guest's disk opens none of Android's keys. `dsa-keymint-key.rc` makes the
   tmpfs folder `/dev/dsa_keymint` (mode 0700, owned by `nobody`, KeyMint's user) on init and
   starts `dsa-channeld --keymint-key` (`dsa-channeld.rc`), a oneshot that runs as `nobody` in
   its own domain. It asks the host on vsock port 5604, past the control channel's handshake,
