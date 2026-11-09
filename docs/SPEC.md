@@ -577,11 +577,13 @@ DSA는 Google Play 서비스와 스토어를 싣지 않는다(C6). 대신 사용
 - `dsa gapps status|install|remove`. 안드로이드가 꺼져 있으면 켜고 처리한다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
 - 설정 앱에 "Google Play" 항목을 둔다. 설치 상태, 버전, 받은 곳, 설치와 제거 단추, 다시 시작 안내를 보인다. Google 앱은 Google의 약관을 따르고 DSA가 배포하는 것이 아니라는 점과, 인증되지 않은 기기를 등록하는 방법을 알린다.
 - 제거하면 다음 시작부터 Google 앱이 사라진다.
+- 데스크톱에서 쓸모없는 Play 서비스의 상주 구성 요소(재난 문자, 긴급 위치 전송, 멀미 방지, 근처 기기 존재 알림, Cast 추천, 원격 제스처, AR 위치 같은 것)는 끈다. Play 서비스가 업데이트되면 끈 상태를 다시 적용해, 업데이트가 되살린 구성 요소가 남지 않게 한다. 상주 메모리를 줄이기 위해서다.
 - ARM 번역기(FR-25)가 켜져 있어도 ABI 목록에서 `x86_64`가 앞에 온다. Play가 Play 서비스 같은 시스템 구성 요소의 ARM판을 내려 주지 않게 하기 위해서다.
 - 수용 기준: 가짜 패키지에서 만든 이미지가 정해진 경로의 파일만 담는다. 허용하지 않는 경로(`..`, 절대 경로)를 담거나 게스트와 아키텍처, 안드로이드 버전이 다른 패키지는 거부되고 저장된 상태가 바뀌지 않는다.
 - 수용 기준: `dsa gapps install`, `status`, `remove`가 로컬 API를 거쳐 이미지를 보내고, 상태를 보이고, 지운다.
 - 수용 기준: 이미지 검사가 설치 표시가 있을 때만 init이 GApps 이미지를 얹는 것을 확인한다.
 - 수용 기준: 설정 앱의 "Google Play" 항목이 설치 전, 설치 뒤, 다시 시작 대기 상태의 문구를 보이고, 단추가 CLI와 같은 일을 한다. 뷰모델 테스트가 이것을 확인한다.
+- 수용 기준: 정해 둔 Play 서비스 구성 요소가 꺼져 있고, Play 서비스 업데이트를 흉내 내 구성 요소가 다시 켜지면 곧 다시 꺼진다. (`fr32_desktop_irrelevant_play_services_stay_off_after_updates`)
 - 수용 기준: 실제 PC에서 설치하고 다시 시작하면 Play 스토어가 열려 로그인되고, Google 캘린더와 주소록을 받아 동기화된다. ARM 번역기를 켜도 Play 서비스는 x86_64판으로 남는다. 제거하면 Google 앱이 사라진다. (수동 확인)
 ### FR-33 폰 VM 백엔드 (`Agreed`, 구현은 M9 뒤)
 USB로 연결한 안드로이드 폰 안의 VM에서 DSA 안드로이드를 돌리고, 그리기와 창은 PC가 맡는다(INTENT D26). PC의 자원을 아끼고 ARM 앱을 번역 없이 돌리기 위해서다.
@@ -652,6 +654,16 @@ USB로 연결한 안드로이드 폰 안의 VM에서 DSA 안드로이드를 돌�
 - 수용 기준: 서명과 Digital Asset Links가 맞는 앱의 패스키 요청만 호스트에 가고, 맞지 않는 rpId는 거절된다. (`fr36_passkeys_only_for_verified_relying_parties`)
 - 수용 기준: 봉인된 루트 키는 같은 호스트 사용자에서만 열리고, 디스크를 다른 사용자나 PC로 옮기면 열리지 않는다. (`fr36_keymint_root_key_is_sealed_by_the_host`)
 - 수용 기준: 실제 PC에서 지도 앱의 주소 검색, 읽어 주기 앱, 메모 앱의 맞춤법 표시, 공유에서 근처 공유, 음성 검색이 동작한다. (수동 확인)
+
+### FR-37 보호된 콘텐츠 재생 (`Agreed`)
+WSA가 제공한 Widevine L3를 제공한다. DSA는 Google 바이너리를 싣지 않으므로(C1, C6), Google ARM 번역기(FR-25)와 Google Play(FR-32)처럼 사용자가 고르면 Google 서버에서 받아 설치한다. 2026-11-10 소유자가 정했다.
+- 설정 앱과 `dsa drm widevine install|status|remove`로 설치한다. 호스트는 그 게스트와 같은 안드로이드 버전과 아키텍처의 Google 에뮬레이터 시스템 이미지(`dl.google.com`)에서 Widevine DRM HAL(`android.hardware.drm-service.widevine`과 그 라이브러리, init 스크립트, VINTF 조각)을 꺼내 erofs 이미지로 만들어 게스트 사용자 디스크로 보낸다. 다른 출처(제3자 저장소의 추출본)는 쓰지 않는다. 출처와 라이선스를 확인할 수 없기 때문이다.
+- 게스트는 그 이미지를 `/vendor`의 정해 둔 자리에 servicemanager가 VINTF를 읽기 전에 얹는다. SELinux 정책(`hal_drm_widevine`, `/data/vendor/mediadrm`)은 DSA 이미지에 미리 둔다. 기기 인증서는 처음 쓸 때 안드로이드의 프로비저닝으로 받는다.
+- 보안 수준은 L3이다. 스트리밍 서비스는 L3 기기에 표준 화질(SD)까지만 보낼 수 있으므로, 설정 앱의 이 항목과 사용자 안내는 고화질은 호스트의 브라우저나 앱에서 보라고 알린다.
+- Google 이미지에 그 버전의 Widevine이 없으면 설치는 이유를 알리고 실패한다. 이미지에 아무것도 남기지 않는다.
+- 수용 기준: 가짜 에뮬레이터 이미지에서 Widevine 파일만 담은 erofs 이미지를 만들고, 다른 경로나 다른 아키텍처의 파일이 섞이면 거절한다. (`fr37_widevine_image_holds_only_the_drm_hal`)
+- 수용 기준: 설치한 게스트에서 `MediaDrm.isCryptoSchemeSupported`가 Widevine UUID에 참을 돌려주고 보안 수준이 L3로 보인다. 설치하지 않은 게스트는 거짓이다. (`fr37_widevine_is_offered_only_when_installed`)
+- 수용 기준: 실제 PC에서 설치하고 다시 시작하면 Widevine을 쓰는 스트리밍 앱이 재생된다. (수동 확인)
 
 ## 4. 비기능 요구사항
 
