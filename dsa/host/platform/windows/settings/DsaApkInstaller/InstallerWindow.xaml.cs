@@ -30,6 +30,8 @@ public partial class InstallerWindow : FluentWindow
         // Width and Height are the size it prefers; on a screen too small for that it opens
         // smaller, inside the work area, so its title bar can be grabbed.
         Dsa.Settings.StartupPlacement.Attach(this);
+        // The title bar dims while another window has the focus, as Windows' own do.
+        Dsa.Settings.TitleBarActivation.Attach(this);
         Icon =BitmapFrame.Create(new Uri("pack://application:,,,/Assets/apk-installer.ico"));
         Resources["SensitiveText"] = App.Text.Get("ApkWindow_Sensitive");
         Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture);

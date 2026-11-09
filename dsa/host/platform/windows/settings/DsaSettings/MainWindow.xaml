@@ -192,10 +192,12 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Title="{l:Text WindowTitle}" Grid.Row="0" Height="48">
+        <!-- Dims, and leaves the accent colour, while another window has the focus. -->
+        <ui:TitleBar Title="{l:Text WindowTitle}" Grid.Row="0" Height="48" Style="{StaticResource WindowTitleBar}">
             <ui:TitleBar.Icon>
                 <!-- 16 px wide, then 4 px here and the library's 12 px: the title starts on the labels' column. -->
-                <ui:ImageIcon Width="16" Height="16" Margin="0,0,4,0" Source="pack://application:,,,/Assets/logo.png" />
+                <ui:ImageIcon Width="16" Height="16" Margin="0,0,4,0" Source="pack://application:,,,/Assets/logo.png"
+                              Style="{StaticResource WindowTitleBarIcon}" />
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
