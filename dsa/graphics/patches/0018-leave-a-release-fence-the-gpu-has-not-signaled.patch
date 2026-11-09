@@ -4,7 +4,7 @@ diff --git a/host/vulkan/VkAndroidNativeBuffer.cpp b/host/vulkan/VkAndroidNative
 @@ -102,6 +102,13 @@ AndroidNativeBufferInfo::QsriWaitFencePool::~QsriWaitFencePool() {
      VK_ANB_DEBUG("exit");
  }
-
+ 
 +void AndroidNativeBufferInfo::QsriWaitFencePool::abandonFence(VkFence fence) {
 +    std::lock_guard<std::mutex> lock(mMutex);
 +    // Left pending, neither reset nor destroyed: the GPU may still signal it. One fence is
@@ -55,6 +55,6 @@ diff --git a/host/vulkan/VkAndroidNativeBuffer.h b/host/vulkan/VkAndroidNativeBu
          void returnFence(VkFence fence);
 +        // A fence whose wait timed out, still pending: it is never used again.
 +        void abandonFence(VkFence fence);
-
+ 
         private:
          std::mutex mMutex;
