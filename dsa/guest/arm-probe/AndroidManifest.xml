@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ARM probe: an ordinary third-party app whose only code is one ARM64 library, so Android
+  installs it for arm64-v8a and starts its process through the ARM translator, as it does any
+  ARM app. It has no Java code: its activity is the framework's NativeActivity, which loads the
+  library through the native bridge and calls it. The image boot check installs it and starts
+  it (dsa/host/platform/linux/tests/overlays.rs), so a translator that aborts every ARM app as
+  it starts fails the check, as a translator whose files are merely in place does not.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.github.thisisthepy.dsa.armprobe">
+
+    <application android:label="DSA ARM probe" android:hasCode="false"
+        android:extractNativeLibs="true">
+        <activity android:name="android.app.NativeActivity" android:exported="true">
+            <meta-data android:name="android.app.lib_name" android:value="dsaarmprobe" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
