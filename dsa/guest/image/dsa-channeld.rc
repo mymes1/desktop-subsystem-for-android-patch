@@ -125,3 +125,19 @@ on property:vendor.dsa.root_elevation=1
 
 on property:vendor.dsa.root_elevation=0
     stop dsa_su
+
+# KeyMint's root key, which the host keeps sealed by the user's credential store and gives
+# once each boot. dsa-channeld --keymint-key asks for it on the host's KeyMint port and writes
+# it to /dev/dsa_keymint/root_key, a tmpfs file only KeyMint's domain may read
+# (channeld.cil), so the key never reaches the user's disk. It writes "none" with the reason
+# when the host has no key, or cannot be reached within half a minute. dsa-keymint-key.rc
+# makes the folder and starts it on init, long before KeyMint (class early_hal, at late-fs),
+# which waits a bounded time for the file. It runs as nobody, KeyMint's user, so the file it
+# makes (mode 0400) is KeyMint's to read.
+service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key
+    user nobody
+    group nobody
+    seclabel u:r:dsa_keymint_key:s0
+    oneshot
+    disabled
+    stdio_to_kmsg

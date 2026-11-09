@@ -152,3 +152,33 @@
 ; The host's game controllers: the daemon makes each one a gamepad on /dev/uinput, reports its
 ; buttons, sticks and triggers there, and reads the rumble effects apps play on it.
 (allow dsa_channeld uhid_device (chr_file (ioctl read write open getattr)))
+
+; KeyMint's root key. init runs dsa-channeld --keymint-key once each boot in a domain of its
+; own (dsa-channeld.rc, dsa-keymint-key.rc): it reads the boot's secret, asks the host for the
+; key over vsock, and writes it to /dev/dsa_keymint/root_key, a tmpfs folder init makes, which
+; vendor_file_contexts labels dsa_keymint_key_file. A file made there takes the folder's type.
+; Only KeyMint's domain (hal_keymint_server) may read it; the control daemon itself cannot,
+; and no app can. Nothing else in this domain touches the disk.
+(type dsa_keymint_key)
+(roletype object_r dsa_keymint_key)
+(typeattributeset domain (dsa_keymint_key))
+(allow init dsa_keymint_key (process (transition siginh rlimitinh)))
+(dontaudit init dsa_keymint_key (process (noatsecure)))
+(allow dsa_keymint_key dsa_channeld_exec (file (entrypoint read getattr map execute open)))
+(allow dsa_keymint_key init (fd (use)))
+(allow dsa_keymint_key kmsg_device (chr_file (write append getattr)))
+(allow dsa_keymint_key kmsg_debug_device (chr_file (write append getattr)))
+(allow dsa_keymint_key proc_bootconfig (file (read open getattr)))
+(allow dsa_keymint_key self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+
+(type dsa_keymint_key_file)
+(roletype object_r dsa_keymint_key_file)
+(typeattributeset file_type (dsa_keymint_key_file))
+(allow dsa_keymint_key_file tmpfs (filesystem (associate)))
+(allow init dsa_keymint_key_file (dir (create search getattr setattr open read write add_name relabelto)))
+(allow dsa_keymint_key device (dir (search)))
+(allow dsa_keymint_key dsa_keymint_key_file (dir (search getattr write add_name remove_name)))
+(allow dsa_keymint_key dsa_keymint_key_file (file (create write open getattr rename unlink)))
+(allow hal_keymint_server device (dir (search)))
+(allow hal_keymint_server dsa_keymint_key_file (dir (search getattr)))
+(allow hal_keymint_server dsa_keymint_key_file (file (read open getattr)))

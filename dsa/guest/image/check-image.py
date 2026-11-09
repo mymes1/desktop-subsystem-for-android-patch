@@ -303,6 +303,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # guard that hides su from every app the host did not allow.
     if "VENDOR/bin/dsa-channeld" in names:
         problems += make_image.root_elevation_problems(names, z.read)
+        # KeyMint's root key from the host, which only KeyMint may read.
+        problems += make_image.keymint_key_problems(names, z.read)
 
     # The binder service the agent and the hwcomposer reach the daemon through.
     # servicemanager refuses it unless the vendor manifest declares it, and checks who may

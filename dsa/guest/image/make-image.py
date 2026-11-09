@@ -3459,6 +3459,14 @@ CHANNEL_INSTANCE = "io.github.thisisthepy.dsa.channel.IChannel/default"
 CHANNEL_MANIFEST = "VENDOR/etc/vintf/manifest/dsa-channel.xml"
 VENDOR_SERVICE_CONTEXTS = "VENDOR/etc/selinux/vendor_service_contexts"
 CHANNEL_SERVICE_CONTEXT = f"{CHANNEL_INSTANCE} u:object_r:dsa_channel_service:s0"
+# KeyMint's root key from the host: dsa-channeld --keymint-key, which dsa-channeld.rc defines,
+# writes it to a tmpfs folder that a system script makes and starts it for on init (as init:
+# a vendor script's mkdir runs as vendor_init). The folder's label lets only KeyMint's domain
+# read the key (channeld.cil).
+KEYMINT_KEY_RC = "SYSTEM/etc/init/dsa-keymint-key.rc"
+KEYMINT_KEY_SERVICE = "service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key"
+KEYMINT_KEY_DIR = "/dev/dsa_keymint"
+KEYMINT_KEY_CONTEXT = f"{KEYMINT_KEY_DIR}(/.*)? u:object_r:dsa_keymint_key_file:s0"
 # The agent: a privileged app in system_ext, signed with the platform key, which reports
 # each app task to the host and starts and ends tasks for it. The framework refuses to boot
 # when a privileged app requests a privileged permission its allowlist does not grant.
@@ -3848,6 +3856,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries.append((r"/vendor/bin/dsa-channeld", CHANNELD_CONTEXT))
         # The elevation helper's sockets: init gives a socket file the label its path has here.
         entries += SU_SOCKET_CONTEXTS
+        # KeyMint's root key, readable only by KeyMint.
+        entries.append((f"{KEYMINT_KEY_DIR}(", KEYMINT_KEY_CONTEXT))
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
     if power:
@@ -4134,6 +4144,50 @@ def root_elevation_problems(names, read):
         if context not in contexts:
             problems.append(f"vendor_file_contexts lacks \"{context}\", so init makes the socket with a label "
                             "its clients may not write")
+    return problems
+
+
+def keymint_key_problems(names, read):
+    """Returns what an image with the daemon lacks for KeyMint's root key from the host: the
+    service that fetches it, in its own domain as KeyMint's user, the system script that makes
+    its tmpfs folder and starts it before KeyMint, the folder's label, and the policy that lets
+    only KeyMint read the key."""
+    problems = []
+    rc = read(CHANNELD_RC).decode().splitlines() if CHANNELD_RC in names else []
+    for line, why in [
+        (KEYMINT_KEY_SERVICE, "nothing fetches KeyMint's root key from the host"),
+        ("    user nobody", "the key file is not KeyMint's user's"),
+        ("    seclabel u:r:dsa_keymint_key:s0", "the key is fetched outside its own domain"),
+        ("    oneshot", "init would ask the host for the key again, which it refuses"),
+    ]:
+        if line not in rc:
+            problems.append(f"{CHANNELD_RC} lacks \"{line.strip()}\", so {why}")
+    if KEYMINT_KEY_RC not in names:
+        problems.append(f"{KEYMINT_KEY_RC} is missing, so KeyMint's root key has no folder and is never fetched")
+    else:
+        script = read(KEYMINT_KEY_RC).decode().splitlines()
+        for line in ["on init", f"    mkdir {KEYMINT_KEY_DIR} 0700 nobody nobody", "    start dsa_keymint_key"]:
+            if line not in script:
+                problems.append(f"{KEYMINT_KEY_RC} lacks \"{line.strip()}\", so the key is not there "
+                                "before KeyMint starts")
+    contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
+                if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
+    if KEYMINT_KEY_CONTEXT not in contexts:
+        problems.append(f"vendor_file_contexts lacks \"{KEYMINT_KEY_CONTEXT}\", so the key's folder has a "
+                        "label other domains may read")
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
+        policy = read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        for rule, why in [
+            ("(typeattributeset domain (dsa_keymint_key))", "the key is fetched in no domain of its own"),
+            ("(allow hal_keymint_server dsa_keymint_key_file (file (read open getattr)))",
+             "KeyMint cannot read its key"),
+        ]:
+            if rule not in policy:
+                problems.append(f"the SELinux policy lacks {rule}, so {why}")
+        readers = re.findall(r"\(allow\s+(\S+)\s+dsa_keymint_key_file\s+\(\s*file\s+\(([^)]*)\)", policy)
+        others = sorted({who for who, perms in readers if "read" in perms.split() and who != "hal_keymint_server"})
+        if others:
+            problems.append(f"the SELinux policy lets {', '.join(others)} read KeyMint's root key")
     return problems
 
 
@@ -4674,6 +4728,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                     if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG + ADDONS_FS_CONFIG
                                                  + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
+                                                     "system/etc/init/dsa-keymint-key.rc 0 0 644 capabilities=0x0",
                                                      "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
@@ -4764,6 +4819,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(SU_GUARD_RC, (HERE / "dsa-su-guard.rc").read_bytes())
+            zout.writestr(KEYMINT_KEY_RC, (HERE / "dsa-keymint-key.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
         if su_payload is not None:
             zout.writestr(SU_CLIENT_BINARY, su_payload)

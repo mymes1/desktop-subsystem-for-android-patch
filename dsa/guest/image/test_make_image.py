@@ -97,6 +97,8 @@ class ImageLayoutTests(unittest.TestCase):
         # The elevation helper (dsa-channeld --su-relay) and the commands it starts.
         "su_helper.rs": ("dsa_su", "su.cil"),
         "su_process.rs": ("dsa_su", "su.cil"),
+        # KeyMint's root key from the host (dsa-channeld --keymint-key).
+        "keymint_key.rs": ("dsa_keymint_key", "channeld.cil"),
     }
     # The policy files the image installs together with the daemon, so a rule for one of its
     # domains may live in any of them (the daemon's root elevation rules are in su.cil).
@@ -6714,6 +6716,89 @@ class RootElevationImageTests(unittest.TestCase):
                 or self._rules(line),
                 line,
             )
+
+
+class KeyMintKeyImageTests(unittest.TestCase):
+    """The guest image's side of KeyMint's root key from the host: the daemon's mode that
+    fetches it once each boot, the tmpfs folder it goes to, and the policy that lets only
+    KeyMint read it."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", "/system/bin/sh u:object_r:shell_exec:s0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = root / "dsa-channeld"
+        daemon.write_bytes(b"daemon")
+        client = root / "su"
+        client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _block(self, text, first_line):
+        start = text.index(first_line)
+        end = text.find("\n\n", start)
+        return [line.strip() for line in text[start:end if end >= 0 else len(text)].splitlines()]
+
+    def test_fr36_keymint_root_key_is_fetched_once_before_keymint_starts(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.KEYMINT_KEY_SERVICE)
+        for option in ["user nobody", "group nobody", "seclabel u:r:dsa_keymint_key:s0", "oneshot", "disabled"]:
+            self.assertIn(option, service)
+        script = (self.HERE / "dsa-keymint-key.rc").read_text()
+        # On init: before late-fs, where init starts KeyMint with class early_hal.
+        block = self._block(script, "on init\n")
+        self.assertEqual(block[1:], ["mkdir /dev/dsa_keymint 0700 nobody nobody", "start dsa_keymint_key"])
+        self.assertNotIn("/data", script + "\n".join(service))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.keymint_key_problems(names, archive.read), [])
+            self.assertEqual(archive.read(make_image.KEYMINT_KEY_RC).decode(), script)
+            self.assertIn("system/etc/init/dsa-keymint-key.rc 0 0 644 capabilities=0x0",
+                          archive.read(make_image.SYSTEM_FS_CONFIG).decode().splitlines())
+            self.assertIn(make_image.KEYMINT_KEY_CONTEXT,
+                          archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
+
+    def test_fr36_only_keymint_reads_its_root_key(self):
+        readers = re.findall(r"\(allow\s+(\S+)\s+dsa_keymint_key_file\s+\(\s*file\s+\(([^)]*)\)", self.POLICY)
+        self.assertTrue(readers)
+        self.assertEqual({who for who, perms in readers if "read" in perms.split()}, {"hal_keymint_server"})
+        writers = {who for who, perms in readers if {"write", "create"} & set(perms.split())}
+        self.assertEqual(writers, {"dsa_keymint_key"})
+        # The daemon proper, which talks to every client in the guest, never holds the key.
+        self.assertNotRegex(self.POLICY, r"\(allow\s+dsa_channeld\s+dsa_keymint_key_file")
+        self.assertNotIn("dsa_keymint", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertIn(make_image.KEYMINT_KEY_CONTEXT,
+                      make_image.update_vendor_file_contexts("", channeld=True).splitlines())
+
+    def test_fr36_check_image_names_what_the_root_key_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        del files[make_image.KEYMINT_KEY_RC]
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_keymint_key:s0").encode()
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
+            b"\n(allow untrusted_app dsa_keymint_key_file (file (read open)))\n")
+        files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
+        problems = make_image.keymint_key_problems(list(files), files.__getitem__)
+        expected = [
+            'lacks "seclabel u:r:dsa_keymint_key:s0"',
+            "dsa-keymint-key.rc is missing",
+            "vendor_file_contexts lacks",
+            "lets untrusted_app read KeyMint's root key",
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
 
 
 if __name__ == "__main__":
