@@ -21,6 +21,7 @@ pub mod host_file;
 pub mod ime;
 pub mod keys;
 pub mod launch;
+pub mod live_icon;
 pub mod pointer;
 pub mod screenshot;
 pub mod splash;

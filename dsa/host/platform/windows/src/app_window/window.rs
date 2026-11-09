@@ -292,6 +292,30 @@ struct WindowData {
     rescaling: Cell<bool>,
     /// Where a screenshot that failed says why.
     logger: Option<Arc<CompositorLogger>>,
+    /// The icons the window shows in place of its program's, once the window manager sent
+    /// the app's new icon; kept while the window shows them.
+    icons: RefCell<Option<super::live_icon::WindowIcons>>,
+}
+
+/// Gives the window the app's icon the window manager sent, if it sent one, at the sizes of
+/// the window's DPI, and with `repaint` draws its title bar again with it (a window that is
+/// still opening draws it when it first paints).
+///
+/// # Safety
+///
+/// `hwnd` is a live task window of the calling thread, and `data` its data.
+unsafe fn take_live_icon(hwnd: HWND, data: &WindowData, repaint: bool) {
+    let Some(icon) = super::live_icon::current() else {
+        return;
+    };
+    if let Some(icons) = super::live_icon::apply(hwnd, &icon.icon_png) {
+        // The icons the window showed until now are destroyed only after it let go of them.
+        data.icons.replace(Some(icons));
+    }
+    if repaint {
+        let presenter = data.presenter.borrow().clone();
+        data.caption.repaint(hwnd, presenter.as_deref());
+    }
 }
 
 /// The UI thread's state, reached from the message window's procedure.
@@ -742,6 +766,14 @@ unsafe extern "system" fn task_window_proc(
                 // A splash still up keeps its icon sharp and its size on the new monitor.
                 if let Some(presenter) = data.presenter.borrow().as_deref() {
                     presenter.splash_dpi_changed(dpi.max(96));
+                }
+                // The app's icon the window manager sent is drawn again at the new scale.
+                if data.icons.borrow().is_some() {
+                    if let Some(icon) = super::live_icon::current() {
+                        if let Some(icons) = super::live_icon::apply(hwnd, &icon.icon_png) {
+                            data.icons.replace(Some(icons));
+                        }
+                    }
                 }
             }
             // A per-monitor aware window is handed the rectangle that keeps its size in
@@ -1454,6 +1486,22 @@ impl Ui {
                             system_menu::apply(*hwnd, new_window);
                         }
                     }
+                    ToHost::AppIcon {
+                        icon_png,
+                        caption_icon_png,
+                    } => {
+                        // Every window of the app shows the new icon at once, and the next ones
+                        // too.
+                        if super::live_icon::set(icon_png, caption_icon_png) {
+                            for hwnd in self.open.values() {
+                                if let Some(data) = window_data(*hwnd) {
+                                    take_live_icon(*hwnd, data, true);
+                                }
+                            }
+                        } else {
+                            self.log("the app's new icon is not an image; its windows keep theirs");
+                        }
+                    }
                 }
             }
         }
@@ -1562,6 +1610,7 @@ impl Ui {
             self_sizing: Cell::new(false),
             rescaling: Cell::new(false),
             logger: self.setup.logger.clone(),
+            icons: RefCell::new(None),
         }));
         let class = wide(TASK_CLASS);
         let hwnd = CreateWindowExW(
@@ -1599,6 +1648,10 @@ impl Ui {
         window_marks::mark_task(hwnd as isize, task_id);
         // The Android window menu, under Windows' own items.
         system_menu::apply(hwnd, self.new_window);
+        // The app's icon, when it changed after the program was made.
+        if let Some(data) = window_data(hwnd) {
+            take_live_icon(hwnd, data, false);
+        }
         // Files dropped from Explorer go to the task's app.
         if let Some(handler) = &self.setup.drops {
             if let Err(why) = drop_target::register(hwnd as isize, task_id, Arc::clone(handler)) {

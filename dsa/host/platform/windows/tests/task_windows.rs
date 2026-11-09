@@ -351,6 +351,81 @@ fn fr3_an_apps_window_host_is_made_with_the_apps_name_and_icon() {
     );
 }
 
+/// The 256-pixel PNG of the DSA icon, standing in for an app's launcher icon.
+fn logo_png() -> Vec<u8> {
+    let icon = include_bytes!("../installer/setup-ui/assets/logo.ico");
+    dsa_exe_resources::parse_ico(icon)
+        .unwrap()
+        .into_iter()
+        .find(|image| image.width == 0)
+        .unwrap()
+        .data
+}
+
+/// The icon the window shows as its `kind` (ICON_SMALL or ICON_BIG) icon, as the taskbar and
+/// Alt+Tab ask for it; 0 when it was given none.
+fn window_icon(hwnd: isize, kind: u32) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::WM_GETICON;
+    unsafe { SendMessageW(hwnd as HWND, WM_GETICON, kind as usize, 0) }
+}
+
+/// The width of the icon `icon`, in pixels.
+fn icon_width(icon: isize) -> i32 {
+    use windows_sys::Win32::Graphics::Gdi::{DeleteObject, GetObjectW, BITMAP};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
+    unsafe {
+        let mut info: ICONINFO = std::mem::zeroed();
+        assert_ne!(GetIconInfo(icon as _, &mut info), 0);
+        let mut bitmap: BITMAP = std::mem::zeroed();
+        GetObjectW(
+            info.hbmColor,
+            std::mem::size_of::<BITMAP>() as i32,
+            (&mut bitmap as *mut BITMAP).cast(),
+        );
+        DeleteObject(info.hbmColor);
+        DeleteObject(info.hbmMask);
+        bitmap.bmWidth
+    }
+}
+
+#[test]
+fn fr7_an_open_window_takes_its_apps_new_icon_at_once() {
+    use dsa_host_windows::app_window::live_icon::icon_sides;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{ICON_BIG, ICON_SMALL};
+    let running = start(None);
+    // The guest could not draw the app's icon when its window host was started.
+    let mut clock = AppInfo {
+        package_name: "com.example.app1".into(),
+        label: "Clock".into(),
+        ..Default::default()
+    };
+    running.android.publish(TaskEvent::App(clock.clone()));
+    running
+        .android
+        .publish(TaskEvent::Updated(task(1, "Clock", 400, 300)));
+    let open = windows_of(&running, 1);
+    let hwnd = open[0].hwnd;
+    assert_eq!(window_icon(hwnd, ICON_BIG), 0, "only its program's icon");
+    // It can now: the open window shows it at once, at the sizes of its monitor's scale.
+    clock.icon_png = logo_png();
+    running.android.publish(TaskEvent::App(clock));
+    let big = wait_for("the window to show the app's new icon", || {
+        let icon = window_icon(hwnd, ICON_BIG);
+        (icon != 0).then_some(icon)
+    });
+    let small = window_icon(hwnd, ICON_SMALL);
+    assert_ne!(small, 0);
+    let (small_side, big_side) = icon_sides(unsafe { GetDpiForWindow(hwnd as HWND) }.max(96));
+    assert_eq!(icon_width(big), big_side as i32);
+    assert_eq!(icon_width(small), small_side as i32);
+    // The same window host's next window takes it as it opens.
+    let mut second = task(2, "Clock 2", 400, 300);
+    second.package_name = "com.example.app1".into();
+    running.android.publish(TaskEvent::Updated(second));
+    let open = windows_of(&running, 2);
+    assert_ne!(window_icon(open[1].hwnd, ICON_BIG), 0);
+}
+
 #[test]
 fn fr3_two_tasks_of_one_app_share_its_window_host() {
     let running = start(None);
