@@ -465,7 +465,7 @@ DSA가 실행 중에 만드는 파일은 정해진 두 루트 아래 정해진 �
 - 번역 묶음은 디렉터리 하나다. `arm-translation.json`(이름, 버전, 브리지 라이브러리 파일 이름, ABI 목록, 라이선스)과 `system.img`(erofs, 안에 `system/lib64`, `system/bin`, `system/etc` 아래 놓일 파일)를 담는다. 브리지 라이브러리 이름은 영숫자, `.`, `_`, `-`로 된 `.so` 파일 이름이다. 이미지는 브리지를 `system/lib64/libdsa_native_bridge.so`라는 이름으로도 담는다(링크). 이미지의 속성이 번역기와 상관없이 이 이름을 가리키기 때문이다. ABI는 `arm64-v8a`만 받는다. 게스트는 64비트 전용이라 `armeabi-v7a`를 돌릴 zygote가 없기 때문이다.
 - `dsa arm-translation status|install <경로>|remove`. install은 묶음을 검사하고 게스트의 사용자 디스크(`/data/vendor/dsa/arm-translation/`)로 보낸다. 안드로이드가 꺼져 있으면 켜고 처리한다. remove는 그것을 지운다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
 - 동반 서비스는 설치된 묶음의 설명을 사용자 설정에 두고, 설정 `arm-translation`(`on`, `off`, 기본 `on`)이 켜져 있고 묶음이 있을 때만 부팅 bootconfig에 `androidboot.dsa.arm_translation=on`을 넣는다.
-- 게스트는 그 값이 있을 때만 `ro.dalvik.vm.native.bridge`(`libdsa_native_bridge.so`), `ro.dalvik.vm.isa.arm64=x86_64`, `ro.enable.native.bridge.exec=1`을 정하고, `ro.product.cpu.abilist`와 `abilist64`에 `arm64-v8a`를 덧붙이며, `system.img`를 시스템의 `lib64`, `bin`, `etc` 위에 얹고 binfmt_misc 처리기를 등록한다. 값이 없으면 이미지는 `x86_64`만 알리고 아무것도 얹지 않는다.
+- 게스트는 그 값이 있을 때만 `ro.dalvik.vm.native.bridge`(`libdsa_native_bridge.so`), `ro.dalvik.vm.isa.arm64=x86_64`, `ro.enable.native.bridge.exec=1`을 정하고, `ro.product.cpu.abilist`와 `abilist64`에 `arm64-v8a`를 덧붙이며, `system.img`(erofs)를 마운트하고 그 안의 각 부분을 이미지가 미리 마련한 빈 자리에 연결(bind mount)한 뒤 binfmt_misc 처리기를 등록한다. 시스템의 `lib64`, `bin`, `etc` 전체 위에는 아무것도 얹지 않는다. 그 폴더의 프로그램이 제 SELinux 도메인으로 시작하지 못해 부팅이 깨지기 때문이다. 값이 없으면 이미지는 `x86_64`만 알리고 아무것도 마운트하지 않는다.
 - 제어 데몬은 연결할 때마다 묶음이 있는지, 얹혔는지, 패키지 관리자가 보는 ABI 목록(`ro.product.cpu.abilist`)을 호스트에 보고한다.
 - 설정 앱에 "ARM 앱" 항목을 둔다. ARM 앱을 돌릴 수 있는지, 설치된 번역기의 이름, 버전, 라이선스, 지금의 ABI 목록, 켜고 끄는 스위치, 제거 단추, 다시 시작이 필요하다는 안내를 보여 준다.
 - 배포할 수 있는 오픈 소스 번역기가 생기면 CI가 스크립트로 받아 빌드하고 기본 묶음으로 넣는다. 그때까지 저장소는 후보(Digitalis)를 받아 묶음을 만드는 스크립트를 둔다.
@@ -559,7 +559,7 @@ WSA처럼 Windows 사용자 폴더를 안드로이드 앱이 쓰고, 안드로�
 ### FR-32 Google Play 설치 도구 (`Agreed`)
 DSA는 Google Play 서비스와 스토어를 싣지 않는다(C6). 대신 사용자가 설정 앱에서 고르면 공개 GApps 패키지를 받아 설치한다. 설치하지 않는 것이 기본이고, 설치하지 않아도 DSA의 다른 기능은 그대로 쓴다.
 - 패키지는 LiteGapps의 Core 구성이다. Play 서비스, Play 스토어, 서비스 프레임워크에 더해 계정 동기화 같은 핵심 구성 요소를 담는다. Lite 구성은 동기화 구성 요소가 없어 Play에서 받은 캘린더와 주소록이 동기화되지 않을 수 있어서 쓰지 않는다. 게스트의 안드로이드 버전(API 36, 37)과 아키텍처(x86_64, arm64)에 맞는 최신 파일을 LiteGapps 배포처에서 받고, zip 구조와 공개된 체크섬(있으면)을 검사한다.
-- 호스트는 패키지의 시스템 파일(앱, 권한 목록, 설정 파일, 프레임워크 파일)을 erofs 이미지로 만들어 게스트 사용자 디스크(`/data/vendor/dsa/gapps/`)로 보낸다. 다음 시작부터 FR-25의 번역 묶음과 같은 방식으로 시스템 위에 얹는다. 시스템 이미지는 바꾸지 않는다.
+- 호스트는 패키지의 시스템 파일(앱, 권한 목록, 설정 파일, 프레임워크 파일)을 erofs 이미지로 만들어 게스트 사용자 디스크(`/data/vendor/dsa/gapps/`)로 보낸다. 다음 시작부터 그 이미지를 마운트하고, `/product`와 `/system_ext`의 앱, 시스템 앱, 프레임워크, 권한과 설정 폴더에만 겹친다. 파티션 전체에는 겹치지 않는다. 그 파티션의 `bin`에 있는 서비스가 시작하지 못해 부팅이 깨지기 때문이다. 시스템 이미지는 바꾸지 않는다.
 - `dsa gapps status|install|remove`. 안드로이드가 꺼져 있으면 켜고 처리한다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
 - 설정 앱에 "Google Play" 항목을 둔다. 설치 상태, 버전, 받은 곳, 설치와 제거 단추, 다시 시작 안내를 보인다. Google 앱은 Google의 약관을 따르고 DSA가 배포하는 것이 아니라는 점과, 인증되지 않은 기기를 등록하는 방법을 알린다.
 - 제거하면 다음 시작부터 Google 앱이 사라진다.
