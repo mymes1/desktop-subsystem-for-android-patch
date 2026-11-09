@@ -5687,8 +5687,8 @@ class ArmTranslationImageTests(unittest.TestCase):
         }
         for value, image in images.items():
             section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
-            self.assertIn(f"mount erofs loop@{image} /mnt/dsa-arm-translation ro nodev nosuid "
-                          "fscontext=u:object_r:dsa_arm_translation_fs:s0,"
+            self.assertIn(f"mount erofs {image} /mnt/dsa-arm-translation ro nodev nosuid "
+                          "directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,"
                           "context=u:object_r:system_lib_file:s0", section)
             erofs = section.index(next(c for c in section if c.startswith("mount erofs ")))
             # Each part of the package is bound onto the empty place the image carries for it,
@@ -5870,8 +5870,8 @@ class ArmTranslationImageTests(unittest.TestCase):
         trigger = "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
         before, after = rc.split(trigger, 1)
         section, rest = after.split("\n\n", 1)
-        self.assertIn("mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
-                      "fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
+        self.assertIn("mount erofs /data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
+                      "directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
         for folder in make_image.gapps_folders():
             point = "/" + folder.lower()
             self.assertIn(

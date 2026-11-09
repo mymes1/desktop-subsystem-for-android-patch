@@ -1,10 +1,13 @@
 //! The images init puts in the system on the real image, with SELinux enforcing: the default
 //! ARM translation package and a user's Google apps.
 //!
-//! Each is an erofs image that init mounts through a loop device with `context=` (the
-//! translation labelled as system libraries, the Google apps as system files), before the
-//! zygote starts. A `context=` mount is checked against the type it names as well as the
-//! filesystem's own, and when the policy allowed only the latter every boot refused both mounts
+//! Each is an erofs image that init mounts with `context=` (the translation labelled as system
+//! libraries, the Google apps as system files), before the zygote starts. erofs reads each
+//! image file itself, with `directio`: no loop device may back either mount, and the mount's
+//! source must be the image file, because a loop device kept every page read from the image
+//! twice, once in erofs's cache and once in the image file's. A `context=` mount is checked
+//! against the type it names as well as the filesystem's own, and when the policy allowed only
+//! the latter every boot refused both mounts
 //! ("avc: denied { relabelfrom } ... tclass=filesystem"): Android started with no translator and
 //! no Google Play, and nothing but the log said so.
 //!
@@ -56,6 +59,16 @@
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
 //! checked fails with those refusals in its message.
 //!
+//! A second boot check measures the idle reclaim with Google apps installed and no app window
+//! open, for the decision on backing off its interval (`idle_reclaim`). It installs LiteGapps'
+//! own newest build for the guest, downloaded into the mirror (the small stand-in build holds
+//! no Play services that run, so it is used only when LiteGapps cannot be reached, and the
+//! report says so), starts Android again, and samples the guest once a second for five
+//! minutes: each run of the reclaim, the kernel time init spends in it, the guest's processor
+//! time, the refaults and reads around each run, and which processes faulted file pages in
+//! between. The report goes to `idle-reclaim.md` and `idle-reclaim.json` in the check's folder,
+//! with the raw samples and the guest log beside them. It fails only when it cannot measure.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
 //! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
@@ -66,6 +79,7 @@
 #![cfg(target_os = "linux")]
 
 mod boot_check;
+mod idle_reclaim;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -85,6 +99,16 @@ use dsa_host_unix::socket::UnixLocalConnector;
 const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc"];
 /// Where the translation package is mounted.
 const TRANSLATION_POINT: &str = "/mnt/dsa-arm-translation";
+/// The files the translation package is mounted from: a package the user installed, or the
+/// image's default one.
+const TRANSLATION_IMAGES: &[&str] = &[
+    "/data/vendor/dsa/arm-translation/system.img",
+    "/system/etc/dsa/arm-translation/default.img",
+];
+/// The file the Google apps image is mounted from.
+const GAPPS_IMAGE: &str = "/data/vendor/dsa/gapps/system.img";
+/// The major number of loop devices.
+const LOOP_MAJOR: &str = "7";
 /// Where each part of the package is bound, and the part, as a path inside the image.
 const TRANSLATION_BINDS: &[(&str, &str)] = &[
     ("/system_ext/lib64", "/system/lib64"),
@@ -331,12 +355,17 @@ struct Adb {
 impl Adb {
     /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most.
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
+        self.run_for(args, ADB_LIMIT)
+    }
+
+    /// Runs adb with `args` against the guest, for `limit` at most.
+    fn run_for(&self, args: &[&str], limit: Duration) -> Result<Vec<u8>, String> {
         let out = run_bounded(
             Command::new(&self.program)
                 .arg("-s")
                 .arg(&self.serial)
                 .args(args),
-            ADB_LIMIT,
+            limit,
             usize::MAX,
         )?;
         match out.status {
@@ -350,7 +379,7 @@ impl Adb {
             None => Err(format!(
                 "adb {} did not finish within {} s and was stopped",
                 args.join(" "),
-                ADB_LIMIT.as_secs()
+                limit.as_secs()
             )),
         }
     }
@@ -411,13 +440,14 @@ impl Adb {
 
 /// One line of `/proc/self/mountinfo`: the device, the folder of its filesystem that is
 /// mounted (`/` for the whole of it, a folder for a bind), where, the mount's own options, the
-/// filesystem type and the filesystem's options.
+/// filesystem type, what it was mounted from and the filesystem's options.
 struct Mount<'a> {
     device: &'a str,
     root: &'a str,
     point: &'a str,
     options: &'a str,
     kind: &'a str,
+    source: &'a str,
     super_options: &'a str,
 }
 
@@ -435,7 +465,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
             let options = fields.next().unwrap_or("");
             let mut fields = theirs.split_whitespace();
             let kind = fields.next()?;
-            let _source = fields.next();
+            let source = fields.next().unwrap_or("");
             let super_options = fields.next().unwrap_or("");
             Some(Mount {
                 device,
@@ -443,6 +473,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
                 point,
                 options,
                 kind,
+                source,
                 super_options,
             })
         })
@@ -453,8 +484,40 @@ fn has_option(options: &str, wanted: &str) -> bool {
     options.split(',').any(|option| option == wanted)
 }
 
+/// What is wrong with how the erofs image mounted at `image.point` reads its file: no loop
+/// device may back it (its device is not a loop device, and it was not mounted from one), it
+/// must be mounted from one of `files`, and with `directio`. A loop device keeps every page
+/// read from the image a second time, in the image file's own page cache.
+fn file_backed_problems(image: &Mount<'_>, files: &[&str]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let loop_device = image.device.split(':').next() == Some(LOOP_MAJOR)
+        || image.source.starts_with("/dev/block/loop")
+        || image.source.starts_with("/dev/loop");
+    if loop_device {
+        problems.push(format!(
+            "a loop device ({}, device {}) backs {}, so every page read from the image is cached twice",
+            image.source, image.device, image.point
+        ));
+    } else if !files.contains(&image.source) {
+        problems.push(format!(
+            "{} is mounted from {:?}, not from the image file ({})",
+            image.point,
+            image.source,
+            files.join(" or ")
+        ));
+    }
+    if !has_option(image.super_options, "directio") {
+        problems.push(format!(
+            "{} is mounted without directio ({}), so erofs reads its file through the file's page cache",
+            image.point, image.super_options
+        ));
+    }
+    problems
+}
+
 /// What is wrong with the mount table `table` for the translation package: it must be mounted
-/// at [`TRANSLATION_POINT`] and each part bound where [`TRANSLATION_BINDS`] says, from that
+/// at [`TRANSLATION_POINT`] from one of [`TRANSLATION_IMAGES`] itself (see
+/// [`file_backed_problems`]) and each part bound where [`TRANSLATION_BINDS`] says, from that
 /// same image; nothing may be mounted on [`PROGRAM_FOLDERS`] or laid over a partition.
 fn translation_mount_problems(table: &str) -> Vec<String> {
     let table = mounts(table);
@@ -465,6 +528,7 @@ fn translation_mount_problems(table: &str) -> Vec<String> {
     match image {
         None => problems.push(format!("no erofs image is mounted at {TRANSLATION_POINT}")),
         Some(image) => {
+            problems.extend(file_backed_problems(image, TRANSLATION_IMAGES));
             for (point, part) in TRANSLATION_BINDS {
                 let bound = table.iter().find(|m| m.point == *point);
                 match bound {
@@ -505,16 +569,18 @@ fn program_folder_problems(table: &[Mount<'_>]) -> Vec<String> {
 }
 
 /// What is wrong with the mount table `table` for the Google apps image: it must be mounted at
-/// [`GAPPS_POINT`] and laid over each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder
-/// as the upper of the lower layers, and not nosuid, as the partitions are not.
+/// [`GAPPS_POINT`] from [`GAPPS_IMAGE`] itself (see [`file_backed_problems`]) and laid over
+/// each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder as the upper of the lower
+/// layers, and not nosuid, as the partitions are not.
 fn gapps_mount_problems(table: &str) -> Vec<String> {
     let parsed = mounts(table);
     let mut problems = Vec::new();
-    if !parsed
+    match parsed
         .iter()
-        .any(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
     {
-        problems.push(format!("no erofs image is mounted at {GAPPS_POINT}"));
+        None => problems.push(format!("no erofs image is mounted at {GAPPS_POINT}")),
+        Some(image) => problems.extend(file_backed_problems(image, &[GAPPS_IMAGE])),
     }
     for folder in GAPPS_FOLDERS {
         let layer = format!("{GAPPS_POINT}{folder}");
@@ -847,13 +913,13 @@ const BOUND: &str = "\
 20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n\
 21 1 254:3 / /system_ext ro,relatime shared:2 - erofs /dev/block/dm-3 ro,seclabel\n\
 22 1 254:2 / /product ro,relatime shared:3 - erofs /dev/block/dm-2 ro,seclabel\n\
-90 30 7:8 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-91 21 7:8 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-92 20 7:8 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-93 20 7:8 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-94 20 7:8 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-95 20 7:8 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-98 20 7:8 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+90 30 0:48 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+91 21 0:48 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+92 20 0:48 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+93 20 0:48 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+94 20 0:48 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+95 20 0:48 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+98 20 0:48 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
 96 31 0:41 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:41 - binfmt_misc binfmt_misc rw\n";
 
 #[test]
@@ -894,13 +960,13 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
 
     // A part bound onto the wrong place, or from another image, does not count.
     let crossed = BOUND.replace(
-        "7:8 /system/bin /system/bin/dsa-arm-translation",
-        "7:8 /system/etc /system/bin/dsa-arm-translation",
+        "0:48 /system/bin /system/bin/dsa-arm-translation",
+        "0:48 /system/etc /system/bin/dsa-arm-translation",
     );
     assert_eq!(translation_mount_problems(&crossed).len(), 1);
     let other = BOUND.replace(
-        "7:8 /system/lib64 /system_ext/lib64",
-        "7:9 /system/lib64 /system_ext/lib64",
+        "0:48 /system/lib64 /system_ext/lib64",
+        "0:49 /system/lib64 /system_ext/lib64",
     );
     assert_eq!(translation_mount_problems(&other).len(), 1);
     // A partition laid over is found too.
@@ -908,6 +974,59 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
         "{BOUND}97 20 0:43 / /system_ext ro,relatime - overlay overlay ro,lowerdir=/a:/system_ext\n"
     );
     assert_eq!(translation_mount_problems(&partition).len(), 1);
+}
+
+#[test]
+fn nfr2_fr25_fr32_an_image_mounted_through_a_loop_device_is_found_in_the_mount_table() {
+    // What v0.2.1 mounted: both images through loop devices, every page read from them kept
+    // twice. The translation's binds share its device, so they still match.
+    let looped = BOUND.replace("0:48 ", "7:8 ").replace(
+        "erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio",
+        "erofs /dev/block/loop8 ro,seclabel",
+    );
+    let problems = translation_mount_problems(&looped);
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0]
+        .contains("a loop device (/dev/block/loop8, device 7:8) backs /mnt/dsa-arm-translation"));
+    assert!(problems[1].contains("without directio"));
+    // A loop device is found by its device number too, whatever the source says.
+    let numbered = BOUND.replace(
+        "0:48 / /mnt/dsa-arm-translation",
+        "7:8 / /mnt/dsa-arm-translation",
+    );
+    assert!(translation_mount_problems(&numbered)
+        .iter()
+        .any(|p| p.contains("a loop device")));
+    // A package the user installed is mounted from its own file.
+    let installed = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/vendor/dsa/arm-translation/system.img",
+    );
+    assert_eq!(translation_mount_problems(&installed), Vec::<String>::new());
+    // A file that is not the package's is not it.
+    let elsewhere = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/local/tmp/other.img",
+    );
+    let problems = translation_mount_problems(&elsewhere);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("not from the image file"));
+
+    let gapps = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n";
+    let problems = gapps_mount_problems(gapps);
+    assert!(
+        problems.iter().any(
+            |p| p.contains("a loop device (/dev/block/loop9, device 7:9) backs /mnt/dsa-gapps")
+        ),
+        "{problems:?}"
+    );
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("/mnt/dsa-gapps is mounted without directio")));
+    let gapps = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n";
+    assert!(!gapps_mount_problems(gapps)
+        .iter()
+        .any(|p| p.contains("loop device") || p.contains("directio") || p.contains("image file")));
 }
 
 #[test]
@@ -1131,7 +1250,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(mount_denials(log).len(), 1);
 
     let mut good =
-        String::from("80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n");
+        String::from("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n");
     for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
         good.push_str(&format!(
             "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
@@ -1147,7 +1266,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     );
     assert_eq!(gapps_mount_problems(&nosuid).len(), GAPPS_FOLDERS.len());
     // What develop 3b9b304c laid over: the partitions' roots, whose services then fail.
-    let roots = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n\
+    let roots = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n\
                  81 1 0:50 / /product ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/product:/product\n\
                  82 1 0:51 / /system_ext ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n";
     let problems = gapps_mount_problems(roots);
@@ -1726,5 +1845,351 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     if !problems.is_empty() {
         problems.dedup();
         fail(problems.join("\n"), &service, &log);
+    }
+}
+
+/// How long the idle reclaim is watched for, with Google apps installed and no app window.
+const IDLE_WINDOW: Duration = Duration::from_secs(300);
+/// Every how many of the sampler's looks (one a second) it also reads every process and cgroup.
+const IDLE_SNAPSHOT_EVERY: u32 = 10;
+/// The whole measurement, both boots, LiteGapps' download and the window included, stays under
+/// twenty-two minutes.
+const IDLE_BUDGET: Duration = Duration::from_secs(1320);
+/// How long LiteGapps' build (120 to 260 MiB) may take to download.
+const LITEGAPPS_DOWNLOAD: Duration = Duration::from_secs(420);
+/// Where the sampler is put in the guest: the one place the shell may run a file it wrote.
+const SAMPLER_GUEST: &str = "/data/local/tmp/dsa-idle-sampler.sh";
+/// The guest's memory and processors while the idle reclaim is measured.
+const IDLE_MEMORY_MB: u64 = 4096;
+const IDLE_PROCESSORS: u64 = 2;
+
+/// Puts LiteGapps' newest Core build for `arch` at API level `sdk` into the mirror at `mirror`,
+/// in place of the small stand-in build, so the service installs the build a user gets.
+/// Returns its file name.
+fn mirror_litegapps(mirror: &Path, arch: &str, sdk: u32) -> Result<String, String> {
+    use dsa_host_core::gapps::{listing, Target};
+    let abi = if arch == "x86_64" {
+        "x86_64"
+    } else {
+        "arm64-v8a"
+    };
+    let target = Target::for_guest(sdk, abi)?;
+    let build = listing::newest(&dsa_host_linux::fetch::CurlFetch, listing::PROJECT, &target)?;
+    let folder = format!("/litegapps/{}/{}/core", target.arch, target.sdk);
+    let path = format!("{folder}/{}/{}", build.folder, build.file);
+    let download = mirror.join(format!("files{path}/download"));
+    std::fs::create_dir_all(download.parent().unwrap())
+        .map_err(|why| format!("making {}: {why}", download.display()))?;
+    let out = run_bounded(
+        Command::new("curl")
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=https",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "30",
+                "--max-time",
+            ])
+            .arg(LITEGAPPS_DOWNLOAD.as_secs().to_string())
+            .arg("--output")
+            .arg(&download)
+            .arg(listing::download_url(listing::PROJECT, &target, &build)),
+        LITEGAPPS_DOWNLOAD + Duration::from_secs(30),
+        usize::MAX,
+    )?;
+    if !out.status.is_some_and(|status| status.success()) {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "downloading {}: {}",
+            build.file,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let mut file = std::fs::File::open(&download)
+        .map_err(|why| format!("reading {}: {why}", download.display()))?;
+    let mut md5 = Md5::new();
+    let mut size = 0u64;
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|why| format!("reading {}: {why}", download.display()))?;
+        if read == 0 {
+            break;
+        }
+        md5.update(&buffer[..read]);
+        size += read as u64;
+    }
+    let digest = hex(&md5.finish());
+    if size != build.size || digest != build.md5 {
+        let _ = std::fs::remove_file(&download);
+        return Err(format!(
+            "{} arrived as {size} bytes with MD5 {digest}; LiteGapps lists {} bytes with {}",
+            build.file, build.size, build.md5
+        ));
+    }
+    std::fs::write(
+        mirror.join(format!("rss?path={folder}")),
+        feed::feed(&[feed::item(&path, size, &digest)]),
+    )
+    .map_err(|why| format!("writing the mirror's list: {why}"))?;
+    Ok(build.file)
+}
+
+#[test]
+fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
+    let (Some(crosvm), Some(image)) = (
+        std::env::var_os("DSA_CROSVM").map(PathBuf::from),
+        std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
+    ) else {
+        eprintln!("skipped: DSA_CROSVM and DSA_WIDGET_TEST_IMAGE name no crosvm and image");
+        return;
+    };
+    let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
+    let adb_program = std::env::var_os("DSA_ADB")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("adb"));
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(image.join("image.json")).expect("reading the image's image.json"),
+    )
+    .expect("the image's image.json is JSON");
+    let arch = manifest["arch"].as_str().unwrap_or("x86_64").to_string();
+
+    let started = Instant::now();
+    let deadline = started + IDLE_BUDGET;
+    let _watchdog = Watchdog::start("the idle reclaim measurement", IDLE_BUDGET + OVERRUN);
+    let dir = scratch();
+    let mirror = dir.join("mirror");
+    write_mirror(&mirror, &arch).unwrap();
+    let socket = dir.join("host.sock");
+    let config = dir.join("dsa-hostd.json");
+    let settings = serde_json::json!({
+        "image_dir": image,
+        "kernel": kernel,
+        "crosvm": crosvm,
+        "socket": socket,
+        "machine_dir": dir.join("machine"),
+        "network": false,
+        "memory_mb": IDLE_MEMORY_MB,
+        "processors": IDLE_PROCESSORS,
+        "data_disk_size_gb": 8,
+        "gapps_project": format!("file://{}", mirror.display()),
+    });
+    std::fs::write(&config, settings.to_string()).unwrap();
+    let service = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
+            .arg("--config")
+            .arg(&config),
+        dir.join("hostd.log"),
+    );
+    let _compositor = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-compositor")).env("DSA_SOCKET", &socket),
+        dir.join("compositor.log"),
+    );
+    let mut api = client(&socket, Duration::from_secs(30));
+    let log: Arc<Mutex<Vec<String>>> = Arc::default();
+    read_log(&socket, &log);
+    let boot = (deadline.saturating_duration_since(Instant::now())) / 4;
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // Developer mode, so adb reaches the guest through the service's loopback port.
+    let mut wanted = match api.settings() {
+        Ok(report) => report.settings,
+        Err(why) => fail(format!("reading the settings: {why}"), &service, &log),
+    };
+    wanted.developer_mode = true;
+    wanted.adb_auto_connect = false;
+    let port = wanted.adb_port;
+    if let Err(why) = api.set_settings(&wanted) {
+        fail(format!("turning developer mode on: {why}"), &service, &log);
+    }
+    let adb = Adb {
+        program: adb_program,
+        serial: format!("127.0.0.1:{port}"),
+    };
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+
+    // LiteGapps' own build, which a user's Android runs, wherever it can be had.
+    let sdk = adb
+        .shell("getprop ro.build.version.sdk")
+        .ok()
+        .and_then(|sdk| sdk.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    let gapps = match mirror_litegapps(&mirror, &arch, sdk) {
+        Ok(file) => format!("LiteGapps' {file}"),
+        Err(why) => {
+            println!(
+                "::warning::the idle reclaim is measured with the check's small stand-in Google apps build, not LiteGapps' own: {why}"
+            );
+            format!(
+                "the check's small stand-in build, because LiteGapps' own could not be had ({why}); \
+                 it holds no Google Play services that run, so this measures only the system with \
+                 the image laid over"
+            )
+        }
+    };
+    eprintln!("{} s: installing {gapps}", started.elapsed().as_secs());
+    let install_until = Instant::now() + Duration::from_secs(240);
+    let installed = loop {
+        let result = client(&socket, Duration::from_secs(10)).install_gapps(&mut |news| {
+            eprintln!("Google Play: {news:?}");
+        });
+        match result {
+            Ok(status) => break status,
+            Err(why) if Instant::now() >= install_until => fail(
+                format!("installing the Google apps from the mirror: {why}"),
+                &service,
+                &log,
+            ),
+            Err(why) => {
+                eprintln!("installing the Google apps from the mirror: {why}; trying again");
+                std::thread::sleep(Duration::from_secs(3));
+            }
+        }
+    };
+    if installed.package.is_none() || !installed.restart_needed {
+        fail(
+            format!(
+                "the service took the Google apps but does not say they apply from the next start: {:?}",
+                installed.package
+            ),
+            &service,
+            &log,
+        );
+    }
+
+    // Android starts again, with the Google apps.
+    if let Err(why) = api.stop() {
+        fail(format!("stopping Android: {why}"), &service, &log);
+    }
+    let stop_until = Instant::now() + Duration::from_secs(120);
+    let mut left = false;
+    loop {
+        use dsa_host_core::session::SessionState;
+        match api.status() {
+            Ok(status) if status.state == SessionState::Stopped => break,
+            Ok(status) if left && status.state == SessionState::Starting => break,
+            Ok(status) if Instant::now() < stop_until => {
+                left |= status.state == SessionState::Stopping;
+                std::thread::sleep(Duration::from_secs(1))
+            }
+            Ok(status) => fail(
+                format!("Android did not stop: it is {:?}", status.state),
+                &service,
+                &log,
+            ),
+            Err(why) => fail(format!("reading the status: {why}"), &service, &log),
+        }
+    }
+    let boot = deadline
+        .saturating_duration_since(Instant::now())
+        .saturating_sub(IDLE_WINDOW + Duration::from_secs(180));
+    if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    }) {
+        fail(
+            format!("Android did not become ready again with the Google apps: {why}"),
+            &service,
+            &log,
+        );
+    }
+    read_log(&socket, &log);
+    if let Err(why) = adb.connect(Duration::from_secs(120)) {
+        fail(
+            format!("adb did not reach the guest after the restart: {why}"),
+            &service,
+            &log,
+        );
+    }
+    let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-mounts.txt"), &table);
+    let Some(mounted) = mounts(&table)
+        .iter()
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .map(|m| format!("{} ({})", m.source, m.super_options))
+    else {
+        fail(
+            format!(
+                "no Google apps image is mounted at {GAPPS_POINT}, so there is nothing to measure"
+            ),
+            &service,
+            &log,
+        );
+    };
+
+    // Five minutes with no app window open, sampled from inside the guest.
+    let sampler = dir.join("idle-sampler.sh");
+    std::fs::write(&sampler, idle_reclaim::SAMPLER).unwrap();
+    if let Err(why) = adb.run(&["push", &sampler.to_string_lossy(), SAMPLER_GUEST]) {
+        fail(
+            format!("putting the sampler in the guest: {why}"),
+            &service,
+            &log,
+        );
+    }
+    eprintln!(
+        "{} s: watching the idle reclaim for {} s",
+        started.elapsed().as_secs(),
+        IDLE_WINDOW.as_secs()
+    );
+    let command = format!(
+        "sh {SAMPLER_GUEST} {} {IDLE_SNAPSHOT_EVERY}",
+        IDLE_WINDOW.as_secs()
+    );
+    let raw = match adb.run_for(&["shell", &command], IDLE_WINDOW + Duration::from_secs(120)) {
+        Ok(out) => String::from_utf8_lossy(&out).into_owned(),
+        Err(why) => fail(format!("the idle sampler: {why}"), &service, &log),
+    };
+    let _ = std::fs::write(dir.join("idle-reclaim-samples.txt"), &raw);
+    let guest_log = adb
+        .shell("logcat -d -b kernel -b main -b system -v monotonic")
+        .unwrap_or_default();
+    let _ = std::fs::write(dir.join("idle-reclaim-log.txt"), &guest_log);
+
+    let record = idle_reclaim::parse(&raw);
+    let events = idle_reclaim::log_events(&guest_log);
+    let report = idle_reclaim::report(
+        &record,
+        &events,
+        &format!("{gapps}, its image mounted from {mounted}"),
+        IDLE_MEMORY_MB,
+        IDLE_PROCESSORS,
+    );
+    let _ = std::fs::write(dir.join("idle-reclaim.md"), &report.markdown);
+    let _ = std::fs::write(
+        dir.join("idle-reclaim.json"),
+        serde_json::to_string_pretty(&report.json).unwrap_or_default(),
+    );
+    println!("{}", report.markdown);
+    if record.looks.len() < 10 {
+        fail(
+            format!(
+                "the idle sampler gave {} looks in {} s, too few to measure; its output is in idle-reclaim-samples.txt",
+                record.looks.len(),
+                IDLE_WINDOW.as_secs()
+            ),
+            &service,
+            &log,
+        );
     }
 }
