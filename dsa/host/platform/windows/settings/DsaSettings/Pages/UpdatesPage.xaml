@@ -67,10 +67,27 @@
                                              Visibility="{Binding IsDownloading, Converter={StaticResource Visible}}" />
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ui:Button x:Name="CheckNowButton" Content="{l:Text AndroidCheckButton.Content}" Click="OnCheckNow"
-                                   IsEnabled="{Binding CanCheckNow, Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Shown while a downloaded image waits for this user's Android to restart. -->
+                            <ui:Button x:Name="RestartNowButton" Content="{l:Text AndroidRestartButton.Content}" Appearance="Primary"
+                                       Margin="0,0,8,0" Click="OnRestartNow" IsEnabled="{Binding CanRestartNow, Mode=OneWay}"
+                                       Visibility="{Binding IsRestartPending, Converter={StaticResource Visible}}" />
+                            <ui:Button x:Name="CheckNowButton" Content="{l:Text AndroidCheckButton.Content}" Click="OnCheckNow"
+                                       IsEnabled="{Binding CanCheckNow, Mode=OneWay}" />
+                        </StackPanel>
                     </ui:CardControl>
                 </StackPanel>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowClockwise24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ImageAutoRestartCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text ImageAutoRestartCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="AutoRestartSwitch" IsChecked="{Binding ImageAutoRestart, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnAutoRestartToggled"
+                                     AutomationProperties.Name="{l:Text ImageAutoRestartCard.Header}" />
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
                     <ui:CardControl.Header>
                         <StackPanel>

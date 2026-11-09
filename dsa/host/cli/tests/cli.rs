@@ -1767,6 +1767,49 @@ fn fr11_dsa_apk_info_reads_the_apk_and_says_it_updates_the_installed_app() {
 }
 
 #[test]
+fn fr25_dsa_apk_info_says_whether_android_runs_arm64_code() {
+    use dsa_host_core::apk_info::fixture::notes_apk;
+    use dsa_host_core::arm_translation::Package;
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let digitalis = Package {
+        name: "Digitalis".into(),
+        version: "17-abefbe2b1600".into(),
+        library: "libberberis_arm64.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    };
+    let ((listener, _, _), endpoint) = local_pair();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())));
+    let _service = RunningService::start_service(listener, service);
+    let path = apk_file("notes-arm.apk", &notes_apk());
+
+    // Before Android runs: it starts with the image's default translator, so an app with
+    // arm64-v8a code runs, and the installer has nothing to warn of.
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert_eq!(json["android"], "stopped");
+    assert_eq!(json["runs_arm64"], true, "{json}");
+
+    // With the translator turned off, it does not.
+    let off = dsa(&endpoint, "settings set arm-translation off");
+    assert!(off.status.success(), "{}", stderr(&off));
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert_eq!(json["runs_arm64"], false, "{json}");
+}
+
+#[test]
+fn fr25_dsa_apk_info_cannot_say_whether_arm64_code_runs_without_the_settings() {
+    use dsa_host_core::apk_info::fixture::notes_apk;
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+    let path = apk_file("notes-unknown.apk", &notes_apk());
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert!(json["runs_arm64"].is_null(), "{json}");
+}
+
+#[test]
 fn fr11_dsa_apk_info_refuses_a_file_that_is_not_an_apk() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
@@ -3126,6 +3169,7 @@ impl dsa_host_core::update::versions::AndroidVersions for FakeVersions {
             target_major: target_major(channel, &[16, 17]).unwrap(),
             on_trial: false,
             notice: None,
+            restart_pending: None,
         })
     }
     fn choose(
@@ -3176,6 +3220,76 @@ fn fr14_dsa_android_shows_the_version_and_moves_down_only_with_erase_data() {
     assert_eq!(parsed.android, Some(Channel::Latest));
     assert!(parse(&args("android use seventeen")).is_err());
     assert!(parse(&args("android use")).is_err());
+}
+
+#[test]
+fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_android_versions(Arc::new(FakeVersions::default()))
+        .with_settings(
+            Arc::new(MemorySettings::default()),
+            ServiceFacts {
+                version: "0.0.9".into(),
+                log_dir: None,
+                program_updates_available: true,
+                update_channel_available: true,
+                image_updates_available: true,
+                android_version: None,
+            },
+        );
+    let _service = RunningService::start_service(listener, service);
+
+    // The setting is on by default, and the user's Android follows a change at once.
+    assert_eq!(
+        json_of(&dsa(&endpoint, "settings --json"))["image_auto_restart"],
+        true
+    );
+    let shown = stdout(&dsa(&endpoint, "settings"));
+    assert!(
+        shown.contains("Restart into a downloaded Android image by itself: on"),
+        "{shown}"
+    );
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set image-auto-restart off --json",
+    ));
+    assert_eq!(changed["image_auto_restart"], false);
+    let android = androids.of(&user).unwrap();
+    assert_eq!(*android.image_auto_restart.lock().unwrap(), [false]);
+    assert!(parse(&args("settings set image-auto-restart maybe")).is_err());
+
+    // Nothing waits: `dsa android restart` says so and restarts nothing.
+    let json = json_of(&dsa(&endpoint, "android --json"));
+    assert_eq!(json["restart_pending"], serde_json::Value::Null);
+    let nothing = json_of(&dsa(&endpoint, "android restart --json"));
+    assert_eq!(nothing["restarting"], serde_json::Value::Null);
+    assert!(android.restarted_into.lock().unwrap().is_empty());
+
+    // An image waits: the version report says which, and the restart applies it.
+    *android.restart_pending.lock().unwrap() = Some("17.0.0-16373615-9".into());
+    let json = json_of(&dsa(&endpoint, "android version --json"));
+    assert_eq!(json["restart_pending"], "17.0.0-16373615-9");
+    let shown = stdout(&dsa(&endpoint, "android version"));
+    assert!(shown.contains("dsa android restart"), "{shown}");
+    let restart = dsa(&endpoint, "android restart");
+    assert!(restart.status.success(), "{}", stderr(&restart));
+    assert!(
+        stdout(&restart).contains("17.0.0-16373615-9"),
+        "{}",
+        stdout(&restart)
+    );
+    assert_eq!(
+        *android.restarted_into.lock().unwrap(),
+        ["17.0.0-16373615-9"]
+    );
+    assert_eq!(
+        parse(&args("android restart")).unwrap().command,
+        Cmd::AndroidRestart
+    );
 }
 
 #[test]

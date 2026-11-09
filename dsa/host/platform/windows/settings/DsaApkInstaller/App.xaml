@@ -10,6 +10,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <ui:ThemesDictionary Theme="Light" />
                 <ui:ControlsDictionary />
+                <!-- The title bar's colours, active and inactive, after the library's style it extends. -->
+                <ResourceDictionary Source="/TitleBarStyle.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- The Windows type ramp, as App Installer uses it: Segoe UI Variable (Display for

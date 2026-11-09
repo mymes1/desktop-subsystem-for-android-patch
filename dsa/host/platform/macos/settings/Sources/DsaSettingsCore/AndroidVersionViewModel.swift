@@ -11,6 +11,8 @@ public struct AndroidVersionInfo: Equatable, Sendable {
     public var targetMajor: Int
     public var onTrial: Bool
     public var notice: String?
+    /// The downloaded image the user's running Android waits to restart into, or nil.
+    public var restartPending: String? = nil
 
     public static func parse(_ text: String) throws -> AndroidVersionInfo {
         let json = try Json.parse(text)
@@ -22,7 +24,8 @@ public struct AndroidVersionInfo: Equatable, Sendable {
             version: json.string("version"), major: json.int("android_major"), buildId: json.optionalString("build_id"),
             securityPatch: json.optionalString("security_patch"), channel: json.optionalString("channel") ?? "latest",
             supported: json["supported_majors"].items.compactMap { $0.number?.intValue },
-            targetMajor: json.int("target_major"), onTrial: json.bool("on_trial"), notice: json.optionalString("notice"))
+            targetMajor: json.int("target_major"), onTrial: json.bool("on_trial"), notice: json.optionalString("notice"),
+            restartPending: json.optionalString("restart_pending").flatMap { $0.isEmpty ? nil : $0 })
     }
 }
 
@@ -101,11 +104,31 @@ public final class AndroidVersionViewModel: ObservableObject {
         guard info != nil else {
             return ""
         }
+        if isDownloading {
+            return notice
+        }
+        if let restartPending {
+            return text.format("Android_RestartPending", restartPending)
+        }
         if hasNotice {
             return notice
         }
         return isSwitching ? switchingText : text.get("Android_UpToDate")
     }
+
+    /// The downloaded image the user's running Android waits to restart into, or nil.
+    public var restartPending: String? { info?.restartPending }
+    /// Whether the [Restart now] button is shown.
+    public var isRestartPending: Bool { restartPending != nil }
+    /// Whether [Restart now] can be pressed now.
+    public var canRestartNow: Bool { !isBusy && isRestartPending }
+
+    /// The dsa arguments that restart Android now into the image that waits.
+    public nonisolated static let restartArguments = ["android", "restart", "--json"]
+
+    /// Restarts Android now into the downloaded image that waits for it, then reads the
+    /// version again.
+    public func restartNow() async { await run(AndroidVersionViewModel.restartArguments, thenRead: true) }
 
     /// Whether the service can be asked to check for an Android image now.
     public var canCheckNow: Bool { !isBusy && info != nil }
@@ -188,12 +211,18 @@ public final class AndroidVersionViewModel: ObservableObject {
         await run(AndroidVersionViewModel.useArguments(choice, eraseData: eraseData))
     }
 
-    private func run(_ args: [String]) async {
+    private func run(_ args: [String], thenRead: Bool = false) async {
         isBusy = true
         do {
-            let result = try await cli.run(args)
+            var result = try await cli.run(args)
             if result.exitCode != 0 {
                 throw DsaError.failure(result)
+            }
+            if thenRead {
+                result = try await cli.run(["android", "version", "--json"])
+                if result.exitCode != 0 {
+                    throw DsaError.failure(result)
+                }
             }
             show(try AndroidVersionInfo.parse(result.output))
             error = nil

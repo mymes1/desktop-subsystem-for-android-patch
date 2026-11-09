@@ -29,6 +29,7 @@ pub mod audio;
 pub mod background;
 pub mod clipboard;
 pub mod committed;
+pub mod device_recovery;
 pub mod display_gpu;
 pub mod fluent;
 pub mod fluent_menu;
@@ -1075,7 +1076,7 @@ impl Compositor {
                 luid = presenter.adapter_luid();
                 match Gpu::new(luid, false) {
                     Ok(gpu) => {
-                        if luid.is_some() && !gpu.on_renderer_gpu {
+                        if luid.is_some() && !gpu.on_renderer_gpu() {
                             log("the renderer's GPU was not found; task windows may stay empty");
                         }
                         match presenter
@@ -1101,11 +1102,11 @@ impl Compositor {
                 crate::app_exe::default_template(),
                 crate::app_exe::default_apps_dir(),
             ) {
-                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher {
+                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher::new(
                     template,
                     apps_dir,
-                    logger: self.logger.clone(),
-                }),
+                    self.logger.clone(),
+                )),
                 _ => {
                     log("cannot tell where the app window programs go; task windows cannot open");
                     return TaskWindowThreads::default();
@@ -1154,6 +1155,9 @@ impl Compositor {
             stop: Arc::clone(&manager_stop),
             idle: Arc::clone(&idle),
             fronts,
+            renderer_generation: self.presenter.clone().map(|presenter| {
+                Box::new(move || presenter.device_generation()) as Box<dyn Fn() -> u64 + Send>
+            }),
         };
         let manager = thread::Builder::new()
             .name("dsa-wm-manager".into())

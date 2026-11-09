@@ -6,7 +6,8 @@
 //! (whether adb reaches their Android) with the loopback port adb connects to and whether that
 //! port is attached to their adb server by itself, file sharing
 //! (which of their host folders their Android shows in its shared storage), and whether the
-//! host's own touch gestures are off while one of their task windows is in front. The others are the
+//! host's own touch gestures are off while one of their task windows is in front, and whether
+//! their Android restarts by itself into an Android image the service downloaded. The others are the
 //! machine's, shared by every user: whether the service updates DSA itself, whether it takes
 //! pre-releases of DSA as well as stable releases, whether it downloads new Android images,
 //! and whether DSA's processes write the input trace and the per-stage resize trace to their
@@ -27,7 +28,8 @@
 //!                              "file_sharing": true,
 //!                              "shared_folders": ["Documents", "Pictures"],
 //!                              "advanced_networking": false,
-//!                              "touch_gestures_off": true}
+//!                              "touch_gestures_off": true,
+//!                              "image_auto_restart": true}
 //! <dir>/users/<user>.app-windows.json
 //!                             the user's window settings for each app
 //! <dir>/users/<user>.arm-translation.json
@@ -123,6 +125,10 @@ pub struct Settings {
     /// user's task windows is in front, so apps get every finger. On by default; the user's
     /// window manager applies it.
     pub touch_gestures_off: bool,
+    /// Whether the user's Android restarts by itself into an Android image the service
+    /// downloaded: at once while no app window is open, else after asking, or once every
+    /// window is closed. On by default; off, a downloaded image waits for the next start.
+    pub image_auto_restart: bool,
     /// Whether apps may elevate to root through the host's administrator approval. The
     /// machine's, shared by every user; off by default. It takes effect from the next start
     /// of Android.
@@ -151,6 +157,7 @@ impl Default for Settings {
             file_sharing: true,
             shared_folders: file_share::all_folders(),
             touch_gestures_off: true,
+            image_auto_restart: true,
             root_elevation: false,
         }
     }
@@ -250,6 +257,8 @@ pub struct UserSettings {
     pub advanced_networking: bool,
     #[serde(default = "yes")]
     pub touch_gestures_off: bool,
+    #[serde(default = "yes")]
+    pub image_auto_restart: bool,
 }
 
 impl Default for UserSettings {
@@ -269,6 +278,7 @@ impl Default for UserSettings {
             shared_folders: file_share::all_folders(),
             advanced_networking: false,
             touch_gestures_off: true,
+            image_auto_restart: true,
         }
     }
 }
@@ -296,6 +306,7 @@ impl UserSettings {
             shared_folders,
             advanced_networking: settings.advanced_networking,
             touch_gestures_off: settings.touch_gestures_off,
+            image_auto_restart: settings.image_auto_restart,
         }
     }
 }
@@ -595,6 +606,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         shared_folders: file_share::normalise_folders(&mine.shared_folders)
             .unwrap_or_else(|_| file_share::known_folders(&mine.shared_folders)),
         touch_gestures_off: mine.touch_gestures_off,
+        image_auto_restart: mine.image_auto_restart,
     }
 }
 
@@ -999,6 +1011,7 @@ mod tests {
                     file_sharing: false,
                     shared_folders: vec!["Pictures".into()],
                     touch_gestures_off: false,
+                    image_auto_restart: true,
                     root_elevation: false,
                 },
             )
@@ -1273,6 +1286,30 @@ mod tests {
         assert!(!again.get("uid:1000").unwrap().adb_auto_connect);
         assert!(
             again.get("uid:1001").unwrap().adb_auto_connect,
+            "the user's own"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr14_image_auto_restart_is_on_by_default_and_kept_per_user() {
+        let dir = scratch("image-auto-restart");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().image_auto_restart);
+        let saved = store
+            .set(
+                "uid:1000",
+                &Settings {
+                    image_auto_restart: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!saved.image_auto_restart);
+        let again = FileSettings::new(&dir);
+        assert!(!again.get("uid:1000").unwrap().image_auto_restart);
+        assert!(
+            again.get("uid:1001").unwrap().image_auto_restart,
             "the user's own"
         );
         let _ = std::fs::remove_dir_all(&dir);

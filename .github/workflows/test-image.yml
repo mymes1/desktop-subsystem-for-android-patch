@@ -33,6 +33,7 @@ on:
       - "dsa/guest/aidl/**"
       - "dsa/protocol/**"
       - "dsa/guest/media-probe/**"
+      - "dsa/guest/arm-probe/**"
       - "dsa/host/platform/linux/tests/widgets.rs"
       - "dsa/host/platform/linux/tests/media.rs"
       - "dsa/host/platform/linux/tests/system_screens.rs"
@@ -470,6 +471,20 @@ jobs:
         with:
           name: guest-media-probe
           path: .scratch/media-probe/dsa-media-probe.apk
+          if-no-files-found: error
+
+      # An app whose only code is an ARM64 library, which the overlay check starts through
+      # the ARM translator.
+      - name: Build the ARM probe
+        id: arm-probe
+        if: ${{ !cancelled() }}
+        run: bash dsa/guest/arm-probe/build.sh .scratch/arm-probe
+
+      - if: ${{ !cancelled() && steps.arm-probe.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-arm-probe
+          path: .scratch/arm-probe/dsa-arm-probe.apk
           if-no-files-found: error
 
 
@@ -1171,6 +1186,13 @@ jobs:
           name: guest-media-probe
           path: .scratch/media-probe
 
+      - name: Download the ARM probe
+        if: matrix.test == 'overlays'
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-arm-probe
+          path: .scratch/arm-probe
+
       - name: Download the graphics test apps
         if: matrix.test == 'graphics'
         uses: actions/download-artifact@v4
@@ -1235,6 +1257,9 @@ jobs:
           export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
           if [[ "${{ matrix.test }}" == media ]]; then
             export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
+          fi
+          if [[ "${{ matrix.test }}" == overlays ]]; then
+            export DSA_ARM_PROBE="$GITHUB_WORKSPACE/.scratch/arm-probe/dsa-arm-probe.apk"
           fi
           if [[ "${{ matrix.test }}" == graphics ]]; then
             # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.

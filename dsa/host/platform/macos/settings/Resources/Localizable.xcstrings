@@ -698,6 +698,108 @@
         }
       }
     },
+    "Android_RestartPending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0} is downloaded. Restart Android to use it now."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0}을(를) 내려받았습니다. 지금 적용하려면 Android를 다시 시작하세요."
+          }
+        }
+      }
+    },
+    "AndroidRestartButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 다시 시작"
+          }
+        }
+      }
+    },
+    "AndroidRestartConfirm.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Android now?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 Android를 다시 시작할까요?"
+          }
+        }
+      }
+    },
+    "AndroidRestartConfirm.Body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android restarts into Android {0}. Its app windows close; open the apps again once it has started."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0}(으)로 다시 시작합니다. 앱 창이 닫히며, 시작이 끝나면 앱을 다시 열면 됩니다."
+          }
+        }
+      }
+    },
+    "ImageAutoRestartCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Android into updates by itself"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트 시 Android 자동으로 다시 시작"
+          }
+        }
+      }
+    },
+    "ImageAutoRestartCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본값은 켬입니다. 열린 앱 창이 없으면 내려받은 업데이트로 Android를 바로 다시 시작합니다. 창이 열려 있으면 먼저 묻거나, 창을 모두 닫을 때까지 기다립니다. 끄면 다음에 Android를 시작할 때 업데이트를 적용합니다."
+          }
+        }
+      }
+    },
     "AndroidFollowsCard.Header": {
       "extractionState": "manual",
       "localizations": {
@@ -1146,13 +1248,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."
+            "value": "No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다."
+            "value": "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 열린 앱 창이 없을 때 Android를 다시 시작해 업데이트를 적용합니다."
           }
         }
       }
@@ -5164,13 +5266,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download signed security updates and new versions of Android. They apply at the next start of Android."
+            "value": "Download signed security updates and new versions of Android. They apply when Android restarts, as the setting below says."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 다음에 Android를 시작할 때 적용됩니다."
+            "value": "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 아래 설정에 따라 Android가 다시 시작할 때 적용됩니다."
           }
         }
       }

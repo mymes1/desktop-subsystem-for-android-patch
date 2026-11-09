@@ -74,6 +74,27 @@ public partial class UpdatesPage : Page
     private async void OnImageToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetImageUpdatesAsync(ImageSwitch.IsChecked == true);
 
+    private async void OnAutoRestartToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetImageAutoRestartAsync(AutoRestartSwitch.IsChecked == true);
+
+    /// <summary>Restarts Android now into the downloaded image, after the user agrees that its
+    /// app windows close.</summary>
+    private async void OnRestartNow(object sender, RoutedEventArgs e)
+    {
+        if (Android.RestartPending is not { } version)
+        {
+            return;
+        }
+        var confirmed = await Shell.Confirm(App.Text.Get("AndroidRestartConfirm.Title"),
+            string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                App.Text.Get("AndroidRestartConfirm.Body"), version),
+            App.Text.Get("AndroidRestartButton.Content"));
+        if (confirmed)
+        {
+            await Android.RestartNowAsync();
+        }
+    }
+
     private async void OnPrereleaseToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetPrereleaseUpdatesAsync(PrereleaseSwitch.IsChecked == true);
 

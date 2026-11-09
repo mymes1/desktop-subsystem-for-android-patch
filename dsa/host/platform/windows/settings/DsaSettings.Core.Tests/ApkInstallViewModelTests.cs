@@ -330,6 +330,54 @@ public class ApkInstallViewModelTests
         Assert.Equal("", arm.CompatibilityWarning);
     }
 
+    /// <summary>What dsa apk-info says of an APK with native code for <paramref name="abis"/>
+    /// only, and of whether Android runs arm64-v8a code (null: dsa could not say).</summary>
+    private static string ArmInfo(string abis, string runsArm64) =>
+        Info().Replace("\"abis\":[\"x86_64\"]", $"\"abis\":[{abis}]")
+            .Replace("\"android\":", $"\"runs_arm64\":{runsArm64},\"android\":");
+
+    [Fact]
+    public async Task Fr25_an_arm64_app_is_not_flagged_while_an_arm_translator_runs_it()
+    {
+        // What APKPure 3.20 is: arm64-v8a code only. With the default translator on, Android
+        // runs it, so the installer has nothing to warn of.
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", ArmInfo("\"arm64-v8a\"", "true")));
+        Assert.True(vm.Apk!.RunsArm64);
+        Assert.Equal("", vm.CompatibilityWarning);
+        Assert.Equal("", vm.CompatibilityTitle);
+        Assert.True(vm.CanInstall);
+        // An app with 32-bit ARM code beside it runs its arm64-v8a code.
+        var both = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json",
+            ArmInfo("\"arm64-v8a\",\"armeabi-v7a\"", "true")));
+        Assert.Equal("", both.CompatibilityWarning);
+    }
+
+    [Fact]
+    public async Task Fr25_an_arm_app_is_flagged_without_a_translator_or_with_only_32_bit_code()
+    {
+        // No translator: the translation is off, or the image has none.
+        var off = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", ArmInfo("\"arm64-v8a\"", "false")));
+        Assert.False(off.Apk!.RunsArm64);
+        Assert.StartsWith("ApkWindow_AbiWarning arm64-v8a", off.CompatibilityWarning);
+        Assert.StartsWith("ApkWindow_AbiWarningTitle", off.CompatibilityTitle);
+        // dsa could not ask the service: the warning stays, as before it could.
+        var unknown = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", ArmInfo("\"arm64-v8a\"", "null")));
+        Assert.Null(unknown.Apk!.RunsArm64);
+        Assert.StartsWith("ApkWindow_AbiWarning arm64-v8a", unknown.CompatibilityWarning);
+        // The translator runs no 32-bit ARM code, so an app with only that is flagged with it on,
+        // and told why.
+        var old = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json",
+            ArmInfo("\"armeabi-v7a\",\"armeabi\"", "true")));
+        Assert.StartsWith("ApkWindow_Abi32Warning armeabi-v7a, armeabi", old.CompatibilityWarning);
+        Assert.StartsWith("ApkWindow_AbiWarningTitle", old.CompatibilityTitle);
+        var oldOff = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json",
+            ArmInfo("\"armeabi-v7a\"", "false")));
+        Assert.StartsWith("ApkWindow_AbiWarning armeabi-v7a", oldOff.CompatibilityWarning);
+        // Android decides either way, so the install stays possible.
+        Assert.True(old.CanInstall);
+        Assert.True(off.CanInstall);
+    }
+
     [Fact]
     public async Task Fr11_launch_when_ready_opens_the_app_once_it_is_installed()
     {

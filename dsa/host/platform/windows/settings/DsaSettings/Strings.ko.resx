@@ -359,7 +359,7 @@
     <value>Android 이미지 자동 업데이트</value>
   </data>
   <data name="ImageUpdatesCard.Description" xml:space="preserve">
-    <value>서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 다음에 Android를 시작할 때 적용됩니다.</value>
+    <value>서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 아래 설정에 따라 Android가 다시 시작할 때 적용됩니다.</value>
   </data>
   <data name="UpdatesMachineNote.Text" xml:space="preserve">
     <value>이 설정은 이 PC의 모든 사용자에게 적용되며, 관리자만 바꿀 수 있습니다. 꺼진 채 바뀌지 않는 스위치는 이 설치에서 제공하지 않는 기능입니다.</value>
@@ -1123,6 +1123,9 @@
   <data name="ApkWindow_AbiWarning" xml:space="preserve">
     <value>이 앱에는 {0} 프로세서용 코드만 있고 이 PC의 프로세서용 코드는 없습니다. ARM 번역 묶음가 있어야 Android에서 실행되며, 설치가 거부될 수 있습니다.</value>
   </data>
+  <data name="ApkWindow_Abi32Warning" xml:space="preserve">
+    <value>이 앱에는 {0} 프로세서용 코드만 있습니다. ARM 번역기는 64비트 ARM(arm64-v8a) 코드만 실행하므로, 설치가 거부되거나 앱이 시작되지 않을 수 있습니다.</value>
+  </data>
   <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
     <value>{0}이(가) 설치됐지만 열리지 않았습니다. {1}</value>
   </data>
@@ -1883,10 +1886,28 @@
     <value>Android 업데이트</value>
   </data>
   <data name="Android_UpToDate" xml:space="preserve">
-    <value>기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다.</value>
+    <value>기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 열린 앱 창이 없을 때 Android를 다시 시작해 업데이트를 적용합니다.</value>
   </data>
   <data name="AndroidCheckButton.Content" xml:space="preserve">
     <value>지금 확인</value>
+  </data>
+  <data name="Android_RestartPending" xml:space="preserve">
+    <value>Android {0}을(를) 내려받았습니다. 지금 적용하려면 Android를 다시 시작하세요.</value>
+  </data>
+  <data name="AndroidRestartButton.Content" xml:space="preserve">
+    <value>지금 다시 시작</value>
+  </data>
+  <data name="AndroidRestartConfirm.Title" xml:space="preserve">
+    <value>지금 Android를 다시 시작할까요?</value>
+  </data>
+  <data name="AndroidRestartConfirm.Body" xml:space="preserve">
+    <value>Android {0}(으)로 다시 시작합니다. 앱 창이 닫히며, 시작이 끝나면 앱을 다시 열면 됩니다.</value>
+  </data>
+  <data name="ImageAutoRestartCard.Header" xml:space="preserve">
+    <value>업데이트 시 Android 자동으로 다시 시작</value>
+  </data>
+  <data name="ImageAutoRestartCard.Description" xml:space="preserve">
+    <value>기본값은 켬입니다. 열린 앱 창이 없으면 내려받은 업데이트로 Android를 바로 다시 시작합니다. 창이 열려 있으면 먼저 묻거나, 창을 모두 닫을 때까지 기다립니다. 끄면 다음에 Android를 시작할 때 업데이트를 적용합니다.</value>
   </data>
   <data name="IdentitySpecsCard.Header" xml:space="preserve">
     <value>기기 사양</value>

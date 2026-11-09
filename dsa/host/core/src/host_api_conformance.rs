@@ -152,6 +152,12 @@ pub struct FakeAndroid {
     pub install_abis: Mutex<Vec<Option<String>>>,
     /// Each "Run as ARM" change it was asked for: the package, on, and whether its data may go.
     pub run_as_arm: Mutex<Vec<(String, bool, bool)>>,
+    /// Each word on whether it restarts by itself into a downloaded image, in order.
+    pub image_auto_restart: Mutex<Vec<bool>>,
+    /// The downloaded image it waits to restart into, if any.
+    pub restart_pending: Mutex<Option<String>>,
+    /// The images it was asked to restart into now, in order.
+    pub restarted_into: Mutex<Vec<String>>,
 }
 
 /// The system app the fake Android lists, which it refuses to uninstall.
@@ -271,6 +277,9 @@ impl FakeAndroid {
             translating: Mutex::new(false),
             install_abis: Mutex::new(Vec::new()),
             run_as_arm: Mutex::new(Vec::new()),
+            image_auto_restart: Mutex::new(Vec::new()),
+            restart_pending: Mutex::new(None),
+            restarted_into: Mutex::new(Vec::new()),
         }
     }
 
@@ -406,6 +415,19 @@ impl UserAndroid for FakeAndroid {
     }
     fn links_in_android(&self, on: bool) {
         self.links_in_android.lock().unwrap().push(on);
+    }
+    fn image_auto_restart(&self, on: bool) {
+        self.image_auto_restart.lock().unwrap().push(on);
+    }
+    fn restart_pending(&self) -> Option<String> {
+        self.restart_pending.lock().unwrap().clone()
+    }
+    fn restart_for_update(&self) -> Result<Option<String>, String> {
+        let waiting = self.restart_pending.lock().unwrap().take();
+        if let Some(version) = &waiting {
+            self.restarted_into.lock().unwrap().push(version.clone());
+        }
+        Ok(waiting)
     }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         if let Some(why) = self.refuse_developer_mode.lock().unwrap().clone() {

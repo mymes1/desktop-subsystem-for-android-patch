@@ -446,19 +446,22 @@ impl StartMenuSetup {
     /// Makes each app's window program and its shortcut, and removes the shortcuts of the apps
     /// that are gone. Returns what went wrong, one sentence each; the rest is done anyway.
     pub fn sync(&self, apps: &[AppInfo], shortcuts: &dyn Shortcuts) -> Vec<String> {
+        self.sync_waiting(apps, shortcuts).0
+    }
+
+    /// [`StartMenuSetup::sync`], and whether a program is still waiting to take its app's name
+    /// and icon because it runs, so the sync is worth trying again once its windows close.
+    pub fn sync_waiting(&self, apps: &[AppInfo], shortcuts: &dyn Shortcuts) -> (Vec<String>, bool) {
         let mut problems = Vec::new();
         let mut entries = Vec::new();
+        let mut waiting = false;
         for app in apps {
             if !is_valid_package(&app.package_name) {
                 continue;
             }
-            match crate::app_exe::ensure(
-                &self.template,
-                &self.apps_dir,
-                &app.package_name,
-                Some(app),
-            ) {
+            match crate::app_exe::ensure_installed(&self.template, &self.apps_dir, app) {
                 Ok((program, note)) => {
+                    waiting |= note.is_some();
                     problems.extend(note);
                     let label = app.label.trim();
                     entries.push(MenuEntry {
@@ -475,7 +478,7 @@ impl StartMenuSetup {
             }
         }
         problems.extend(self.menu.update(&entries, shortcuts));
-        problems
+        (problems, waiting)
     }
 
     /// Removes the window program of each app in `gone`, an app that was installed and is no
@@ -502,24 +505,62 @@ pub fn default_uninstaller() -> Option<PathBuf> {
     uninstaller_beside(&std::env::current_exe().ok()?)
 }
 
+/// How often the Start menu is brought in step again while an app's program could not take
+/// the app's name and icon because the app's windows were open.
+pub const RETRY_WHILE_IN_USE: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Keeps the Start menu, and Windows' list of installed apps, in step with each list of
 /// installed apps that arrives on `installed`, until it closes. When several lists are waiting,
-/// only the latest is acted on.
+/// only the latest is acted on. A program that runs, and so could not take its app's new name
+/// or icon, is tried again every [`RETRY_WHILE_IN_USE`] until its windows have closed.
 pub fn keep(
     installed: Receiver<Vec<AppInfo>>,
     setup: StartMenuSetup,
     logger: Option<Arc<CompositorLogger>>,
 ) {
+    use std::sync::mpsc::RecvTimeoutError;
     let _com = ComApartment::enter();
     let mut previous: Option<BTreeSet<String>> = None;
     let uninstaller = default_uninstaller();
     let keys = crate::installed_apps::RegistryKeys::current_user();
-    while let Ok(mut apps) = installed.recv() {
+    let mut last: Option<Vec<AppInfo>> = None;
+    let mut waiting = false;
+    // What was logged at the last sync, so a retry says only what is new.
+    let mut told: BTreeSet<String> = BTreeSet::new();
+    loop {
+        let received = if waiting {
+            installed.recv_timeout(RETRY_WHILE_IN_USE)
+        } else {
+            installed.recv().map_err(|_| RecvTimeoutError::Disconnected)
+        };
+        let fresh = received.is_ok();
+        let mut apps = match received {
+            Ok(apps) => apps,
+            Err(RecvTimeoutError::Timeout) => match last.clone() {
+                Some(apps) => apps,
+                None => {
+                    waiting = false;
+                    continue;
+                }
+            },
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
         while let Ok(newer) = installed.try_recv() {
             apps = newer;
         }
-        for problem in setup.sync(&apps, &ShellLinks) {
-            note(logger.as_deref(), &format!("Start menu: {problem}"));
+        let (problems, still_waiting) = setup.sync_waiting(&apps, &ShellLinks);
+        waiting = still_waiting;
+        let now_told: BTreeSet<String> = problems.iter().cloned().collect();
+        for problem in &problems {
+            if !told.contains(problem) {
+                note(logger.as_deref(), &format!("Start menu: {problem}"));
+            }
+        }
+        told = now_told;
+        last = Some(apps.clone());
+        if !fresh {
+            // Only the programs were tried again; the rest is in step with this list already.
+            continue;
         }
         if let Some(uninstaller) = &uninstaller {
             let entries = crate::installed_apps::entries(&apps, &setup.apps_dir, uninstaller);

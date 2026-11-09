@@ -13,6 +13,12 @@ grep -Fq 'check: Lay the ARM translator and Google Play over the booted system' 
 grep -Fq 'test: overlays' "$workflow"
 grep -Fq 'artifact: overlay-check-logs' "$workflow"
 grep -Fq '"dsa/host/platform/linux/tests/overlays.rs"' "$workflow"
+# The check starts an ARM app through the translator: a translator whose files were all in
+# place aborted every ARM app as it started, and only an app's start showed it.
+grep -Fq 'run: bash dsa/guest/arm-probe/build.sh .scratch/arm-probe' "$workflow"
+grep -Fq 'name: guest-arm-probe' "$workflow"
+grep -Fq 'export DSA_ARM_PROBE="$GITHUB_WORKSPACE/.scratch/arm-probe/dsa-arm-probe.apk"' "$workflow"
+grep -Fq '"dsa/guest/arm-probe/**"' "$workflow"
 # The translator is downloaded before the image's inputs are named and the image is made, so
 # the image carries it and its cache entry names it.
 download=$(grep -n 'name: Download the default ARM translator' "$workflow" | head -1 | cut -d: -f1)

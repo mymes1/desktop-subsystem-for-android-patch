@@ -1,0 +1,38 @@
+<!--
+    The title bar of the settings window and of the APK Installer, which both draw it themselves.
+    It shows whether its window has the focus, as the title bars Windows draws do: an active
+    window's bar has its title and buttons at full strength, on the backdrop or, with "Show
+    accent colour on title bars", on the accent colour; an inactive window's bar dims them and
+    goes back to the backdrop. High contrast takes the theme's caption colours.
+
+    The colours are the window's resources, which TitleBarActivation fills and keeps up to date
+    with the theme, the accent colour and high contrast. The library's title bar (WPF UI, MIT
+    licence, Leszek Pomianowski and WPF UI contributors) keeps its own template; this style
+    only colours it.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <Style x:Key="WindowTitleBar" TargetType="ui:TitleBar" BasedOn="{StaticResource {x:Type ui:TitleBar}}">
+        <Setter Property="Background" Value="{DynamicResource TitleBarActiveBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource TitleBarActiveForeground}" />
+        <Setter Property="ButtonsForeground" Value="{DynamicResource TitleBarActiveForeground}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                <Setter Property="Background" Value="{DynamicResource TitleBarInactiveBackground}" />
+                <Setter Property="Foreground" Value="{DynamicResource TitleBarInactiveForeground}" />
+                <Setter Property="ButtonsForeground" Value="{DynamicResource TitleBarInactiveForeground}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The icon in the title bar dims with the title. -->
+    <Style x:Key="WindowTitleBarIcon" TargetType="ui:ImageIcon">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                <Setter Property="Opacity" Value="{DynamicResource TitleBarInactiveIconOpacity}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>

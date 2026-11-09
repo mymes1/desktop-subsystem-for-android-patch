@@ -11,7 +11,22 @@
 //! A copy is made again when the installed window host changes (DSA was updated) or the app's
 //! name or icon does. A note beside it (`made.json`) records what it was made from. A copy
 //! under the app's old name is removed once it no longer runs. A copy that is running cannot
-//! be replaced; when its name stays the same, it stays as it is until the app's windows close.
+//! be replaced; when its name stays the same, it stays as it is until the app's windows close,
+//! and is made again then.
+//!
+//! The guest describes an app in two ways: before its window opens ([`ensure`]), with the
+//! icon drawn large for the splash and the title bar's icon beside it, and in the list of
+//! installed apps ([`ensure_installed`]), with the launcher icon at 256 pixels and the app's
+//! version. The two drawings of one icon never have the same bytes, so a program made from the
+//! first is kept while the list describes the same app at the same version; otherwise every
+//! window and every list would make the program again in turn, and the copy in use would stay
+//! as it was. An icon the guest could not draw never takes the place of one it drew.
+//!
+//! Explorer keeps the icon of a program by its file and index, so a program made again with
+//! another icon under the same name would go on showing the old one in the Start menu and on
+//! the taskbar, which take it from the app's shortcut. Explorer is told the file changed and to
+//! read icons again. A window's own icon, which Alt+Tab shows, is read from the program when it
+//! starts.
 
 use std::fs;
 use std::io;
@@ -135,6 +150,78 @@ struct Made {
     /// for none. A note written before it was recorded reads as none.
     #[serde(default)]
     caption_icon: String,
+    /// What the program was made from: [`FROM_WINDOW`] or [`FROM_INSTALLED`]. A note written
+    /// before it was recorded reads as neither.
+    #[serde(default)]
+    source: String,
+    /// The installed version (`<version code>-<last update time>`) of the app the program was
+    /// last held against, from the list of installed apps; empty while none was.
+    #[serde(default)]
+    updated: String,
+}
+
+/// A program made from the description the guest gives before the app's window opens.
+const FROM_WINDOW: &str = "window";
+
+/// A program made from the guest's list of installed apps.
+const FROM_INSTALLED: &str = "installed";
+
+/// The installed version of `app` as a note records it; empty when the guest gave none.
+fn installed_version(app: &AppInfo) -> String {
+    if app.version_code == 0 && app.last_update_time_ms == 0 {
+        return String::new();
+    }
+    format!("{}-{}", app.version_code, app.last_update_time_ms)
+}
+
+/// What becomes of a program when it is asked for again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Plan {
+    /// The program stays as it is, and its note says this.
+    Keep(Made),
+    /// The program is made again, and its note says this.
+    Make(Made),
+}
+
+/// What becomes of the program made as `current` (`None` when there is none) when it is asked
+/// for as `wanted`.
+fn plan(current: Option<&Made>, mut wanted: Made) -> Plan {
+    let from_window = wanted.source == FROM_WINDOW;
+    let Some(current) = current else {
+        return Plan::Make(wanted);
+    };
+    if from_window {
+        // The window's description says nothing of the installed version, so the version the
+        // program was last held against stays.
+        wanted.updated = current.updated.clone();
+    }
+    if current.template != wanted.template || current.label != wanted.label {
+        return Plan::Make(wanted);
+    }
+    let kept = |updated: String| {
+        Plan::Keep(Made {
+            updated,
+            ..current.clone()
+        })
+    };
+    if current.icon == wanted.icon && current.caption_icon == wanted.caption_icon {
+        return kept(wanted.updated);
+    }
+    // An icon the guest could not draw this time never takes the place of one it drew.
+    if wanted.icon.is_empty() && !current.icon.is_empty() {
+        return kept(wanted.updated);
+    }
+    // The list draws the same icon smaller and without the title bar's icon. A program made
+    // from the window's description of the app at the version listed, or before any version
+    // was, already shows it.
+    if !from_window
+        && current.source == FROM_WINDOW
+        && !current.icon.is_empty()
+        && (current.updated.is_empty() || current.updated == wanted.updated)
+    {
+        return kept(wanted.updated);
+    }
+    Plan::Make(wanted)
 }
 
 fn template_stamp(template: &Path) -> io::Result<String> {
@@ -160,14 +247,42 @@ fn label_of(package: &str, app: Option<&AppInfo>) -> String {
 }
 
 /// Makes sure `apps_dir` holds the window program of `package`, made from `template` with the
-/// app's name and icon and named after the app, and returns its path. An existing copy that
-/// is up to date is used as it is; an outdated one of the same name that is running is used
-/// too, and the reason is returned with it.
+/// app's name and icon (as the guest describes the app before its window opens) and named
+/// after the app, and returns its path. An existing copy that is up to date is used as it is;
+/// an outdated one of the same name that is running is used too, and the reason is returned
+/// with it.
 pub fn ensure(
     template: &Path,
     apps_dir: &Path,
     package: &str,
     app: Option<&AppInfo>,
+) -> Result<(PathBuf, Option<String>), String> {
+    make(template, apps_dir, package, app, FROM_WINDOW)
+}
+
+/// [`ensure`] for an app as the guest's list of installed apps describes it, for its Start
+/// menu shortcut. A program made from the window's description of the same app at the same
+/// version is kept: it shows the same icon, drawn larger, with the title bar's icon beside it.
+pub fn ensure_installed(
+    template: &Path,
+    apps_dir: &Path,
+    app: &AppInfo,
+) -> Result<(PathBuf, Option<String>), String> {
+    make(
+        template,
+        apps_dir,
+        &app.package_name,
+        Some(app),
+        FROM_INSTALLED,
+    )
+}
+
+fn make(
+    template: &Path,
+    apps_dir: &Path,
+    package: &str,
+    app: Option<&AppInfo>,
+    source: &str,
 ) -> Result<(PathBuf, Option<String>), String> {
     if !is_valid_package(package) {
         return Err(format!("{package:?} is not an Android package name"));
@@ -195,14 +310,26 @@ pub fn ensure(
         caption_icon: caption_icon
             .map(|png| hex(&Sha256::digest(png)))
             .unwrap_or_default(),
+        source: source.to_string(),
+        updated: match app {
+            Some(app) if source == FROM_INSTALLED => installed_version(app),
+            _ => String::new(),
+        },
     };
+    let existed = target.exists();
     let current = fs::read_to_string(&note)
         .ok()
         .and_then(|text| serde_json::from_str::<Made>(&text).ok());
-    if target.exists() && current.as_ref() == Some(&made) {
-        remove_old(apps_dir, package, &target);
-        return Ok((target, None));
-    }
+    let made = match plan(current.as_ref().filter(|_| existed), made) {
+        Plan::Keep(kept) => {
+            if current.as_ref() != Some(&kept) {
+                let _ = fs::write(&note, serde_json::to_string(&kept).unwrap_or_default());
+            }
+            remove_old(apps_dir, package, &target);
+            return Ok((target, None));
+        }
+        Plan::Make(made) => made,
+    };
     fs::create_dir_all(&folder)
         .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
     let mut fresh = target.clone().into_os_string();
@@ -224,6 +351,9 @@ pub fn ensure(
             let text = serde_json::to_string(&made).unwrap_or_default();
             let _ = fs::write(&note, text);
             remove_old(apps_dir, package, &target);
+            if existed && current.is_none_or(|current| current.icon != made.icon) {
+                tell_explorer_the_icon_changed(&target);
+            }
             Ok((target, None))
         }
         Err(e) if target.exists() => {
@@ -242,6 +372,31 @@ pub fn ensure(
                 "could not put {package}'s window program in place: {e}"
             ))
         }
+    }
+}
+
+/// Tells Explorer that the program at `path` was made again with another icon, so the Start
+/// menu and the taskbar read it again rather than show the one Explorer keeps for the file's
+/// name and index.
+fn tell_explorer_the_icon_changed(path: &Path) {
+    use windows_sys::Win32::UI::Shell::{
+        SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNE_UPDATEITEM, SHCNF_IDLIST, SHCNF_PATHW,
+    };
+    let path = wide(&path.to_string_lossy());
+    // SAFETY: a NUL-terminated path that outlives the call, and an event with no items.
+    unsafe {
+        SHChangeNotify(
+            SHCNE_UPDATEITEM as i32,
+            SHCNF_PATHW,
+            path.as_ptr().cast(),
+            std::ptr::null(),
+        );
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED as i32,
+            SHCNF_IDLIST,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
     }
 }
 
@@ -405,15 +560,73 @@ pub struct ProgramLauncher {
     pub template: PathBuf,
     pub apps_dir: PathBuf,
     pub logger: Option<std::sync::Arc<crate::compositor::log::CompositorLogger>>,
+    /// The apps whose program ended while it could not take the app's name and icon, with
+    /// them and how many more ticks it is tried.
+    waiting: std::collections::BTreeMap<String, (AppInfo, u32)>,
+}
+
+/// How many ticks of the window manager a program that ended is tried again while its file is
+/// still held: its process may end a little after its connection.
+const REMAKE_TRIES: u32 = 20;
+
+impl ProgramLauncher {
+    pub fn new(
+        template: PathBuf,
+        apps_dir: PathBuf,
+        logger: Option<std::sync::Arc<crate::compositor::log::CompositorLogger>>,
+    ) -> ProgramLauncher {
+        ProgramLauncher {
+            template,
+            apps_dir,
+            logger,
+            waiting: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// Makes the program of `app` again if it is outdated. True when nothing is left to do:
+    /// it is up to date, or it cannot be made at all.
+    fn remake(&self, app: &AppInfo) -> bool {
+        match ensure(&self.template, &self.apps_dir, &app.package_name, Some(app)) {
+            Ok((_, None)) => true,
+            Ok((_, Some(_))) => false,
+            Err(why) => {
+                crate::compositor::log::note(self.logger.as_deref(), &why);
+                true
+            }
+        }
+    }
 }
 
 impl crate::compositor::hosts::HostLauncher for ProgramLauncher {
     fn start(&mut self, package: &str, app: Option<&AppInfo>) -> Result<(), String> {
+        self.waiting.remove(package);
         let (program, note) = ensure(&self.template, &self.apps_dir, package, app)?;
         if let Some(note) = note {
             crate::compositor::log::note(self.logger.as_deref(), &note);
         }
         spawn(&program, package)
+    }
+
+    fn ended(&mut self, package: &str, app: Option<&AppInfo>) {
+        let Some(app) = app.filter(|app| app.package_name == package) else {
+            return;
+        };
+        if !self.remake(app) {
+            self.waiting
+                .insert(package.to_string(), (app.clone(), REMAKE_TRIES));
+        }
+    }
+
+    fn tick(&mut self) {
+        if self.waiting.is_empty() {
+            return;
+        }
+        let waiting = std::mem::take(&mut self.waiting);
+        for (package, (app, tries)) in waiting {
+            if !self.remake(&app) && tries > 1 {
+                self.waiting.insert(package, (app, tries - 1));
+            }
+        }
     }
 }
 
@@ -465,4 +678,141 @@ fn spawn(program: &Path, package: &str) -> Result<(), String> {
         CloseHandle(process.hThread);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn made(source: &str, icon: &str, caption_icon: &str, updated: &str) -> Made {
+        Made {
+            template: "template".into(),
+            label: "Google Play Store".into(),
+            icon: icon.into(),
+            caption_icon: caption_icon.into(),
+            source: source.into(),
+            updated: updated.into(),
+        }
+    }
+
+    #[test]
+    fn fr7_the_installed_list_keeps_the_program_its_window_made_at_the_same_version() {
+        // The window's description draws the icon at 512 pixels with the title bar's icon;
+        // the list draws it at 256 without. They are the same icon, so the program stays.
+        let window = made(FROM_WINDOW, "large", "caption", "85073430-1");
+        let listed = made(FROM_INSTALLED, "small", "", "85073430-1");
+        assert_eq!(plan(Some(&window), listed), Plan::Keep(window.clone()));
+        // A program the window made before any list was seen takes the list's version.
+        let unversioned = made(FROM_WINDOW, "large", "caption", "");
+        assert_eq!(
+            plan(
+                Some(&unversioned),
+                made(FROM_INSTALLED, "small", "", "85073430-1")
+            ),
+            Plan::Keep(made(FROM_WINDOW, "large", "caption", "85073430-1"))
+        );
+    }
+
+    #[test]
+    fn fr7_an_updated_app_gets_its_new_icon_from_the_installed_list() {
+        // Play updates itself: a new version is listed, whose icon may be new.
+        let window = made(FROM_WINDOW, "large", "caption", "85073430-1");
+        let listed = made(FROM_INSTALLED, "new", "", "86000000-2");
+        assert_eq!(plan(Some(&window), listed.clone()), Plan::Make(listed));
+    }
+
+    #[test]
+    fn fr7_opening_a_window_makes_the_program_from_the_windows_icon() {
+        // The window's description is the richer one, and keeps the version already held.
+        let listed = made(FROM_INSTALLED, "small", "", "85073430-1");
+        let window = made(FROM_WINDOW, "large", "caption", "");
+        assert_eq!(
+            plan(Some(&listed), window),
+            Plan::Make(made(FROM_WINDOW, "large", "caption", "85073430-1"))
+        );
+        // Once made, the list at that version and the next window leave it as it is.
+        let current = made(FROM_WINDOW, "large", "caption", "85073430-1");
+        assert_eq!(
+            plan(
+                Some(&current),
+                made(FROM_INSTALLED, "small", "", "85073430-1")
+            ),
+            Plan::Keep(current.clone())
+        );
+        assert_eq!(
+            plan(Some(&current), made(FROM_WINDOW, "large", "caption", "")),
+            Plan::Keep(current.clone())
+        );
+    }
+
+    #[test]
+    fn fr7_an_icon_the_guest_could_not_draw_never_replaces_one_it_drew() {
+        // A system app read before its icon could be drawn comes with none.
+        let current = made(FROM_INSTALLED, "icon", "", "1-1");
+        assert_eq!(
+            plan(Some(&current), made(FROM_WINDOW, "", "", "")),
+            Plan::Keep(current.clone())
+        );
+        assert_eq!(
+            plan(Some(&current), made(FROM_INSTALLED, "", "", "1-1")),
+            Plan::Keep(current.clone())
+        );
+    }
+
+    #[test]
+    fn fr7_a_program_made_without_an_icon_takes_it_once_it_is_known() {
+        // Started before the guest could draw the app's icon, the program carries none; the
+        // next description that has one makes it again, from the list or from a window.
+        let bare = made(FROM_WINDOW, "", "", "");
+        let listed = made(FROM_INSTALLED, "icon", "", "1-1");
+        assert_eq!(plan(Some(&bare), listed.clone()), Plan::Make(listed));
+        let window = made(FROM_WINDOW, "large", "caption", "");
+        assert_eq!(plan(Some(&bare), window.clone()), Plan::Make(window));
+    }
+
+    #[test]
+    fn fr7_a_renamed_app_or_an_upgraded_dsa_always_makes_the_program_again() {
+        let current = made(FROM_WINDOW, "large", "caption", "1-1");
+        let renamed = Made {
+            label: "Play Store".into(),
+            ..made(FROM_INSTALLED, "small", "", "1-1")
+        };
+        assert_eq!(plan(Some(&current), renamed.clone()), Plan::Make(renamed));
+        let upgraded = Made {
+            template: "newer".into(),
+            ..made(FROM_WINDOW, "large", "caption", "")
+        };
+        assert!(matches!(plan(Some(&current), upgraded), Plan::Make(_)));
+    }
+
+    #[test]
+    fn fr7_a_note_from_before_the_source_was_recorded_is_made_again_once() {
+        // An earlier release did not say what made the program; its note reads as neither.
+        let old: Made = serde_json::from_str(
+            r#"{"template":"template","label":"Google Play Store","icon":"small"}"#,
+        )
+        .unwrap();
+        assert_eq!(old.source, "");
+        // The same drawing stays, and records the version.
+        assert_eq!(
+            plan(Some(&old), made(FROM_INSTALLED, "small", "", "1-1")),
+            Plan::Keep(Made {
+                updated: "1-1".into(),
+                ..old.clone()
+            })
+        );
+        let window = made(FROM_WINDOW, "large", "caption", "");
+        assert_eq!(plan(Some(&old), window.clone()), Plan::Make(window));
+    }
+
+    #[test]
+    fn fr7_the_installed_version_is_the_version_code_and_update_time() {
+        let app = AppInfo {
+            version_code: 85073430,
+            last_update_time_ms: 1_700_000_000_000,
+            ..Default::default()
+        };
+        assert_eq!(installed_version(&app), "85073430-1700000000000");
+        assert_eq!(installed_version(&AppInfo::default()), "");
+    }
 }

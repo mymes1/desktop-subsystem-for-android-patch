@@ -191,6 +191,9 @@ public struct SettingsInfo: Equatable, Sendable {
     /// Whether apps in Android may ask for root through an administrator's approval. The
     /// computer's setting, off by default; it applies from the next start of Android.
     public var rootElevation = false
+    /// Whether Android restarts by itself into an Android image the service downloaded. On by
+    /// default; off, the image is used the next time the user starts Android.
+    public var imageAutoRestart = true
 
     public init() {}
 

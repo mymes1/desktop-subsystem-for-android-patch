@@ -17,8 +17,11 @@
 //! onto empty places the image carries: its libraries onto `/system_ext/lib64`, where the
 //! zygote finds the bridge by name, its ARM64 libraries, linker and app_process onto
 //! `/system/lib64/arm64` and `/system/bin/arm64`, its runners onto
-//! `/system/bin/dsa-arm-translation`, and its linker configuration onto
-//! `/system/etc/ld.config.arm64.txt`. The Google apps are laid over the folders of `/product`
+//! `/system/bin/dsa-arm-translation`, its linker configuration onto
+//! `/system/etc/ld.config.arm64.txt`, and its exec region library onto
+//! `/system/lib64/libberberis_exec_region.so`, the absolute path Berberis opens it by. Until
+//! that was bound, the files were all in place and every ARM app still aborted as it started
+//! ("exec_region_elf_backed.cc:48: CHECK failed: 0 != 0"). The Google apps are laid over the folders of `/product`
 //! and `/system_ext` that hold apps and their configuration, never over a partition's root,
 //! whose `bin` holds services too. statfs on any of those is checked against the image's
 //! superblock, so every program may read it only while the superblock has a type of its own.
@@ -29,9 +32,15 @@
 //! package's two rules take (a fixed-address executable and a position-independent one)
 //! running through the translator and writing what it was made to write, the bridge library
 //! where the zygote looks, and the ARM64 ABI offered, with no native bridge failure in the log.
-//! The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
+//! `pm list features` must report OpenGL ES 3.2 (`reqGlEsVersion=0x30002`) and the features
+//! Google Play takes for granted, or Play hides the apps that need them. The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
 //! registered rules; a program that runs proves its rule is registered, enabled, and starts a
-//! runner that is there and works, which reading the rule never did. Then a small Google apps build, laid
+//! runner that is there and works, which reading the rule never did. An ARM app is then
+//! installed and started: the ARM probe, whose only code is an ARM64 library that the framework's
+//! NativeActivity loads through the native bridge. Android must install it for arm64-v8a, its
+//! ARM64 code must run and log its line, and its process must not crash or abort, which is what
+//! the translator did to every ARM app while its exec region library was missing. A program run
+//! through binfmt_misc never loads that library, so only an app shows it. Then a small Google apps build, laid
 //! out as LiteGapps publishes one, is installed through the local API from a mirror in the
 //! test's folder, and Android starts again: the image must be mounted and laid over each of
 //! its folders, with the translator still in place, the host's privileged permission allowlist
@@ -49,7 +58,8 @@
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
-//! default ARM translation package), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
+//! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
+//! (`dsa/guest/arm-probe/build.sh`), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
 //! the folder carries none, and `DSA_ADB` the adb to reach the guest with (`adb` on the path
 //! when not set). It needs `/dev/kvm` and `/dev/vhost-vsock`. What it read stays in its folder
 //! (`/tmp/overlays-test-<pid>`) for the job to keep.
@@ -84,6 +94,10 @@ const TRANSLATION_BINDS: &[(&str, &str)] = &[
     (
         "/system/etc/ld.config.arm64.txt",
         "/system/etc/ld.config.arm64.txt",
+    ),
+    (
+        "/system/lib64/libberberis_exec_region.so",
+        "/system/lib64/libberberis_exec_region.so",
     ),
 ];
 /// The folders of the system's own programs, which nothing may be mounted on.
@@ -130,6 +144,7 @@ const TRANSLATION_PLACES: &[&str] = &[
     "/system/bin/arm64",
     "/system/bin/dsa-arm-translation",
     "ld.config.arm64.txt",
+    "libberberis_exec_region",
     "libdsa_native_bridge",
     "binfmt_misc",
 ];
@@ -170,6 +185,43 @@ const OVERLAY_TYPES: &[&str] = &[
     "dsa_gapps_fs",
     "system_lib_file",
     "system_file",
+];
+/// The ARM probe (`dsa/guest/arm-probe`): its package, the activity that starts it, the tag it
+/// logs with, and the line its ARM64 code logs once it ran.
+const PROBE_PACKAGE: &str = "io.github.thisisthepy.dsa.armprobe";
+const PROBE_ACTIVITY: &str = "io.github.thisisthepy.dsa.armprobe/android.app.NativeActivity";
+const PROBE_TAG: &str = "DsaArmProbe";
+const PROBE_LINE: &str = "DSA ARM probe ran as arm64";
+/// How long the probe may take from its start to its line: a first translation is slow.
+const PROBE_WAIT: Duration = Duration::from_secs(60);
+/// How long the probe keeps running after its line before the log is read, so a crash just
+/// after it is in the log too.
+const PROBE_SETTLE: Duration = Duration::from_secs(5);
+/// What the log holds when a process crashes or aborts: debuggerd's tombstone lines (the
+/// translator's CHECK failures end in an abort), the kernel's signal, and the runtime's
+/// uncaught exception.
+const CRASH_SIGNS: &[&str] = &[
+    "Abort message",
+    "CHECK failed",
+    "Fatal signal",
+    "FATAL EXCEPTION",
+];
+/// The OpenGL ES version `pm list features` must report, 3.2: ANGLE gives every app 3.2 on the
+/// host GPU's Vulkan. Google Play hides every app whose manifest asks for a version above the
+/// reported one, and v0.2.1 reported 0x0, which hid YouTube, Chrome and most games.
+const GLES_FEATURE: &str = "feature:reqGlEsVersion=0x30002";
+/// Features Google Play takes for granted in the apps it lists, by name. Each one missing hides
+/// every app that does not mark it optional.
+const PLAY_FEATURES: &[&str] = &[
+    "android.hardware.ram.normal",
+    "android.hardware.screen.landscape",
+    "android.hardware.screen.portrait",
+    "android.hardware.touchscreen",
+    "android.hardware.vulkan.level",
+    "android.hardware.vulkan.version",
+    "android.software.app_widgets",
+    "android.software.home_screen",
+    "android.software.input_methods",
 ];
 /// The API levels the mirror carries a build for, with the Android version LiteGapps names.
 const MIRROR_SDKS: &[(u32, &str)] = &[(36, "16.0"), (37, "17.0")];
@@ -801,6 +853,7 @@ const BOUND: &str = "\
 93 20 7:8 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
 94 20 7:8 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
 95 20 7:8 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+98 20 7:8 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
 96 31 0:41 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:41 - binfmt_misc binfmt_misc rw\n";
 
 #[test]
@@ -948,6 +1001,78 @@ fn fr25_a_refusal_of_the_checks_own_commands_is_not_the_translators() {
     let init = "avc:  denied  { search } for  comm=\"init\" name=\"/\" dev=\"binfmt_misc\" scontext=u:r:init:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n";
     assert_eq!(translator_denials(init).len(), 1);
     assert_eq!(mount_denials(init).len(), 1);
+}
+
+/// The ABI Android installed the probe for, as `dumpsys package` shows it.
+fn primary_abi(dump: &str) -> Option<&str> {
+    dump.lines()
+        .find_map(|line| line.trim().strip_prefix("primaryCpuAbi="))
+        .map(str::trim)
+}
+
+/// The lines of `log` that say a process crashed or aborted ([CRASH_SIGNS]).
+fn crash_lines(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| CRASH_SIGNS.iter().any(|sign| line.contains(sign)))
+        .collect()
+}
+
+/// What is wrong with an ARM app's start, given what `dumpsys package` says of the probe and
+/// the log from its start on: it must be installed for arm64-v8a, its ARM64 code must have
+/// logged [PROBE_LINE], and no process may have crashed.
+fn arm_app_problems(dump: &str, log: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    match primary_abi(dump) {
+        Some("arm64-v8a") => {}
+        abi => problems.push(format!(
+            "Android installed the ARM probe for {abi:?}, not arm64-v8a, so it never ran through the translator"
+        )),
+    }
+    let crashes = crash_lines(log);
+    for line in &crashes {
+        problems.push(format!(
+            "an ARM app crashed as it started through the translator: {}",
+            line.trim()
+        ));
+    }
+    if !log.contains(PROBE_LINE) {
+        problems.push(format!(
+            "the ARM probe's ARM64 code never ran: its line ({PROBE_LINE:?}) is not in the log{}",
+            if crashes.is_empty() {
+                ""
+            } else {
+                ", and a process crashed"
+            }
+        ));
+    }
+    problems
+}
+
+#[test]
+fn fr25_an_arm_app_the_translator_aborts_as_it_starts_is_found() {
+    let dump = "Packages:\n  Package [io.github.thisisthepy.dsa.armprobe] (1a2b3c):\n    primaryCpuAbi=arm64-v8a\n    secondaryCpuAbi=null\n";
+    assert_eq!(primary_abi(dump), Some("arm64-v8a"));
+    let ran = "11-10 10:00:01.000  2001  2001 I DsaArmProbe: DSA ARM probe ran as arm64 in process 2001 (333328333350000)\n";
+    assert_eq!(arm_app_problems(dump, ran), Vec::<String>::new());
+
+    // What v0.2.1 did to every ARM app, APKPure's here: the exec region library was not at
+    // the path Berberis opens it by.
+    let aborted = "11-10 10:00:01.000  2001  2001 F libc    : frameworks/libs/binary_translation/runtime_primitives/exec_region_elf_backed.cc:48: CHECK failed: 0 != 0\n\
+                   11-10 10:00:01.001  2001  2001 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 2001 (thisisthepy.dsa.armprobe), pid 2001 (armprobe)\n\
+                   11-10 10:00:01.200  2050  2050 F DEBUG   : Abort message: 'frameworks/libs/binary_translation/runtime_primitives/exec_region_elf_backed.cc:48: CHECK failed: 0 != 0'\n";
+    let problems = arm_app_problems(dump, aborted);
+    assert_eq!(problems.len(), 4, "{problems:?}");
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("exec_region_elf_backed.cc:48")));
+    assert!(problems.last().unwrap().contains("never ran"));
+
+    // Its line, and then a crash, is a failure too.
+    assert_eq!(arm_app_problems(dump, &format!("{ran}{aborted}")).len(), 3);
+    // Installed for x86_64: the translator was never asked.
+    let x86 = dump.replace("primaryCpuAbi=arm64-v8a", "primaryCpuAbi=x86_64");
+    assert_eq!(arm_app_problems(&x86, ran).len(), 1);
+    assert_eq!(arm_app_problems("", ran).len(), 1);
 }
 
 #[test]
@@ -1166,6 +1291,117 @@ fn translation_problems(adb: &Adb, dir: &Path, table: &str, problems: &mut Vec<S
     }
 }
 
+/// Installs the ARM probe `apk`, starts it, and adds what is wrong with its start to
+/// `problems`: an ARM app's process, started through the native bridge, which loads the
+/// translator's exec region library, as no program run through binfmt_misc does. What it read
+/// stays in `dir`.
+fn arm_app_run_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<String>) {
+    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+        problems.push(format!("ARM translation: installing the ARM probe: {why}"));
+        return;
+    }
+    let dump = adb
+        .shell(&format!("dumpsys package {PROBE_PACKAGE}"))
+        .unwrap_or_default();
+    let _ = std::fs::write(dir.join("arm-probe-package.txt"), &dump);
+    // Only what the start logs.
+    let _ = adb.shell("logcat -c -b main -b system -b crash");
+    let started = adb
+        .shell(&format!("am start -W -n {PROBE_ACTIVITY} 2>&1"))
+        .unwrap_or_else(|why| why);
+    let _ = std::fs::write(dir.join("arm-probe-start.txt"), &started);
+    let until = Instant::now() + PROBE_WAIT;
+    while Instant::now() < until {
+        let seen = adb
+            .shell(&format!("logcat -d -s {PROBE_TAG}"))
+            .unwrap_or_default();
+        if seen.contains(PROBE_LINE) {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    std::thread::sleep(PROBE_SETTLE);
+    let log = adb
+        .shell("logcat -d -b main -b system -b crash")
+        .unwrap_or_default();
+    let _ = std::fs::write(dir.join("arm-probe-log.txt"), &log);
+    for problem in arm_app_problems(&dump, &log) {
+        problems.push(format!("ARM translation: {problem}"));
+    }
+    let _ = adb.shell(&format!("am force-stop {PROBE_PACKAGE}"));
+}
+
+/// What in `pm list features` (`features`) and `ro.opengles.version` (`gles`) makes Google Play
+/// call apps incompatible with the device.
+fn play_feature_problems(features: &str, gles: &str) -> Vec<String> {
+    let lines: Vec<&str> = features.lines().map(str::trim).collect();
+    let mut problems = Vec::new();
+    if !lines.contains(&GLES_FEATURE) {
+        let reported = lines
+            .iter()
+            .find(|line| line.starts_with("feature:reqGlEsVersion="))
+            .copied()
+            .unwrap_or("no reqGlEsVersion");
+        problems.push(format!(
+            "Android reports {reported} (ro.opengles.version {:?}), not OpenGL ES 3.2 \
+             ({GLES_FEATURE}), so Google Play hides every app that needs OpenGL ES",
+            gles.trim()
+        ));
+    }
+    for feature in PLAY_FEATURES {
+        let declared = lines.iter().any(|line| {
+            line.strip_prefix("feature:")
+                .is_some_and(|rest| rest.split('=').next() == Some(*feature))
+        });
+        if !declared {
+            problems.push(format!(
+                "Android does not declare {feature}, so Google Play hides every app that needs it"
+            ));
+        }
+    }
+    problems
+}
+
+#[test]
+fn fr32_pr3_a_device_without_opengles_or_a_feature_play_needs_is_found() {
+    let complete = format!(
+        "{GLES_FEATURE}\n{}\nfeature:android.software.webview\n",
+        PLAY_FEATURES
+            .iter()
+            .map(|feature| match *feature {
+                "android.hardware.vulkan.level" => format!("feature:{feature}=1"),
+                "android.hardware.vulkan.version" => format!("feature:{feature}=4206592"),
+                _ => format!("feature:{feature}"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(play_feature_problems(&complete, "196610").is_empty());
+
+    // v0.2.1 on a real PC: no ro.opengles.version, and so reqGlEsVersion=0x0.
+    let without_gles = complete.replace(GLES_FEATURE, "feature:reqGlEsVersion=0x0");
+    let problems = play_feature_problems(&without_gles, "");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("reqGlEsVersion=0x0"), "{problems:?}");
+    let gles_3_1 = complete.replace(GLES_FEATURE, "feature:reqGlEsVersion=0x30001");
+    assert_eq!(play_feature_problems(&gles_3_1, "196609").len(), 1);
+
+    let without_vulkan = complete.replace("feature:android.hardware.vulkan.level=1\n", "");
+    let problems = play_feature_problems(&without_vulkan, "196610");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(
+        problems[0].contains("android.hardware.vulkan.level"),
+        "{problems:?}"
+    );
+    // A feature whose name only starts with a wanted one does not stand in for it.
+    let lookalike = complete.replace(
+        "feature:android.software.home_screen\n",
+        "feature:android.software.home_screen_extra\n",
+    );
+    assert_eq!(play_feature_problems(&lookalike, "196610").len(), 1);
+    assert_eq!(play_feature_problems("", "").len(), 1 + PLAY_FEATURES.len());
+}
+
 /// What the guest's own log of the running boot says went wrong with the overlay scripts.
 fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     // Init's messages are in the kernel's buffer, which logd reads, with the audit messages.
@@ -1199,6 +1435,12 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         return;
     };
     let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
+    let probe = std::env::var_os("DSA_ARM_PROBE")
+        .map(PathBuf::from)
+        .filter(|apk| apk.is_file())
+        .expect(
+            "DSA_ARM_PROBE names no ARM probe APK (dsa/guest/arm-probe/build.sh), so no ARM app can be started",
+        );
     let adb_program = std::env::var_os("DSA_ADB")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("adb"));
@@ -1313,6 +1555,23 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(format!("reading where ARM translation stands: {why}")),
     }
     log_problems(&adb, &dir, "first boot", &mut problems);
+    // An ARM app, after the boot's log is read: the probe clears the log to read its own start.
+    arm_app_run_problems(&adb, &probe, &dir, &mut problems);
+    // What Google Play compares each app's manifest with, which the Google apps do not change.
+    match (
+        adb.shell("pm list features"),
+        adb.shell("getprop ro.opengles.version"),
+    ) {
+        (Ok(features), Ok(gles)) => {
+            let _ = std::fs::write(dir.join("features.txt"), &features);
+            for problem in play_feature_problems(&features, &gles) {
+                problems.push(format!("Google Play: {problem}"));
+            }
+        }
+        (Err(why), _) | (_, Err(why)) => {
+            problems.push(format!("reading the device's features: {why}"))
+        }
+    }
 
     // Google apps from the mirror, through the local API as `dsa gapps install` does. The
     // guest reports its API level a moment after it is ready, so the install is tried again

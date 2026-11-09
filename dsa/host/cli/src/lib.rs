@@ -103,7 +103,12 @@
 //! `xapk`, `apks` or `apkm`), `apks` (the names of the APKs that would be installed, the base
 //! first), `split_count` (how many of them are splits), `obbs` (the expansion files),
 //! `total_size` (all of them, in bytes) and `install_abi` (the ABI chosen from the splits, or
-//! null). A file it cannot read fails as `dsa install` does.
+//! null), and `runs_arm64`: whether this computer's Android runs `arm64-v8a` code, natively or
+//! through its ARM translator (what the running Android's ABI list says, or while it is not
+//! running, whether it starts with a translator), or null when the service cannot say. An app
+//! whose native code is all for other processors may not run; one with `arm64-v8a` code runs
+//! where `runs_arm64` is true, and one with only 32-bit ARM code does not, since no
+//! translator runs it. A file it cannot read fails as `dsa install` does.
 //!
 //! `dsa open` sends a file from this computer to Android, which asks which app opens it; that
 //! app shows in a window of its own. `dsa share` does the same for sharing the file with an
@@ -219,6 +224,13 @@
 //! Windows 11's three- and four-finger touch gestures off while a DSA app window is in front,
 //! so apps get every finger, and puts the user's own value back when another window comes to
 //! the front; `dsa settings` says whether the window manager can do it on this computer.
+//! `image-auto-restart` (on by default) restarts the user's running Android by itself into an
+//! Android image the service downloaded: at once while no app window is open, and otherwise
+//! after the desktop asks ([Restart now] or [Later], which waits until every window is closed);
+//! off, the image is used the next time the user starts Android. `dsa android restart`
+//! restarts Android into the waiting image now, whatever the setting, and `dsa android
+//! version` says when one waits (`restart_pending` in its JSON; `dsa android restart --json`
+//! prints `restarting`, the image or null, and `detail`).
 //! `root-elevation` (off by default, the computer's, so an administrator changes it) lets apps
 //! elevate to root through the computer's administrator approval, from the next start of
 //! Android; `dsa apps root <package>` then sets each app's level.
@@ -357,7 +369,7 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
-     android [version | use <major>|latest [--erase-data]]> \
+     android [version | use <major>|latest [--erase-data] | restart]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
 pub mod device;
@@ -436,6 +448,8 @@ pub enum Command {
     AndroidVersion,
     /// Choose the Android version [`Invocation::android`] names.
     AndroidUse,
+    /// Restart Android now into the downloaded image that waits for it.
+    AndroidRestart,
 }
 
 /// What `dsa app-window` does.
@@ -556,6 +570,7 @@ pub enum Change {
     SharedFolders(Vec<String>),
     AdvancedNetworking(bool),
     TouchGesturesOff(bool),
+    ImageAutoRestart(bool),
     RootElevation(bool),
 }
 
@@ -589,6 +604,7 @@ impl Change {
             "shared-folders" => parse_shared_folders(value).map(Change::SharedFolders),
             "advanced-networking" => switch().map(Change::AdvancedNetworking),
             "touch-gestures-off" => switch().map(Change::TouchGesturesOff),
+            "image-auto-restart" => switch().map(Change::ImageAutoRestart),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -600,7 +616,8 @@ impl Change {
                  clipboard, links-in-android, program-updates, prerelease-updates, \
                  image-updates, input-trace, resize-trace, root-elevation, memory-limit, developer-mode, adb-port, adb-auto-connect, \
                  arm-translation, stop-without-asking, file-sharing, shared-folders, \
-                 advanced-networking, touch-gestures-off and device.<field>"
+                 advanced-networking, touch-gestures-off, image-auto-restart and \
+                 device.<field>"
             )),
         }
     }
@@ -1162,9 +1179,11 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                         })?);
                         Command::AndroidUse
                     }
+                    Some("restart") => Command::AndroidRestart,
                     Some(other) => {
                         return Err(format!(
-                            "dsa android takes version or use <major>, not {other:?}\n{USAGE}"
+                            "dsa android takes version, use <major> or restart, not \
+                             {other:?}\n{USAGE}"
                         ))
                     }
                 });
@@ -2113,6 +2132,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "shared_folders": report.settings.shared_folders,
         "advanced_networking": report.settings.advanced_networking,
         "touch_gestures_off": report.settings.touch_gestures_off,
+        "image_auto_restart": report.settings.image_auto_restart,
         "touch_gestures_state": report.touch_gestures.as_str(),
         "touch_gestures_problem": report.touch_gestures.problem(),
         "network": network_json(report.network.as_ref()),
@@ -2273,6 +2293,7 @@ pub fn android_versions_json(report: &VersionReport) -> Value {
         "target_major": report.target_major,
         "on_trial": report.on_trial,
         "notice": report.notice,
+        "restart_pending": report.restart_pending,
     })
 }
 
@@ -2310,7 +2331,23 @@ pub fn android_versions_text(report: &VersionReport) -> String {
     if let Some(notice) = &report.notice {
         lines.push(format!("Update: {notice}"));
     }
+    if let Some(version) = &report.restart_pending {
+        lines.push(format!(
+            "Android {version} is downloaded and waits for Android to restart; dsa android \
+             restart applies it now"
+        ));
+    }
     lines.join("\n")
+}
+
+/// `dsa android restart`: restarts Android now into the downloaded image that waits for it.
+fn android_restart(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    let (version, detail) = client.restart_for_update().map_err(|e| e.to_string())?;
+    Ok(if invocation.json {
+        json!({ "restarting": version, "detail": detail }).to_string()
+    } else {
+        detail
+    })
 }
 
 /// `dsa android version` and `dsa android use`.
@@ -2442,6 +2479,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!(
             "Advanced networking: {} (dsa network shows the addresses)",
             on_off(settings.advanced_networking)
+        ),
+        format!(
+            "Restart into a downloaded Android image by itself: {} (image-auto-restart)",
+            on_off(settings.image_auto_restart)
         ),
     ];
     // Only Windows 11 has such gestures. Hidden where the window manager found none, as the
@@ -2677,6 +2718,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
             Change::TouchGesturesOff(on) => wanted.touch_gestures_off = *on,
+            Change::ImageAutoRestart(on) => wanted.image_auto_restart = *on,
             Change::RootElevation(on) => wanted.root_elevation = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
@@ -3761,6 +3803,16 @@ pub fn describe_apk(
     out
 }
 
+/// Whether this computer's Android runs `arm64-v8a` code, natively or through its ARM
+/// translator: what the running Android's ABI list says, or, while it is not running, whether
+/// it starts with a translator.
+pub fn runs_arm64(status: &ArmTranslationStatus) -> bool {
+    match &status.guest {
+        Some(guest) => native_abi::translates_arm64(&guest.abilist),
+        None => status.translator.is_some(),
+    }
+}
+
 /// `dsa apk-info`: reads the APK, and when Android runs, asks what it has of the package.
 /// Never starts Android or the service.
 fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<String, String> {
@@ -3773,10 +3825,15 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
     let mut installed = None;
     let mut kind = None;
     let mut device = None;
+    let mut arm64 = None;
     if let Ok(mut client) = connect(connector, None, false, Duration::from_secs(5)) {
         if bundle.is_some() {
             device = Some(bundle_device(Some(&mut client)));
         }
+        arm64 = client
+            .arm_translation()
+            .ok()
+            .map(|status| runs_arm64(&status));
         android = "stopped";
         if client
             .status()
@@ -3803,6 +3860,9 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
     Ok(if invocation.json {
         let mut json = apk_info_json(&info, android, installed.as_ref(), kind);
         add_install_files(&mut json, &info, chosen);
+        if let Value::Object(fields) = &mut json {
+            fields.insert("runs_arm64".into(), json!(arm64));
+        }
         json.to_string()
     } else {
         let mut text = describe_apk(&info, installed.as_ref(), kind);
@@ -4274,6 +4334,7 @@ pub fn run_with_starter(
         Command::AndroidVersion | Command::AndroidUse => {
             return android_version(invocation, &mut client)
         }
+        Command::AndroidRestart => return android_restart(invocation, &mut client),
         Command::Memory => {
             let memory = client.memory().map_err(|e| e.to_string())?;
             return Ok(if invocation.json {

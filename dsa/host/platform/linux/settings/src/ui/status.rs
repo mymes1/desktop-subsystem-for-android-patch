@@ -459,9 +459,46 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
         .visible(false)
         .build();
     update_row.add_suffix(&progress);
+    // Shown while a downloaded image waits for this user's Android to restart.
+    let restart = button(&tr("Restart now"));
+    restart.add_css_class("suggested-action");
+    restart.set_visible(false);
+    update_row.add_suffix(&restart);
+    let restart_button = restart.clone();
     let check = button(&tr("Check now"));
     update_row.add_suffix(&check);
     running.add(&update_row);
+    // The user's own switch: restarting into a downloaded image by itself.
+    let auto_restart = {
+        let (ctx, page) = (ctx.clone(), page.clone());
+        Switch::new(
+            &tr("Restart Android into updates by itself"),
+            &tr("On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android."),
+            move |on| {
+                let page = page.clone();
+                request(
+                    &ctx,
+                    move |c| c.switch("image-auto-restart", on),
+                    move |r| {
+                        page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                    },
+                );
+            },
+        )
+    };
+    running.add(&auto_restart.row);
+    {
+        let auto_restart = auto_restart.clone();
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                if let Ok(settings) = r {
+                    auto_restart.set(settings.image_auto_restart);
+                }
+            },
+        );
+    }
     page.add(&running);
     page.add(image);
 
@@ -504,6 +541,7 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
             );
             follows_label.set_label(&view::android_channel_text(&version));
             update_row.set_subtitle(&view::android_update_text(&version));
+            restart.set_visible(version.restart_pending.is_some());
             match view::android_download_percent(version.notice.as_deref()) {
                 Some(percent) => {
                     progress.set_fraction(f64::from(percent) / 100.0);
@@ -542,6 +580,35 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
                 &ctx,
                 move |c| c.use_android(&channel, false),
                 move |r| show(r),
+            );
+        });
+    }
+    {
+        // The restart is the user's own Android's, so no administrator is asked; the user
+        // agrees first that its app windows close.
+        let (ctx, show, info) = (ctx.clone(), show.clone(), info.clone());
+        restart_button.connect_clicked(move |_| {
+            let Some(version) = info
+                .borrow()
+                .as_ref()
+                .and_then(|version| version.restart_pending.clone())
+            else {
+                return;
+            };
+            let (asked, show) = (ctx.clone(), show.clone());
+            confirm(
+                &ctx,
+                &tr("Restart Android now?"),
+                &trf(
+                    "Android restarts into Android {0}. Its app windows close; open the apps again once it has started.",
+                    &[version.as_str()],
+                ),
+                &tr("Restart now"),
+                false,
+                move || {
+                    let show = show.clone();
+                    request(&asked, |c| c.restart_android(), move |r| show(r));
+                },
             );
         });
     }
@@ -692,7 +759,7 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
         let (ctx, page, cell) = (ctx.clone(), page.clone(), image_switch.clone());
         Switch::new(
             &tr("Update the Android image automatically"),
-            &tr("Download signed security updates and new versions of Android. They apply at the next start of Android."),
+            &tr("Download signed security updates and new versions of Android. They apply when Android restarts, as the Android update settings above say."),
             move |on| {
                 let page = page.clone();
                 let cell = cell.clone();

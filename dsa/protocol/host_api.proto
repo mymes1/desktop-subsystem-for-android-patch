@@ -1582,6 +1582,12 @@ message Settings {
   // is closed and the level does nothing; "unavailable" while root_elevation is off. A client
   // cannot change it here: SetAppRoot with the package "com.android.shell" sets it.
   string adb_shell_root = 38;
+  // Whether the caller's Android restarts by itself into an Android image the service has
+  // downloaded: at once while no app window is open (Dozing), and otherwise after the user's
+  // desktop asks, or once every window is closed and Android dozes. On unless the user turned
+  // it off; a client sends back the value it read. Off, a downloaded image is used from the
+  // next time the user starts Android.
+  bool image_auto_restart = 39;
   // A run mode setting (run_mode, a RunMode enum, stop_after_secs and keep_for_notifications)
   // was here and is gone: an idle Android stays in Doze. Its numbers and names are never
   // used again, so an older peer that still sends them is read without them. The enum name
@@ -1649,6 +1655,25 @@ message AndroidVersions {
   bool on_trial = 9;
   // The latest news about the image; empty when there is none.
   string notice = 10;
+  // The image the caller's running Android waits to restart into: one the service downloaded
+  // after it started. Empty when none waits (it is not running, or it already runs the
+  // newest image). RestartForUpdate applies it now.
+  string restart_pending = 11;
+}
+
+// Restarts the caller's Android now into the Android image that waits for it
+// (AndroidVersions.restart_pending), as the [Restart now] of the desktop's question and of
+// the settings app do. The service answers UpdateRestart at once; the restart then happens on
+// its own, with the new image's trial boot and, when it fails, the rollback to the previous
+// image.
+message RestartForUpdate {}
+
+// The answer to RestartForUpdate.
+message UpdateRestart {
+  // The image Android restarts into. Empty when none waits, and nothing is restarted.
+  string version = 1;
+  // What happens next, in words for the user.
+  string detail = 2;
 }
 
 // What an ARM translation package says of itself, from its arm-translation.json.
@@ -2180,6 +2205,7 @@ message Request {
     EndDrag end_drag = 322;
     GetAndroidVersions get_android_versions = 330;
     UseAndroidVersion use_android_version = 331;
+    RestartForUpdate restart_for_update = 332;
     InstallGapps install_gapps = 400;
     GetGapps get_gapps = 401;
     RemoveGapps remove_gapps = 402;
@@ -2215,6 +2241,7 @@ message Response {
     DragOffer drag_offer = 320;
     DragData drag_data = 321;
     AndroidVersions android_versions = 330;
+    UpdateRestart update_restart = 332;
     Gapps gapps = 400;
     GappsProgress gapps_progress = 401;
     RunAsArmResult run_as_arm_result = 340;

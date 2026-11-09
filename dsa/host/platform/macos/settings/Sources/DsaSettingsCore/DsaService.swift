@@ -97,6 +97,7 @@ public final class DsaService {
         s.adbAutoConnect = json.bool("adb_auto_connect", missing: true)
         s.adbAutoConnectState = AdbAutoConnectState.read(json.optionalString("adb_auto_connect_state"))
         s.rootElevation = json.bool("root_elevation")
+        s.imageAutoRestart = json.bool("image_auto_restart", missing: true)
         return s
     }
 
@@ -145,6 +146,8 @@ public final class DsaService {
     }
     public func setProgramUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("program-updates", onOff(on)) }
     public func setImageUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("image-updates", onOff(on)) }
+    /// Whether Android restarts by itself into an Android image the service downloaded.
+    public func setImageAutoRestart(_ on: Bool) async throws -> SettingsInfo { try await set("image-auto-restart", onOff(on)) }
     /// Chooses the release channel: on takes pre-releases as well as stable releases.
     public func setPrereleaseUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("prerelease-updates", onOff(on)) }
     public func setInputTrace(_ on: Bool) async throws -> SettingsInfo { try await set("input-trace", onOff(on)) }
