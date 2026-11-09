@@ -87,6 +87,7 @@ use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::gapps::{self, GappsPackage, GuestGapps};
+use crate::geocode::{self, GeocodeOutcome, GeocodeQuery};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
 use crate::ime::{ImeCursor, ImeEditor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
@@ -101,6 +102,7 @@ use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
+use crate::share::{ShareOutcome, ShareRequest};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -311,6 +313,34 @@ pub trait UserAndroid: Send + Sync {
         let _ = (job_id, outcome);
         Err(TaskRequestError::Failed(
             "this Android does not print on the host".into(),
+        ))
+    }
+    /// The address lookups of this Android's apps from now on. `None` when the host does not
+    /// answer them.
+    fn watch_geocoding(&self) -> Option<Receiver<GeocodeQuery>> {
+        None
+    }
+    /// Tells this Android what one of its lookups found.
+    fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &GeocodeOutcome,
+    ) -> Result<(), TaskRequestError> {
+        let _ = (query_id, outcome);
+        Err(TaskRequestError::Failed(
+            "this Android does not look addresses up on the host".into(),
+        ))
+    }
+    /// What this Android's apps share with the host from now on. `None` when it does not
+    /// share with the host.
+    fn watch_shares(&self) -> Option<Receiver<ShareRequest>> {
+        None
+    }
+    /// Tells this Android what became of one of its shares.
+    fn share_result(&self, share_id: u32, outcome: &ShareOutcome) -> Result<(), TaskRequestError> {
+        let _ = (share_id, outcome);
+        Err(TaskRequestError::Failed(
+            "this Android does not share with the host".into(),
         ))
     }
     /// Whether this Android wants the host's location, from what it wants now on. `None`
@@ -714,6 +744,22 @@ impl UserAndroid for Session {
     }
     fn watch_location(&self) -> Option<Receiver<Wanted>> {
         Some(Session::watch_location(self))
+    }
+    fn watch_geocoding(&self) -> Option<Receiver<GeocodeQuery>> {
+        Some(Session::watch_geocoding(self))
+    }
+    fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &GeocodeOutcome,
+    ) -> Result<(), TaskRequestError> {
+        Session::geocode_result(self, query_id, outcome).map_err(request_error)
+    }
+    fn watch_shares(&self) -> Option<Receiver<ShareRequest>> {
+        Some(Session::watch_shares(self))
+    }
+    fn share_result(&self, share_id: u32, outcome: &ShareOutcome) -> Result<(), TaskRequestError> {
+        Session::share_result(self, share_id, outcome).map_err(request_error)
     }
     fn host_location(&self, event: LocationEvent) {
         Session::host_location(self, event)
@@ -2209,6 +2255,12 @@ impl HostApiService {
             if let Some(request::Body::WatchLocation(_)) = request.body {
                 return self.watch_location(connection, &peer, request.id);
             }
+            if let Some(request::Body::WatchGeocoding(_)) = request.body {
+                return self.watch_geocoding(connection, &peer, request.id);
+            }
+            if let Some(request::Body::WatchShares(_)) = request.body {
+                return self.watch_shares(connection, &peer, request.id);
+            }
             if let Some(request::Body::WatchWidgets(_)) = request.body {
                 return self.watch_widgets(connection, &peer, request.id);
             }
@@ -3170,6 +3222,203 @@ impl HostApiService {
                     );
                 }
             }
+        }
+    }
+
+    /// Answers a WatchGeocoding request, then passes the address lookups of the client's
+    /// Android to it until the client goes away. The client sends nothing more: anything it
+    /// sends closes the connection, except a frame that cannot be read, which is dropped. A
+    /// lookup that cannot be sent is answered as refused, so the app does not wait for an
+    /// answer that never comes.
+    fn watch_geocoding(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.watch_geocoding() {
+                Some(watch) => Ok((android, watch)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android does not look addresses up on the host".into(),
+                )),
+            },
+        };
+        let (android, watch) = match watched {
+            Ok(watched) => watched,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.try_recv() {
+                    Ok(query) => {
+                        let query_id = query.query_id;
+                        let frame = Body::GeocodeQuery(query.to_host_api());
+                        if send(&mut *connection, frame).is_err() {
+                            let outcome: GeocodeOutcome = Err(geocode::GeocodeError::new(
+                                geocode::GeocodeErrorKind::Refused,
+                                "the desktop session that was to look it up went away",
+                            ));
+                            let _ = android.geocode_result(query_id, &outcome);
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            if !self.one_way_watch_continues(&mut *connection, peer, "watches address lookups") {
+                return;
+            }
+        }
+    }
+
+    /// Answers a WatchShares request, then passes what the apps of the client's Android share
+    /// to it until the client goes away. The client sends nothing more on it. A share that
+    /// cannot be sent fails in Android, and Android gives back its access to the files.
+    fn watch_shares(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.watch_shares() {
+                Some(watch) => Ok((android, watch)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android does not share with the host".into(),
+                )),
+            },
+        };
+        let (android, watch) = match watched {
+            Ok(watched) => watched,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.try_recv() {
+                    Ok(request) => {
+                        let share_id = request.share_id;
+                        let frame = Body::ShareOffer(request.to_host_api());
+                        if send(&mut *connection, frame).is_err() {
+                            let outcome = ShareOutcome::Failed(
+                                "the desktop session that was to share it went away".into(),
+                            );
+                            let _ = android.end_drag(share_id, false);
+                            let _ = android.share_result(share_id, &outcome);
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            if !self.one_way_watch_continues(&mut *connection, peer, "watches shares") {
+                return;
+            }
+        }
+    }
+
+    /// Waits a moment for the client of a watch it sends nothing on. False when the watch is
+    /// over: the connection ended, or the client sent something, which closes it. A frame that
+    /// cannot be read is dropped.
+    fn one_way_watch_continues(
+        &self,
+        connection: &mut dyn Connection,
+        peer: &Peer,
+        what: &str,
+    ) -> bool {
+        let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return true,
+            Err(_) => return false,
+        };
+        match decode(&frame) {
+            Ok(_) => {
+                eprintln!(
+                    "local API: a client of {} sent something on a connection that {what}; \
+                     closing its connection",
+                    peer.user
+                );
+                connection.close();
+                false
+            }
+            Err(error) => {
+                eprintln!(
+                    "local API: a client of {} sent an unreadable frame on a connection that \
+                     {what} ({error}); dropping it",
+                    peer.user
+                );
+                true
+            }
+        }
+    }
+
+    /// Passes what a lookup found to the caller's Android.
+    fn report_geocode(&self, peer: &Peer, report: types::ReportGeocode) -> response::Body {
+        let query_id = report.query_id;
+        let outcome = match geocode::outcome_from_host_api(report) {
+            Ok(outcome) => outcome,
+            Err(why) => return error(ErrorCode::UnknownRequest, why),
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.geocode_result(query_id, &outcome) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            // The app that asked has gone with its Android; nothing waits for the answer.
+            Err(TaskRequestError::NotRunning(_)) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Passes what became of a share to the caller's Android.
+    fn report_share(&self, peer: &Peer, report: types::ReportShare) -> response::Body {
+        let outcome = match ShareOutcome::from_host_api(&report) {
+            Ok(outcome) => outcome,
+            Err(why) => return error(ErrorCode::UnknownRequest, why),
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.share_result(report.share_id, &outcome) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(_)) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
         }
     }
 
@@ -4286,6 +4535,8 @@ impl HostApiService {
             }
             Some(request::Body::ActOnNotification(act)) => self.act_on_notification(peer, act),
             Some(request::Body::ReportPrintJob(report)) => self.report_print_job(peer, report),
+            Some(request::Body::ReportGeocode(report)) => self.report_geocode(peer, report),
+            Some(request::Body::ReportShare(report)) => self.report_share(peer, report),
             Some(request::Body::ListBackgroundApps(_)) => self.list_background(peer),
             Some(request::Body::ActOnBackgroundApp(act)) => self.act_on_background(peer, act),
             Some(request::Body::ControlMedia(control)) => self.control_media(peer, control),
@@ -4387,7 +4638,11 @@ impl HostApiService {
                         | request::Body::RestartForUpdate(_)
                         | request::Body::SetRunAsArm(_)
                         | request::Body::SetAppRoot(_)
-                        | request::Body::ReportTouchGestures(_) => unreachable!("answered above"),
+                        | request::Body::ReportTouchGestures(_)
+                        | request::Body::WatchGeocoding(_)
+                        | request::Body::ReportGeocode(_)
+                        | request::Body::WatchShares(_)
+                        | request::Body::ReportShare(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -6734,6 +6989,58 @@ impl HostApiClient {
         }))
     }
 
+    /// Watches the address lookups of the caller's Android. The connection carries nothing
+    /// else from here on, so the client is used up.
+    pub fn watch_geocoding(mut self) -> Result<GeocodeStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchGeocoding(types::WatchGeocoding {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(GeocodeStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that lookups are watched".into(),
+            )),
+        }
+    }
+
+    /// Tells the caller's Android what one of its lookups found.
+    pub fn report_geocode(
+        &mut self,
+        query_id: u32,
+        outcome: &GeocodeOutcome,
+    ) -> Result<(), ClientError> {
+        self.done(request::Body::ReportGeocode(geocode::report_to_host_api(
+            query_id, outcome,
+        )))
+    }
+
+    /// Watches what the apps of the caller's Android share with the host. The connection
+    /// carries nothing else from here on, so the client is used up.
+    pub fn watch_shares(mut self) -> Result<ShareStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchShares(types::WatchShares {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(ShareStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that shares are watched".into(),
+            )),
+        }
+    }
+
+    /// Tells the caller's Android what became of one of its shares.
+    pub fn report_share(
+        &mut self,
+        share_id: u32,
+        outcome: &ShareOutcome,
+    ) -> Result<(), ClientError> {
+        self.done(request::Body::ReportShare(outcome.to_host_api(share_id)))
+    }
+
     /// Watches the apps that run in the background in the caller's Android. The connection
     /// carries nothing else from here on, so the client is used up.
     pub fn watch_background(mut self) -> Result<BackgroundStream, ClientError> {
@@ -7287,6 +7594,58 @@ impl LocationStream {
     /// the connection has ended, and a new one is needed.
     pub fn send(&mut self, event: &LocationEvent) -> Result<(), ClientError> {
         send(&mut *self.connection, event.to_host_api()).map_err(ClientError::Transport)
+    }
+}
+
+/// The address lookups of the caller's Android, from [`HostApiClient::watch_geocoding`].
+pub struct GeocodeStream {
+    connection: Box<dyn Connection>,
+}
+
+impl GeocodeStream {
+    /// The next lookup, checked, waiting at most `timeout`. `Ok(None)` means none came in
+    /// time; an error means the connection has ended or the service sent something else.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<GeocodeQuery>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::GeocodeQuery(query)),
+            }) => GeocodeQuery::from_host_api(&query)
+                .map(Some)
+                .map_err(ClientError::Malformed),
+            Ok(_) => Err(ClientError::Malformed("expected an address lookup".into())),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+}
+
+/// What the apps of the caller's Android share, from [`HostApiClient::watch_shares`].
+pub struct ShareStream {
+    connection: Box<dyn Connection>,
+}
+
+impl ShareStream {
+    /// The next share, checked, waiting at most `timeout`. `Ok(None)` means none came in
+    /// time; an error means the connection has ended or the service sent something else.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<ShareRequest>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::ShareOffer(offer)),
+            }) => ShareRequest::from_host_api(offer)
+                .map(Some)
+                .map_err(ClientError::Malformed),
+            Ok(_) => Err(ClientError::Malformed("expected a share".into())),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
     }
 }
 
