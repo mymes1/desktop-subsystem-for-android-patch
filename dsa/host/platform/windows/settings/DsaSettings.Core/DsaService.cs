@@ -78,9 +78,35 @@ public sealed partial class DsaService
         ParseState(OptionalString(json, "state")),
         OptionalString(json, "last_reason"),
         OptionalString(json, "update_notice"),
-        OptionalString(json, "problem"));
+        OptionalString(json, "problem"),
+        json.TryGetProperty("program_update", out var update) && update.ValueKind == JsonValueKind.Object
+            ? ReadProgramUpdate(update)
+            : null);
+
+    /// <summary>The phase a name of <c>dsa status --json</c> stands for. An unknown name, as
+    /// a newer service may give, is none.</summary>
+    public static ProgramUpdatePhase ReadProgramUpdatePhase(string? name) => name switch
+    {
+        "downloading" => ProgramUpdatePhase.Downloading,
+        "stopping_android" => ProgramUpdatePhase.StoppingAndroid,
+        "installing" => ProgramUpdatePhase.Installing,
+        "restarting" => ProgramUpdatePhase.Restarting,
+        "applied" => ProgramUpdatePhase.Applied,
+        "failed" => ProgramUpdatePhase.Failed,
+        _ => ProgramUpdatePhase.None,
+    };
+
+    private static ProgramUpdateProgress? ReadProgramUpdate(JsonElement json) =>
+        ReadProgramUpdatePhase(OptionalString(json, "phase")) is var phase and not ProgramUpdatePhase.None
+            ? new ProgramUpdateProgress(phase, String(json, "version"))
+            : null;
 
     public async Task<StatusInfo> StatusAsync() => ReadStatus(await RunJsonAsync("status").ConfigureAwait(true));
+
+    /// <summary>The status from a running service only. While setup has stopped the service
+    /// this fails rather than start the old service again under setup.</summary>
+    public async Task<StatusInfo> RunningStatusAsync() =>
+        ReadStatus(await RunJsonAsync("status", "--no-start").ConfigureAwait(true));
 
     /// <summary>Starts Android and waits until it has started or failed.</summary>
     public async Task<StatusInfo> StartAsync() =>
@@ -563,15 +589,13 @@ public sealed partial class DsaService
         return result.Output;
     }
 
-    /// <summary>Installs the newest version of DSA now. Returns what the service said.</summary>
-    public async Task<string> UpdateNowAsync()
+    /// <summary>Installs the newest version of DSA now. Returns the version setup installs, or
+    /// none when DSA is up to date, with what the service said.</summary>
+    public async Task<ProgramUpdateAnswer> UpdateNowAsync()
     {
-        var result = await _cli.RunAsync(new[] { "update" }).ConfigureAwait(true);
-        if (result.ExitCode != 0)
-        {
-            var detail = result.Error.StartsWith("dsa: ", StringComparison.Ordinal) ? result.Error[5..] : result.Error;
-            throw new DsaException(Problem.Refused, detail);
-        }
-        return result.Output;
+        var json = await RunJsonAsync("update").ConfigureAwait(true);
+        return new ProgramUpdateAnswer(
+            OptionalString(json, "installing") is { Length: > 0 } version ? version : null,
+            String(json, "detail"));
     }
 }
