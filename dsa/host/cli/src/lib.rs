@@ -268,12 +268,17 @@
 //! `dsa gapps install` has the service download the newest LiteGapps Core build for the Android
 //! version and processor the running Android reports, check it, make a system image of its
 //! apps and permission files, and send it to Android; with `--progress` it prints a `stage`
-//! line as each step starts and as bytes arrive. `dsa gapps remove` removes it. Android is
-//! started first when it is not running, and both apply from its next start, and say so.
-//! Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
-//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, or null),
-//! `installed`, `android` (`installed`, `active`, `sdk`, `abi`, `abilist` and `device_id`, or
-//! null while Android is not running), `restart_needed`, `terms_url` and `registration_url`.
+//! line as each step starts and as bytes arrive; Android is started first when it is not
+//! running. `dsa gapps remove` removes it without starting Android, so it also works while
+//! Google's apps keep Android from starting: the next start goes without them, and the image
+//! leaves Android's disk at once when Android runs, else at its next start. Both apply from
+//! Android's next start, and say so. An image an older DSA made is never laid over: the
+//! service makes it again from the package it kept, or the status says to install Google Play
+//! again. Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
+//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, `image_format`, or
+//! null), `installed`, `reinstall_needed`, `android` (`installed`, `active`, `sdk`, `abi`,
+//! `abilist` and `device_id`, or null while Android is not running), `restart_needed`,
+//! `terms_url` and `registration_url`.
 //!
 //! `dsa settings device` shows the device identity Android reports to its apps: what the user
 //! chose, and each value as Android reports it from its next start.
@@ -3092,7 +3097,7 @@ pub fn google_notice(image: &google::SdkImage) -> String {
     )
 }
 
-/// Starts Android when it is not running, as both `dsa gapps install` and `remove` need it.
+/// Starts Android when it is not running, as `dsa gapps install` needs it.
 fn start_for_gapps(invocation: &Invocation, client: &mut HostApiClient) -> Result<(), String> {
     #[cfg(windows)]
     if invocation.endpoint.is_none() {
@@ -3153,11 +3158,18 @@ fn install_gapps(
     Ok(show_gapps(invocation, &status, Some(&done)))
 }
 
-/// `dsa gapps remove`: starts Android when it is not running, so the image leaves its disk too.
+/// `dsa gapps remove`: never starts Android, since an Android that Google's apps keep from
+/// starting is exactly when the user needs to remove them. The service forgets them at once, so
+/// the next start goes without them; a running Android loses the image now, any other at its
+/// next start.
 fn remove_gapps(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
-    start_for_gapps(invocation, &mut client)?;
     let status = client.remove_gapps().map_err(|e| e.to_string())?;
-    Ok(show_gapps(invocation, &status, Some("Removed Google Play")))
+    let done = if status.guest.is_some() {
+        "Removed Google Play"
+    } else {
+        "Removed Google Play; Android starts without it from its next start"
+    };
+    Ok(show_gapps(invocation, &status, Some(done)))
 }
 
 /// Where Google Play stands as one JSON object.
@@ -3172,8 +3184,10 @@ pub fn gapps_json(status: &GappsStatus) -> Value {
             "file": package.file,
             "source": package.source,
             "md5": package.md5,
+            "image_format": package.image_format,
         })),
         "installed": status.package.is_some(),
+        "reinstall_needed": status.reinstall_needed,
         "android": status.guest.as_ref().map(|guest| json!({
             "installed": guest.installed,
             "active": guest.active,
@@ -3213,6 +3227,13 @@ pub fn describe_gapps(status: &GappsStatus, done: Option<&str>) -> String {
             }
         }
         None => lines.push("Android is not running".to_string()),
+    }
+    if status.reinstall_needed {
+        lines.push(
+            "Install Google Play again (dsa gapps install): its image was made by an older DSA, \
+             so Android starts without Google's apps until then"
+                .to_string(),
+        );
     }
     if status.restart_needed {
         lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());

@@ -1696,6 +1696,9 @@ message GappsPackage {
   string source = 7;
   // The MD5 digest the file host published for it, which the download matched.
   string md5 = 8;
+  // The format of the system image the service made from it; 0 for an image made by a
+  // service from before formats were recorded.
+  uint32 image_format = 9;
 }
 
 // Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
@@ -1756,6 +1759,10 @@ message Gapps {
   // What is installed differs from what the running Android booted with, so it applies once
   // Android starts again.
   bool restart_needed = 9;
+  // The installed package's image was made by an older DSA, which this one no longer lays
+  // over the system, and the downloaded package is not kept to make it again: Android starts
+  // without Google's apps until the user installs Google Play again.
+  bool reinstall_needed = 10;
 }
 
 // Asks for the device identity of the caller's Android.

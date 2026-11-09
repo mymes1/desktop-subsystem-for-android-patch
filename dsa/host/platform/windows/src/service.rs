@@ -1084,11 +1084,15 @@ where
         service = service.with_android_version(source);
     }
     // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
-    // service's own temporary folder.
-    service = service.with_gapps(dsa_host_core::gapps::Source::new(
-        Arc::new(UrlFetch::default()),
-        config.machine_root().tmp().join("gapps"),
-    ));
+    // service's own temporary folder, and the installed package kept in the machine's DSA
+    // folder, which outlasts the service's restarts and updates.
+    service = service.with_gapps(
+        dsa_host_core::gapps::Source::new(
+            Arc::new(UrlFetch::default()),
+            config.machine_root().tmp().join("gapps"),
+        )
+        .with_package_dir(config.machine_root().gapps()),
+    );
     if let Some(versions) = version_store {
         service = service.with_android_versions(Arc::new(versions));
     }
