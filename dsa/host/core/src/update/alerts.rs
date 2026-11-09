@@ -1,5 +1,7 @@
 //! Telling the user about updates on the desktop: an update that is downloaded and waits to be
-//! applied, one that was applied, and one that failed.
+//! applied, the question whether Android restarts into a downloaded image now (with the
+//! [Restart now] and [Later] buttons of [`buttons_of`]), one that was applied, and one that
+//! failed.
 //!
 //! The service raises each of these once ([`UpdateAlerts::raise`]), and every user's desktop
 //! shows it as one of the host's own notifications, beside the notifications of the user's
@@ -60,6 +62,10 @@ pub enum AlertKind {
     /// It is downloaded and is applied later: an Android image the next time Android starts,
     /// DSA once no Android is running.
     Ready,
+    /// An Android image is downloaded while app windows are open, and the user is asked
+    /// whether Android restarts into it now ([`RESTART_NOW`]) or later ([`LATER`]), which is
+    /// once every window is closed and Android dozes.
+    Restart,
     /// It was applied and is in use.
     Applied,
     /// It was not applied; the previous version is still in use.
@@ -70,15 +76,63 @@ impl AlertKind {
     fn word(self) -> &'static str {
         match self {
             AlertKind::Ready => "ready",
+            AlertKind::Restart => "restart",
             AlertKind::Applied => "applied",
             AlertKind::Failed => "failed",
         }
     }
 
     fn of_word(word: &str) -> Option<AlertKind> {
-        [AlertKind::Ready, AlertKind::Applied, AlertKind::Failed]
-            .into_iter()
-            .find(|kind| kind.word() == word)
+        [
+            AlertKind::Ready,
+            AlertKind::Restart,
+            AlertKind::Applied,
+            AlertKind::Failed,
+        ]
+        .into_iter()
+        .find(|kind| kind.word() == word)
+    }
+}
+
+/// The action of the button that restarts Android into the downloaded image now. A host that
+/// gets it asks the service to restart ([`crate::host_api::HostApiClient::restart_for_update`]).
+pub const RESTART_NOW: &str = "restart-now";
+
+/// The action of the button that leaves the downloaded image for later: the service applies it
+/// once every app window is closed and Android dozes. A host only closes the notification.
+pub const LATER: &str = "later";
+
+/// A button on an alert's notification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlertButton {
+    /// What it does: [`RESTART_NOW`] or [`LATER`].
+    pub action: &'static str,
+    /// Its label, in the user's language.
+    pub label: String,
+}
+
+/// The buttons the notification with `key` shows: [Restart now] and [Later] on the question
+/// whether Android restarts into a downloaded image, none on any other notification.
+pub fn buttons_of(key: &str, korean: bool) -> Vec<AlertButton> {
+    match UpdateAlert::parse_key(key) {
+        Some((Subject::Android, AlertKind::Restart, _)) => {
+            let (restart, later) = if korean {
+                ("지금 다시 시작", "나중에")
+            } else {
+                ("Restart now", "Later")
+            };
+            vec![
+                AlertButton {
+                    action: RESTART_NOW,
+                    label: restart.into(),
+                },
+                AlertButton {
+                    action: LATER,
+                    label: later.into(),
+                },
+            ]
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -177,6 +231,27 @@ impl UpdateAlert {
             (Subject::Android, AlertKind::Ready, true) => (
                 "Android 업데이트가 준비되었습니다".into(),
                 format!("Android {v}을(를) 내려받았습니다. 다음에 Android를 시작할 때 적용됩니다."),
+            ),
+            (Subject::Android, AlertKind::Restart, false) => (
+                "Restart Android to update".into(),
+                format!(
+                    "Android {v} is downloaded. Restart Android now to use it, or it is used once \
+                     every Android app window is closed."
+                ),
+            ),
+            (Subject::Android, AlertKind::Restart, true) => (
+                "Android를 다시 시작해 업데이트하세요".into(),
+                format!(
+                    "Android {v}을(를) 내려받았습니다. 지금 다시 시작해 적용하거나, Android 앱 \
+                     창을 모두 닫으면 적용됩니다."
+                ),
+            ),
+            (Subject::Program, AlertKind::Restart, false) => {
+                ("DSA update ready".into(), format!("DSA {v} is downloaded."))
+            }
+            (Subject::Program, AlertKind::Restart, true) => (
+                "DSA 업데이트가 준비되었습니다".into(),
+                format!("DSA {v}을(를) 내려받았습니다."),
             ),
             (Subject::Android, AlertKind::Applied, false) => (
                 "Android updated".into(),
@@ -363,6 +438,35 @@ mod tests {
             Some("dsa:update:program")
         );
         assert_eq!(thread_of("0|com.example|1|null|1"), None);
+    }
+
+    #[test]
+    fn fr14_the_question_to_restart_has_restart_now_and_later() {
+        let asked = UpdateAlert::new(Subject::Android, AlertKind::Restart, "16.0.3");
+        assert_eq!(asked.key(), "dsa:update:android:restart:16.0.3");
+        assert!(is_update_key(&asked.key()));
+        assert_eq!(
+            thread_of(&asked.key()).as_deref(),
+            Some("dsa:update:android"),
+            "the news that it was applied replaces the question"
+        );
+        let buttons = buttons_of(&asked.key(), false);
+        assert_eq!(
+            buttons
+                .iter()
+                .map(|b| (b.action, b.label.as_str()))
+                .collect::<Vec<_>>(),
+            [(RESTART_NOW, "Restart now"), (LATER, "Later")]
+        );
+        let korean = buttons_of(&asked.key(), true);
+        assert_eq!(korean[0].label, "지금 다시 시작");
+        assert_eq!(korean[1].label, "나중에");
+        let (title, text) = asked.text(false);
+        assert_eq!(title, "Restart Android to update");
+        assert!(text.contains("Android 16.0.3"), "{text}");
+        let ready = UpdateAlert::new(Subject::Android, AlertKind::Ready, "16.0.3");
+        assert!(buttons_of(&ready.key(), false).is_empty());
+        assert!(buttons_of("0|com.example|1|null|1", false).is_empty());
     }
 
     #[test]

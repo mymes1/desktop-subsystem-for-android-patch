@@ -357,17 +357,26 @@ pub fn android_download_percent(notice: Option<&str>) -> Option<u8> {
     digits.parse::<u32>().ok().map(|p| p.min(100) as u8)
 }
 
-/// Where the Android image update stands, in one line: the service's news (a download with
-/// its progress, or what was applied), a version waiting for the next start, or that none is
-/// waiting.
+/// Where the Android image update stands, in one line: a download with its progress, a
+/// downloaded image waiting for Android to restart, the service's news (what was applied), a
+/// version waiting for the next start, or that none is waiting.
 pub fn android_update_text(info: &AndroidVersion) -> String {
+    if android_download_percent(info.notice.as_deref()).is_some() {
+        return info.notice.clone().unwrap_or_default();
+    }
+    if let Some(version) = &info.restart_pending {
+        return trf(
+            "Android {0} is downloaded. Restart Android to use it now.",
+            &[version.as_str()],
+        );
+    }
     match &info.notice {
         Some(notice) if !notice.is_empty() => notice.clone(),
         _ if info.target_major != info.major => trf(
             "Android {0} is chosen. It is downloaded now and used the next time Android starts.",
             &[&info.target_major.to_string()],
         ),
-        _ => tr("No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."),
+        _ => tr("No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open."),
     }
 }
 

@@ -60,6 +60,18 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(settings.selectedGpu, "discrete")
     }
 
+    func test_fr14_image_auto_restart_is_on_by_default_and_turned_off_through_the_service() async {
+        let (cli, service) = make()
+        cli.answer("settings --json", #"{"render_gpu":"display"}"#)
+        cli.answer("settings set image-auto-restart off --json", #"{"render_gpu":"display","image_auto_restart":false}"#)
+        let settings = SettingsViewModel(service: service, text: KeyText())
+        await settings.load()
+        XCTAssertTrue(settings.imageAutoRestart, "on when the service does not say")
+        await settings.setImageAutoRestart(false)
+        XCTAssertTrue(cli.called("settings set image-auto-restart off --json"))
+        XCTAssertFalse(settings.imageAutoRestart)
+    }
+
     func test_fr17_a_gpu_name_chosen_before_still_shows_as_chosen() async {
         let (cli, service) = make()
         cli.answer("settings --json", #"{"render_gpu":"Radeon"}"#)

@@ -42,8 +42,8 @@ use dsa_host_core::update::program_service::{
     ProgramStatus, ProgramUpdates, Timing, WithProgramStatus,
 };
 use dsa_host_core::update::service::{
-    check_alerting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
-    UpdatingAndroid,
+    check_alerting, follow_waiting_image, next_image_check, CheckNow, Download, StoreVersions,
+    UpdateNotices, UpdatingAndroid, WAITING_IMAGE_CHECK,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::WindowManagerKeeper;
@@ -527,14 +527,20 @@ pub fn create_user_android(
     }
     Ok(match updates {
         None => session as Arc<dyn UserAndroid>,
-        Some(updates) => Arc::new(UpdatingAndroid {
-            session,
-            store: Arc::clone(&updates.store),
-            notices: Arc::clone(&updates.notices),
-            boot_timeout: updates.boot_timeout,
-            trial_running: Arc::clone(&updates.trial_running),
-            rollback: Default::default(),
-        }),
+        Some(updates) => {
+            let android = Arc::new(UpdatingAndroid {
+                session,
+                store: Arc::clone(&updates.store),
+                notices: Arc::clone(&updates.notices),
+                boot_timeout: updates.boot_timeout,
+                trial_running: Arc::clone(&updates.trial_running),
+                rollback: Default::default(),
+                image_restart: Default::default(),
+            });
+            // An image downloaded while the user's Android runs is applied by restarting it.
+            follow_waiting_image(&android, WAITING_IMAGE_CHECK);
+            android as Arc<dyn UserAndroid>
+        }
     })
 }
 
@@ -978,6 +984,9 @@ where
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
+                // So is restarting into a downloaded Android image by itself; on unless they
+                // turned it off.
+                android.image_auto_restart(settings.as_ref().is_none_or(|s| s.image_auto_restart));
                 // So is file sharing, on with every folder unless they chose otherwise.
                 android.share_folders(
                     settings.as_ref().is_none_or(|s| s.file_sharing),
