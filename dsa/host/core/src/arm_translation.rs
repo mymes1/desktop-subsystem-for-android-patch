@@ -24,8 +24,12 @@
 //!   translator) in its system partition, which its `image.json` describes under
 //!   `arm_translation` ([`default_package`]). An arm64 image runs ARM apps itself and has none;
 //! - a package the user installs: the host checks the description and the image's erofs
-//!   signature, sends the image to the user's Android, which keeps it on the user's disk, and
-//!   keeps the description with the user's settings;
+//!   signature, puts the image on the user's add-on disk ([`crate::addon_disk`],
+//!   `arm-translation.img`), which it attaches to their VM read only, and keeps the description
+//!   with the user's settings. A DSA from before the add-on disk sent the image to the user's
+//!   Android disk instead (`/data/vendor/dsa/arm-translation/system.img`); the first start
+//!   after the update mounts it from there once more, and the host moves it onto the add-on
+//!   disk and has the guest delete it ([`Upkeep::MoveImage`]);
 //! - Google's translator, which [`google`] makes into such a package on the user's request:
 //!   the user's computer downloads it from Google, and DSA never ships it.
 //!
@@ -58,6 +62,9 @@ pub const BOOTCONFIG_ON: &str = "androidboot.dsa.arm_translation = \"on\"\n";
 /// The bootconfig line that turns translation on for one boot, with the image's default
 /// package.
 pub const BOOTCONFIG_DEFAULT: &str = "androidboot.dsa.arm_translation = \"default\"\n";
+/// The bootconfig key that says where an installed package's image is for one boot
+/// ([`crate::addon_disk::image_bootconfig`]).
+pub const IMAGE_KEY: &str = "arm_translation_image";
 /// Where an image that has a default package carries its system image, as `image.json` says.
 pub const DEFAULT_SYSTEM_IMAGE: &str = "/system/etc/dsa/arm-translation/default.img";
 /// The only ABI a package may translate: the guest has no 32-bit zygote.
@@ -287,12 +294,17 @@ pub fn choose(
 }
 
 /// What a boot's bootconfig carries for ARM translation: [`BOOTCONFIG_ON`] for a package the
-/// user installed, [`BOOTCONFIG_DEFAULT`] for the image's own, nothing without a translator.
-pub fn bootconfig(chosen: Option<&Translator>) -> &'static str {
+/// user installed, with where its image is (on the add-on disk the boot attaches when
+/// `on_disk`, else where an older DSA kept it in `/data`), [`BOOTCONFIG_DEFAULT`] for the
+/// image's own, nothing without a translator.
+pub fn bootconfig(chosen: Option<&Translator>, on_disk: bool) -> String {
     match chosen.map(|translator| translator.source) {
-        Some(Source::User | Source::Google) => BOOTCONFIG_ON,
-        Some(Source::Default) => BOOTCONFIG_DEFAULT,
-        None => "",
+        Some(Source::User | Source::Google) => format!(
+            "{BOOTCONFIG_ON}{}",
+            crate::addon_disk::image_bootconfig(IMAGE_KEY, on_disk)
+        ),
+        Some(Source::Default) => BOOTCONFIG_DEFAULT.to_string(),
+        None => String::new(),
     }
 }
 
@@ -333,9 +345,16 @@ pub fn default_package(dir: &Path) -> Option<Package> {
 }
 
 /// The bootconfig for `user`'s next boot of the image in `image_dir`, from what their settings
-/// record: the translator [`choose`] picks. It records that choice as what this boot was told,
-/// and logs it. A record that cannot be read counts as none, so Android still starts.
-pub fn bootconfig_for(store: &dyn SettingsStore, user: &str, image_dir: Option<&Path>) -> String {
+/// record: the translator [`choose`] picks, with an installed package's image from the add-on
+/// disk the boot attaches when it holds one (`attached`). It records that choice as what this
+/// boot was told, and logs it. A record that cannot be read counts as none, so Android still
+/// starts.
+pub fn bootconfig_for(
+    store: &dyn SettingsStore,
+    user: &str,
+    image_dir: Option<&Path>,
+    attached: &[crate::addon_disk::Addon],
+) -> String {
     let installed = store.arm_translation(user).unwrap_or_else(|why| {
         eprintln!("arm translation: {user}'s package is not known ({why}); booting without it");
         None
@@ -362,18 +381,62 @@ pub fn bootconfig_for(store: &dyn SettingsStore, user: &str, image_dir: Option<&
     if let Err(why) = store.set_arm_translation_boot(user, chosen.as_ref()) {
         eprintln!("arm translation: what {user}'s Android starts with is not recorded: {why}");
     }
-    bootconfig(chosen.as_ref()).to_string()
+    let on_disk = attached.contains(&crate::addon_disk::Addon::ArmTranslation);
+    if chosen
+        .as_ref()
+        .is_some_and(|translator| translator.source != Source::Default)
+        && !on_disk
+    {
+        eprintln!(
+            "arm translation: {user}'s package is not on their add-on disk; Android mounts the \
+             copy an older DSA kept in /data once more, and the service moves it to the disk"
+        );
+    }
+    bootconfig(chosen.as_ref(), on_disk)
 }
 
 /// Where ARM translation stands in the running guest, as its control daemon says.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GuestArmTranslation {
-    /// A package image the user installed is on the user's disk.
+    /// A package image the user installed is on the user's add-on disk, for the next start of
+    /// Android. The host fills this in from the disk; the guest does not know it.
     pub installed: bool,
+    /// A package image a DSA from before the add-on disk sent is still on the user's Android
+    /// disk.
+    pub left_on_data: bool,
     /// This boot runs with a package (the user's or the image's default) in place.
     pub active: bool,
     /// The ABIs the guest's package manager installs apps for.
     pub abilist: String,
+}
+
+/// What a boot of a user's Android that reached its desktop needs done for their translation
+/// package's image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Upkeep {
+    /// Nothing.
+    Nothing,
+    /// An image an older DSA sent is still on the Android disk, and is of no more use: the user
+    /// removed the package, or it is on the add-on disk already. It goes now.
+    RemoveImage,
+    /// An image an older DSA sent is on the Android disk and not yet on the add-on disk: it is
+    /// moved there and then removed from the Android disk.
+    MoveImage,
+    /// The package is recorded, but its image is neither on the add-on disk nor on the Android
+    /// disk: the record goes, so Android uses the default translator again, and the user
+    /// installs the package again.
+    Forget,
+}
+
+/// What `user`'s running Android needs, from the package their settings record (`installed`),
+/// what the guest says, and whether the add-on disk holds the image (`on_disk`).
+pub fn upkeep(installed: Option<&Package>, guest: &GuestArmTranslation, on_disk: bool) -> Upkeep {
+    match installed {
+        _ if guest.left_on_data && (installed.is_none() || on_disk) => Upkeep::RemoveImage,
+        Some(_) if !on_disk && guest.left_on_data => Upkeep::MoveImage,
+        Some(_) if !on_disk => Upkeep::Forget,
+        _ => Upkeep::Nothing,
+    }
 }
 
 /// Whether the translator the user's settings choose (`wanted`) differs from what the running
@@ -608,13 +671,25 @@ mod tests {
         std::fs::write(dir.join("image.json"), manifest("x86_64").to_string()).unwrap();
         let store = MemorySettings::default();
         let user = "uid:1000";
-        assert_eq!(bootconfig_for(&store, user, Some(&dir)), BOOTCONFIG_DEFAULT);
+        let disk = [crate::addon_disk::Addon::ArmTranslation];
+        assert_eq!(
+            bootconfig_for(&store, user, Some(&dir), &[]),
+            BOOTCONFIG_DEFAULT
+        );
         assert_eq!(
             store.arm_translation_boot(user).unwrap().map(|t| t.source),
             Some(Source::Default)
         );
         store.set_arm_translation(user, Some(&package())).unwrap();
-        assert_eq!(bootconfig_for(&store, user, Some(&dir)), BOOTCONFIG_ON);
+        assert_eq!(
+            bootconfig_for(&store, user, Some(&dir), &disk),
+            format!("{BOOTCONFIG_ON}androidboot.dsa.arm_translation_image = \"disk\"\n")
+        );
+        // Until the host has moved it, the image is where an older DSA kept it.
+        assert_eq!(
+            bootconfig_for(&store, user, Some(&dir), &[]),
+            format!("{BOOTCONFIG_ON}androidboot.dsa.arm_translation_image = \"data\"\n")
+        );
         assert_eq!(
             store.arm_translation_boot(user).unwrap(),
             Some(Translator {
@@ -631,13 +706,30 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(bootconfig_for(&store, user, Some(&dir)), "");
+        assert_eq!(bootconfig_for(&store, user, Some(&dir), &disk), "");
         assert_eq!(store.arm_translation_boot(user).unwrap(), None);
         // No image known: only an installed package can be used.
         store.set(user, &Settings::default()).unwrap();
         store.set_arm_translation(user, None).unwrap();
-        assert_eq!(bootconfig_for(&store, user, None), "");
+        assert_eq!(bootconfig_for(&store, user, None, &disk), "");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr25_a_package_an_older_dsa_kept_in_data_moves_to_the_addon_disk() {
+        let left = GuestArmTranslation {
+            left_on_data: true,
+            ..GuestArmTranslation::default()
+        };
+        let none = GuestArmTranslation::default();
+        let installed = package();
+        assert_eq!(upkeep(Some(&installed), &left, false), Upkeep::MoveImage);
+        assert_eq!(upkeep(Some(&installed), &left, true), Upkeep::RemoveImage);
+        assert_eq!(upkeep(None, &left, false), Upkeep::RemoveImage);
+        assert_eq!(upkeep(Some(&installed), &none, true), Upkeep::Nothing);
+        assert_eq!(upkeep(None, &none, false), Upkeep::Nothing);
+        // Recorded, but nowhere: the default translator comes back.
+        assert_eq!(upkeep(Some(&installed), &none, false), Upkeep::Forget);
     }
 
     #[test]
@@ -647,6 +739,7 @@ mod tests {
         let google = choose(Some(&google_package()), None, true);
         let active = GuestArmTranslation {
             installed: true,
+            left_on_data: false,
             active: true,
             abilist: "x86_64,arm64-v8a".into(),
         };

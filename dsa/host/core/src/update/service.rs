@@ -757,13 +757,13 @@ impl UserAndroid for UpdatingAndroid {
     fn links_in_android(&self, on: bool) {
         UserAndroid::links_in_android(&*self.session, on)
     }
-    fn install_arm_translation(
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
-        UserAndroid::install_arm_translation(&*self.session, size, sha256, content)
+        addon: crate::addon_disk::Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<crate::host_api::AddonImagePart, crate::host_api::InstallError> {
+        UserAndroid::read_addon_image(&*self.session, addon, offset, length)
     }
     fn remove_arm_translation(
         &self,
@@ -772,14 +772,6 @@ impl UserAndroid for UpdatingAndroid {
     }
     fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
         UserAndroid::arm_translation(&*self.session)
-    }
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
-        UserAndroid::install_gapps(&*self.session, size, sha256, content)
     }
     fn remove_gapps(&self) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
         UserAndroid::remove_gapps(&*self.session)
