@@ -119,7 +119,17 @@ pub struct BackupService {
     queue: Mutex<Option<Sender<Body>>>,
     runs: Mutex<HashMap<u64, Sender<control::BackupRunResult>>>,
     next_run: AtomicU64,
+    file_access: Option<FileAccess>,
 }
+
+/// Runs what it is given with the file rights of the user the folder belongs to, as
+/// [`crate::file_share::ShareHost::as_user`] does; `Err` says why it could not.
+///
+/// A service that runs as another account (a Linux service running as root) gives one, so
+/// that every file of the folder is made, read and removed with the user's own rights and is
+/// the user's own. Without it, the folder is used with the process's rights, as on a host
+/// whose service runs as the user.
+pub type FileAccess = Arc<dyn Fn(&mut dyn FnMut()) -> Result<(), String> + Send + Sync>;
 
 #[derive(Default)]
 struct State {
@@ -175,7 +185,40 @@ impl BackupService {
             queue: Mutex::new(None),
             runs: Mutex::new(HashMap::new()),
             next_run: AtomicU64::new(1),
+            file_access: None,
         }
+    }
+
+    /// Uses the folder only through `access`, with the rights of the user it belongs to.
+    pub fn with_file_access(mut self, access: FileAccess) -> BackupService {
+        self.file_access = Some(access);
+        self
+    }
+
+    /// Runs `f` with the folder owner's file rights, when the service was given a way to.
+    fn as_owner<T>(&self, f: impl FnOnce() -> Result<T, Unavailable>) -> Result<T, Unavailable> {
+        let Some(access) = &self.file_access else {
+            return f();
+        };
+        let mut f = Some(f);
+        let mut out = None;
+        access(&mut || {
+            if let Some(f) = f.take() {
+                out = Some(f());
+            }
+        })
+        .map_err(|why| {
+            Unavailable(format!(
+                "{} cannot be used with its owner's rights: {why}",
+                self.folder_dir.display()
+            ))
+        })?;
+        out.unwrap_or_else(|| {
+            Err(Unavailable(format!(
+                "{} was not used: nothing ran with its owner's rights",
+                self.folder_dir.display()
+            )))
+        })
     }
 
     pub fn folder(&self) -> &Path {
@@ -278,14 +321,16 @@ impl BackupService {
         &self,
         f: impl FnOnce(&mut State) -> Result<T, String>,
     ) -> Result<T, Unavailable> {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.folder.is_none() {
-            let key = self.key()?;
-            let folder = Folder::open(&self.folder_dir, key, &self.made_on)
-                .map_err(|e| Unavailable(e.to_string()))?;
-            state.folder = Some(folder);
-        }
-        f(&mut state).map_err(Unavailable)
+        self.as_owner(|| {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            if state.folder.is_none() {
+                let key = self.key()?;
+                let folder = Folder::open(&self.folder_dir, key, &self.made_on)
+                    .map_err(|e| Unavailable(e.to_string()))?;
+                state.folder = Some(folder);
+            }
+            f(&mut state).map_err(Unavailable)
+        })
     }
 
     /// Where the backup stands. It never makes a folder or a key.
@@ -294,7 +339,13 @@ impl BackupService {
             folder: self.folder_dir.clone(),
             ..BackupReport::default()
         };
-        let exists = matches!(store::read_metadata(&self.folder_dir), Ok(Some(_)));
+        let exists = match self.as_owner(|| Ok(store::read_metadata(&self.folder_dir))) {
+            Ok(metadata) => matches!(metadata, Ok(Some(_))),
+            Err(Unavailable(why)) => {
+                report.problem = why;
+                return report;
+            }
+        };
         if !exists {
             // A first backup makes the folder; until then, say only whether it could.
             match self.keys.load(KeyPurpose::Backup) {
@@ -327,7 +378,7 @@ impl BackupService {
     /// The recovery key of the user's backup key, made with the folder's first use when there
     /// is none yet.
     pub fn recovery_key(&self) -> Result<String, Unavailable> {
-        let _ = self.key()?;
+        let _ = self.as_owner(|| self.key())?;
         let secret = self
             .keys
             .load(KeyPurpose::Backup)
@@ -341,7 +392,10 @@ impl BackupService {
     pub fn use_recovery_key(&self, text: &str) -> Result<(), String> {
         let secret: Secret = crypto::parse_recovery_key(text)?;
         let key = BackupKey::new(&secret);
-        if let Ok(Some(metadata)) = store::read_metadata(&self.folder_dir) {
+        let metadata = self
+            .as_owner(|| Ok(store::read_metadata(&self.folder_dir)))
+            .map_err(|Unavailable(why)| why)?;
+        if let Ok(Some(metadata)) = metadata {
             if metadata.key_id != key.id_hex() {
                 return Err(format!(
                     "this recovery key is not the one {} was made with",
@@ -352,12 +406,31 @@ impl BackupService {
         self.keys
             .store(KeyPurpose::Backup, &secret)
             .map_err(|e| key_problem(&e))?;
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.folder = None;
-        state.uploads.clear();
-        state.fetches.clear();
+        self.let_go(|state| {
+            state.folder = None;
+            state.uploads.clear();
+            state.fetches.clear();
+        });
         eprintln!("backup: a recovery key was entered; the backup folder is read with it");
         Ok(())
+    }
+
+    /// Changes `state` with the owner's file rights, since letting go of an upload removes
+    /// its unfinished file. Without those rights it changes all the same: an unfinished file
+    /// left behind is only removed later.
+    fn let_go(&self, change: impl FnOnce(&mut State)) {
+        let mut change = Some(change);
+        let done = self.as_owner(|| {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(change) = change.take() {
+                change(&mut state);
+            }
+            Ok(())
+        });
+        if let (Err(Unavailable(why)), Some(change)) = (done, change.take()) {
+            eprintln!("backup: {why}");
+            change(&mut self.state.lock().unwrap_or_else(|e| e.into_inner()));
+        }
     }
 
     /// The restore set's token and the packages the backup holds.
@@ -461,9 +534,10 @@ impl BackupService {
 
     /// Android stopped: nothing under way goes on, and nobody waits for it.
     pub fn guest_gone(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.uploads.clear();
-        state.fetches.clear();
+        self.let_go(|state| {
+            state.uploads.clear();
+            state.fetches.clear();
+        });
         self.runs.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
@@ -471,11 +545,10 @@ impl BackupService {
         match body {
             Body::BackupUpload(upload) => reply(self.upload(upload)),
             Body::BackupCommit(commit) => reply(self.commit(commit)),
-            Body::BackupDiscard(discard) => {
-                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            Body::BackupDiscard(discard) => self.let_go(|state| {
                 state.uploads.remove(&discard.request_id);
                 state.fetches.remove(&discard.request_id);
-            }
+            }),
             Body::BackupClear(clear) => reply(self.clear(clear)),
             Body::BackupQuery(query) => reply(self.query(query.request_id)),
             Body::BackupFetch(fetch) => reply(self.fetch(fetch)),

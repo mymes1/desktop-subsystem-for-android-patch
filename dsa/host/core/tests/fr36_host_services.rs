@@ -704,6 +704,90 @@ fn fr36_a_backup_is_refused_without_a_credential_store() {
     let _ = std::fs::remove_dir_all(&home);
 }
 
+thread_local! {
+    /// Whether this thread runs with the backup folder owner's rights, in the test below.
+    static AS_OWNER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// A service that runs as another account (root) uses the user's folder only with the
+/// user's own rights: every guest message, report and key goes through them.
+#[test]
+fn fr36_a_backup_folder_is_used_only_with_its_owners_rights() {
+    let home = scratch("backup-owner");
+    let folder = home.join("DSA Backup");
+    let entered = Arc::new(Mutex::new(0u32));
+    let counted = Arc::clone(&entered);
+    let backup = Arc::new(
+        BackupService::new(folder.clone(), Arc::new(MemoryKeys::default()), "PC").with_file_access(
+            Arc::new(move |run: &mut dyn FnMut()| {
+                assert!(!AS_OWNER.with(|c| c.get()), "the owner's rights never nest");
+                *counted.lock().unwrap() += 1;
+                AS_OWNER.with(|c| c.set(true));
+                run();
+                AS_OWNER.with(|c| c.set(false));
+                Ok(())
+            }),
+        ),
+    );
+    let (tx, rx) = std::sync::mpsc::channel();
+    backup.attach(Arc::new(move |body| tx.send(body).unwrap()));
+    assert!(
+        backup.guest_message(Body::BackupUpload(control::BackupUpload {
+            request_id: 1,
+            offset: 0,
+            data: vec![7; 10],
+        }))
+    );
+    match rx.recv_timeout(WAIT).unwrap() {
+        Body::BackupAnswer(answer) => assert_eq!(answer.status, BackupStatus::Ok as i32),
+        other => panic!("expected an answer, got {other:?}"),
+    }
+    assert!(
+        backup.guest_message(Body::BackupDiscard(control::BackupDiscard {
+            request_id: 1
+        }))
+    );
+    assert!(backup.report().available);
+    assert!(backup.recovery_key().is_ok());
+    backup.guest_gone();
+    assert!(
+        *entered.lock().unwrap() >= 4,
+        "the upload, the discard, the report and the key went through the owner's rights"
+    );
+    assert!(folder.exists());
+
+    // Rights that cannot be had: nothing is written, and the reason is told.
+    let elsewhere = home.join("Other Backup");
+    let refused = Arc::new(
+        BackupService::new(elsewhere.clone(), Arc::new(MemoryKeys::default()), "PC")
+            .with_file_access(Arc::new(|_: &mut dyn FnMut()| {
+                Err("the user's identity was refused".to_string())
+            })),
+    );
+    let report = refused.report();
+    assert!(!report.available);
+    assert!(report.problem.contains("the user's identity was refused"));
+    let (tx, rx) = std::sync::mpsc::channel();
+    refused.attach(Arc::new(move |body| tx.send(body).unwrap()));
+    assert!(
+        refused.guest_message(Body::BackupUpload(control::BackupUpload {
+            request_id: 2,
+            offset: 0,
+            data: vec![7; 10],
+        }))
+    );
+    match rx.recv_timeout(WAIT).unwrap() {
+        Body::BackupAnswer(answer) => {
+            assert_eq!(answer.status, BackupStatus::NotAvailable as i32);
+            assert!(answer.message.contains("the user's identity was refused"));
+        }
+        other => panic!("expected an answer, got {other:?}"),
+    }
+    assert!(refused.recovery_key().is_err());
+    assert!(!elsewhere.exists(), "nothing is written without the rights");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 #[test]
 fn fr36_an_upload_out_of_order_or_short_is_not_kept() {
     let home = scratch("backup-order");
