@@ -50,6 +50,12 @@
     <Compile Include="..\DsaSettings\RowList.cs" Link="RowList.cs" />
   </ItemGroup>
 
+  <!-- The settings app's startup placement: the window opens at a size that fits the work area
+       of its monitor and inside it, as the settings window does. -->
+  <ItemGroup>
+    <Compile Include="..\DsaSettings\StartupPlacement.cs" Link="StartupPlacement.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Resource Include="Assets\apk-installer.png" />
     <Resource Include="Assets\apk-installer.ico" />
