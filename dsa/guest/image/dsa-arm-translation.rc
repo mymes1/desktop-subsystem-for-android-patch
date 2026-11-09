@@ -27,6 +27,13 @@
 #                       libraries; one under /mnt would get none.
 #   system/etc/ld.config.arm64.txt  onto the empty /system/etc/ld.config.arm64.txt: the ARM64
 #                       linker reads its namespaces from that path only.
+#   system/lib64/libberberis_exec_region.so  onto the empty file of that name in /system/lib64:
+#                       Berberis (Digitalis) opens the library its translated code runs in by
+#                       that absolute path, not by name, so it may load it at an address it
+#                       reserved first. Without it every ARM app aborted as it started
+#                       ("exec_region_elf_backed.cc:48: CHECK failed: 0 != 0"). The linker
+#                       checks the path it really opened against the namespace, which is why
+#                       this is a bind and not a link into the mount.
 # /system/etc/cpuinfo.arm64.txt and /system/etc/berberis are links into the mount, for the
 # translators that carry them, and /system/bin/berberis_program_runner_binfmt_misc_arm64 and
 # /system/bin/ndk_translation_program_runner_binfmt_misc_arm64 links to the bound runners, for
@@ -55,6 +62,7 @@ on post-fs-data && property:ro.boot.dsa.arm_translation=on
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin /system/bin/dsa-arm-translation bind
     mount none /mnt/dsa-arm-translation/system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt bind
+    mount none /mnt/dsa-arm-translation/system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so bind
     mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_exe /proc/sys/fs/binfmt_misc/register
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_dyn /proc/sys/fs/binfmt_misc/register
@@ -67,6 +75,7 @@ on post-fs-data && property:ro.boot.dsa.arm_translation=default
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin /system/bin/dsa-arm-translation bind
     mount none /mnt/dsa-arm-translation/system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt bind
+    mount none /mnt/dsa-arm-translation/system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so bind
     mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_exe /proc/sys/fs/binfmt_misc/register
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_dyn /proc/sys/fs/binfmt_misc/register

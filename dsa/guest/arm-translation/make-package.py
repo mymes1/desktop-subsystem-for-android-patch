@@ -12,7 +12,9 @@ a folder holding
 The guest mounts the image at /mnt/dsa-arm-translation and binds parts of it onto empty places
 of its own (system/lib64 onto /system_ext/lib64, system/lib64/arm64 and system/bin/arm64 onto
 the same paths under /system, system/bin onto /system/bin/dsa-arm-translation, and
-system/etc/ld.config.arm64.txt onto the same path), so a package needs each of them. The
+system/etc/ld.config.arm64.txt onto the same path), so a package needs each of them. It also
+binds a Berberis bundle's system/lib64/libberberis_exec_region.so onto that same path: Berberis
+opens it by that absolute path, so without it every ARM app aborts as it starts. The
 guest's properties name the bridge `libdsa_native_bridge.so`, whatever the translator calls it,
 so the image adds that name as a link to the bridge library. Each binfmt_misc rule names its
 runner where the guest binds it, under /system/bin/dsa-arm-translation.
@@ -44,6 +46,10 @@ TAKEN = ["lib64", "bin", "etc"]
 BOUND = ["lib64/arm64", "bin/arm64", "etc/ld.config.arm64.txt"]
 # The binfmt_misc rules the guest registers, and where it binds the bundle's system/bin.
 RULES = ["arm64_exe", "arm64_dyn"]
+# What the guest binds onto its own empty place for a Berberis bundle (one whose bridge is
+# libberberis_*.so): the library Berberis runs its translated code in, which it opens by the
+# absolute path /system/lib64/libberberis_exec_region.so.
+BERBERIS_BOUND = ["lib64/libberberis_exec_region.so"]
 RUNNERS = "/system/bin/dsa-arm-translation/"
 LIBRARY_NAME = re.compile(r"^[A-Za-z0-9._-]+\.so$")
 
@@ -97,7 +103,8 @@ def stage(bundle, staging, library):
     system = Path(bundle) / "system"
     if not (system / "lib64" / library).is_file():
         raise SystemExit(f"{system / 'lib64' / library} is missing; is {bundle} a translator's bundle?")
-    for path in BOUND:
+    bound = BOUND + (BERBERIS_BOUND if library.startswith("libberberis_") else [])
+    for path in bound:
         if not (system / path).exists():
             raise SystemExit(f"{system / path} is missing; the guest binds it, so a package needs it")
     target = Path(staging) / "system"
