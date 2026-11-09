@@ -740,11 +740,17 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         });
     }
     let command = group(&tr("Command line"), None);
-    let (cli_row, _) = value_row(&tr("The dsa command"), "dsa --help");
-    cli_row.set_subtitle(&tr(
-        "Everything on these pages is also available from a terminal.",
-    ));
+    let cli_row = action_row(
+        &tr("The dsa command"),
+        &tr("Everything on these pages is also available from a terminal."),
+    );
     command.add(&cli_row);
+    // Each command is its own row with its own copy button: they are separate commands, and
+    // one line with all of them would read as a shell pipeline.
+    for cli_command in view::COMMAND_LINE_COMMANDS {
+        let (row, _) = command_row(cli_command);
+        command.add(&row);
+    }
     page.add(&logs);
     page.add(&command);
 
@@ -877,6 +883,7 @@ fn developer(ctx: &Shared, page: &Rc<Page>) -> adw::PreferencesGroup {
         "While developer mode is on and Android is running, run this command:",
     ));
     adb_command.add_css_class("monospace");
+    adb_row.add_suffix(&copy_button(&adb_command));
     developer_group.add(&adb_row);
     {
         let (ctx, show) = (ctx.clone(), show.clone());

@@ -345,7 +345,42 @@
                         <StackPanel>
                             <TextBlock Text="{l:Text CommandLineCard.Header}" Style="{StaticResource CardTitle}" />
                             <TextBlock Text="{l:Text CommandLineCard.Description}" Style="{StaticResource CardDescription}" />
-                            <TextBox Style="{StaticResource SelectableCode}" Margin="0,8,0,0" Text="dsa status | dsa settings | dsa memory" />
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa status" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa status"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa settings" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa settings"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa memory" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa memory"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </ui:CardControl.Header>
                 </ui:CardControl>
