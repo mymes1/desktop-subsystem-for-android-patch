@@ -513,13 +513,20 @@ user's DSA Backup folder, encrypted with a key the guest never holds. A data res
 the guest's disk, so the folder survives it, and so does a move to another computer once its
 recovery key is entered there.
 
+- **Only when the user turns it on.** Backup keeps a second copy of the apps' data on the
+  computer, so it is off until the user turns it on on the host (the settings app, or
+  `dsa backup on`). The host says which (`BackupSetting`) each time the agent connects and
+  whenever the user changes it. Until it says on, the agent keeps Android's backup manager off,
+  automatic restore too, while the host's transport, AOSP's local one or none is selected, so
+  nothing is backed up and nothing is scheduled; a transport of another app the user chose
+  (Google's) is left to that app. The host's `BackupRun` and `BackupRestore` are refused then.
 - **Which transport.** The backup manager binds a transport only of a privileged app that a
   sysconfig file lists. The image installs `sysconfig-dsa-agent.xml` in
   `system_ext/etc/sysconfig/`, and the service has the `android.backup.TRANSPORT_HOST` action. It
-  is not exported: only the system binds it. At start, and every five minutes after, the agent
-  turns backup and automatic restore on and selects its transport (`backup/BackupRuns.kt`,
-  through `IBackupManager`), so a transport another app selects (Google Play services, if the
-  user installs it) does not take the user's data elsewhere.
+  is not exported: only the system binds it. While backup is on, at each change and every five
+  minutes after, the agent turns backup and automatic restore on and selects its transport
+  (`backup/BackupRuns.kt`, through `IBackupManager`), so a transport another app selects (Google
+  Play services, if the user installs it) does not take the user's data elsewhere.
 - **Backing up.** A key-value backup is read from the app's `BackupDataInput` and sent as
   records (a big-endian key length, the key, a value length, -1 for a deleted key, the value);
   an incremental one only changes what the host holds. A full backup's tar stream goes as

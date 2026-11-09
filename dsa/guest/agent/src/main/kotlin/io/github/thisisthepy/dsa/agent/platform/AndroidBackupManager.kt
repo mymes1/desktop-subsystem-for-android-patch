@@ -50,6 +50,24 @@ class AndroidBackupManager(private val context: Context, private val log: Log) :
         return manager.currentTransport == transport && manager.isBackupEnabled
     }
 
+    override fun keepOff(): Boolean {
+        val manager = manager() ?: return false
+        // A backup service that is not active backs nothing up and schedules nothing.
+        if (!manager.isBackupServiceActive(userId)) return true
+        val current = manager.currentTransport
+        if (!offWith(current, transport)) {
+            // Another app's transport (Google's, once the user installs Google Play) is the
+            // user's choice in Android, not DSA's to turn off.
+            return true
+        }
+        if (manager.isBackupEnabled) {
+            manager.setBackupEnabled(false)
+            log.info("Android's backup manager is off, as backup to the host is")
+        }
+        manager.setAutoRestore(false)
+        return !manager.isBackupEnabled
+    }
+
     override fun backUpAll(done: (BackupOutcome) -> Unit) {
         val manager = manager() ?: return done(BackupOutcome(0, 0, "Android's backup manager is not running"))
         val installed = context.packageManager.getInstalledPackages(0).map { it.packageName }.toTypedArray()
@@ -129,8 +147,19 @@ class AndroidBackupManager(private val context: Context, private val log: Log) :
         if (listing != 0) end("Android's backup manager could not list the restore sets (status $listing)")
     }
 
-    private companion object {
+    companion object {
         /** UserHandle.PER_USER_RANGE: each user's apps have uids in a range of this size. */
-        const val PER_USER_RANGE = 100_000
+        private const val PER_USER_RANGE = 100_000
+
+        /** The transport AOSP's backup manager starts with, which keeps backups on the guest. */
+        const val LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"
+
+        /**
+         * Whether backup is kept off while the user has backup to the host off, with [current]
+         * the transport Android uses and [host] the agent's: the host's, AOSP's own local one
+         * or none. Another app's transport is that app's and the user's.
+         */
+        fun offWith(current: String?, host: String): Boolean =
+            current.isNullOrEmpty() || current == host || current == LOCAL_TRANSPORT
     }
 }

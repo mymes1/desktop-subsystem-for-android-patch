@@ -21,6 +21,14 @@ interface BackupManagerPort {
      */
     fun useHostTransport(): Boolean
 
+    /**
+     * Keeps Android's backup manager from backing up to the host while the user has backup
+     * off: backup off and automatic restore off, so nothing is backed up and nothing is
+     * scheduled. A transport of another app the user chose (Google's) is left as it is. False
+     * while that cannot be done yet, so the agent tries again.
+     */
+    fun keepOff(): Boolean
+
     /** Backs up every app Android may back up, now, as `bmgr backupnow --all` does. */
     fun backUpAll(done: (BackupOutcome) -> Unit)
 
@@ -30,6 +38,7 @@ interface BackupManagerPort {
     companion object {
         val NONE = object : BackupManagerPort {
             override fun useHostTransport() = false
+            override fun keepOff() = true
             override fun backUpAll(done: (BackupOutcome) -> Unit) =
                 done(BackupOutcome(0, 0, "this Android has no backup manager"))
             override fun restore(token: Long, packages: List<String>, done: (String?) -> Unit) =
@@ -39,14 +48,19 @@ interface BackupManagerPort {
 }
 
 /**
- * Keeps the agent's transport Android's backup transport, and runs the backups and restores
- * the host asks for (BackupRun, BackupRestore), each answered with BackupRunResult once
- * Android's backup manager has finished.
+ * Keeps Android's backup manager as the user chose on the host, and runs the backups and
+ * restores the host asks for (BackupRun, BackupRestore), each answered with BackupRunResult
+ * once Android's backup manager has finished.
  *
- * At start, and every [CHECK_MILLIS] after, it makes sure backup is on, with the host's
- * transport selected: another app (Google Play services, if the user installs it) may select
- * its own, and the user's app data then would no longer reach the host. Until the backup
- * manager has found the transport it tries again every [RETRY_MILLIS].
+ * Backup is the user's choice and off until the host says it is on (BackupSetting, sent each
+ * time the agent connects and whenever the user changes it). While it is off the agent keeps
+ * Android's backup manager from backing up to the host, so nothing is backed up and nothing is
+ * scheduled, and refuses the host's runs. While it is on it makes sure backup is on, with the
+ * host's transport selected: another app (Google Play services, if the user installs it) may
+ * select its own, and the user's app data then would no longer reach the host.
+ *
+ * It checks at start, at each change, and every [CHECK_MILLIS] after; until the backup
+ * manager has done what is asked it tries again every [RETRY_MILLIS].
  *
  * One run at a time: a request while one is under way is answered as an error at once.
  * Every method runs on the agent's thread; the port's callbacks come back through [post].
@@ -60,31 +74,64 @@ class BackupRuns(
     private val later: (Long, () -> Unit) -> Unit,
 ) {
     private var running = false
-    private var selected = false
+
+    /** Whether the user turned backup on, as the host last said. Off until it says. */
+    var enabled = false
+        private set
+
+    /** What the last check left in place: null before one, else whether backup was on. */
+    private var inPlace: Boolean? = null
+
+    /** Each check belongs to one chain; a change of the setting starts a new one. */
+    private var chain = 0
 
     fun start() {
-        // Without a backup manager there is nothing to keep selected.
+        // Without a backup manager there is nothing to keep as the user chose.
         if (port === BackupManagerPort.NONE) return
-        check()
+        check(chain)
     }
 
-    private fun check() {
+    private fun check(mine: Int) {
+        if (mine != chain) return
+        val wanted = enabled
         val ok = try {
-            port.useHostTransport()
+            if (wanted) port.useHostTransport() else port.keepOff()
         } catch (e: Exception) {
-            log.warn("could not make the host's backup Android's; app data is not backed up", e)
+            log.warn(
+                if (wanted) "could not make the host's backup Android's; app data is not backed up"
+                else "could not keep Android's backup manager from backing up to the host",
+                e,
+            )
             false
         }
-        if (ok != selected) {
-            selected = ok
-            log.info(if (ok) "app data is backed up to the host" else "the host's backup transport is not in use yet")
+        val now = if (ok) wanted else null
+        if (now != inPlace) {
+            inPlace = now
+            log.info(
+                when (now) {
+                    true -> "app data is backed up to the host"
+                    false -> "backup to the host is off, as the user chose"
+                    null -> if (wanted) "the host's backup transport is not in use yet" else "backup is not off yet"
+                },
+            )
         }
-        later(if (ok) CHECK_MILLIS else RETRY_MILLIS) { check() }
+        later(if (ok) CHECK_MILLIS else RETRY_MILLIS) { check(mine) }
     }
 
-    /** Acts on BackupRun and BackupRestore. False for any other frame. */
+    /** The host said whether the user has backup on: acts on it at once. */
+    private fun setting(on: Boolean) {
+        if (on == enabled && inPlace != null) return
+        enabled = on
+        log.info(if (on) "the user turned backup to the host on" else "backup to the host is off")
+        if (port === BackupManagerPort.NONE) return
+        chain++
+        check(chain)
+    }
+
+    /** Acts on BackupSetting, BackupRun and BackupRestore. False for any other frame. */
     fun handle(envelope: Envelope): Boolean {
         when (envelope.bodyCase) {
+            Envelope.BodyCase.BACKUP_SETTING -> setting(envelope.backupSetting.enabled)
             Envelope.BodyCase.BACKUP_RUN -> run(envelope.backupRun.requestId)
             Envelope.BodyCase.BACKUP_RESTORE -> {
                 val request = envelope.backupRestore
@@ -96,6 +143,10 @@ class BackupRuns(
     }
 
     private fun run(id: Long) {
+        if (!enabled) {
+            answer(id, BackupStatus.BACKUP_STATUS_NOT_AVAILABLE, OFF)
+            return
+        }
         if (running) {
             answer(id, BackupStatus.BACKUP_STATUS_ERROR, "a backup or restore is under way; try again when it ends")
             return
@@ -124,6 +175,10 @@ class BackupRuns(
     }
 
     private fun restore(id: Long, token: Long, packages: List<String>) {
+        if (!enabled) {
+            answer(id, BackupStatus.BACKUP_STATUS_NOT_AVAILABLE, OFF)
+            return
+        }
         if (running) {
             answer(id, BackupStatus.BACKUP_STATUS_ERROR, "a backup or restore is under way; try again when it ends")
             return
@@ -174,5 +229,6 @@ class BackupRuns(
     companion object {
         const val RETRY_MILLIS = 10_000L
         const val CHECK_MILLIS = 5 * 60_000L
+        const val OFF = "backup is off; turn it on in DSA's settings app or with dsa backup on"
     }
 }

@@ -5,6 +5,7 @@ import io.github.thisisthepy.dsa.agent.channel.HostCalls
 import io.github.thisisthepy.dsa.control.v1.BackupRestore
 import io.github.thisisthepy.dsa.control.v1.BackupRun
 import io.github.thisisthepy.dsa.control.v1.BackupRunResult
+import io.github.thisisthepy.dsa.control.v1.BackupSetting
 import io.github.thisisthepy.dsa.control.v1.BackupStatus
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import java.util.concurrent.ArrayBlockingQueue
@@ -19,12 +20,23 @@ import org.junit.Test
 class FakeBackupManager : BackupManagerPort {
     var transportReady = false
     var selections = 0
+    var turnedOff = 0
+
+    /** Whether Android's backup manager backs up and schedules now. */
+    var backingUp = false
     val backups = mutableListOf<(BackupOutcome) -> Unit>()
     val restores = mutableListOf<Triple<Long, List<String>, (String?) -> Unit>>()
 
     override fun useHostTransport(): Boolean {
         selections++
+        if (transportReady) backingUp = true
         return transportReady
+    }
+
+    override fun keepOff(): Boolean {
+        turnedOff++
+        backingUp = false
+        return true
     }
 
     override fun backUpAll(done: (BackupOutcome) -> Unit) {
@@ -58,21 +70,68 @@ class BackupRunsTest {
 
     private fun run(id: Long) = Envelope.newBuilder().setBackupRun(BackupRun.newBuilder().setRequestId(id)).build()
 
+    private fun setting(on: Boolean) =
+        Envelope.newBuilder().setBackupSetting(BackupSetting.newBuilder().setEnabled(on)).build()
+
     @Test
-    fun fr36_backup_transport_is_selected_at_start_and_kept_selected() {
+    fun fr36_backup_is_kept_off_until_the_host_says_the_user_turned_it_on() {
         runs.start()
+        assertEquals("nothing is selected while backup is off", 0, manager.selections)
+        assertEquals(1, manager.turnedOff)
+        assertFalse(manager.backingUp)
+        assertFalse(runs.enabled)
+        // Kept off, in case something turns it on meanwhile.
+        assertEquals(BackupRuns.CHECK_MILLIS, later.single().first)
+        later.removeAt(0).second()
+        assertEquals(2, manager.turnedOff)
+        // The host's runs are refused while it is off, and Android is not asked.
+        runs.handle(run(5))
+        assertEquals(BackupStatus.BACKUP_STATUS_NOT_AVAILABLE, sent.single().status)
+        assertTrue(sent.single().message.contains("backup is off"))
+        assertTrue(manager.backups.isEmpty())
+        // The host saying it is still off changes nothing.
+        assertTrue(runs.handle(setting(false)))
+        assertEquals(0, manager.selections)
+    }
+
+    @Test
+    fun fr36_backup_transport_is_selected_once_on_and_kept_selected() {
+        runs.start()
+        later.clear()
+        assertTrue(runs.handle(setting(true)))
+        assertTrue(runs.enabled)
         assertEquals(1, manager.selections)
         assertEquals(BackupRuns.RETRY_MILLIS, later.single().first)
         manager.transportReady = true
         later.removeAt(0).second()
         assertEquals(2, manager.selections)
+        assertTrue(manager.backingUp)
         // Checked again later, in case another app selected its own transport meanwhile.
         assertEquals(BackupRuns.CHECK_MILLIS, later.single().first)
         assertTrue(log.lines.any { it.contains("backed up to the host") })
     }
 
     @Test
+    fun fr36_turning_backup_off_stops_android_backing_up_at_once() {
+        manager.transportReady = true
+        runs.start()
+        runs.handle(setting(true))
+        assertTrue(manager.backingUp)
+        val turnedOffBefore = manager.turnedOff
+        runs.handle(setting(false))
+        assertFalse(manager.backingUp)
+        assertEquals(turnedOffBefore + 1, manager.turnedOff)
+        // The checks of the earlier setting end: only the new chain goes on.
+        val selections = manager.selections
+        later.toList().forEach { it.second() }
+        assertEquals(selections, manager.selections)
+        assertFalse(manager.backingUp)
+    }
+
+    @Test
     fun fr36_backup_run_is_answered_once_the_backup_manager_finishes() {
+        runs.handle(setting(true))
+        sent.clear()
         assertTrue(runs.handle(run(7)))
         assertTrue("no answer before Android finishes", sent.isEmpty())
         // A second request while the first runs is refused at once.
@@ -97,6 +156,7 @@ class BackupRunsTest {
             BackupRestore.newBuilder().setRequestId(3).setToken(0x5eed)
                 .addAllPackages(listOf("@pm@", "org.example.notes", "org.example.game")),
         ).build()
+        runs.handle(setting(true))
         assertTrue(runs.handle(restore))
         val (token, packages, done) = manager.restores.single()
         assertEquals(0x5eedL, token)
@@ -116,6 +176,7 @@ class BackupRunsTest {
         val restore = Envelope.newBuilder().setBackupRestore(
             BackupRestore.newBuilder().setRequestId(4).setToken(1).addPackages("@pm@"),
         ).build()
+        runs.handle(setting(true))
         runs.handle(restore)
         assertTrue(manager.restores.isEmpty())
         assertEquals(BackupStatus.BACKUP_STATUS_OK, sent.single().status)
