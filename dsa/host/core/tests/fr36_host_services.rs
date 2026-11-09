@@ -1464,6 +1464,34 @@ fn fr36_a_passkey_request_with_no_desktop_session_is_unavailable() {
 }
 
 #[test]
+fn fr36_a_host_without_passkeys_says_why_a_checked_request_is_unavailable() {
+    let web = Arc::new(FakeWeb::default());
+    web.serve(
+        &format!("https://{BANK}/.well-known/assetlinks.json"),
+        &statements(
+            "delegate_permission/common.get_login_creds",
+            NOTES,
+            &[notes_cert()],
+        ),
+    );
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone());
+    session.serve_passkeys(Arc::new(
+        PasskeyService::new(web).with_no_authenticator_reason("this host keeps no passkeys"),
+    ));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    send_body(
+        &mut agent,
+        Body::PasskeyRequest(passkey_request(PasskeyOperation::Get, get_json(BANK))),
+    );
+    let response = passkey_response(&mut agent, 1);
+    assert_eq!(response.status, PasskeyStatus::Unavailable as i32);
+    assert_eq!(response.message, "this host keeps no passkeys");
+}
+
+#[test]
 fn fr36_relying_party_ids_and_origins_are_checked_strictly() {
     for good in [
         "bank.example",

@@ -538,6 +538,7 @@ pub struct PasskeyService {
     pending: Mutex<HashMap<u64, Sender<CeremonyResult>>>,
     next: AtomicU64,
     reply: Mutex<Option<GuestReply>>,
+    no_authenticator: String,
 }
 
 impl PasskeyService {
@@ -548,7 +549,15 @@ impl PasskeyService {
             pending: Mutex::new(HashMap::new()),
             next: AtomicU64::new(1),
             reply: Mutex::new(None),
+            no_authenticator: NO_AUTHENTICATOR.into(),
         }
+    }
+
+    /// Says `why` (in place of [`NO_AUTHENTICATOR`]) to a checked request that no desktop
+    /// session watches for, as a host that has no passkeys of its own says why.
+    pub fn with_no_authenticator_reason(mut self, why: impl Into<String>) -> PasskeyService {
+        self.no_authenticator = why.into();
+        self
     }
 
     /// Answers go to the guest through `reply`.
@@ -651,7 +660,7 @@ impl PasskeyService {
                 }
             }
         } else {
-            CeremonyResult::Unavailable(NO_AUTHENTICATOR.into())
+            CeremonyResult::Unavailable(self.no_authenticator.clone())
         };
         self.pending
             .lock()
