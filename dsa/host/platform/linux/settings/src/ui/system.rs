@@ -585,7 +585,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     arm_group.add(&arm_restart);
     let (arm_remove_row, arm_remove) = button_row(
         &tr("Remove the ARM translation package"),
-        &tr("Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."),
+        &tr("Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts."),
         &tr("Remove"),
     );
     arm_remove.add_css_class("destructive-action");
@@ -1043,7 +1043,7 @@ fn google_play(ctx: &Shared, page: &Rc<Page>) {
     gapps_group.add(&install_row);
     let (remove_row, remove) = button_row(
         &tr("Remove Google Play"),
-        &tr("Deletes Google's apps from your Android disk. They are gone from the next start of Android."),
+        &tr("Deletes Google's apps from your add-on disk. They are gone from the next start of Android."),
         &tr("Remove"),
     );
     remove.add_css_class("destructive-action");

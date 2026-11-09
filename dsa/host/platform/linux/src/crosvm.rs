@@ -6,7 +6,8 @@
 //! VM has:
 //! - the kernel booted directly (the kernel, `--initrd`, `--params`), straight into Android's
 //!   init, as the Windows host does with `LinuxKernelDirect`;
-//! - the image's disks on virtio-blk, at fixed PCI addresses. Android's first stage init makes
+//! - the image's disks, the user's disk, the pstore disk and the user's add-on disk (read
+//!   only, while they have add-ons) on virtio-blk, at fixed PCI addresses. Android's first stage init makes
 //!   `/dev/block/by-name` links only for disks below the devices `androidboot.boot_devices`
 //!   names, so the command line names those addresses in place of the image's `vmbus`. The
 //!   partitions themselves are found by the disk's GPT GUID, whatever the bus;
@@ -52,6 +53,7 @@ pub mod slot {
     pub const SYSTEM_DISK: u8 = 0x10;
     pub const DATA_DISK: u8 = 0x11;
     pub const PSTORE_DISK: u8 = 0x12;
+    pub const ADDON_DISK: u8 = 0x13;
 }
 
 /// The platform device of crosvm's arm64 PCI host bridge, as Linux names it from the device
@@ -114,6 +116,8 @@ pub struct VmConfig {
     pub data_disk: PathBuf,
     /// The small raw disk the guest kernel keeps its last log on (pstore).
     pub pstore_disk: Option<PathBuf>,
+    /// The user's add-on disk, attached read only: the images of the add-ons they installed.
+    pub addon_disk: Option<PathBuf>,
     /// The guest's vsock address. Unique on the machine while the VM runs.
     pub guest_cid: u32,
     /// Free page reporting granularity, as a page order (9 is 2 MiB).
@@ -205,6 +209,9 @@ impl VmConfig {
         if self.pstore_disk.is_some() {
             slots.push(slot::PSTORE_DISK);
         }
+        if self.addon_disk.is_some() {
+            slots.push(slot::ADDON_DISK);
+        }
         slots
     }
 
@@ -246,6 +253,7 @@ impl VmConfig {
             ("system image", self.system_image.as_ref()),
             ("data disk", Some(&self.data_disk)),
             ("pstore disk", self.pstore_disk.as_ref()),
+            ("add-on disk", self.addon_disk.as_ref()),
             ("control socket", Some(&self.control_socket)),
             ("sandbox folder", self.sandbox_root.as_ref()),
         ] {
@@ -351,6 +359,16 @@ impl VmConfig {
                 ),
             );
         }
+        if let Some(addons) = &self.addon_disk {
+            push(
+                "--block",
+                format!(
+                    "path={},ro=true,lock=false,pci-address={}",
+                    path_value(addons),
+                    pci_address(slot::ADDON_DISK)
+                ),
+            );
+        }
         match &self.network {
             NetworkBackend::None => {}
             NetworkBackend::Passt { socket } => push(
@@ -422,6 +440,7 @@ mod tests {
             system_image: Some("/var/lib/dsa/images/1/system.img".into()),
             data_disk: "/home/u/.local/share/dsa/data.img".into(),
             pstore_disk: Some("/home/u/.local/share/dsa/pstore.img".into()),
+            addon_disk: None,
             guest_cid: guest_cid(1000),
             page_reporting_order: 9,
             control_socket: "/home/u/.local/share/dsa/tmp/crosvm.sock".into(),
@@ -491,6 +510,22 @@ mod tests {
             "path=/home/u/.local/share/dsa/data.img,sparse=true,pci-address=00:11.0"
         );
         assert!(blocks[2].ends_with("pci-address=00:12.0"));
+        assert_eq!(blocks.len(), 3, "no add-on disk without add-ons");
+    }
+
+    #[test]
+    fn fr32_the_addon_disk_is_attached_read_only_where_the_guest_finds_it() {
+        let mut config = config();
+        config.addon_disk = Some("/home/u/.local/share/dsa/addons.img".into());
+        let args = config.crosvm_args().unwrap();
+        let blocks = value_of(&args, "--block");
+        assert_eq!(
+            blocks[3],
+            "path=/home/u/.local/share/dsa/addons.img,ro=true,lock=false,pci-address=00:13.0"
+        );
+        assert!(config
+            .full_kernel_cmdline()
+            .contains("pci0000:00/0000:00:12.0,pci0000:00/0000:00:13.0"));
     }
 
     #[test]

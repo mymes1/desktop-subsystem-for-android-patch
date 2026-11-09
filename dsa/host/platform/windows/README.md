@@ -89,6 +89,7 @@ that builds their paths. The settings app and the installer follow the same layo
 |---|---|
 | `android.vhdx`, `android.image-version` | the user's Android disk and the image it holds |
 | `pstore.vhd` | a fixed 4 MiB disk where the guest kernel keeps its last log across a crash; uninstalling removes it |
+| `addons.vhd` | the add-ons the user installed (the Google apps, an ARM translation package), a fixed disk the VM attaches read only so the guest reads each image once; a change waits in `addons.vhd.next` for the next start of Android; uninstalling removes it |
 | `apps\<package>\` | each app's window program |
 | `notifications\` | the icons notifications show |
 | `logs\` | `dsa-wm.log`, `dsa-app-window.log` |

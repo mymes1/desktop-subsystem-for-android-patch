@@ -955,30 +955,11 @@ message DeveloperMode {
   bool on = 1;
 }
 
-// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
-// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
-// writes it to the user's disk beside any package already there, checks its length and
-// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
-// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
-// when the host says one is installed. One transfer at a time; a new one drops an unfinished
-// one.
-message ArmTranslationInstall {
-  uint32 transfer_id = 1;
-  uint64 size = 2;
-  // The SHA-256 digest of the whole image.
-  bytes sha256 = 3;
-}
-
-// Host to guest: part of the image an ArmTranslationInstall announced.
-message ArmTranslationChunk {
-  uint32 transfer_id = 1;
-  // Where `data` starts in the image.
-  uint64 offset = 2;
-  bytes data = 3;
-}
-
-// Host to guest, to the control daemon: remove the installed ARM translation package. The
-// guest goes on using a package it has mounted until it restarts. Answered with
+// Host to guest, to the control daemon: remove the ARM translation package's image that a DSA
+// from before the add-on disk left on the user's disk (/data/vendor/dsa/arm-translation). The
+// host keeps an installed package on the add-on disk, which only the host writes; this removes
+// the old copy once the host has moved it there, or once the user removed the package. The
+// guest goes on using an image it has mounted until it restarts. Answered with
 // ArmTranslationState.
 message ArmTranslationRemove {}
 
@@ -986,18 +967,14 @@ message ArmTranslationRemove {}
 message ArmTranslationQuery {}
 
 // Guest to host, from the control daemon: where ARM translation stands in the guest. It
-// answers each of the messages above.
+// answers ArmTranslationRemove and ArmTranslationQuery.
 message ArmTranslationState {
-  // The transfer this answers, or 0.
-  uint32 transfer_id = 1;
-  // How many bytes of that transfer the daemon has written.
-  uint64 received = 2;
-  // The transfer is complete and its image checked and in place.
+  // The removal this answers is done.
   bool done = 3;
-  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-  // failed transfer leaves the package that was there before.
+  // Non-empty when the removal failed: why, in words a person can act on.
   string error = 4;
-  // A package image is on the user's disk.
+  // A package image a DSA from before the add-on disk sent is still on the user's disk
+  // (/data), for the host to move onto the add-on disk and then remove.
   bool installed = 5;
   // This boot runs with a package laid over the system: the bridge library is in place.
   bool active = 6;
@@ -1005,48 +982,25 @@ message ArmTranslationState {
   string abilist = 7;
 }
 
-// Host to guest, to the control daemon: the system image (erofs) of the Google apps the user
-// chose to install follows in GappsChunk messages of the same `transfer_id`, in order. The
-// daemon keeps it on the user's disk as it keeps an ARM translation package's image: beside
-// any image already there, checked for its length and SHA-256 once all `size` bytes have
-// arrived, and only then in the old one's place. It answers each chunk with GappsState. The
-// guest lays the image over its product and system_ext partitions from its next boot, when
-// the host says one is installed. One transfer at a time; a new one drops an unfinished one.
-message GappsInstall {
-  uint32 transfer_id = 1;
-  uint64 size = 2;
-  // The SHA-256 digest of the whole image.
-  bytes sha256 = 3;
-}
-
-// Host to guest: part of the image a GappsInstall announced.
-message GappsChunk {
-  uint32 transfer_id = 1;
-  // Where `data` starts in the image.
-  uint64 offset = 2;
-  bytes data = 3;
-}
-
-// Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
-// an image it has mounted until it restarts. Answered with GappsState.
+// Host to guest, to the control daemon: remove the Google apps image that a DSA from before
+// the add-on disk left on the user's disk (/data/vendor/dsa/gapps). The host keeps installed
+// Google apps on the add-on disk, which only the host writes; this removes the old copy once
+// the host has moved it there, or once the user removed Google Play. The guest goes on using an
+// image it has mounted until it restarts. Answered with GappsState.
 message GappsRemove {}
 
 // Host to guest, to the control daemon: asks for GappsState.
 message GappsQuery {}
 
 // Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
-// each of the messages above.
+// GappsRemove and GappsQuery.
 message GappsState {
-  // The transfer this answers, or 0.
-  uint32 transfer_id = 1;
-  // How many bytes of that transfer the daemon has written.
-  uint64 received = 2;
-  // The transfer is complete and its image checked and in place.
+  // The removal this answers is done.
   bool done = 3;
-  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-  // failed transfer leaves the image that was there before.
+  // Non-empty when the removal failed: why, in words a person can act on.
   string error = 4;
-  // A Google apps image is on the user's disk.
+  // A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+  // (/data), for the host to move onto the add-on disk and then remove.
   bool installed = 5;
   // This boot runs with the image laid over the system.
   bool active = 6;
@@ -1057,6 +1011,40 @@ message GappsState {
   // The ABIs the package manager installs apps for, in the order it prefers them
   // (ro.product.cpu.abilist).
   string abilist = 9;
+}
+
+// The add-on images a DSA from before the add-on disk kept on the user's disk (/data).
+enum AddonImage {
+  ADDON_IMAGE_UNSPECIFIED = 0;
+  // The Google apps' system image, /data/vendor/dsa/gapps/system.img.
+  ADDON_IMAGE_GAPPS = 1;
+  // The ARM translation package's system image, /data/vendor/dsa/arm-translation/system.img.
+  ADDON_IMAGE_ARM_TRANSLATION = 2;
+}
+
+// Host to guest, to the control daemon: asks for part of an add-on image that a DSA from before
+// the add-on disk left on the user's disk, so the host can move it onto the add-on disk, which
+// the guest mounts it from at its next boot. The host reads the image from its start to its
+// end, then removes it (GappsRemove, ArmTranslationRemove). Answered with AddonImagePart.
+message AddonImageRead {
+  AddonImage image = 1;
+  // Where the part starts in the image.
+  uint64 offset = 2;
+  // How many bytes the host asks for. The daemon sends at most this many and at most 1 MiB,
+  // fewer at the end of the image.
+  uint32 length = 3;
+}
+
+// Guest to host, from the control daemon: part of an add-on image, answering AddonImageRead.
+message AddonImagePart {
+  AddonImage image = 1;
+  // Where `data` starts in the image.
+  uint64 offset = 2;
+  bytes data = 3;
+  // The size of the whole image; 0 when there is none.
+  uint64 size = 4;
+  // Non-empty when the image cannot be read: why, in words a person can act on.
+  string error = 5;
 }
 
 // Host to guest, to the agent: asks for GoogleDeviceId.
@@ -2524,13 +2512,9 @@ message Envelope {
     DisplayRefresh display_refresh = 407;
     PowerHint power_hint = 110;
     DeveloperMode developer_mode = 140;
-    ArmTranslationInstall arm_translation_install = 150;
-    ArmTranslationChunk arm_translation_chunk = 151;
     ArmTranslationRemove arm_translation_remove = 152;
     ArmTranslationQuery arm_translation_query = 153;
     ArmTranslationState arm_translation_state = 154;
-    GappsInstall gapps_install = 400;
-    GappsChunk gapps_chunk = 401;
     GappsRemove gapps_remove = 402;
     GappsQuery gapps_query = 403;
     GappsState gapps_state = 404;
@@ -2539,6 +2523,8 @@ message Envelope {
     RootElevationConfig root_elevation_config = 411;
     SuRequest su_request = 412;
     SuDecision su_decision = 413;
+    AddonImageRead addon_image_read = 414;
+    AddonImagePart addon_image_part = 415;
     DeviceIdle device_idle = 42;
     HostMemory host_memory = 43;
     HostSleep host_sleep = 44;

@@ -63,6 +63,12 @@ extern AccessibilityWatchDefaultTypeInternal _AccessibilityWatch_default_instanc
 class AddWidget;
 struct AddWidgetDefaultTypeInternal;
 extern AddWidgetDefaultTypeInternal _AddWidget_default_instance_;
+class AddonImagePart;
+struct AddonImagePartDefaultTypeInternal;
+extern AddonImagePartDefaultTypeInternal _AddonImagePart_default_instance_;
+class AddonImageRead;
+struct AddonImageReadDefaultTypeInternal;
+extern AddonImageReadDefaultTypeInternal _AddonImageRead_default_instance_;
 class AgentConnected;
 struct AgentConnectedDefaultTypeInternal;
 extern AgentConnectedDefaultTypeInternal _AgentConnected_default_instance_;
@@ -75,12 +81,6 @@ extern ApkChunkDefaultTypeInternal _ApkChunk_default_instance_;
 class AppInfo;
 struct AppInfoDefaultTypeInternal;
 extern AppInfoDefaultTypeInternal _AppInfo_default_instance_;
-class ArmTranslationChunk;
-struct ArmTranslationChunkDefaultTypeInternal;
-extern ArmTranslationChunkDefaultTypeInternal _ArmTranslationChunk_default_instance_;
-class ArmTranslationInstall;
-struct ArmTranslationInstallDefaultTypeInternal;
-extern ArmTranslationInstallDefaultTypeInternal _ArmTranslationInstall_default_instance_;
 class ArmTranslationQuery;
 struct ArmTranslationQueryDefaultTypeInternal;
 extern ArmTranslationQueryDefaultTypeInternal _ArmTranslationQuery_default_instance_;
@@ -234,12 +234,6 @@ extern GamepadRumbleDefaultTypeInternal _GamepadRumble_default_instance_;
 class GamepadState;
 struct GamepadStateDefaultTypeInternal;
 extern GamepadStateDefaultTypeInternal _GamepadState_default_instance_;
-class GappsChunk;
-struct GappsChunkDefaultTypeInternal;
-extern GappsChunkDefaultTypeInternal _GappsChunk_default_instance_;
-class GappsInstall;
-struct GappsInstallDefaultTypeInternal;
-extern GappsInstallDefaultTypeInternal _GappsInstall_default_instance_;
 class GappsQuery;
 struct GappsQueryDefaultTypeInternal;
 extern GappsQueryDefaultTypeInternal _GappsQuery_default_instance_;
@@ -249,6 +243,15 @@ extern GappsRemoveDefaultTypeInternal _GappsRemove_default_instance_;
 class GappsState;
 struct GappsStateDefaultTypeInternal;
 extern GappsStateDefaultTypeInternal _GappsState_default_instance_;
+class GeocodeAddress;
+struct GeocodeAddressDefaultTypeInternal;
+extern GeocodeAddressDefaultTypeInternal _GeocodeAddress_default_instance_;
+class GeocodeRequest;
+struct GeocodeRequestDefaultTypeInternal;
+extern GeocodeRequestDefaultTypeInternal _GeocodeRequest_default_instance_;
+class GeocodeResult;
+struct GeocodeResultDefaultTypeInternal;
+extern GeocodeResultDefaultTypeInternal _GeocodeResult_default_instance_;
 class GoogleDeviceId;
 struct GoogleDeviceIdDefaultTypeInternal;
 extern GoogleDeviceIdDefaultTypeInternal _GoogleDeviceId_default_instance_;
@@ -477,6 +480,12 @@ extern SetTaskCaptionDefaultTypeInternal _SetTaskCaption_default_instance_;
 class SetTaskDensity;
 struct SetTaskDensityDefaultTypeInternal;
 extern SetTaskDensityDefaultTypeInternal _SetTaskDensity_default_instance_;
+class ShareResult;
+struct ShareResultDefaultTypeInternal;
+extern ShareResultDefaultTypeInternal _ShareResult_default_instance_;
+class ShareToHost;
+struct ShareToHostDefaultTypeInternal;
+extern ShareToHostDefaultTypeInternal _ShareToHost_default_instance_;
 class StopApp;
 struct StopAppDefaultTypeInternal;
 extern StopAppDefaultTypeInternal _StopApp_default_instance_;
@@ -562,12 +571,12 @@ template<> ::dsa::control::v1::AccessibilityNode* Arena::CreateMaybeMessage<::ds
 template<> ::dsa::control::v1::AccessibilityTree* Arena::CreateMaybeMessage<::dsa::control::v1::AccessibilityTree>(Arena*);
 template<> ::dsa::control::v1::AccessibilityWatch* Arena::CreateMaybeMessage<::dsa::control::v1::AccessibilityWatch>(Arena*);
 template<> ::dsa::control::v1::AddWidget* Arena::CreateMaybeMessage<::dsa::control::v1::AddWidget>(Arena*);
+template<> ::dsa::control::v1::AddonImagePart* Arena::CreateMaybeMessage<::dsa::control::v1::AddonImagePart>(Arena*);
+template<> ::dsa::control::v1::AddonImageRead* Arena::CreateMaybeMessage<::dsa::control::v1::AddonImageRead>(Arena*);
 template<> ::dsa::control::v1::AgentConnected* Arena::CreateMaybeMessage<::dsa::control::v1::AgentConnected>(Arena*);
 template<> ::dsa::control::v1::AndroidFiles* Arena::CreateMaybeMessage<::dsa::control::v1::AndroidFiles>(Arena*);
 template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ApkChunk>(Arena*);
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
-template<> ::dsa::control::v1::ArmTranslationChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationChunk>(Arena*);
-template<> ::dsa::control::v1::ArmTranslationInstall* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationInstall>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationQuery* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationQuery>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationRemove* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationRemove>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationState* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationState>(Arena*);
@@ -619,11 +628,12 @@ template<> ::dsa::control::v1::GamepadConnected* Arena::CreateMaybeMessage<::dsa
 template<> ::dsa::control::v1::GamepadDisconnected* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadDisconnected>(Arena*);
 template<> ::dsa::control::v1::GamepadRumble* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadRumble>(Arena*);
 template<> ::dsa::control::v1::GamepadState* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadState>(Arena*);
-template<> ::dsa::control::v1::GappsChunk* Arena::CreateMaybeMessage<::dsa::control::v1::GappsChunk>(Arena*);
-template<> ::dsa::control::v1::GappsInstall* Arena::CreateMaybeMessage<::dsa::control::v1::GappsInstall>(Arena*);
 template<> ::dsa::control::v1::GappsQuery* Arena::CreateMaybeMessage<::dsa::control::v1::GappsQuery>(Arena*);
 template<> ::dsa::control::v1::GappsRemove* Arena::CreateMaybeMessage<::dsa::control::v1::GappsRemove>(Arena*);
 template<> ::dsa::control::v1::GappsState* Arena::CreateMaybeMessage<::dsa::control::v1::GappsState>(Arena*);
+template<> ::dsa::control::v1::GeocodeAddress* Arena::CreateMaybeMessage<::dsa::control::v1::GeocodeAddress>(Arena*);
+template<> ::dsa::control::v1::GeocodeRequest* Arena::CreateMaybeMessage<::dsa::control::v1::GeocodeRequest>(Arena*);
+template<> ::dsa::control::v1::GeocodeResult* Arena::CreateMaybeMessage<::dsa::control::v1::GeocodeResult>(Arena*);
 template<> ::dsa::control::v1::GoogleDeviceId* Arena::CreateMaybeMessage<::dsa::control::v1::GoogleDeviceId>(Arena*);
 template<> ::dsa::control::v1::GoogleDeviceIdQuery* Arena::CreateMaybeMessage<::dsa::control::v1::GoogleDeviceIdQuery>(Arena*);
 template<> ::dsa::control::v1::GuestBoot* Arena::CreateMaybeMessage<::dsa::control::v1::GuestBoot>(Arena*);
@@ -700,6 +710,8 @@ template<> ::dsa::control::v1::SensorReading* Arena::CreateMaybeMessage<::dsa::c
 template<> ::dsa::control::v1::SensorReadings* Arena::CreateMaybeMessage<::dsa::control::v1::SensorReadings>(Arena*);
 template<> ::dsa::control::v1::SetTaskCaption* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskCaption>(Arena*);
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
+template<> ::dsa::control::v1::ShareResult* Arena::CreateMaybeMessage<::dsa::control::v1::ShareResult>(Arena*);
+template<> ::dsa::control::v1::ShareToHost* Arena::CreateMaybeMessage<::dsa::control::v1::ShareToHost>(Arena*);
 template<> ::dsa::control::v1::StopApp* Arena::CreateMaybeMessage<::dsa::control::v1::StopApp>(Arena*);
 template<> ::dsa::control::v1::SuDecision* Arena::CreateMaybeMessage<::dsa::control::v1::SuDecision>(Arena*);
 template<> ::dsa::control::v1::SuRequest* Arena::CreateMaybeMessage<::dsa::control::v1::SuRequest>(Arena*);
@@ -1069,6 +1081,76 @@ inline const std::string& LocationAccess_Name(T enum_t_value) {
 }
 bool LocationAccess_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, LocationAccess* value);
+enum GeocodeStatus : int {
+  GEOCODE_STATUS_UNSPECIFIED = 0,
+  GEOCODE_STATUS_OK = 1,
+  GEOCODE_STATUS_UNAVAILABLE = 2,
+  GEOCODE_STATUS_REFUSED = 3,
+  GEOCODE_STATUS_BUSY = 4,
+  GEOCODE_STATUS_INVALID = 5,
+  GeocodeStatus_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  GeocodeStatus_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool GeocodeStatus_IsValid(int value);
+constexpr GeocodeStatus GeocodeStatus_MIN = GEOCODE_STATUS_UNSPECIFIED;
+constexpr GeocodeStatus GeocodeStatus_MAX = GEOCODE_STATUS_INVALID;
+constexpr int GeocodeStatus_ARRAYSIZE = GeocodeStatus_MAX + 1;
+
+const std::string& GeocodeStatus_Name(GeocodeStatus value);
+template<typename T>
+inline const std::string& GeocodeStatus_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, GeocodeStatus>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function GeocodeStatus_Name.");
+  return GeocodeStatus_Name(static_cast<GeocodeStatus>(enum_t_value));
+}
+bool GeocodeStatus_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, GeocodeStatus* value);
+enum ShareOutcome : int {
+  SHARE_OUTCOME_UNSPECIFIED = 0,
+  SHARE_OUTCOME_SHARED = 1,
+  SHARE_OUTCOME_CANCELED = 2,
+  SHARE_OUTCOME_FAILED = 3,
+  ShareOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  ShareOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool ShareOutcome_IsValid(int value);
+constexpr ShareOutcome ShareOutcome_MIN = SHARE_OUTCOME_UNSPECIFIED;
+constexpr ShareOutcome ShareOutcome_MAX = SHARE_OUTCOME_FAILED;
+constexpr int ShareOutcome_ARRAYSIZE = ShareOutcome_MAX + 1;
+
+const std::string& ShareOutcome_Name(ShareOutcome value);
+template<typename T>
+inline const std::string& ShareOutcome_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, ShareOutcome>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function ShareOutcome_Name.");
+  return ShareOutcome_Name(static_cast<ShareOutcome>(enum_t_value));
+}
+bool ShareOutcome_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ShareOutcome* value);
+enum AddonImage : int {
+  ADDON_IMAGE_UNSPECIFIED = 0,
+  ADDON_IMAGE_GAPPS = 1,
+  ADDON_IMAGE_ARM_TRANSLATION = 2,
+  AddonImage_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  AddonImage_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool AddonImage_IsValid(int value);
+constexpr AddonImage AddonImage_MIN = ADDON_IMAGE_UNSPECIFIED;
+constexpr AddonImage AddonImage_MAX = ADDON_IMAGE_ARM_TRANSLATION;
+constexpr int AddonImage_ARRAYSIZE = AddonImage_MAX + 1;
+
+const std::string& AddonImage_Name(AddonImage value);
+template<typename T>
+inline const std::string& AddonImage_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, AddonImage>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function AddonImage_Name.");
+  return AddonImage_Name(static_cast<AddonImage>(enum_t_value));
+}
+bool AddonImage_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AddonImage* value);
 enum RootLevel : int {
   ROOT_LEVEL_OFF = 0,
   ROOT_LEVEL_ASK = 1,
@@ -8994,6 +9076,1153 @@ class LocationFix final :
 };
 // -------------------------------------------------------------------
 
+class GeocodeRequest final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GeocodeRequest) */ {
+ public:
+  inline GeocodeRequest() : GeocodeRequest(nullptr) {}
+  ~GeocodeRequest() override;
+  explicit PROTOBUF_CONSTEXPR GeocodeRequest(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GeocodeRequest(const GeocodeRequest& from);
+  GeocodeRequest(GeocodeRequest&& from) noexcept
+    : GeocodeRequest() {
+    *this = ::std::move(from);
+  }
+
+  inline GeocodeRequest& operator=(const GeocodeRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GeocodeRequest& operator=(GeocodeRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GeocodeRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GeocodeRequest* internal_default_instance() {
+    return reinterpret_cast<const GeocodeRequest*>(
+               &_GeocodeRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    46;
+
+  friend void swap(GeocodeRequest& a, GeocodeRequest& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GeocodeRequest* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GeocodeRequest* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GeocodeRequest* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GeocodeRequest>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GeocodeRequest& from);
+  void MergeFrom(const GeocodeRequest& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GeocodeRequest* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GeocodeRequest";
+  }
+  protected:
+  explicit GeocodeRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kQueryFieldNumber = 3,
+    kLanguageFieldNumber = 12,
+    kRequestIdFieldNumber = 1,
+    kReverseFieldNumber = 2,
+    kHasBoundsFieldNumber = 6,
+    kLatitudeDegreesFieldNumber = 4,
+    kLongitudeDegreesFieldNumber = 5,
+    kLowerLeftLatitudeFieldNumber = 7,
+    kLowerLeftLongitudeFieldNumber = 8,
+    kUpperRightLatitudeFieldNumber = 9,
+    kUpperRightLongitudeFieldNumber = 10,
+    kMaxResultsFieldNumber = 11,
+  };
+  // string query = 3;
+  void clear_query();
+  const std::string& query() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_query(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_query();
+  PROTOBUF_NODISCARD std::string* release_query();
+  void set_allocated_query(std::string* query);
+  private:
+  const std::string& _internal_query() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_query(const std::string& value);
+  std::string* _internal_mutable_query();
+  public:
+
+  // string language = 12;
+  void clear_language();
+  const std::string& language() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_language(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_language();
+  PROTOBUF_NODISCARD std::string* release_language();
+  void set_allocated_language(std::string* language);
+  private:
+  const std::string& _internal_language() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_language(const std::string& value);
+  std::string* _internal_mutable_language();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // bool reverse = 2;
+  void clear_reverse();
+  bool reverse() const;
+  void set_reverse(bool value);
+  private:
+  bool _internal_reverse() const;
+  void _internal_set_reverse(bool value);
+  public:
+
+  // bool has_bounds = 6;
+  void clear_has_bounds();
+  bool has_bounds() const;
+  void set_has_bounds(bool value);
+  private:
+  bool _internal_has_bounds() const;
+  void _internal_set_has_bounds(bool value);
+  public:
+
+  // double latitude_degrees = 4;
+  void clear_latitude_degrees();
+  double latitude_degrees() const;
+  void set_latitude_degrees(double value);
+  private:
+  double _internal_latitude_degrees() const;
+  void _internal_set_latitude_degrees(double value);
+  public:
+
+  // double longitude_degrees = 5;
+  void clear_longitude_degrees();
+  double longitude_degrees() const;
+  void set_longitude_degrees(double value);
+  private:
+  double _internal_longitude_degrees() const;
+  void _internal_set_longitude_degrees(double value);
+  public:
+
+  // double lower_left_latitude = 7;
+  void clear_lower_left_latitude();
+  double lower_left_latitude() const;
+  void set_lower_left_latitude(double value);
+  private:
+  double _internal_lower_left_latitude() const;
+  void _internal_set_lower_left_latitude(double value);
+  public:
+
+  // double lower_left_longitude = 8;
+  void clear_lower_left_longitude();
+  double lower_left_longitude() const;
+  void set_lower_left_longitude(double value);
+  private:
+  double _internal_lower_left_longitude() const;
+  void _internal_set_lower_left_longitude(double value);
+  public:
+
+  // double upper_right_latitude = 9;
+  void clear_upper_right_latitude();
+  double upper_right_latitude() const;
+  void set_upper_right_latitude(double value);
+  private:
+  double _internal_upper_right_latitude() const;
+  void _internal_set_upper_right_latitude(double value);
+  public:
+
+  // double upper_right_longitude = 10;
+  void clear_upper_right_longitude();
+  double upper_right_longitude() const;
+  void set_upper_right_longitude(double value);
+  private:
+  double _internal_upper_right_longitude() const;
+  void _internal_set_upper_right_longitude(double value);
+  public:
+
+  // uint32 max_results = 11;
+  void clear_max_results();
+  uint32_t max_results() const;
+  void set_max_results(uint32_t value);
+  private:
+  uint32_t _internal_max_results() const;
+  void _internal_set_max_results(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GeocodeRequest)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr query_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr language_;
+    uint32_t request_id_;
+    bool reverse_;
+    bool has_bounds_;
+    double latitude_degrees_;
+    double longitude_degrees_;
+    double lower_left_latitude_;
+    double lower_left_longitude_;
+    double upper_right_latitude_;
+    double upper_right_longitude_;
+    uint32_t max_results_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GeocodeAddress final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GeocodeAddress) */ {
+ public:
+  inline GeocodeAddress() : GeocodeAddress(nullptr) {}
+  ~GeocodeAddress() override;
+  explicit PROTOBUF_CONSTEXPR GeocodeAddress(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GeocodeAddress(const GeocodeAddress& from);
+  GeocodeAddress(GeocodeAddress&& from) noexcept
+    : GeocodeAddress() {
+    *this = ::std::move(from);
+  }
+
+  inline GeocodeAddress& operator=(const GeocodeAddress& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GeocodeAddress& operator=(GeocodeAddress&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GeocodeAddress& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GeocodeAddress* internal_default_instance() {
+    return reinterpret_cast<const GeocodeAddress*>(
+               &_GeocodeAddress_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    47;
+
+  friend void swap(GeocodeAddress& a, GeocodeAddress& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GeocodeAddress* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GeocodeAddress* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GeocodeAddress* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GeocodeAddress>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GeocodeAddress& from);
+  void MergeFrom(const GeocodeAddress& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GeocodeAddress* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GeocodeAddress";
+  }
+  protected:
+  explicit GeocodeAddress(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kAddressLinesFieldNumber = 1,
+    kFeatureNameFieldNumber = 2,
+    kPremisesFieldNumber = 3,
+    kSubThoroughfareFieldNumber = 4,
+    kThoroughfareFieldNumber = 5,
+    kSubLocalityFieldNumber = 6,
+    kLocalityFieldNumber = 7,
+    kSubAdminAreaFieldNumber = 8,
+    kAdminAreaFieldNumber = 9,
+    kPostalCodeFieldNumber = 10,
+    kCountryCodeFieldNumber = 11,
+    kCountryNameFieldNumber = 12,
+    kLatitudeDegreesFieldNumber = 14,
+    kLongitudeDegreesFieldNumber = 15,
+    kHasPositionFieldNumber = 13,
+  };
+  // repeated string address_lines = 1;
+  int address_lines_size() const;
+  private:
+  int _internal_address_lines_size() const;
+  public:
+  void clear_address_lines();
+  const std::string& address_lines(int index) const;
+  std::string* mutable_address_lines(int index);
+  void set_address_lines(int index, const std::string& value);
+  void set_address_lines(int index, std::string&& value);
+  void set_address_lines(int index, const char* value);
+  void set_address_lines(int index, const char* value, size_t size);
+  std::string* add_address_lines();
+  void add_address_lines(const std::string& value);
+  void add_address_lines(std::string&& value);
+  void add_address_lines(const char* value);
+  void add_address_lines(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& address_lines() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_address_lines();
+  private:
+  const std::string& _internal_address_lines(int index) const;
+  std::string* _internal_add_address_lines();
+  public:
+
+  // string feature_name = 2;
+  void clear_feature_name();
+  const std::string& feature_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_feature_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_feature_name();
+  PROTOBUF_NODISCARD std::string* release_feature_name();
+  void set_allocated_feature_name(std::string* feature_name);
+  private:
+  const std::string& _internal_feature_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_feature_name(const std::string& value);
+  std::string* _internal_mutable_feature_name();
+  public:
+
+  // string premises = 3;
+  void clear_premises();
+  const std::string& premises() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_premises(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_premises();
+  PROTOBUF_NODISCARD std::string* release_premises();
+  void set_allocated_premises(std::string* premises);
+  private:
+  const std::string& _internal_premises() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_premises(const std::string& value);
+  std::string* _internal_mutable_premises();
+  public:
+
+  // string sub_thoroughfare = 4;
+  void clear_sub_thoroughfare();
+  const std::string& sub_thoroughfare() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_sub_thoroughfare(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_sub_thoroughfare();
+  PROTOBUF_NODISCARD std::string* release_sub_thoroughfare();
+  void set_allocated_sub_thoroughfare(std::string* sub_thoroughfare);
+  private:
+  const std::string& _internal_sub_thoroughfare() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sub_thoroughfare(const std::string& value);
+  std::string* _internal_mutable_sub_thoroughfare();
+  public:
+
+  // string thoroughfare = 5;
+  void clear_thoroughfare();
+  const std::string& thoroughfare() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_thoroughfare(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_thoroughfare();
+  PROTOBUF_NODISCARD std::string* release_thoroughfare();
+  void set_allocated_thoroughfare(std::string* thoroughfare);
+  private:
+  const std::string& _internal_thoroughfare() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_thoroughfare(const std::string& value);
+  std::string* _internal_mutable_thoroughfare();
+  public:
+
+  // string sub_locality = 6;
+  void clear_sub_locality();
+  const std::string& sub_locality() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_sub_locality(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_sub_locality();
+  PROTOBUF_NODISCARD std::string* release_sub_locality();
+  void set_allocated_sub_locality(std::string* sub_locality);
+  private:
+  const std::string& _internal_sub_locality() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sub_locality(const std::string& value);
+  std::string* _internal_mutable_sub_locality();
+  public:
+
+  // string locality = 7;
+  void clear_locality();
+  const std::string& locality() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_locality(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_locality();
+  PROTOBUF_NODISCARD std::string* release_locality();
+  void set_allocated_locality(std::string* locality);
+  private:
+  const std::string& _internal_locality() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_locality(const std::string& value);
+  std::string* _internal_mutable_locality();
+  public:
+
+  // string sub_admin_area = 8;
+  void clear_sub_admin_area();
+  const std::string& sub_admin_area() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_sub_admin_area(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_sub_admin_area();
+  PROTOBUF_NODISCARD std::string* release_sub_admin_area();
+  void set_allocated_sub_admin_area(std::string* sub_admin_area);
+  private:
+  const std::string& _internal_sub_admin_area() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sub_admin_area(const std::string& value);
+  std::string* _internal_mutable_sub_admin_area();
+  public:
+
+  // string admin_area = 9;
+  void clear_admin_area();
+  const std::string& admin_area() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_admin_area(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_admin_area();
+  PROTOBUF_NODISCARD std::string* release_admin_area();
+  void set_allocated_admin_area(std::string* admin_area);
+  private:
+  const std::string& _internal_admin_area() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_admin_area(const std::string& value);
+  std::string* _internal_mutable_admin_area();
+  public:
+
+  // string postal_code = 10;
+  void clear_postal_code();
+  const std::string& postal_code() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_postal_code(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_postal_code();
+  PROTOBUF_NODISCARD std::string* release_postal_code();
+  void set_allocated_postal_code(std::string* postal_code);
+  private:
+  const std::string& _internal_postal_code() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_postal_code(const std::string& value);
+  std::string* _internal_mutable_postal_code();
+  public:
+
+  // string country_code = 11;
+  void clear_country_code();
+  const std::string& country_code() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_country_code(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_country_code();
+  PROTOBUF_NODISCARD std::string* release_country_code();
+  void set_allocated_country_code(std::string* country_code);
+  private:
+  const std::string& _internal_country_code() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_country_code(const std::string& value);
+  std::string* _internal_mutable_country_code();
+  public:
+
+  // string country_name = 12;
+  void clear_country_name();
+  const std::string& country_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_country_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_country_name();
+  PROTOBUF_NODISCARD std::string* release_country_name();
+  void set_allocated_country_name(std::string* country_name);
+  private:
+  const std::string& _internal_country_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_country_name(const std::string& value);
+  std::string* _internal_mutable_country_name();
+  public:
+
+  // double latitude_degrees = 14;
+  void clear_latitude_degrees();
+  double latitude_degrees() const;
+  void set_latitude_degrees(double value);
+  private:
+  double _internal_latitude_degrees() const;
+  void _internal_set_latitude_degrees(double value);
+  public:
+
+  // double longitude_degrees = 15;
+  void clear_longitude_degrees();
+  double longitude_degrees() const;
+  void set_longitude_degrees(double value);
+  private:
+  double _internal_longitude_degrees() const;
+  void _internal_set_longitude_degrees(double value);
+  public:
+
+  // bool has_position = 13;
+  void clear_has_position();
+  bool has_position() const;
+  void set_has_position(bool value);
+  private:
+  bool _internal_has_position() const;
+  void _internal_set_has_position(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GeocodeAddress)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> address_lines_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr feature_name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr premises_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sub_thoroughfare_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr thoroughfare_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sub_locality_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr locality_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sub_admin_area_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr admin_area_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr postal_code_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr country_code_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr country_name_;
+    double latitude_degrees_;
+    double longitude_degrees_;
+    bool has_position_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GeocodeResult final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GeocodeResult) */ {
+ public:
+  inline GeocodeResult() : GeocodeResult(nullptr) {}
+  ~GeocodeResult() override;
+  explicit PROTOBUF_CONSTEXPR GeocodeResult(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GeocodeResult(const GeocodeResult& from);
+  GeocodeResult(GeocodeResult&& from) noexcept
+    : GeocodeResult() {
+    *this = ::std::move(from);
+  }
+
+  inline GeocodeResult& operator=(const GeocodeResult& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GeocodeResult& operator=(GeocodeResult&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GeocodeResult& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GeocodeResult* internal_default_instance() {
+    return reinterpret_cast<const GeocodeResult*>(
+               &_GeocodeResult_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    48;
+
+  friend void swap(GeocodeResult& a, GeocodeResult& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GeocodeResult* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GeocodeResult* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GeocodeResult* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GeocodeResult>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GeocodeResult& from);
+  void MergeFrom(const GeocodeResult& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GeocodeResult* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GeocodeResult";
+  }
+  protected:
+  explicit GeocodeResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kAddressesFieldNumber = 3,
+    kMessageFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kStatusFieldNumber = 2,
+  };
+  // repeated .dsa.control.v1.GeocodeAddress addresses = 3;
+  int addresses_size() const;
+  private:
+  int _internal_addresses_size() const;
+  public:
+  void clear_addresses();
+  ::dsa::control::v1::GeocodeAddress* mutable_addresses(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::GeocodeAddress >*
+      mutable_addresses();
+  private:
+  const ::dsa::control::v1::GeocodeAddress& _internal_addresses(int index) const;
+  ::dsa::control::v1::GeocodeAddress* _internal_add_addresses();
+  public:
+  const ::dsa::control::v1::GeocodeAddress& addresses(int index) const;
+  ::dsa::control::v1::GeocodeAddress* add_addresses();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::GeocodeAddress >&
+      addresses() const;
+
+  // string message = 4;
+  void clear_message();
+  const std::string& message() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_message(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_message();
+  PROTOBUF_NODISCARD std::string* release_message();
+  void set_allocated_message(std::string* message);
+  private:
+  const std::string& _internal_message() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
+  std::string* _internal_mutable_message();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // .dsa.control.v1.GeocodeStatus status = 2;
+  void clear_status();
+  ::dsa::control::v1::GeocodeStatus status() const;
+  void set_status(::dsa::control::v1::GeocodeStatus value);
+  private:
+  ::dsa::control::v1::GeocodeStatus _internal_status() const;
+  void _internal_set_status(::dsa::control::v1::GeocodeStatus value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GeocodeResult)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::GeocodeAddress > addresses_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
+    uint32_t request_id_;
+    int status_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ShareToHost final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ShareToHost) */ {
+ public:
+  inline ShareToHost() : ShareToHost(nullptr) {}
+  ~ShareToHost() override;
+  explicit PROTOBUF_CONSTEXPR ShareToHost(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ShareToHost(const ShareToHost& from);
+  ShareToHost(ShareToHost&& from) noexcept
+    : ShareToHost() {
+    *this = ::std::move(from);
+  }
+
+  inline ShareToHost& operator=(const ShareToHost& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ShareToHost& operator=(ShareToHost&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ShareToHost& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ShareToHost* internal_default_instance() {
+    return reinterpret_cast<const ShareToHost*>(
+               &_ShareToHost_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    49;
+
+  friend void swap(ShareToHost& a, ShareToHost& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ShareToHost* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ShareToHost* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ShareToHost* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ShareToHost>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ShareToHost& from);
+  void MergeFrom(const ShareToHost& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ShareToHost* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ShareToHost";
+  }
+  protected:
+  explicit ShareToHost(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kItemsFieldNumber = 5,
+    kTitleFieldNumber = 2,
+    kPackageNameFieldNumber = 3,
+    kAppLabelFieldNumber = 4,
+    kShareIdFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.DragItem items = 5;
+  int items_size() const;
+  private:
+  int _internal_items_size() const;
+  public:
+  void clear_items();
+  ::dsa::control::v1::DragItem* mutable_items(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >*
+      mutable_items();
+  private:
+  const ::dsa::control::v1::DragItem& _internal_items(int index) const;
+  ::dsa::control::v1::DragItem* _internal_add_items();
+  public:
+  const ::dsa::control::v1::DragItem& items(int index) const;
+  ::dsa::control::v1::DragItem* add_items();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >&
+      items() const;
+
+  // string title = 2;
+  void clear_title();
+  const std::string& title() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_title(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_title();
+  PROTOBUF_NODISCARD std::string* release_title();
+  void set_allocated_title(std::string* title);
+  private:
+  const std::string& _internal_title() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_title(const std::string& value);
+  std::string* _internal_mutable_title();
+  public:
+
+  // string package_name = 3;
+  void clear_package_name();
+  const std::string& package_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_package_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_package_name();
+  PROTOBUF_NODISCARD std::string* release_package_name();
+  void set_allocated_package_name(std::string* package_name);
+  private:
+  const std::string& _internal_package_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
+  std::string* _internal_mutable_package_name();
+  public:
+
+  // string app_label = 4;
+  void clear_app_label();
+  const std::string& app_label() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_app_label(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_app_label();
+  PROTOBUF_NODISCARD std::string* release_app_label();
+  void set_allocated_app_label(std::string* app_label);
+  private:
+  const std::string& _internal_app_label() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_app_label(const std::string& value);
+  std::string* _internal_mutable_app_label();
+  public:
+
+  // uint32 share_id = 1;
+  void clear_share_id();
+  uint32_t share_id() const;
+  void set_share_id(uint32_t value);
+  private:
+  uint32_t _internal_share_id() const;
+  void _internal_set_share_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ShareToHost)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem > items_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr title_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr app_label_;
+    uint32_t share_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ShareResult final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ShareResult) */ {
+ public:
+  inline ShareResult() : ShareResult(nullptr) {}
+  ~ShareResult() override;
+  explicit PROTOBUF_CONSTEXPR ShareResult(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ShareResult(const ShareResult& from);
+  ShareResult(ShareResult&& from) noexcept
+    : ShareResult() {
+    *this = ::std::move(from);
+  }
+
+  inline ShareResult& operator=(const ShareResult& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ShareResult& operator=(ShareResult&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ShareResult& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ShareResult* internal_default_instance() {
+    return reinterpret_cast<const ShareResult*>(
+               &_ShareResult_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    50;
+
+  friend void swap(ShareResult& a, ShareResult& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ShareResult* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ShareResult* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ShareResult* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ShareResult>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ShareResult& from);
+  void MergeFrom(const ShareResult& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ShareResult* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ShareResult";
+  }
+  protected:
+  explicit ShareResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kMessageFieldNumber = 3,
+    kShareIdFieldNumber = 1,
+    kOutcomeFieldNumber = 2,
+  };
+  // string message = 3;
+  void clear_message();
+  const std::string& message() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_message(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_message();
+  PROTOBUF_NODISCARD std::string* release_message();
+  void set_allocated_message(std::string* message);
+  private:
+  const std::string& _internal_message() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
+  std::string* _internal_mutable_message();
+  public:
+
+  // uint32 share_id = 1;
+  void clear_share_id();
+  uint32_t share_id() const;
+  void set_share_id(uint32_t value);
+  private:
+  uint32_t _internal_share_id() const;
+  void _internal_set_share_id(uint32_t value);
+  public:
+
+  // .dsa.control.v1.ShareOutcome outcome = 2;
+  void clear_outcome();
+  ::dsa::control::v1::ShareOutcome outcome() const;
+  void set_outcome(::dsa::control::v1::ShareOutcome value);
+  private:
+  ::dsa::control::v1::ShareOutcome _internal_outcome() const;
+  void _internal_set_outcome(::dsa::control::v1::ShareOutcome value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ShareResult)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
+    uint32_t share_id_;
+    int outcome_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class DeviceIdle final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DeviceIdle) */ {
  public:
@@ -9033,7 +10262,7 @@ class DeviceIdle final :
                &_DeviceIdle_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    51;
 
   friend void swap(DeviceIdle& a, DeviceIdle& b) {
     a.Swap(&b);
@@ -9163,7 +10392,7 @@ class ClipboardText final :
                &_ClipboardText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    52;
 
   friend void swap(ClipboardText& a, ClipboardText& b) {
     a.Swap(&b);
@@ -9298,7 +10527,7 @@ class ClipboardSharing final :
                &_ClipboardSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    53;
 
   friend void swap(ClipboardSharing& a, ClipboardSharing& b) {
     a.Swap(&b);
@@ -9428,7 +10657,7 @@ class DeveloperMode final :
                &_DeveloperMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    54;
 
   friend void swap(DeveloperMode& a, DeveloperMode& b) {
     a.Swap(&b);
@@ -9519,320 +10748,6 @@ class DeveloperMode final :
 };
 // -------------------------------------------------------------------
 
-class ArmTranslationInstall final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ArmTranslationInstall) */ {
- public:
-  inline ArmTranslationInstall() : ArmTranslationInstall(nullptr) {}
-  ~ArmTranslationInstall() override;
-  explicit PROTOBUF_CONSTEXPR ArmTranslationInstall(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  ArmTranslationInstall(const ArmTranslationInstall& from);
-  ArmTranslationInstall(ArmTranslationInstall&& from) noexcept
-    : ArmTranslationInstall() {
-    *this = ::std::move(from);
-  }
-
-  inline ArmTranslationInstall& operator=(const ArmTranslationInstall& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ArmTranslationInstall& operator=(ArmTranslationInstall&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const ArmTranslationInstall& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const ArmTranslationInstall* internal_default_instance() {
-    return reinterpret_cast<const ArmTranslationInstall*>(
-               &_ArmTranslationInstall_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    50;
-
-  friend void swap(ArmTranslationInstall& a, ArmTranslationInstall& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(ArmTranslationInstall* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ArmTranslationInstall* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  ArmTranslationInstall* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<ArmTranslationInstall>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const ArmTranslationInstall& from);
-  void MergeFrom(const ArmTranslationInstall& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(ArmTranslationInstall* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.ArmTranslationInstall";
-  }
-  protected:
-  explicit ArmTranslationInstall(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kSha256FieldNumber = 3,
-    kSizeFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
-  };
-  // bytes sha256 = 3;
-  void clear_sha256();
-  const std::string& sha256() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_sha256(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_sha256();
-  PROTOBUF_NODISCARD std::string* release_sha256();
-  void set_allocated_sha256(std::string* sha256);
-  private:
-  const std::string& _internal_sha256() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sha256(const std::string& value);
-  std::string* _internal_mutable_sha256();
-  public:
-
-  // uint64 size = 2;
-  void clear_size();
-  uint64_t size() const;
-  void set_size(uint64_t value);
-  private:
-  uint64_t _internal_size() const;
-  void _internal_set_size(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.ArmTranslationInstall)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sha256_;
-    uint64_t size_;
-    uint32_t transfer_id_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class ArmTranslationChunk final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ArmTranslationChunk) */ {
- public:
-  inline ArmTranslationChunk() : ArmTranslationChunk(nullptr) {}
-  ~ArmTranslationChunk() override;
-  explicit PROTOBUF_CONSTEXPR ArmTranslationChunk(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  ArmTranslationChunk(const ArmTranslationChunk& from);
-  ArmTranslationChunk(ArmTranslationChunk&& from) noexcept
-    : ArmTranslationChunk() {
-    *this = ::std::move(from);
-  }
-
-  inline ArmTranslationChunk& operator=(const ArmTranslationChunk& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ArmTranslationChunk& operator=(ArmTranslationChunk&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const ArmTranslationChunk& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const ArmTranslationChunk* internal_default_instance() {
-    return reinterpret_cast<const ArmTranslationChunk*>(
-               &_ArmTranslationChunk_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    51;
-
-  friend void swap(ArmTranslationChunk& a, ArmTranslationChunk& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(ArmTranslationChunk* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ArmTranslationChunk* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  ArmTranslationChunk* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<ArmTranslationChunk>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const ArmTranslationChunk& from);
-  void MergeFrom(const ArmTranslationChunk& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(ArmTranslationChunk* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.ArmTranslationChunk";
-  }
-  protected:
-  explicit ArmTranslationChunk(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kDataFieldNumber = 3,
-    kOffsetFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
-  };
-  // bytes data = 3;
-  void clear_data();
-  const std::string& data() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_data(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_data();
-  PROTOBUF_NODISCARD std::string* release_data();
-  void set_allocated_data(std::string* data);
-  private:
-  const std::string& _internal_data() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
-  std::string* _internal_mutable_data();
-  public:
-
-  // uint64 offset = 2;
-  void clear_offset();
-  uint64_t offset() const;
-  void set_offset(uint64_t value);
-  private:
-  uint64_t _internal_offset() const;
-  void _internal_set_offset(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.ArmTranslationChunk)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
-    uint64_t offset_;
-    uint32_t transfer_id_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
 class ArmTranslationRemove final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ArmTranslationRemove) */ {
  public:
@@ -9872,7 +10787,7 @@ class ArmTranslationRemove final :
                &_ArmTranslationRemove_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    55;
 
   friend void swap(ArmTranslationRemove& a, ArmTranslationRemove& b) {
     a.Swap(&b);
@@ -9989,7 +10904,7 @@ class ArmTranslationQuery final :
                &_ArmTranslationQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    56;
 
   friend void swap(ArmTranslationQuery& a, ArmTranslationQuery& b) {
     a.Swap(&b);
@@ -10106,7 +11021,7 @@ class ArmTranslationState final :
                &_ArmTranslationState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    57;
 
   friend void swap(ArmTranslationState& a, ArmTranslationState& b) {
     a.Swap(&b);
@@ -10172,8 +11087,6 @@ class ArmTranslationState final :
   enum : int {
     kErrorFieldNumber = 4,
     kAbilistFieldNumber = 7,
-    kReceivedFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
     kDoneFieldNumber = 3,
     kInstalledFieldNumber = 5,
     kActiveFieldNumber = 6,
@@ -10204,24 +11117,6 @@ class ArmTranslationState final :
   const std::string& _internal_abilist() const;
   inline PROTOBUF_ALWAYS_INLINE void _internal_set_abilist(const std::string& value);
   std::string* _internal_mutable_abilist();
-  public:
-
-  // uint64 received = 2;
-  void clear_received();
-  uint64_t received() const;
-  void set_received(uint64_t value);
-  private:
-  uint64_t _internal_received() const;
-  void _internal_set_received(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
   public:
 
   // bool done = 3;
@@ -10261,325 +11156,9 @@ class ArmTranslationState final :
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abilist_;
-    uint64_t received_;
-    uint32_t transfer_id_;
     bool done_;
     bool installed_;
     bool active_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class GappsInstall final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsInstall) */ {
- public:
-  inline GappsInstall() : GappsInstall(nullptr) {}
-  ~GappsInstall() override;
-  explicit PROTOBUF_CONSTEXPR GappsInstall(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  GappsInstall(const GappsInstall& from);
-  GappsInstall(GappsInstall&& from) noexcept
-    : GappsInstall() {
-    *this = ::std::move(from);
-  }
-
-  inline GappsInstall& operator=(const GappsInstall& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline GappsInstall& operator=(GappsInstall&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const GappsInstall& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const GappsInstall* internal_default_instance() {
-    return reinterpret_cast<const GappsInstall*>(
-               &_GappsInstall_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    55;
-
-  friend void swap(GappsInstall& a, GappsInstall& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(GappsInstall* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(GappsInstall* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  GappsInstall* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<GappsInstall>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const GappsInstall& from);
-  void MergeFrom(const GappsInstall& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(GappsInstall* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.GappsInstall";
-  }
-  protected:
-  explicit GappsInstall(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kSha256FieldNumber = 3,
-    kSizeFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
-  };
-  // bytes sha256 = 3;
-  void clear_sha256();
-  const std::string& sha256() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_sha256(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_sha256();
-  PROTOBUF_NODISCARD std::string* release_sha256();
-  void set_allocated_sha256(std::string* sha256);
-  private:
-  const std::string& _internal_sha256() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sha256(const std::string& value);
-  std::string* _internal_mutable_sha256();
-  public:
-
-  // uint64 size = 2;
-  void clear_size();
-  uint64_t size() const;
-  void set_size(uint64_t value);
-  private:
-  uint64_t _internal_size() const;
-  void _internal_set_size(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsInstall)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sha256_;
-    uint64_t size_;
-    uint32_t transfer_id_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class GappsChunk final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsChunk) */ {
- public:
-  inline GappsChunk() : GappsChunk(nullptr) {}
-  ~GappsChunk() override;
-  explicit PROTOBUF_CONSTEXPR GappsChunk(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  GappsChunk(const GappsChunk& from);
-  GappsChunk(GappsChunk&& from) noexcept
-    : GappsChunk() {
-    *this = ::std::move(from);
-  }
-
-  inline GappsChunk& operator=(const GappsChunk& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline GappsChunk& operator=(GappsChunk&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const GappsChunk& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const GappsChunk* internal_default_instance() {
-    return reinterpret_cast<const GappsChunk*>(
-               &_GappsChunk_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    56;
-
-  friend void swap(GappsChunk& a, GappsChunk& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(GappsChunk* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(GappsChunk* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  GappsChunk* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<GappsChunk>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const GappsChunk& from);
-  void MergeFrom(const GappsChunk& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(GappsChunk* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.GappsChunk";
-  }
-  protected:
-  explicit GappsChunk(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kDataFieldNumber = 3,
-    kOffsetFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
-  };
-  // bytes data = 3;
-  void clear_data();
-  const std::string& data() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_data(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_data();
-  PROTOBUF_NODISCARD std::string* release_data();
-  void set_allocated_data(std::string* data);
-  private:
-  const std::string& _internal_data() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
-  std::string* _internal_mutable_data();
-  public:
-
-  // uint64 offset = 2;
-  void clear_offset();
-  uint64_t offset() const;
-  void set_offset(uint64_t value);
-  private:
-  uint64_t _internal_offset() const;
-  void _internal_set_offset(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsChunk)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
-    uint64_t offset_;
-    uint32_t transfer_id_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -10626,7 +11205,7 @@ class GappsRemove final :
                &_GappsRemove_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    58;
 
   friend void swap(GappsRemove& a, GappsRemove& b) {
     a.Swap(&b);
@@ -10743,7 +11322,7 @@ class GappsQuery final :
                &_GappsQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    59;
 
   friend void swap(GappsQuery& a, GappsQuery& b) {
     a.Swap(&b);
@@ -10860,7 +11439,7 @@ class GappsState final :
                &_GappsState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    60;
 
   friend void swap(GappsState& a, GappsState& b) {
     a.Swap(&b);
@@ -10927,8 +11506,6 @@ class GappsState final :
     kErrorFieldNumber = 4,
     kAbiFieldNumber = 8,
     kAbilistFieldNumber = 9,
-    kReceivedFieldNumber = 2,
-    kTransferIdFieldNumber = 1,
     kDoneFieldNumber = 3,
     kInstalledFieldNumber = 5,
     kActiveFieldNumber = 6,
@@ -10974,24 +11551,6 @@ class GappsState final :
   const std::string& _internal_abilist() const;
   inline PROTOBUF_ALWAYS_INLINE void _internal_set_abilist(const std::string& value);
   std::string* _internal_mutable_abilist();
-  public:
-
-  // uint64 received = 2;
-  void clear_received();
-  uint64_t received() const;
-  void set_received(uint64_t value);
-  private:
-  uint64_t _internal_received() const;
-  void _internal_set_received(uint64_t value);
-  public:
-
-  // uint32 transfer_id = 1;
-  void clear_transfer_id();
-  uint32_t transfer_id() const;
-  void set_transfer_id(uint32_t value);
-  private:
-  uint32_t _internal_transfer_id() const;
-  void _internal_set_transfer_id(uint32_t value);
   public:
 
   // bool done = 3;
@@ -11041,12 +11600,346 @@ class GappsState final :
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abi_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abilist_;
-    uint64_t received_;
-    uint32_t transfer_id_;
     bool done_;
     bool installed_;
     bool active_;
     uint32_t sdk_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class AddonImageRead final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AddonImageRead) */ {
+ public:
+  inline AddonImageRead() : AddonImageRead(nullptr) {}
+  ~AddonImageRead() override;
+  explicit PROTOBUF_CONSTEXPR AddonImageRead(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AddonImageRead(const AddonImageRead& from);
+  AddonImageRead(AddonImageRead&& from) noexcept
+    : AddonImageRead() {
+    *this = ::std::move(from);
+  }
+
+  inline AddonImageRead& operator=(const AddonImageRead& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AddonImageRead& operator=(AddonImageRead&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AddonImageRead& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AddonImageRead* internal_default_instance() {
+    return reinterpret_cast<const AddonImageRead*>(
+               &_AddonImageRead_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    61;
+
+  friend void swap(AddonImageRead& a, AddonImageRead& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AddonImageRead* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AddonImageRead* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AddonImageRead* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AddonImageRead>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AddonImageRead& from);
+  void MergeFrom(const AddonImageRead& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AddonImageRead* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AddonImageRead";
+  }
+  protected:
+  explicit AddonImageRead(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kOffsetFieldNumber = 2,
+    kImageFieldNumber = 1,
+    kLengthFieldNumber = 3,
+  };
+  // uint64 offset = 2;
+  void clear_offset();
+  uint64_t offset() const;
+  void set_offset(uint64_t value);
+  private:
+  uint64_t _internal_offset() const;
+  void _internal_set_offset(uint64_t value);
+  public:
+
+  // .dsa.control.v1.AddonImage image = 1;
+  void clear_image();
+  ::dsa::control::v1::AddonImage image() const;
+  void set_image(::dsa::control::v1::AddonImage value);
+  private:
+  ::dsa::control::v1::AddonImage _internal_image() const;
+  void _internal_set_image(::dsa::control::v1::AddonImage value);
+  public:
+
+  // uint32 length = 3;
+  void clear_length();
+  uint32_t length() const;
+  void set_length(uint32_t value);
+  private:
+  uint32_t _internal_length() const;
+  void _internal_set_length(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AddonImageRead)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint64_t offset_;
+    int image_;
+    uint32_t length_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class AddonImagePart final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AddonImagePart) */ {
+ public:
+  inline AddonImagePart() : AddonImagePart(nullptr) {}
+  ~AddonImagePart() override;
+  explicit PROTOBUF_CONSTEXPR AddonImagePart(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AddonImagePart(const AddonImagePart& from);
+  AddonImagePart(AddonImagePart&& from) noexcept
+    : AddonImagePart() {
+    *this = ::std::move(from);
+  }
+
+  inline AddonImagePart& operator=(const AddonImagePart& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AddonImagePart& operator=(AddonImagePart&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AddonImagePart& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AddonImagePart* internal_default_instance() {
+    return reinterpret_cast<const AddonImagePart*>(
+               &_AddonImagePart_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    62;
+
+  friend void swap(AddonImagePart& a, AddonImagePart& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AddonImagePart* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AddonImagePart* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AddonImagePart* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AddonImagePart>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AddonImagePart& from);
+  void MergeFrom(const AddonImagePart& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AddonImagePart* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AddonImagePart";
+  }
+  protected:
+  explicit AddonImagePart(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDataFieldNumber = 3,
+    kErrorFieldNumber = 5,
+    kOffsetFieldNumber = 2,
+    kSizeFieldNumber = 4,
+    kImageFieldNumber = 1,
+  };
+  // bytes data = 3;
+  void clear_data();
+  const std::string& data() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_data(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_data();
+  PROTOBUF_NODISCARD std::string* release_data();
+  void set_allocated_data(std::string* data);
+  private:
+  const std::string& _internal_data() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
+  std::string* _internal_mutable_data();
+  public:
+
+  // string error = 5;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // uint64 offset = 2;
+  void clear_offset();
+  uint64_t offset() const;
+  void set_offset(uint64_t value);
+  private:
+  uint64_t _internal_offset() const;
+  void _internal_set_offset(uint64_t value);
+  public:
+
+  // uint64 size = 4;
+  void clear_size();
+  uint64_t size() const;
+  void set_size(uint64_t value);
+  private:
+  uint64_t _internal_size() const;
+  void _internal_set_size(uint64_t value);
+  public:
+
+  // .dsa.control.v1.AddonImage image = 1;
+  void clear_image();
+  ::dsa::control::v1::AddonImage image() const;
+  void set_image(::dsa::control::v1::AddonImage value);
+  private:
+  ::dsa::control::v1::AddonImage _internal_image() const;
+  void _internal_set_image(::dsa::control::v1::AddonImage value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AddonImagePart)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    uint64_t offset_;
+    uint64_t size_;
+    int image_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -11093,7 +11986,7 @@ class GoogleDeviceIdQuery final :
                &_GoogleDeviceIdQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    63;
 
   friend void swap(GoogleDeviceIdQuery& a, GoogleDeviceIdQuery& b) {
     a.Swap(&b);
@@ -11210,7 +12103,7 @@ class GoogleDeviceId final :
                &_GoogleDeviceId_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    64;
 
   friend void swap(GoogleDeviceId& a, GoogleDeviceId& b) {
     a.Swap(&b);
@@ -11345,7 +12238,7 @@ class RootApp final :
                &_RootApp_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    65;
 
   friend void swap(RootApp& a, RootApp& b) {
     a.Swap(&b);
@@ -11502,7 +12395,7 @@ class RootElevationConfig final :
                &_RootElevationConfig_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    66;
 
   friend void swap(RootElevationConfig& a, RootElevationConfig& b) {
     a.Swap(&b);
@@ -11652,7 +12545,7 @@ class SuRequest final :
                &_SuRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    67;
 
   friend void swap(SuRequest& a, SuRequest& b) {
     a.Swap(&b);
@@ -11846,7 +12739,7 @@ class SuDecision final :
                &_SuDecision_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    68;
 
   friend void swap(SuDecision& a, SuDecision& b) {
     a.Swap(&b);
@@ -12003,7 +12896,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    69;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -12262,7 +13155,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    70;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -12397,7 +13290,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    71;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -12532,7 +13425,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    72;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -12667,7 +13560,7 @@ class BackgroundApp final :
                &_BackgroundApp_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    73;
 
   friend void swap(BackgroundApp& a, BackgroundApp& b) {
     a.Swap(&b);
@@ -12892,7 +13785,7 @@ class BackgroundAppGone final :
                &_BackgroundAppGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    74;
 
   friend void swap(BackgroundAppGone& a, BackgroundAppGone& b) {
     a.Swap(&b);
@@ -13027,7 +13920,7 @@ class BackgroundAppAction final :
                &_BackgroundAppAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    75;
 
   friend void swap(BackgroundAppAction& a, BackgroundAppAction& b) {
     a.Swap(&b);
@@ -13184,7 +14077,7 @@ class MediaSession final :
                &_MediaSession_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    76;
 
   friend void swap(MediaSession& a, MediaSession& b) {
     a.Swap(&b);
@@ -13454,7 +14347,7 @@ class MediaSessionGone final :
                &_MediaSessionGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    77;
 
   friend void swap(MediaSessionGone& a, MediaSessionGone& b) {
     a.Swap(&b);
@@ -13589,7 +14482,7 @@ class MediaControl final :
                &_MediaControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    78;
 
   friend void swap(MediaControl& a, MediaControl& b) {
     a.Swap(&b);
@@ -13735,7 +14628,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    79;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -13852,7 +14745,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    80;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -14031,7 +14924,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    81;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -14445,7 +15338,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    82;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -14562,7 +15455,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    83;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -14703,7 +15596,7 @@ class InstallPart final :
                &_InstallPart_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    84;
 
   friend void swap(InstallPart& a, InstallPart& b) {
     a.Swap(&b);
@@ -14860,7 +15753,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    85;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -15053,7 +15946,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    86;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -15210,7 +16103,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    87;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -15356,7 +16249,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    88;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -15550,7 +16443,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    89;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -15685,7 +16578,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    90;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -15815,7 +16708,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    91;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -15999,7 +16892,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    92;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -16156,7 +17049,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    93;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -16286,7 +17179,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    94;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -16427,7 +17320,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    95;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -16600,7 +17493,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    96;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -16757,7 +17650,7 @@ class FileSharing final :
                &_FileSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    97;
 
   friend void swap(FileSharing& a, FileSharing& b) {
     a.Swap(&b);
@@ -16940,7 +17833,7 @@ class AndroidFiles final :
                &_AndroidFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    98;
 
   friend void swap(AndroidFiles& a, AndroidFiles& b) {
     a.Swap(&b);
@@ -17086,7 +17979,7 @@ class DragItem final :
                &_DragItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    99;
 
   friend void swap(DragItem& a, DragItem& b) {
     a.Swap(&b);
@@ -17286,7 +18179,7 @@ class DragOut final :
                &_DragOut_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    100;
 
   friend void swap(DragOut& a, DragOut& b) {
     a.Swap(&b);
@@ -17471,7 +18364,7 @@ class DragOffer final :
                &_DragOffer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    101;
 
   friend void swap(DragOffer& a, DragOffer& b) {
     a.Swap(&b);
@@ -17648,7 +18541,7 @@ class DragRead final :
                &_DragRead_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    102;
 
   friend void swap(DragRead& a, DragRead& b) {
     a.Swap(&b);
@@ -17822,7 +18715,7 @@ class DragData final :
                &_DragData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    103;
 
   friend void swap(DragData& a, DragData& b) {
     a.Swap(&b);
@@ -17995,7 +18888,7 @@ class DragEnd final :
                &_DragEnd_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    104;
 
   friend void swap(DragEnd& a, DragEnd& b) {
     a.Swap(&b);
@@ -18136,7 +19029,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    105;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -18266,7 +19159,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    106;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -18418,7 +19311,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    107;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -18557,7 +19450,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    108;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -18709,7 +19602,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    109;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -18855,7 +19748,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    110;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -19034,7 +19927,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    111;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -19235,7 +20128,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    112;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -19352,7 +20245,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    113;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -19469,7 +20362,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    114;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -19604,7 +20497,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    115;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -19799,7 +20692,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    116;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -19938,7 +20831,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    117;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -20090,7 +20983,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    118;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -20255,7 +21148,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    119;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -20394,7 +21287,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    120;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -20535,7 +21428,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    121;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -20665,7 +21558,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    122;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -20952,7 +21845,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    123;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -21113,7 +22006,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    124;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -21259,7 +22152,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    125;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -21416,7 +22309,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    126;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -21566,7 +22459,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    127;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -21710,7 +22603,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    128;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -21840,7 +22733,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    129;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -22025,7 +22918,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    130;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -22193,7 +23086,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    131;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -22367,7 +23260,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    132;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -22508,7 +23401,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    133;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -22660,7 +23553,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    134;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -23103,7 +23996,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    135;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -23336,7 +24229,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    136;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -23526,7 +24419,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    137;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -23694,7 +24587,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    138;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -23873,7 +24766,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    139;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -24014,7 +24907,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    140;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -24160,7 +25053,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    141;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -24339,7 +25232,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    142;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -24485,7 +25378,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    143;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -24615,7 +25508,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    144;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -24778,7 +25671,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    142;
+    145;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -24930,7 +25823,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    143;
+    146;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -25158,7 +26051,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    147;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -25335,7 +26228,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    148;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -25465,7 +26358,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    149;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -25638,7 +26531,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    150;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -25784,7 +26677,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    148;
+    151;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -26050,7 +26943,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    149;
+    152;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -26207,7 +27100,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    150;
+    153;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -26337,7 +27230,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    151;
+    154;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -26494,7 +27387,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    152;
+    155;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -26657,7 +27550,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    153;
+    156;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -26850,7 +27743,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    154;
+    157;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -26989,7 +27882,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    155;
+    158;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -27157,7 +28050,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    156;
+    159;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -27336,7 +28229,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    157;
+    160;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -27526,7 +28419,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    158;
+    161;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -27643,7 +28536,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    159;
+    162;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -27806,7 +28699,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    160;
+    163;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -27968,7 +28861,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    161;
+    164;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -28103,7 +28996,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    162;
+    165;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -28335,7 +29228,7 @@ class DeviceName final :
                &_DeviceName_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    163;
+    166;
 
   friend void swap(DeviceName& a, DeviceName& b) {
     a.Swap(&b);
@@ -28470,7 +29363,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    164;
+    167;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -28649,7 +29542,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    165;
+    168;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -28779,7 +29672,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    166;
+    169;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -28986,7 +29879,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    167;
+    170;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -29182,13 +30075,9 @@ class Envelope final :
     kDisplayRefresh = 407,
     kPowerHint = 110,
     kDeveloperMode = 140,
-    kArmTranslationInstall = 150,
-    kArmTranslationChunk = 151,
     kArmTranslationRemove = 152,
     kArmTranslationQuery = 153,
     kArmTranslationState = 154,
-    kGappsInstall = 400,
-    kGappsChunk = 401,
     kGappsRemove = 402,
     kGappsQuery = 403,
     kGappsState = 404,
@@ -29197,6 +30086,8 @@ class Envelope final :
     kRootElevationConfig = 411,
     kSuRequest = 412,
     kSuDecision = 413,
+    kAddonImageRead = 414,
+    kAddonImagePart = 415,
     kDeviceIdle = 42,
     kHostMemory = 43,
     kHostSleep = 44,
@@ -29298,6 +30189,10 @@ class Envelope final :
     kReinstallApp = 380,
     kReinstallResult = 381,
     kNativeLibraryCrash = 382,
+    kGeocodeRequest = 470,
+    kGeocodeResult = 471,
+    kShareToHost = 472,
+    kShareResult = 473,
     BODY_NOT_SET = 0,
   };
 
@@ -29306,7 +30201,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    168;
+    171;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -29407,13 +30302,9 @@ class Envelope final :
     kDisplayRefreshFieldNumber = 407,
     kPowerHintFieldNumber = 110,
     kDeveloperModeFieldNumber = 140,
-    kArmTranslationInstallFieldNumber = 150,
-    kArmTranslationChunkFieldNumber = 151,
     kArmTranslationRemoveFieldNumber = 152,
     kArmTranslationQueryFieldNumber = 153,
     kArmTranslationStateFieldNumber = 154,
-    kGappsInstallFieldNumber = 400,
-    kGappsChunkFieldNumber = 401,
     kGappsRemoveFieldNumber = 402,
     kGappsQueryFieldNumber = 403,
     kGappsStateFieldNumber = 404,
@@ -29422,6 +30313,8 @@ class Envelope final :
     kRootElevationConfigFieldNumber = 411,
     kSuRequestFieldNumber = 412,
     kSuDecisionFieldNumber = 413,
+    kAddonImageReadFieldNumber = 414,
+    kAddonImagePartFieldNumber = 415,
     kDeviceIdleFieldNumber = 42,
     kHostMemoryFieldNumber = 43,
     kHostSleepFieldNumber = 44,
@@ -29523,6 +30416,10 @@ class Envelope final :
     kReinstallAppFieldNumber = 380,
     kReinstallResultFieldNumber = 381,
     kNativeLibraryCrashFieldNumber = 382,
+    kGeocodeRequestFieldNumber = 470,
+    kGeocodeResultFieldNumber = 471,
+    kShareToHostFieldNumber = 472,
+    kShareResultFieldNumber = 473,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -30190,42 +31087,6 @@ class Envelope final :
       ::dsa::control::v1::DeveloperMode* developer_mode);
   ::dsa::control::v1::DeveloperMode* unsafe_arena_release_developer_mode();
 
-  // .dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;
-  bool has_arm_translation_install() const;
-  private:
-  bool _internal_has_arm_translation_install() const;
-  public:
-  void clear_arm_translation_install();
-  const ::dsa::control::v1::ArmTranslationInstall& arm_translation_install() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::ArmTranslationInstall* release_arm_translation_install();
-  ::dsa::control::v1::ArmTranslationInstall* mutable_arm_translation_install();
-  void set_allocated_arm_translation_install(::dsa::control::v1::ArmTranslationInstall* arm_translation_install);
-  private:
-  const ::dsa::control::v1::ArmTranslationInstall& _internal_arm_translation_install() const;
-  ::dsa::control::v1::ArmTranslationInstall* _internal_mutable_arm_translation_install();
-  public:
-  void unsafe_arena_set_allocated_arm_translation_install(
-      ::dsa::control::v1::ArmTranslationInstall* arm_translation_install);
-  ::dsa::control::v1::ArmTranslationInstall* unsafe_arena_release_arm_translation_install();
-
-  // .dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;
-  bool has_arm_translation_chunk() const;
-  private:
-  bool _internal_has_arm_translation_chunk() const;
-  public:
-  void clear_arm_translation_chunk();
-  const ::dsa::control::v1::ArmTranslationChunk& arm_translation_chunk() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::ArmTranslationChunk* release_arm_translation_chunk();
-  ::dsa::control::v1::ArmTranslationChunk* mutable_arm_translation_chunk();
-  void set_allocated_arm_translation_chunk(::dsa::control::v1::ArmTranslationChunk* arm_translation_chunk);
-  private:
-  const ::dsa::control::v1::ArmTranslationChunk& _internal_arm_translation_chunk() const;
-  ::dsa::control::v1::ArmTranslationChunk* _internal_mutable_arm_translation_chunk();
-  public:
-  void unsafe_arena_set_allocated_arm_translation_chunk(
-      ::dsa::control::v1::ArmTranslationChunk* arm_translation_chunk);
-  ::dsa::control::v1::ArmTranslationChunk* unsafe_arena_release_arm_translation_chunk();
-
   // .dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;
   bool has_arm_translation_remove() const;
   private:
@@ -30279,42 +31140,6 @@ class Envelope final :
   void unsafe_arena_set_allocated_arm_translation_state(
       ::dsa::control::v1::ArmTranslationState* arm_translation_state);
   ::dsa::control::v1::ArmTranslationState* unsafe_arena_release_arm_translation_state();
-
-  // .dsa.control.v1.GappsInstall gapps_install = 400;
-  bool has_gapps_install() const;
-  private:
-  bool _internal_has_gapps_install() const;
-  public:
-  void clear_gapps_install();
-  const ::dsa::control::v1::GappsInstall& gapps_install() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::GappsInstall* release_gapps_install();
-  ::dsa::control::v1::GappsInstall* mutable_gapps_install();
-  void set_allocated_gapps_install(::dsa::control::v1::GappsInstall* gapps_install);
-  private:
-  const ::dsa::control::v1::GappsInstall& _internal_gapps_install() const;
-  ::dsa::control::v1::GappsInstall* _internal_mutable_gapps_install();
-  public:
-  void unsafe_arena_set_allocated_gapps_install(
-      ::dsa::control::v1::GappsInstall* gapps_install);
-  ::dsa::control::v1::GappsInstall* unsafe_arena_release_gapps_install();
-
-  // .dsa.control.v1.GappsChunk gapps_chunk = 401;
-  bool has_gapps_chunk() const;
-  private:
-  bool _internal_has_gapps_chunk() const;
-  public:
-  void clear_gapps_chunk();
-  const ::dsa::control::v1::GappsChunk& gapps_chunk() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::GappsChunk* release_gapps_chunk();
-  ::dsa::control::v1::GappsChunk* mutable_gapps_chunk();
-  void set_allocated_gapps_chunk(::dsa::control::v1::GappsChunk* gapps_chunk);
-  private:
-  const ::dsa::control::v1::GappsChunk& _internal_gapps_chunk() const;
-  ::dsa::control::v1::GappsChunk* _internal_mutable_gapps_chunk();
-  public:
-  void unsafe_arena_set_allocated_gapps_chunk(
-      ::dsa::control::v1::GappsChunk* gapps_chunk);
-  ::dsa::control::v1::GappsChunk* unsafe_arena_release_gapps_chunk();
 
   // .dsa.control.v1.GappsRemove gapps_remove = 402;
   bool has_gapps_remove() const;
@@ -30459,6 +31284,42 @@ class Envelope final :
   void unsafe_arena_set_allocated_su_decision(
       ::dsa::control::v1::SuDecision* su_decision);
   ::dsa::control::v1::SuDecision* unsafe_arena_release_su_decision();
+
+  // .dsa.control.v1.AddonImageRead addon_image_read = 414;
+  bool has_addon_image_read() const;
+  private:
+  bool _internal_has_addon_image_read() const;
+  public:
+  void clear_addon_image_read();
+  const ::dsa::control::v1::AddonImageRead& addon_image_read() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AddonImageRead* release_addon_image_read();
+  ::dsa::control::v1::AddonImageRead* mutable_addon_image_read();
+  void set_allocated_addon_image_read(::dsa::control::v1::AddonImageRead* addon_image_read);
+  private:
+  const ::dsa::control::v1::AddonImageRead& _internal_addon_image_read() const;
+  ::dsa::control::v1::AddonImageRead* _internal_mutable_addon_image_read();
+  public:
+  void unsafe_arena_set_allocated_addon_image_read(
+      ::dsa::control::v1::AddonImageRead* addon_image_read);
+  ::dsa::control::v1::AddonImageRead* unsafe_arena_release_addon_image_read();
+
+  // .dsa.control.v1.AddonImagePart addon_image_part = 415;
+  bool has_addon_image_part() const;
+  private:
+  bool _internal_has_addon_image_part() const;
+  public:
+  void clear_addon_image_part();
+  const ::dsa::control::v1::AddonImagePart& addon_image_part() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AddonImagePart* release_addon_image_part();
+  ::dsa::control::v1::AddonImagePart* mutable_addon_image_part();
+  void set_allocated_addon_image_part(::dsa::control::v1::AddonImagePart* addon_image_part);
+  private:
+  const ::dsa::control::v1::AddonImagePart& _internal_addon_image_part() const;
+  ::dsa::control::v1::AddonImagePart* _internal_mutable_addon_image_part();
+  public:
+  void unsafe_arena_set_allocated_addon_image_part(
+      ::dsa::control::v1::AddonImagePart* addon_image_part);
+  ::dsa::control::v1::AddonImagePart* unsafe_arena_release_addon_image_part();
 
   // .dsa.control.v1.DeviceIdle device_idle = 42;
   bool has_device_idle() const;
@@ -32278,6 +33139,78 @@ class Envelope final :
       ::dsa::control::v1::NativeLibraryCrash* native_library_crash);
   ::dsa::control::v1::NativeLibraryCrash* unsafe_arena_release_native_library_crash();
 
+  // .dsa.control.v1.GeocodeRequest geocode_request = 470;
+  bool has_geocode_request() const;
+  private:
+  bool _internal_has_geocode_request() const;
+  public:
+  void clear_geocode_request();
+  const ::dsa::control::v1::GeocodeRequest& geocode_request() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GeocodeRequest* release_geocode_request();
+  ::dsa::control::v1::GeocodeRequest* mutable_geocode_request();
+  void set_allocated_geocode_request(::dsa::control::v1::GeocodeRequest* geocode_request);
+  private:
+  const ::dsa::control::v1::GeocodeRequest& _internal_geocode_request() const;
+  ::dsa::control::v1::GeocodeRequest* _internal_mutable_geocode_request();
+  public:
+  void unsafe_arena_set_allocated_geocode_request(
+      ::dsa::control::v1::GeocodeRequest* geocode_request);
+  ::dsa::control::v1::GeocodeRequest* unsafe_arena_release_geocode_request();
+
+  // .dsa.control.v1.GeocodeResult geocode_result = 471;
+  bool has_geocode_result() const;
+  private:
+  bool _internal_has_geocode_result() const;
+  public:
+  void clear_geocode_result();
+  const ::dsa::control::v1::GeocodeResult& geocode_result() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GeocodeResult* release_geocode_result();
+  ::dsa::control::v1::GeocodeResult* mutable_geocode_result();
+  void set_allocated_geocode_result(::dsa::control::v1::GeocodeResult* geocode_result);
+  private:
+  const ::dsa::control::v1::GeocodeResult& _internal_geocode_result() const;
+  ::dsa::control::v1::GeocodeResult* _internal_mutable_geocode_result();
+  public:
+  void unsafe_arena_set_allocated_geocode_result(
+      ::dsa::control::v1::GeocodeResult* geocode_result);
+  ::dsa::control::v1::GeocodeResult* unsafe_arena_release_geocode_result();
+
+  // .dsa.control.v1.ShareToHost share_to_host = 472;
+  bool has_share_to_host() const;
+  private:
+  bool _internal_has_share_to_host() const;
+  public:
+  void clear_share_to_host();
+  const ::dsa::control::v1::ShareToHost& share_to_host() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ShareToHost* release_share_to_host();
+  ::dsa::control::v1::ShareToHost* mutable_share_to_host();
+  void set_allocated_share_to_host(::dsa::control::v1::ShareToHost* share_to_host);
+  private:
+  const ::dsa::control::v1::ShareToHost& _internal_share_to_host() const;
+  ::dsa::control::v1::ShareToHost* _internal_mutable_share_to_host();
+  public:
+  void unsafe_arena_set_allocated_share_to_host(
+      ::dsa::control::v1::ShareToHost* share_to_host);
+  ::dsa::control::v1::ShareToHost* unsafe_arena_release_share_to_host();
+
+  // .dsa.control.v1.ShareResult share_result = 473;
+  bool has_share_result() const;
+  private:
+  bool _internal_has_share_result() const;
+  public:
+  void clear_share_result();
+  const ::dsa::control::v1::ShareResult& share_result() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ShareResult* release_share_result();
+  ::dsa::control::v1::ShareResult* mutable_share_result();
+  void set_allocated_share_result(::dsa::control::v1::ShareResult* share_result);
+  private:
+  const ::dsa::control::v1::ShareResult& _internal_share_result() const;
+  ::dsa::control::v1::ShareResult* _internal_mutable_share_result();
+  public:
+  void unsafe_arena_set_allocated_share_result(
+      ::dsa::control::v1::ShareResult* share_result);
+  ::dsa::control::v1::ShareResult* unsafe_arena_release_share_result();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -32320,13 +33253,9 @@ class Envelope final :
   void set_has_display_refresh();
   void set_has_power_hint();
   void set_has_developer_mode();
-  void set_has_arm_translation_install();
-  void set_has_arm_translation_chunk();
   void set_has_arm_translation_remove();
   void set_has_arm_translation_query();
   void set_has_arm_translation_state();
-  void set_has_gapps_install();
-  void set_has_gapps_chunk();
   void set_has_gapps_remove();
   void set_has_gapps_query();
   void set_has_gapps_state();
@@ -32335,6 +33264,8 @@ class Envelope final :
   void set_has_root_elevation_config();
   void set_has_su_request();
   void set_has_su_decision();
+  void set_has_addon_image_read();
+  void set_has_addon_image_part();
   void set_has_device_idle();
   void set_has_host_memory();
   void set_has_host_sleep();
@@ -32436,6 +33367,10 @@ class Envelope final :
   void set_has_reinstall_app();
   void set_has_reinstall_result();
   void set_has_native_library_crash();
+  void set_has_geocode_request();
+  void set_has_geocode_result();
+  void set_has_share_to_host();
+  void set_has_share_result();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -32484,13 +33419,9 @@ class Envelope final :
       ::dsa::control::v1::DisplayRefresh* display_refresh_;
       ::dsa::control::v1::PowerHint* power_hint_;
       ::dsa::control::v1::DeveloperMode* developer_mode_;
-      ::dsa::control::v1::ArmTranslationInstall* arm_translation_install_;
-      ::dsa::control::v1::ArmTranslationChunk* arm_translation_chunk_;
       ::dsa::control::v1::ArmTranslationRemove* arm_translation_remove_;
       ::dsa::control::v1::ArmTranslationQuery* arm_translation_query_;
       ::dsa::control::v1::ArmTranslationState* arm_translation_state_;
-      ::dsa::control::v1::GappsInstall* gapps_install_;
-      ::dsa::control::v1::GappsChunk* gapps_chunk_;
       ::dsa::control::v1::GappsRemove* gapps_remove_;
       ::dsa::control::v1::GappsQuery* gapps_query_;
       ::dsa::control::v1::GappsState* gapps_state_;
@@ -32499,6 +33430,8 @@ class Envelope final :
       ::dsa::control::v1::RootElevationConfig* root_elevation_config_;
       ::dsa::control::v1::SuRequest* su_request_;
       ::dsa::control::v1::SuDecision* su_decision_;
+      ::dsa::control::v1::AddonImageRead* addon_image_read_;
+      ::dsa::control::v1::AddonImagePart* addon_image_part_;
       ::dsa::control::v1::DeviceIdle* device_idle_;
       ::dsa::control::v1::HostMemory* host_memory_;
       ::dsa::control::v1::HostSleep* host_sleep_;
@@ -32600,6 +33533,10 @@ class Envelope final :
       ::dsa::control::v1::ReinstallApp* reinstall_app_;
       ::dsa::control::v1::ReinstallResult* reinstall_result_;
       ::dsa::control::v1::NativeLibraryCrash* native_library_crash_;
+      ::dsa::control::v1::GeocodeRequest* geocode_request_;
+      ::dsa::control::v1::GeocodeResult* geocode_result_;
+      ::dsa::control::v1::ShareToHost* share_to_host_;
+      ::dsa::control::v1::ShareResult* share_result_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -37571,6 +38508,1441 @@ inline void LocationFix::set_unix_time_ms(uint64_t value) {
 
 // -------------------------------------------------------------------
 
+// GeocodeRequest
+
+// uint32 request_id = 1;
+inline void GeocodeRequest::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t GeocodeRequest::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t GeocodeRequest::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.request_id)
+  return _internal_request_id();
+}
+inline void GeocodeRequest::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void GeocodeRequest::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.request_id)
+}
+
+// bool reverse = 2;
+inline void GeocodeRequest::clear_reverse() {
+  _impl_.reverse_ = false;
+}
+inline bool GeocodeRequest::_internal_reverse() const {
+  return _impl_.reverse_;
+}
+inline bool GeocodeRequest::reverse() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.reverse)
+  return _internal_reverse();
+}
+inline void GeocodeRequest::_internal_set_reverse(bool value) {
+  
+  _impl_.reverse_ = value;
+}
+inline void GeocodeRequest::set_reverse(bool value) {
+  _internal_set_reverse(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.reverse)
+}
+
+// string query = 3;
+inline void GeocodeRequest::clear_query() {
+  _impl_.query_.ClearToEmpty();
+}
+inline const std::string& GeocodeRequest::query() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.query)
+  return _internal_query();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeRequest::set_query(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.query_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.query)
+}
+inline std::string* GeocodeRequest::mutable_query() {
+  std::string* _s = _internal_mutable_query();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeRequest.query)
+  return _s;
+}
+inline const std::string& GeocodeRequest::_internal_query() const {
+  return _impl_.query_.Get();
+}
+inline void GeocodeRequest::_internal_set_query(const std::string& value) {
+  
+  _impl_.query_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeRequest::_internal_mutable_query() {
+  
+  return _impl_.query_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeRequest::release_query() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeRequest.query)
+  return _impl_.query_.Release();
+}
+inline void GeocodeRequest::set_allocated_query(std::string* query) {
+  if (query != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.query_.SetAllocated(query, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.query_.IsDefault()) {
+    _impl_.query_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeRequest.query)
+}
+
+// double latitude_degrees = 4;
+inline void GeocodeRequest::clear_latitude_degrees() {
+  _impl_.latitude_degrees_ = 0;
+}
+inline double GeocodeRequest::_internal_latitude_degrees() const {
+  return _impl_.latitude_degrees_;
+}
+inline double GeocodeRequest::latitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.latitude_degrees)
+  return _internal_latitude_degrees();
+}
+inline void GeocodeRequest::_internal_set_latitude_degrees(double value) {
+  
+  _impl_.latitude_degrees_ = value;
+}
+inline void GeocodeRequest::set_latitude_degrees(double value) {
+  _internal_set_latitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.latitude_degrees)
+}
+
+// double longitude_degrees = 5;
+inline void GeocodeRequest::clear_longitude_degrees() {
+  _impl_.longitude_degrees_ = 0;
+}
+inline double GeocodeRequest::_internal_longitude_degrees() const {
+  return _impl_.longitude_degrees_;
+}
+inline double GeocodeRequest::longitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.longitude_degrees)
+  return _internal_longitude_degrees();
+}
+inline void GeocodeRequest::_internal_set_longitude_degrees(double value) {
+  
+  _impl_.longitude_degrees_ = value;
+}
+inline void GeocodeRequest::set_longitude_degrees(double value) {
+  _internal_set_longitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.longitude_degrees)
+}
+
+// bool has_bounds = 6;
+inline void GeocodeRequest::clear_has_bounds() {
+  _impl_.has_bounds_ = false;
+}
+inline bool GeocodeRequest::_internal_has_bounds() const {
+  return _impl_.has_bounds_;
+}
+inline bool GeocodeRequest::has_bounds() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.has_bounds)
+  return _internal_has_bounds();
+}
+inline void GeocodeRequest::_internal_set_has_bounds(bool value) {
+  
+  _impl_.has_bounds_ = value;
+}
+inline void GeocodeRequest::set_has_bounds(bool value) {
+  _internal_set_has_bounds(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.has_bounds)
+}
+
+// double lower_left_latitude = 7;
+inline void GeocodeRequest::clear_lower_left_latitude() {
+  _impl_.lower_left_latitude_ = 0;
+}
+inline double GeocodeRequest::_internal_lower_left_latitude() const {
+  return _impl_.lower_left_latitude_;
+}
+inline double GeocodeRequest::lower_left_latitude() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.lower_left_latitude)
+  return _internal_lower_left_latitude();
+}
+inline void GeocodeRequest::_internal_set_lower_left_latitude(double value) {
+  
+  _impl_.lower_left_latitude_ = value;
+}
+inline void GeocodeRequest::set_lower_left_latitude(double value) {
+  _internal_set_lower_left_latitude(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.lower_left_latitude)
+}
+
+// double lower_left_longitude = 8;
+inline void GeocodeRequest::clear_lower_left_longitude() {
+  _impl_.lower_left_longitude_ = 0;
+}
+inline double GeocodeRequest::_internal_lower_left_longitude() const {
+  return _impl_.lower_left_longitude_;
+}
+inline double GeocodeRequest::lower_left_longitude() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.lower_left_longitude)
+  return _internal_lower_left_longitude();
+}
+inline void GeocodeRequest::_internal_set_lower_left_longitude(double value) {
+  
+  _impl_.lower_left_longitude_ = value;
+}
+inline void GeocodeRequest::set_lower_left_longitude(double value) {
+  _internal_set_lower_left_longitude(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.lower_left_longitude)
+}
+
+// double upper_right_latitude = 9;
+inline void GeocodeRequest::clear_upper_right_latitude() {
+  _impl_.upper_right_latitude_ = 0;
+}
+inline double GeocodeRequest::_internal_upper_right_latitude() const {
+  return _impl_.upper_right_latitude_;
+}
+inline double GeocodeRequest::upper_right_latitude() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.upper_right_latitude)
+  return _internal_upper_right_latitude();
+}
+inline void GeocodeRequest::_internal_set_upper_right_latitude(double value) {
+  
+  _impl_.upper_right_latitude_ = value;
+}
+inline void GeocodeRequest::set_upper_right_latitude(double value) {
+  _internal_set_upper_right_latitude(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.upper_right_latitude)
+}
+
+// double upper_right_longitude = 10;
+inline void GeocodeRequest::clear_upper_right_longitude() {
+  _impl_.upper_right_longitude_ = 0;
+}
+inline double GeocodeRequest::_internal_upper_right_longitude() const {
+  return _impl_.upper_right_longitude_;
+}
+inline double GeocodeRequest::upper_right_longitude() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.upper_right_longitude)
+  return _internal_upper_right_longitude();
+}
+inline void GeocodeRequest::_internal_set_upper_right_longitude(double value) {
+  
+  _impl_.upper_right_longitude_ = value;
+}
+inline void GeocodeRequest::set_upper_right_longitude(double value) {
+  _internal_set_upper_right_longitude(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.upper_right_longitude)
+}
+
+// uint32 max_results = 11;
+inline void GeocodeRequest::clear_max_results() {
+  _impl_.max_results_ = 0u;
+}
+inline uint32_t GeocodeRequest::_internal_max_results() const {
+  return _impl_.max_results_;
+}
+inline uint32_t GeocodeRequest::max_results() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.max_results)
+  return _internal_max_results();
+}
+inline void GeocodeRequest::_internal_set_max_results(uint32_t value) {
+  
+  _impl_.max_results_ = value;
+}
+inline void GeocodeRequest::set_max_results(uint32_t value) {
+  _internal_set_max_results(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.max_results)
+}
+
+// string language = 12;
+inline void GeocodeRequest::clear_language() {
+  _impl_.language_.ClearToEmpty();
+}
+inline const std::string& GeocodeRequest::language() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeRequest.language)
+  return _internal_language();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeRequest::set_language(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.language_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeRequest.language)
+}
+inline std::string* GeocodeRequest::mutable_language() {
+  std::string* _s = _internal_mutable_language();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeRequest.language)
+  return _s;
+}
+inline const std::string& GeocodeRequest::_internal_language() const {
+  return _impl_.language_.Get();
+}
+inline void GeocodeRequest::_internal_set_language(const std::string& value) {
+  
+  _impl_.language_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeRequest::_internal_mutable_language() {
+  
+  return _impl_.language_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeRequest::release_language() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeRequest.language)
+  return _impl_.language_.Release();
+}
+inline void GeocodeRequest::set_allocated_language(std::string* language) {
+  if (language != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.language_.SetAllocated(language, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.language_.IsDefault()) {
+    _impl_.language_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeRequest.language)
+}
+
+// -------------------------------------------------------------------
+
+// GeocodeAddress
+
+// repeated string address_lines = 1;
+inline int GeocodeAddress::_internal_address_lines_size() const {
+  return _impl_.address_lines_.size();
+}
+inline int GeocodeAddress::address_lines_size() const {
+  return _internal_address_lines_size();
+}
+inline void GeocodeAddress::clear_address_lines() {
+  _impl_.address_lines_.Clear();
+}
+inline std::string* GeocodeAddress::add_address_lines() {
+  std::string* _s = _internal_add_address_lines();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.GeocodeAddress.address_lines)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_address_lines(int index) const {
+  return _impl_.address_lines_.Get(index);
+}
+inline const std::string& GeocodeAddress::address_lines(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.address_lines)
+  return _internal_address_lines(index);
+}
+inline std::string* GeocodeAddress::mutable_address_lines(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.address_lines)
+  return _impl_.address_lines_.Mutable(index);
+}
+inline void GeocodeAddress::set_address_lines(int index, const std::string& value) {
+  _impl_.address_lines_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::set_address_lines(int index, std::string&& value) {
+  _impl_.address_lines_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::set_address_lines(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.address_lines_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::set_address_lines(int index, const char* value, size_t size) {
+  _impl_.address_lines_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline std::string* GeocodeAddress::_internal_add_address_lines() {
+  return _impl_.address_lines_.Add();
+}
+inline void GeocodeAddress::add_address_lines(const std::string& value) {
+  _impl_.address_lines_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::add_address_lines(std::string&& value) {
+  _impl_.address_lines_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::add_address_lines(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.address_lines_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline void GeocodeAddress::add_address_lines(const char* value, size_t size) {
+  _impl_.address_lines_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.GeocodeAddress.address_lines)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+GeocodeAddress::address_lines() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.GeocodeAddress.address_lines)
+  return _impl_.address_lines_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+GeocodeAddress::mutable_address_lines() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.GeocodeAddress.address_lines)
+  return &_impl_.address_lines_;
+}
+
+// string feature_name = 2;
+inline void GeocodeAddress::clear_feature_name() {
+  _impl_.feature_name_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::feature_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.feature_name)
+  return _internal_feature_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_feature_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.feature_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.feature_name)
+}
+inline std::string* GeocodeAddress::mutable_feature_name() {
+  std::string* _s = _internal_mutable_feature_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.feature_name)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_feature_name() const {
+  return _impl_.feature_name_.Get();
+}
+inline void GeocodeAddress::_internal_set_feature_name(const std::string& value) {
+  
+  _impl_.feature_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_feature_name() {
+  
+  return _impl_.feature_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_feature_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.feature_name)
+  return _impl_.feature_name_.Release();
+}
+inline void GeocodeAddress::set_allocated_feature_name(std::string* feature_name) {
+  if (feature_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.feature_name_.SetAllocated(feature_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.feature_name_.IsDefault()) {
+    _impl_.feature_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.feature_name)
+}
+
+// string premises = 3;
+inline void GeocodeAddress::clear_premises() {
+  _impl_.premises_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::premises() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.premises)
+  return _internal_premises();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_premises(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.premises_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.premises)
+}
+inline std::string* GeocodeAddress::mutable_premises() {
+  std::string* _s = _internal_mutable_premises();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.premises)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_premises() const {
+  return _impl_.premises_.Get();
+}
+inline void GeocodeAddress::_internal_set_premises(const std::string& value) {
+  
+  _impl_.premises_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_premises() {
+  
+  return _impl_.premises_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_premises() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.premises)
+  return _impl_.premises_.Release();
+}
+inline void GeocodeAddress::set_allocated_premises(std::string* premises) {
+  if (premises != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.premises_.SetAllocated(premises, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.premises_.IsDefault()) {
+    _impl_.premises_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.premises)
+}
+
+// string sub_thoroughfare = 4;
+inline void GeocodeAddress::clear_sub_thoroughfare() {
+  _impl_.sub_thoroughfare_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::sub_thoroughfare() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.sub_thoroughfare)
+  return _internal_sub_thoroughfare();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_sub_thoroughfare(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.sub_thoroughfare_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.sub_thoroughfare)
+}
+inline std::string* GeocodeAddress::mutable_sub_thoroughfare() {
+  std::string* _s = _internal_mutable_sub_thoroughfare();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.sub_thoroughfare)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_sub_thoroughfare() const {
+  return _impl_.sub_thoroughfare_.Get();
+}
+inline void GeocodeAddress::_internal_set_sub_thoroughfare(const std::string& value) {
+  
+  _impl_.sub_thoroughfare_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_sub_thoroughfare() {
+  
+  return _impl_.sub_thoroughfare_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_sub_thoroughfare() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.sub_thoroughfare)
+  return _impl_.sub_thoroughfare_.Release();
+}
+inline void GeocodeAddress::set_allocated_sub_thoroughfare(std::string* sub_thoroughfare) {
+  if (sub_thoroughfare != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.sub_thoroughfare_.SetAllocated(sub_thoroughfare, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.sub_thoroughfare_.IsDefault()) {
+    _impl_.sub_thoroughfare_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.sub_thoroughfare)
+}
+
+// string thoroughfare = 5;
+inline void GeocodeAddress::clear_thoroughfare() {
+  _impl_.thoroughfare_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::thoroughfare() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.thoroughfare)
+  return _internal_thoroughfare();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_thoroughfare(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.thoroughfare_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.thoroughfare)
+}
+inline std::string* GeocodeAddress::mutable_thoroughfare() {
+  std::string* _s = _internal_mutable_thoroughfare();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.thoroughfare)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_thoroughfare() const {
+  return _impl_.thoroughfare_.Get();
+}
+inline void GeocodeAddress::_internal_set_thoroughfare(const std::string& value) {
+  
+  _impl_.thoroughfare_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_thoroughfare() {
+  
+  return _impl_.thoroughfare_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_thoroughfare() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.thoroughfare)
+  return _impl_.thoroughfare_.Release();
+}
+inline void GeocodeAddress::set_allocated_thoroughfare(std::string* thoroughfare) {
+  if (thoroughfare != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.thoroughfare_.SetAllocated(thoroughfare, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.thoroughfare_.IsDefault()) {
+    _impl_.thoroughfare_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.thoroughfare)
+}
+
+// string sub_locality = 6;
+inline void GeocodeAddress::clear_sub_locality() {
+  _impl_.sub_locality_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::sub_locality() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.sub_locality)
+  return _internal_sub_locality();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_sub_locality(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.sub_locality_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.sub_locality)
+}
+inline std::string* GeocodeAddress::mutable_sub_locality() {
+  std::string* _s = _internal_mutable_sub_locality();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.sub_locality)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_sub_locality() const {
+  return _impl_.sub_locality_.Get();
+}
+inline void GeocodeAddress::_internal_set_sub_locality(const std::string& value) {
+  
+  _impl_.sub_locality_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_sub_locality() {
+  
+  return _impl_.sub_locality_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_sub_locality() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.sub_locality)
+  return _impl_.sub_locality_.Release();
+}
+inline void GeocodeAddress::set_allocated_sub_locality(std::string* sub_locality) {
+  if (sub_locality != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.sub_locality_.SetAllocated(sub_locality, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.sub_locality_.IsDefault()) {
+    _impl_.sub_locality_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.sub_locality)
+}
+
+// string locality = 7;
+inline void GeocodeAddress::clear_locality() {
+  _impl_.locality_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::locality() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.locality)
+  return _internal_locality();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_locality(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.locality_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.locality)
+}
+inline std::string* GeocodeAddress::mutable_locality() {
+  std::string* _s = _internal_mutable_locality();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.locality)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_locality() const {
+  return _impl_.locality_.Get();
+}
+inline void GeocodeAddress::_internal_set_locality(const std::string& value) {
+  
+  _impl_.locality_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_locality() {
+  
+  return _impl_.locality_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_locality() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.locality)
+  return _impl_.locality_.Release();
+}
+inline void GeocodeAddress::set_allocated_locality(std::string* locality) {
+  if (locality != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.locality_.SetAllocated(locality, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.locality_.IsDefault()) {
+    _impl_.locality_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.locality)
+}
+
+// string sub_admin_area = 8;
+inline void GeocodeAddress::clear_sub_admin_area() {
+  _impl_.sub_admin_area_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::sub_admin_area() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.sub_admin_area)
+  return _internal_sub_admin_area();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_sub_admin_area(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.sub_admin_area_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.sub_admin_area)
+}
+inline std::string* GeocodeAddress::mutable_sub_admin_area() {
+  std::string* _s = _internal_mutable_sub_admin_area();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.sub_admin_area)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_sub_admin_area() const {
+  return _impl_.sub_admin_area_.Get();
+}
+inline void GeocodeAddress::_internal_set_sub_admin_area(const std::string& value) {
+  
+  _impl_.sub_admin_area_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_sub_admin_area() {
+  
+  return _impl_.sub_admin_area_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_sub_admin_area() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.sub_admin_area)
+  return _impl_.sub_admin_area_.Release();
+}
+inline void GeocodeAddress::set_allocated_sub_admin_area(std::string* sub_admin_area) {
+  if (sub_admin_area != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.sub_admin_area_.SetAllocated(sub_admin_area, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.sub_admin_area_.IsDefault()) {
+    _impl_.sub_admin_area_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.sub_admin_area)
+}
+
+// string admin_area = 9;
+inline void GeocodeAddress::clear_admin_area() {
+  _impl_.admin_area_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::admin_area() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.admin_area)
+  return _internal_admin_area();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_admin_area(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.admin_area_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.admin_area)
+}
+inline std::string* GeocodeAddress::mutable_admin_area() {
+  std::string* _s = _internal_mutable_admin_area();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.admin_area)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_admin_area() const {
+  return _impl_.admin_area_.Get();
+}
+inline void GeocodeAddress::_internal_set_admin_area(const std::string& value) {
+  
+  _impl_.admin_area_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_admin_area() {
+  
+  return _impl_.admin_area_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_admin_area() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.admin_area)
+  return _impl_.admin_area_.Release();
+}
+inline void GeocodeAddress::set_allocated_admin_area(std::string* admin_area) {
+  if (admin_area != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.admin_area_.SetAllocated(admin_area, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.admin_area_.IsDefault()) {
+    _impl_.admin_area_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.admin_area)
+}
+
+// string postal_code = 10;
+inline void GeocodeAddress::clear_postal_code() {
+  _impl_.postal_code_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::postal_code() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.postal_code)
+  return _internal_postal_code();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_postal_code(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.postal_code_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.postal_code)
+}
+inline std::string* GeocodeAddress::mutable_postal_code() {
+  std::string* _s = _internal_mutable_postal_code();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.postal_code)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_postal_code() const {
+  return _impl_.postal_code_.Get();
+}
+inline void GeocodeAddress::_internal_set_postal_code(const std::string& value) {
+  
+  _impl_.postal_code_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_postal_code() {
+  
+  return _impl_.postal_code_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_postal_code() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.postal_code)
+  return _impl_.postal_code_.Release();
+}
+inline void GeocodeAddress::set_allocated_postal_code(std::string* postal_code) {
+  if (postal_code != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.postal_code_.SetAllocated(postal_code, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.postal_code_.IsDefault()) {
+    _impl_.postal_code_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.postal_code)
+}
+
+// string country_code = 11;
+inline void GeocodeAddress::clear_country_code() {
+  _impl_.country_code_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::country_code() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.country_code)
+  return _internal_country_code();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_country_code(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.country_code_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.country_code)
+}
+inline std::string* GeocodeAddress::mutable_country_code() {
+  std::string* _s = _internal_mutable_country_code();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.country_code)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_country_code() const {
+  return _impl_.country_code_.Get();
+}
+inline void GeocodeAddress::_internal_set_country_code(const std::string& value) {
+  
+  _impl_.country_code_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_country_code() {
+  
+  return _impl_.country_code_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_country_code() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.country_code)
+  return _impl_.country_code_.Release();
+}
+inline void GeocodeAddress::set_allocated_country_code(std::string* country_code) {
+  if (country_code != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.country_code_.SetAllocated(country_code, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.country_code_.IsDefault()) {
+    _impl_.country_code_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.country_code)
+}
+
+// string country_name = 12;
+inline void GeocodeAddress::clear_country_name() {
+  _impl_.country_name_.ClearToEmpty();
+}
+inline const std::string& GeocodeAddress::country_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.country_name)
+  return _internal_country_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeAddress::set_country_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.country_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.country_name)
+}
+inline std::string* GeocodeAddress::mutable_country_name() {
+  std::string* _s = _internal_mutable_country_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeAddress.country_name)
+  return _s;
+}
+inline const std::string& GeocodeAddress::_internal_country_name() const {
+  return _impl_.country_name_.Get();
+}
+inline void GeocodeAddress::_internal_set_country_name(const std::string& value) {
+  
+  _impl_.country_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::_internal_mutable_country_name() {
+  
+  return _impl_.country_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeAddress::release_country_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeAddress.country_name)
+  return _impl_.country_name_.Release();
+}
+inline void GeocodeAddress::set_allocated_country_name(std::string* country_name) {
+  if (country_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.country_name_.SetAllocated(country_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.country_name_.IsDefault()) {
+    _impl_.country_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeAddress.country_name)
+}
+
+// bool has_position = 13;
+inline void GeocodeAddress::clear_has_position() {
+  _impl_.has_position_ = false;
+}
+inline bool GeocodeAddress::_internal_has_position() const {
+  return _impl_.has_position_;
+}
+inline bool GeocodeAddress::has_position() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.has_position)
+  return _internal_has_position();
+}
+inline void GeocodeAddress::_internal_set_has_position(bool value) {
+  
+  _impl_.has_position_ = value;
+}
+inline void GeocodeAddress::set_has_position(bool value) {
+  _internal_set_has_position(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.has_position)
+}
+
+// double latitude_degrees = 14;
+inline void GeocodeAddress::clear_latitude_degrees() {
+  _impl_.latitude_degrees_ = 0;
+}
+inline double GeocodeAddress::_internal_latitude_degrees() const {
+  return _impl_.latitude_degrees_;
+}
+inline double GeocodeAddress::latitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.latitude_degrees)
+  return _internal_latitude_degrees();
+}
+inline void GeocodeAddress::_internal_set_latitude_degrees(double value) {
+  
+  _impl_.latitude_degrees_ = value;
+}
+inline void GeocodeAddress::set_latitude_degrees(double value) {
+  _internal_set_latitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.latitude_degrees)
+}
+
+// double longitude_degrees = 15;
+inline void GeocodeAddress::clear_longitude_degrees() {
+  _impl_.longitude_degrees_ = 0;
+}
+inline double GeocodeAddress::_internal_longitude_degrees() const {
+  return _impl_.longitude_degrees_;
+}
+inline double GeocodeAddress::longitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeAddress.longitude_degrees)
+  return _internal_longitude_degrees();
+}
+inline void GeocodeAddress::_internal_set_longitude_degrees(double value) {
+  
+  _impl_.longitude_degrees_ = value;
+}
+inline void GeocodeAddress::set_longitude_degrees(double value) {
+  _internal_set_longitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeAddress.longitude_degrees)
+}
+
+// -------------------------------------------------------------------
+
+// GeocodeResult
+
+// uint32 request_id = 1;
+inline void GeocodeResult::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t GeocodeResult::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t GeocodeResult::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeResult.request_id)
+  return _internal_request_id();
+}
+inline void GeocodeResult::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void GeocodeResult::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeResult.request_id)
+}
+
+// .dsa.control.v1.GeocodeStatus status = 2;
+inline void GeocodeResult::clear_status() {
+  _impl_.status_ = 0;
+}
+inline ::dsa::control::v1::GeocodeStatus GeocodeResult::_internal_status() const {
+  return static_cast< ::dsa::control::v1::GeocodeStatus >(_impl_.status_);
+}
+inline ::dsa::control::v1::GeocodeStatus GeocodeResult::status() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeResult.status)
+  return _internal_status();
+}
+inline void GeocodeResult::_internal_set_status(::dsa::control::v1::GeocodeStatus value) {
+  
+  _impl_.status_ = value;
+}
+inline void GeocodeResult::set_status(::dsa::control::v1::GeocodeStatus value) {
+  _internal_set_status(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeResult.status)
+}
+
+// repeated .dsa.control.v1.GeocodeAddress addresses = 3;
+inline int GeocodeResult::_internal_addresses_size() const {
+  return _impl_.addresses_.size();
+}
+inline int GeocodeResult::addresses_size() const {
+  return _internal_addresses_size();
+}
+inline void GeocodeResult::clear_addresses() {
+  _impl_.addresses_.Clear();
+}
+inline ::dsa::control::v1::GeocodeAddress* GeocodeResult::mutable_addresses(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeResult.addresses)
+  return _impl_.addresses_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::GeocodeAddress >*
+GeocodeResult::mutable_addresses() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.GeocodeResult.addresses)
+  return &_impl_.addresses_;
+}
+inline const ::dsa::control::v1::GeocodeAddress& GeocodeResult::_internal_addresses(int index) const {
+  return _impl_.addresses_.Get(index);
+}
+inline const ::dsa::control::v1::GeocodeAddress& GeocodeResult::addresses(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeResult.addresses)
+  return _internal_addresses(index);
+}
+inline ::dsa::control::v1::GeocodeAddress* GeocodeResult::_internal_add_addresses() {
+  return _impl_.addresses_.Add();
+}
+inline ::dsa::control::v1::GeocodeAddress* GeocodeResult::add_addresses() {
+  ::dsa::control::v1::GeocodeAddress* _add = _internal_add_addresses();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.GeocodeResult.addresses)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::GeocodeAddress >&
+GeocodeResult::addresses() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.GeocodeResult.addresses)
+  return _impl_.addresses_;
+}
+
+// string message = 4;
+inline void GeocodeResult::clear_message() {
+  _impl_.message_.ClearToEmpty();
+}
+inline const std::string& GeocodeResult::message() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GeocodeResult.message)
+  return _internal_message();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GeocodeResult::set_message(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.message_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GeocodeResult.message)
+}
+inline std::string* GeocodeResult::mutable_message() {
+  std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GeocodeResult.message)
+  return _s;
+}
+inline const std::string& GeocodeResult::_internal_message() const {
+  return _impl_.message_.Get();
+}
+inline void GeocodeResult::_internal_set_message(const std::string& value) {
+  
+  _impl_.message_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GeocodeResult::_internal_mutable_message() {
+  
+  return _impl_.message_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GeocodeResult::release_message() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GeocodeResult.message)
+  return _impl_.message_.Release();
+}
+inline void GeocodeResult::set_allocated_message(std::string* message) {
+  if (message != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GeocodeResult.message)
+}
+
+// -------------------------------------------------------------------
+
+// ShareToHost
+
+// uint32 share_id = 1;
+inline void ShareToHost::clear_share_id() {
+  _impl_.share_id_ = 0u;
+}
+inline uint32_t ShareToHost::_internal_share_id() const {
+  return _impl_.share_id_;
+}
+inline uint32_t ShareToHost::share_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareToHost.share_id)
+  return _internal_share_id();
+}
+inline void ShareToHost::_internal_set_share_id(uint32_t value) {
+  
+  _impl_.share_id_ = value;
+}
+inline void ShareToHost::set_share_id(uint32_t value) {
+  _internal_set_share_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareToHost.share_id)
+}
+
+// string title = 2;
+inline void ShareToHost::clear_title() {
+  _impl_.title_.ClearToEmpty();
+}
+inline const std::string& ShareToHost::title() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareToHost.title)
+  return _internal_title();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ShareToHost::set_title(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.title_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareToHost.title)
+}
+inline std::string* ShareToHost::mutable_title() {
+  std::string* _s = _internal_mutable_title();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ShareToHost.title)
+  return _s;
+}
+inline const std::string& ShareToHost::_internal_title() const {
+  return _impl_.title_.Get();
+}
+inline void ShareToHost::_internal_set_title(const std::string& value) {
+  
+  _impl_.title_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ShareToHost::_internal_mutable_title() {
+  
+  return _impl_.title_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ShareToHost::release_title() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.ShareToHost.title)
+  return _impl_.title_.Release();
+}
+inline void ShareToHost::set_allocated_title(std::string* title) {
+  if (title != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.title_.SetAllocated(title, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.title_.IsDefault()) {
+    _impl_.title_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ShareToHost.title)
+}
+
+// string package_name = 3;
+inline void ShareToHost::clear_package_name() {
+  _impl_.package_name_.ClearToEmpty();
+}
+inline const std::string& ShareToHost::package_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareToHost.package_name)
+  return _internal_package_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ShareToHost::set_package_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareToHost.package_name)
+}
+inline std::string* ShareToHost::mutable_package_name() {
+  std::string* _s = _internal_mutable_package_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ShareToHost.package_name)
+  return _s;
+}
+inline const std::string& ShareToHost::_internal_package_name() const {
+  return _impl_.package_name_.Get();
+}
+inline void ShareToHost::_internal_set_package_name(const std::string& value) {
+  
+  _impl_.package_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ShareToHost::_internal_mutable_package_name() {
+  
+  return _impl_.package_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ShareToHost::release_package_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.ShareToHost.package_name)
+  return _impl_.package_name_.Release();
+}
+inline void ShareToHost::set_allocated_package_name(std::string* package_name) {
+  if (package_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.package_name_.IsDefault()) {
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ShareToHost.package_name)
+}
+
+// string app_label = 4;
+inline void ShareToHost::clear_app_label() {
+  _impl_.app_label_.ClearToEmpty();
+}
+inline const std::string& ShareToHost::app_label() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareToHost.app_label)
+  return _internal_app_label();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ShareToHost::set_app_label(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.app_label_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareToHost.app_label)
+}
+inline std::string* ShareToHost::mutable_app_label() {
+  std::string* _s = _internal_mutable_app_label();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ShareToHost.app_label)
+  return _s;
+}
+inline const std::string& ShareToHost::_internal_app_label() const {
+  return _impl_.app_label_.Get();
+}
+inline void ShareToHost::_internal_set_app_label(const std::string& value) {
+  
+  _impl_.app_label_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ShareToHost::_internal_mutable_app_label() {
+  
+  return _impl_.app_label_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ShareToHost::release_app_label() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.ShareToHost.app_label)
+  return _impl_.app_label_.Release();
+}
+inline void ShareToHost::set_allocated_app_label(std::string* app_label) {
+  if (app_label != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.app_label_.SetAllocated(app_label, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.app_label_.IsDefault()) {
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ShareToHost.app_label)
+}
+
+// repeated .dsa.control.v1.DragItem items = 5;
+inline int ShareToHost::_internal_items_size() const {
+  return _impl_.items_.size();
+}
+inline int ShareToHost::items_size() const {
+  return _internal_items_size();
+}
+inline void ShareToHost::clear_items() {
+  _impl_.items_.Clear();
+}
+inline ::dsa::control::v1::DragItem* ShareToHost::mutable_items(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ShareToHost.items)
+  return _impl_.items_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >*
+ShareToHost::mutable_items() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.ShareToHost.items)
+  return &_impl_.items_;
+}
+inline const ::dsa::control::v1::DragItem& ShareToHost::_internal_items(int index) const {
+  return _impl_.items_.Get(index);
+}
+inline const ::dsa::control::v1::DragItem& ShareToHost::items(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareToHost.items)
+  return _internal_items(index);
+}
+inline ::dsa::control::v1::DragItem* ShareToHost::_internal_add_items() {
+  return _impl_.items_.Add();
+}
+inline ::dsa::control::v1::DragItem* ShareToHost::add_items() {
+  ::dsa::control::v1::DragItem* _add = _internal_add_items();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.ShareToHost.items)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >&
+ShareToHost::items() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.ShareToHost.items)
+  return _impl_.items_;
+}
+
+// -------------------------------------------------------------------
+
+// ShareResult
+
+// uint32 share_id = 1;
+inline void ShareResult::clear_share_id() {
+  _impl_.share_id_ = 0u;
+}
+inline uint32_t ShareResult::_internal_share_id() const {
+  return _impl_.share_id_;
+}
+inline uint32_t ShareResult::share_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareResult.share_id)
+  return _internal_share_id();
+}
+inline void ShareResult::_internal_set_share_id(uint32_t value) {
+  
+  _impl_.share_id_ = value;
+}
+inline void ShareResult::set_share_id(uint32_t value) {
+  _internal_set_share_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareResult.share_id)
+}
+
+// .dsa.control.v1.ShareOutcome outcome = 2;
+inline void ShareResult::clear_outcome() {
+  _impl_.outcome_ = 0;
+}
+inline ::dsa::control::v1::ShareOutcome ShareResult::_internal_outcome() const {
+  return static_cast< ::dsa::control::v1::ShareOutcome >(_impl_.outcome_);
+}
+inline ::dsa::control::v1::ShareOutcome ShareResult::outcome() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareResult.outcome)
+  return _internal_outcome();
+}
+inline void ShareResult::_internal_set_outcome(::dsa::control::v1::ShareOutcome value) {
+  
+  _impl_.outcome_ = value;
+}
+inline void ShareResult::set_outcome(::dsa::control::v1::ShareOutcome value) {
+  _internal_set_outcome(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareResult.outcome)
+}
+
+// string message = 3;
+inline void ShareResult::clear_message() {
+  _impl_.message_.ClearToEmpty();
+}
+inline const std::string& ShareResult::message() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ShareResult.message)
+  return _internal_message();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ShareResult::set_message(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.message_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ShareResult.message)
+}
+inline std::string* ShareResult::mutable_message() {
+  std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ShareResult.message)
+  return _s;
+}
+inline const std::string& ShareResult::_internal_message() const {
+  return _impl_.message_.Get();
+}
+inline void ShareResult::_internal_set_message(const std::string& value) {
+  
+  _impl_.message_.Set(value, GetArenaForAllocation());
+}
+inline std::string* ShareResult::_internal_mutable_message() {
+  
+  return _impl_.message_.Mutable(GetArenaForAllocation());
+}
+inline std::string* ShareResult::release_message() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.ShareResult.message)
+  return _impl_.message_.Release();
+}
+inline void ShareResult::set_allocated_message(std::string* message) {
+  if (message != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ShareResult.message)
+}
+
+// -------------------------------------------------------------------
+
 // DeviceIdle
 
 // bool idle = 1;
@@ -37697,194 +40069,6 @@ inline void DeveloperMode::set_on(bool value) {
 
 // -------------------------------------------------------------------
 
-// ArmTranslationInstall
-
-// uint32 transfer_id = 1;
-inline void ArmTranslationInstall::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t ArmTranslationInstall::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t ArmTranslationInstall::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationInstall.transfer_id)
-  return _internal_transfer_id();
-}
-inline void ArmTranslationInstall::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void ArmTranslationInstall::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationInstall.transfer_id)
-}
-
-// uint64 size = 2;
-inline void ArmTranslationInstall::clear_size() {
-  _impl_.size_ = uint64_t{0u};
-}
-inline uint64_t ArmTranslationInstall::_internal_size() const {
-  return _impl_.size_;
-}
-inline uint64_t ArmTranslationInstall::size() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationInstall.size)
-  return _internal_size();
-}
-inline void ArmTranslationInstall::_internal_set_size(uint64_t value) {
-  
-  _impl_.size_ = value;
-}
-inline void ArmTranslationInstall::set_size(uint64_t value) {
-  _internal_set_size(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationInstall.size)
-}
-
-// bytes sha256 = 3;
-inline void ArmTranslationInstall::clear_sha256() {
-  _impl_.sha256_.ClearToEmpty();
-}
-inline const std::string& ArmTranslationInstall::sha256() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationInstall.sha256)
-  return _internal_sha256();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void ArmTranslationInstall::set_sha256(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.sha256_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationInstall.sha256)
-}
-inline std::string* ArmTranslationInstall::mutable_sha256() {
-  std::string* _s = _internal_mutable_sha256();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ArmTranslationInstall.sha256)
-  return _s;
-}
-inline const std::string& ArmTranslationInstall::_internal_sha256() const {
-  return _impl_.sha256_.Get();
-}
-inline void ArmTranslationInstall::_internal_set_sha256(const std::string& value) {
-  
-  _impl_.sha256_.Set(value, GetArenaForAllocation());
-}
-inline std::string* ArmTranslationInstall::_internal_mutable_sha256() {
-  
-  return _impl_.sha256_.Mutable(GetArenaForAllocation());
-}
-inline std::string* ArmTranslationInstall::release_sha256() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.ArmTranslationInstall.sha256)
-  return _impl_.sha256_.Release();
-}
-inline void ArmTranslationInstall::set_allocated_sha256(std::string* sha256) {
-  if (sha256 != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.sha256_.SetAllocated(sha256, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.sha256_.IsDefault()) {
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ArmTranslationInstall.sha256)
-}
-
-// -------------------------------------------------------------------
-
-// ArmTranslationChunk
-
-// uint32 transfer_id = 1;
-inline void ArmTranslationChunk::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t ArmTranslationChunk::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t ArmTranslationChunk::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationChunk.transfer_id)
-  return _internal_transfer_id();
-}
-inline void ArmTranslationChunk::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void ArmTranslationChunk::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationChunk.transfer_id)
-}
-
-// uint64 offset = 2;
-inline void ArmTranslationChunk::clear_offset() {
-  _impl_.offset_ = uint64_t{0u};
-}
-inline uint64_t ArmTranslationChunk::_internal_offset() const {
-  return _impl_.offset_;
-}
-inline uint64_t ArmTranslationChunk::offset() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationChunk.offset)
-  return _internal_offset();
-}
-inline void ArmTranslationChunk::_internal_set_offset(uint64_t value) {
-  
-  _impl_.offset_ = value;
-}
-inline void ArmTranslationChunk::set_offset(uint64_t value) {
-  _internal_set_offset(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationChunk.offset)
-}
-
-// bytes data = 3;
-inline void ArmTranslationChunk::clear_data() {
-  _impl_.data_.ClearToEmpty();
-}
-inline const std::string& ArmTranslationChunk::data() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationChunk.data)
-  return _internal_data();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void ArmTranslationChunk::set_data(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationChunk.data)
-}
-inline std::string* ArmTranslationChunk::mutable_data() {
-  std::string* _s = _internal_mutable_data();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.ArmTranslationChunk.data)
-  return _s;
-}
-inline const std::string& ArmTranslationChunk::_internal_data() const {
-  return _impl_.data_.Get();
-}
-inline void ArmTranslationChunk::_internal_set_data(const std::string& value) {
-  
-  _impl_.data_.Set(value, GetArenaForAllocation());
-}
-inline std::string* ArmTranslationChunk::_internal_mutable_data() {
-  
-  return _impl_.data_.Mutable(GetArenaForAllocation());
-}
-inline std::string* ArmTranslationChunk::release_data() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.ArmTranslationChunk.data)
-  return _impl_.data_.Release();
-}
-inline void ArmTranslationChunk::set_allocated_data(std::string* data) {
-  if (data != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.data_.IsDefault()) {
-    _impl_.data_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ArmTranslationChunk.data)
-}
-
-// -------------------------------------------------------------------
-
 // ArmTranslationRemove
 
 // -------------------------------------------------------------------
@@ -37894,46 +40078,6 @@ inline void ArmTranslationChunk::set_allocated_data(std::string* data) {
 // -------------------------------------------------------------------
 
 // ArmTranslationState
-
-// uint32 transfer_id = 1;
-inline void ArmTranslationState::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t ArmTranslationState::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t ArmTranslationState::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationState.transfer_id)
-  return _internal_transfer_id();
-}
-inline void ArmTranslationState::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void ArmTranslationState::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationState.transfer_id)
-}
-
-// uint64 received = 2;
-inline void ArmTranslationState::clear_received() {
-  _impl_.received_ = uint64_t{0u};
-}
-inline uint64_t ArmTranslationState::_internal_received() const {
-  return _impl_.received_;
-}
-inline uint64_t ArmTranslationState::received() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.ArmTranslationState.received)
-  return _internal_received();
-}
-inline void ArmTranslationState::_internal_set_received(uint64_t value) {
-  
-  _impl_.received_ = value;
-}
-inline void ArmTranslationState::set_received(uint64_t value) {
-  _internal_set_received(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.ArmTranslationState.received)
-}
 
 // bool done = 3;
 inline void ArmTranslationState::clear_done() {
@@ -38097,194 +40241,6 @@ inline void ArmTranslationState::set_allocated_abilist(std::string* abilist) {
 
 // -------------------------------------------------------------------
 
-// GappsInstall
-
-// uint32 transfer_id = 1;
-inline void GappsInstall::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t GappsInstall::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t GappsInstall::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.transfer_id)
-  return _internal_transfer_id();
-}
-inline void GappsInstall::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void GappsInstall::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.transfer_id)
-}
-
-// uint64 size = 2;
-inline void GappsInstall::clear_size() {
-  _impl_.size_ = uint64_t{0u};
-}
-inline uint64_t GappsInstall::_internal_size() const {
-  return _impl_.size_;
-}
-inline uint64_t GappsInstall::size() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.size)
-  return _internal_size();
-}
-inline void GappsInstall::_internal_set_size(uint64_t value) {
-  
-  _impl_.size_ = value;
-}
-inline void GappsInstall::set_size(uint64_t value) {
-  _internal_set_size(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.size)
-}
-
-// bytes sha256 = 3;
-inline void GappsInstall::clear_sha256() {
-  _impl_.sha256_.ClearToEmpty();
-}
-inline const std::string& GappsInstall::sha256() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.sha256)
-  return _internal_sha256();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void GappsInstall::set_sha256(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.sha256_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.sha256)
-}
-inline std::string* GappsInstall::mutable_sha256() {
-  std::string* _s = _internal_mutable_sha256();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsInstall.sha256)
-  return _s;
-}
-inline const std::string& GappsInstall::_internal_sha256() const {
-  return _impl_.sha256_.Get();
-}
-inline void GappsInstall::_internal_set_sha256(const std::string& value) {
-  
-  _impl_.sha256_.Set(value, GetArenaForAllocation());
-}
-inline std::string* GappsInstall::_internal_mutable_sha256() {
-  
-  return _impl_.sha256_.Mutable(GetArenaForAllocation());
-}
-inline std::string* GappsInstall::release_sha256() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsInstall.sha256)
-  return _impl_.sha256_.Release();
-}
-inline void GappsInstall::set_allocated_sha256(std::string* sha256) {
-  if (sha256 != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.sha256_.SetAllocated(sha256, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.sha256_.IsDefault()) {
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsInstall.sha256)
-}
-
-// -------------------------------------------------------------------
-
-// GappsChunk
-
-// uint32 transfer_id = 1;
-inline void GappsChunk::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t GappsChunk::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t GappsChunk::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.transfer_id)
-  return _internal_transfer_id();
-}
-inline void GappsChunk::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void GappsChunk::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.transfer_id)
-}
-
-// uint64 offset = 2;
-inline void GappsChunk::clear_offset() {
-  _impl_.offset_ = uint64_t{0u};
-}
-inline uint64_t GappsChunk::_internal_offset() const {
-  return _impl_.offset_;
-}
-inline uint64_t GappsChunk::offset() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.offset)
-  return _internal_offset();
-}
-inline void GappsChunk::_internal_set_offset(uint64_t value) {
-  
-  _impl_.offset_ = value;
-}
-inline void GappsChunk::set_offset(uint64_t value) {
-  _internal_set_offset(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.offset)
-}
-
-// bytes data = 3;
-inline void GappsChunk::clear_data() {
-  _impl_.data_.ClearToEmpty();
-}
-inline const std::string& GappsChunk::data() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.data)
-  return _internal_data();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void GappsChunk::set_data(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.data)
-}
-inline std::string* GappsChunk::mutable_data() {
-  std::string* _s = _internal_mutable_data();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsChunk.data)
-  return _s;
-}
-inline const std::string& GappsChunk::_internal_data() const {
-  return _impl_.data_.Get();
-}
-inline void GappsChunk::_internal_set_data(const std::string& value) {
-  
-  _impl_.data_.Set(value, GetArenaForAllocation());
-}
-inline std::string* GappsChunk::_internal_mutable_data() {
-  
-  return _impl_.data_.Mutable(GetArenaForAllocation());
-}
-inline std::string* GappsChunk::release_data() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsChunk.data)
-  return _impl_.data_.Release();
-}
-inline void GappsChunk::set_allocated_data(std::string* data) {
-  if (data != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.data_.IsDefault()) {
-    _impl_.data_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsChunk.data)
-}
-
-// -------------------------------------------------------------------
-
 // GappsRemove
 
 // -------------------------------------------------------------------
@@ -38294,46 +40250,6 @@ inline void GappsChunk::set_allocated_data(std::string* data) {
 // -------------------------------------------------------------------
 
 // GappsState
-
-// uint32 transfer_id = 1;
-inline void GappsState::clear_transfer_id() {
-  _impl_.transfer_id_ = 0u;
-}
-inline uint32_t GappsState::_internal_transfer_id() const {
-  return _impl_.transfer_id_;
-}
-inline uint32_t GappsState::transfer_id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.transfer_id)
-  return _internal_transfer_id();
-}
-inline void GappsState::_internal_set_transfer_id(uint32_t value) {
-  
-  _impl_.transfer_id_ = value;
-}
-inline void GappsState::set_transfer_id(uint32_t value) {
-  _internal_set_transfer_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.transfer_id)
-}
-
-// uint64 received = 2;
-inline void GappsState::clear_received() {
-  _impl_.received_ = uint64_t{0u};
-}
-inline uint64_t GappsState::_internal_received() const {
-  return _impl_.received_;
-}
-inline uint64_t GappsState::received() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.received)
-  return _internal_received();
-}
-inline void GappsState::_internal_set_received(uint64_t value) {
-  
-  _impl_.received_ = value;
-}
-inline void GappsState::set_received(uint64_t value) {
-  _internal_set_received(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.received)
-}
 
 // bool done = 3;
 inline void GappsState::clear_done() {
@@ -38563,6 +40479,234 @@ inline void GappsState::set_allocated_abilist(std::string* abilist) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsState.abilist)
+}
+
+// -------------------------------------------------------------------
+
+// AddonImageRead
+
+// .dsa.control.v1.AddonImage image = 1;
+inline void AddonImageRead::clear_image() {
+  _impl_.image_ = 0;
+}
+inline ::dsa::control::v1::AddonImage AddonImageRead::_internal_image() const {
+  return static_cast< ::dsa::control::v1::AddonImage >(_impl_.image_);
+}
+inline ::dsa::control::v1::AddonImage AddonImageRead::image() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImageRead.image)
+  return _internal_image();
+}
+inline void AddonImageRead::_internal_set_image(::dsa::control::v1::AddonImage value) {
+  
+  _impl_.image_ = value;
+}
+inline void AddonImageRead::set_image(::dsa::control::v1::AddonImage value) {
+  _internal_set_image(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImageRead.image)
+}
+
+// uint64 offset = 2;
+inline void AddonImageRead::clear_offset() {
+  _impl_.offset_ = uint64_t{0u};
+}
+inline uint64_t AddonImageRead::_internal_offset() const {
+  return _impl_.offset_;
+}
+inline uint64_t AddonImageRead::offset() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImageRead.offset)
+  return _internal_offset();
+}
+inline void AddonImageRead::_internal_set_offset(uint64_t value) {
+  
+  _impl_.offset_ = value;
+}
+inline void AddonImageRead::set_offset(uint64_t value) {
+  _internal_set_offset(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImageRead.offset)
+}
+
+// uint32 length = 3;
+inline void AddonImageRead::clear_length() {
+  _impl_.length_ = 0u;
+}
+inline uint32_t AddonImageRead::_internal_length() const {
+  return _impl_.length_;
+}
+inline uint32_t AddonImageRead::length() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImageRead.length)
+  return _internal_length();
+}
+inline void AddonImageRead::_internal_set_length(uint32_t value) {
+  
+  _impl_.length_ = value;
+}
+inline void AddonImageRead::set_length(uint32_t value) {
+  _internal_set_length(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImageRead.length)
+}
+
+// -------------------------------------------------------------------
+
+// AddonImagePart
+
+// .dsa.control.v1.AddonImage image = 1;
+inline void AddonImagePart::clear_image() {
+  _impl_.image_ = 0;
+}
+inline ::dsa::control::v1::AddonImage AddonImagePart::_internal_image() const {
+  return static_cast< ::dsa::control::v1::AddonImage >(_impl_.image_);
+}
+inline ::dsa::control::v1::AddonImage AddonImagePart::image() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImagePart.image)
+  return _internal_image();
+}
+inline void AddonImagePart::_internal_set_image(::dsa::control::v1::AddonImage value) {
+  
+  _impl_.image_ = value;
+}
+inline void AddonImagePart::set_image(::dsa::control::v1::AddonImage value) {
+  _internal_set_image(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImagePart.image)
+}
+
+// uint64 offset = 2;
+inline void AddonImagePart::clear_offset() {
+  _impl_.offset_ = uint64_t{0u};
+}
+inline uint64_t AddonImagePart::_internal_offset() const {
+  return _impl_.offset_;
+}
+inline uint64_t AddonImagePart::offset() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImagePart.offset)
+  return _internal_offset();
+}
+inline void AddonImagePart::_internal_set_offset(uint64_t value) {
+  
+  _impl_.offset_ = value;
+}
+inline void AddonImagePart::set_offset(uint64_t value) {
+  _internal_set_offset(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImagePart.offset)
+}
+
+// bytes data = 3;
+inline void AddonImagePart::clear_data() {
+  _impl_.data_.ClearToEmpty();
+}
+inline const std::string& AddonImagePart::data() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImagePart.data)
+  return _internal_data();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AddonImagePart::set_data(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImagePart.data)
+}
+inline std::string* AddonImagePart::mutable_data() {
+  std::string* _s = _internal_mutable_data();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AddonImagePart.data)
+  return _s;
+}
+inline const std::string& AddonImagePart::_internal_data() const {
+  return _impl_.data_.Get();
+}
+inline void AddonImagePart::_internal_set_data(const std::string& value) {
+  
+  _impl_.data_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AddonImagePart::_internal_mutable_data() {
+  
+  return _impl_.data_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AddonImagePart::release_data() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AddonImagePart.data)
+  return _impl_.data_.Release();
+}
+inline void AddonImagePart::set_allocated_data(std::string* data) {
+  if (data != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.data_.IsDefault()) {
+    _impl_.data_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AddonImagePart.data)
+}
+
+// uint64 size = 4;
+inline void AddonImagePart::clear_size() {
+  _impl_.size_ = uint64_t{0u};
+}
+inline uint64_t AddonImagePart::_internal_size() const {
+  return _impl_.size_;
+}
+inline uint64_t AddonImagePart::size() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImagePart.size)
+  return _internal_size();
+}
+inline void AddonImagePart::_internal_set_size(uint64_t value) {
+  
+  _impl_.size_ = value;
+}
+inline void AddonImagePart::set_size(uint64_t value) {
+  _internal_set_size(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImagePart.size)
+}
+
+// string error = 5;
+inline void AddonImagePart::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& AddonImagePart::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AddonImagePart.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AddonImagePart::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AddonImagePart.error)
+}
+inline std::string* AddonImagePart::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AddonImagePart.error)
+  return _s;
+}
+inline const std::string& AddonImagePart::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void AddonImagePart::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AddonImagePart::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AddonImagePart::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AddonImagePart.error)
+  return _impl_.error_.Release();
+}
+inline void AddonImagePart::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AddonImagePart.error)
 }
 
 // -------------------------------------------------------------------
@@ -53652,154 +55796,6 @@ inline ::dsa::control::v1::DeveloperMode* Envelope::mutable_developer_mode() {
   return _msg;
 }
 
-// .dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;
-inline bool Envelope::_internal_has_arm_translation_install() const {
-  return body_case() == kArmTranslationInstall;
-}
-inline bool Envelope::has_arm_translation_install() const {
-  return _internal_has_arm_translation_install();
-}
-inline void Envelope::set_has_arm_translation_install() {
-  _impl_._oneof_case_[0] = kArmTranslationInstall;
-}
-inline void Envelope::clear_arm_translation_install() {
-  if (_internal_has_arm_translation_install()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.arm_translation_install_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::ArmTranslationInstall* Envelope::release_arm_translation_install() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.arm_translation_install)
-  if (_internal_has_arm_translation_install()) {
-    clear_has_body();
-    ::dsa::control::v1::ArmTranslationInstall* temp = _impl_.body_.arm_translation_install_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.arm_translation_install_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::ArmTranslationInstall& Envelope::_internal_arm_translation_install() const {
-  return _internal_has_arm_translation_install()
-      ? *_impl_.body_.arm_translation_install_
-      : reinterpret_cast< ::dsa::control::v1::ArmTranslationInstall&>(::dsa::control::v1::_ArmTranslationInstall_default_instance_);
-}
-inline const ::dsa::control::v1::ArmTranslationInstall& Envelope::arm_translation_install() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.arm_translation_install)
-  return _internal_arm_translation_install();
-}
-inline ::dsa::control::v1::ArmTranslationInstall* Envelope::unsafe_arena_release_arm_translation_install() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.arm_translation_install)
-  if (_internal_has_arm_translation_install()) {
-    clear_has_body();
-    ::dsa::control::v1::ArmTranslationInstall* temp = _impl_.body_.arm_translation_install_;
-    _impl_.body_.arm_translation_install_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_arm_translation_install(::dsa::control::v1::ArmTranslationInstall* arm_translation_install) {
-  clear_body();
-  if (arm_translation_install) {
-    set_has_arm_translation_install();
-    _impl_.body_.arm_translation_install_ = arm_translation_install;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.arm_translation_install)
-}
-inline ::dsa::control::v1::ArmTranslationInstall* Envelope::_internal_mutable_arm_translation_install() {
-  if (!_internal_has_arm_translation_install()) {
-    clear_body();
-    set_has_arm_translation_install();
-    _impl_.body_.arm_translation_install_ = CreateMaybeMessage< ::dsa::control::v1::ArmTranslationInstall >(GetArenaForAllocation());
-  }
-  return _impl_.body_.arm_translation_install_;
-}
-inline ::dsa::control::v1::ArmTranslationInstall* Envelope::mutable_arm_translation_install() {
-  ::dsa::control::v1::ArmTranslationInstall* _msg = _internal_mutable_arm_translation_install();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.arm_translation_install)
-  return _msg;
-}
-
-// .dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;
-inline bool Envelope::_internal_has_arm_translation_chunk() const {
-  return body_case() == kArmTranslationChunk;
-}
-inline bool Envelope::has_arm_translation_chunk() const {
-  return _internal_has_arm_translation_chunk();
-}
-inline void Envelope::set_has_arm_translation_chunk() {
-  _impl_._oneof_case_[0] = kArmTranslationChunk;
-}
-inline void Envelope::clear_arm_translation_chunk() {
-  if (_internal_has_arm_translation_chunk()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.arm_translation_chunk_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::ArmTranslationChunk* Envelope::release_arm_translation_chunk() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.arm_translation_chunk)
-  if (_internal_has_arm_translation_chunk()) {
-    clear_has_body();
-    ::dsa::control::v1::ArmTranslationChunk* temp = _impl_.body_.arm_translation_chunk_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.arm_translation_chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::ArmTranslationChunk& Envelope::_internal_arm_translation_chunk() const {
-  return _internal_has_arm_translation_chunk()
-      ? *_impl_.body_.arm_translation_chunk_
-      : reinterpret_cast< ::dsa::control::v1::ArmTranslationChunk&>(::dsa::control::v1::_ArmTranslationChunk_default_instance_);
-}
-inline const ::dsa::control::v1::ArmTranslationChunk& Envelope::arm_translation_chunk() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.arm_translation_chunk)
-  return _internal_arm_translation_chunk();
-}
-inline ::dsa::control::v1::ArmTranslationChunk* Envelope::unsafe_arena_release_arm_translation_chunk() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.arm_translation_chunk)
-  if (_internal_has_arm_translation_chunk()) {
-    clear_has_body();
-    ::dsa::control::v1::ArmTranslationChunk* temp = _impl_.body_.arm_translation_chunk_;
-    _impl_.body_.arm_translation_chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_arm_translation_chunk(::dsa::control::v1::ArmTranslationChunk* arm_translation_chunk) {
-  clear_body();
-  if (arm_translation_chunk) {
-    set_has_arm_translation_chunk();
-    _impl_.body_.arm_translation_chunk_ = arm_translation_chunk;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.arm_translation_chunk)
-}
-inline ::dsa::control::v1::ArmTranslationChunk* Envelope::_internal_mutable_arm_translation_chunk() {
-  if (!_internal_has_arm_translation_chunk()) {
-    clear_body();
-    set_has_arm_translation_chunk();
-    _impl_.body_.arm_translation_chunk_ = CreateMaybeMessage< ::dsa::control::v1::ArmTranslationChunk >(GetArenaForAllocation());
-  }
-  return _impl_.body_.arm_translation_chunk_;
-}
-inline ::dsa::control::v1::ArmTranslationChunk* Envelope::mutable_arm_translation_chunk() {
-  ::dsa::control::v1::ArmTranslationChunk* _msg = _internal_mutable_arm_translation_chunk();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.arm_translation_chunk)
-  return _msg;
-}
-
 // .dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;
 inline bool Envelope::_internal_has_arm_translation_remove() const {
   return body_case() == kArmTranslationRemove;
@@ -54019,154 +56015,6 @@ inline ::dsa::control::v1::ArmTranslationState* Envelope::_internal_mutable_arm_
 inline ::dsa::control::v1::ArmTranslationState* Envelope::mutable_arm_translation_state() {
   ::dsa::control::v1::ArmTranslationState* _msg = _internal_mutable_arm_translation_state();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.arm_translation_state)
-  return _msg;
-}
-
-// .dsa.control.v1.GappsInstall gapps_install = 400;
-inline bool Envelope::_internal_has_gapps_install() const {
-  return body_case() == kGappsInstall;
-}
-inline bool Envelope::has_gapps_install() const {
-  return _internal_has_gapps_install();
-}
-inline void Envelope::set_has_gapps_install() {
-  _impl_._oneof_case_[0] = kGappsInstall;
-}
-inline void Envelope::clear_gapps_install() {
-  if (_internal_has_gapps_install()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.gapps_install_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::GappsInstall* Envelope::release_gapps_install() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_install)
-  if (_internal_has_gapps_install()) {
-    clear_has_body();
-    ::dsa::control::v1::GappsInstall* temp = _impl_.body_.gapps_install_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.gapps_install_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::GappsInstall& Envelope::_internal_gapps_install() const {
-  return _internal_has_gapps_install()
-      ? *_impl_.body_.gapps_install_
-      : reinterpret_cast< ::dsa::control::v1::GappsInstall&>(::dsa::control::v1::_GappsInstall_default_instance_);
-}
-inline const ::dsa::control::v1::GappsInstall& Envelope::gapps_install() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_install)
-  return _internal_gapps_install();
-}
-inline ::dsa::control::v1::GappsInstall* Envelope::unsafe_arena_release_gapps_install() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_install)
-  if (_internal_has_gapps_install()) {
-    clear_has_body();
-    ::dsa::control::v1::GappsInstall* temp = _impl_.body_.gapps_install_;
-    _impl_.body_.gapps_install_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_gapps_install(::dsa::control::v1::GappsInstall* gapps_install) {
-  clear_body();
-  if (gapps_install) {
-    set_has_gapps_install();
-    _impl_.body_.gapps_install_ = gapps_install;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_install)
-}
-inline ::dsa::control::v1::GappsInstall* Envelope::_internal_mutable_gapps_install() {
-  if (!_internal_has_gapps_install()) {
-    clear_body();
-    set_has_gapps_install();
-    _impl_.body_.gapps_install_ = CreateMaybeMessage< ::dsa::control::v1::GappsInstall >(GetArenaForAllocation());
-  }
-  return _impl_.body_.gapps_install_;
-}
-inline ::dsa::control::v1::GappsInstall* Envelope::mutable_gapps_install() {
-  ::dsa::control::v1::GappsInstall* _msg = _internal_mutable_gapps_install();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_install)
-  return _msg;
-}
-
-// .dsa.control.v1.GappsChunk gapps_chunk = 401;
-inline bool Envelope::_internal_has_gapps_chunk() const {
-  return body_case() == kGappsChunk;
-}
-inline bool Envelope::has_gapps_chunk() const {
-  return _internal_has_gapps_chunk();
-}
-inline void Envelope::set_has_gapps_chunk() {
-  _impl_._oneof_case_[0] = kGappsChunk;
-}
-inline void Envelope::clear_gapps_chunk() {
-  if (_internal_has_gapps_chunk()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.gapps_chunk_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::GappsChunk* Envelope::release_gapps_chunk() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_chunk)
-  if (_internal_has_gapps_chunk()) {
-    clear_has_body();
-    ::dsa::control::v1::GappsChunk* temp = _impl_.body_.gapps_chunk_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.gapps_chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::GappsChunk& Envelope::_internal_gapps_chunk() const {
-  return _internal_has_gapps_chunk()
-      ? *_impl_.body_.gapps_chunk_
-      : reinterpret_cast< ::dsa::control::v1::GappsChunk&>(::dsa::control::v1::_GappsChunk_default_instance_);
-}
-inline const ::dsa::control::v1::GappsChunk& Envelope::gapps_chunk() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_chunk)
-  return _internal_gapps_chunk();
-}
-inline ::dsa::control::v1::GappsChunk* Envelope::unsafe_arena_release_gapps_chunk() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_chunk)
-  if (_internal_has_gapps_chunk()) {
-    clear_has_body();
-    ::dsa::control::v1::GappsChunk* temp = _impl_.body_.gapps_chunk_;
-    _impl_.body_.gapps_chunk_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_gapps_chunk(::dsa::control::v1::GappsChunk* gapps_chunk) {
-  clear_body();
-  if (gapps_chunk) {
-    set_has_gapps_chunk();
-    _impl_.body_.gapps_chunk_ = gapps_chunk;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_chunk)
-}
-inline ::dsa::control::v1::GappsChunk* Envelope::_internal_mutable_gapps_chunk() {
-  if (!_internal_has_gapps_chunk()) {
-    clear_body();
-    set_has_gapps_chunk();
-    _impl_.body_.gapps_chunk_ = CreateMaybeMessage< ::dsa::control::v1::GappsChunk >(GetArenaForAllocation());
-  }
-  return _impl_.body_.gapps_chunk_;
-}
-inline ::dsa::control::v1::GappsChunk* Envelope::mutable_gapps_chunk() {
-  ::dsa::control::v1::GappsChunk* _msg = _internal_mutable_gapps_chunk();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_chunk)
   return _msg;
 }
 
@@ -54759,6 +56607,154 @@ inline ::dsa::control::v1::SuDecision* Envelope::_internal_mutable_su_decision()
 inline ::dsa::control::v1::SuDecision* Envelope::mutable_su_decision() {
   ::dsa::control::v1::SuDecision* _msg = _internal_mutable_su_decision();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.su_decision)
+  return _msg;
+}
+
+// .dsa.control.v1.AddonImageRead addon_image_read = 414;
+inline bool Envelope::_internal_has_addon_image_read() const {
+  return body_case() == kAddonImageRead;
+}
+inline bool Envelope::has_addon_image_read() const {
+  return _internal_has_addon_image_read();
+}
+inline void Envelope::set_has_addon_image_read() {
+  _impl_._oneof_case_[0] = kAddonImageRead;
+}
+inline void Envelope::clear_addon_image_read() {
+  if (_internal_has_addon_image_read()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.addon_image_read_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AddonImageRead* Envelope::release_addon_image_read() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.addon_image_read)
+  if (_internal_has_addon_image_read()) {
+    clear_has_body();
+    ::dsa::control::v1::AddonImageRead* temp = _impl_.body_.addon_image_read_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.addon_image_read_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AddonImageRead& Envelope::_internal_addon_image_read() const {
+  return _internal_has_addon_image_read()
+      ? *_impl_.body_.addon_image_read_
+      : reinterpret_cast< ::dsa::control::v1::AddonImageRead&>(::dsa::control::v1::_AddonImageRead_default_instance_);
+}
+inline const ::dsa::control::v1::AddonImageRead& Envelope::addon_image_read() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.addon_image_read)
+  return _internal_addon_image_read();
+}
+inline ::dsa::control::v1::AddonImageRead* Envelope::unsafe_arena_release_addon_image_read() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.addon_image_read)
+  if (_internal_has_addon_image_read()) {
+    clear_has_body();
+    ::dsa::control::v1::AddonImageRead* temp = _impl_.body_.addon_image_read_;
+    _impl_.body_.addon_image_read_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_addon_image_read(::dsa::control::v1::AddonImageRead* addon_image_read) {
+  clear_body();
+  if (addon_image_read) {
+    set_has_addon_image_read();
+    _impl_.body_.addon_image_read_ = addon_image_read;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.addon_image_read)
+}
+inline ::dsa::control::v1::AddonImageRead* Envelope::_internal_mutable_addon_image_read() {
+  if (!_internal_has_addon_image_read()) {
+    clear_body();
+    set_has_addon_image_read();
+    _impl_.body_.addon_image_read_ = CreateMaybeMessage< ::dsa::control::v1::AddonImageRead >(GetArenaForAllocation());
+  }
+  return _impl_.body_.addon_image_read_;
+}
+inline ::dsa::control::v1::AddonImageRead* Envelope::mutable_addon_image_read() {
+  ::dsa::control::v1::AddonImageRead* _msg = _internal_mutable_addon_image_read();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.addon_image_read)
+  return _msg;
+}
+
+// .dsa.control.v1.AddonImagePart addon_image_part = 415;
+inline bool Envelope::_internal_has_addon_image_part() const {
+  return body_case() == kAddonImagePart;
+}
+inline bool Envelope::has_addon_image_part() const {
+  return _internal_has_addon_image_part();
+}
+inline void Envelope::set_has_addon_image_part() {
+  _impl_._oneof_case_[0] = kAddonImagePart;
+}
+inline void Envelope::clear_addon_image_part() {
+  if (_internal_has_addon_image_part()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.addon_image_part_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AddonImagePart* Envelope::release_addon_image_part() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.addon_image_part)
+  if (_internal_has_addon_image_part()) {
+    clear_has_body();
+    ::dsa::control::v1::AddonImagePart* temp = _impl_.body_.addon_image_part_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.addon_image_part_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AddonImagePart& Envelope::_internal_addon_image_part() const {
+  return _internal_has_addon_image_part()
+      ? *_impl_.body_.addon_image_part_
+      : reinterpret_cast< ::dsa::control::v1::AddonImagePart&>(::dsa::control::v1::_AddonImagePart_default_instance_);
+}
+inline const ::dsa::control::v1::AddonImagePart& Envelope::addon_image_part() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.addon_image_part)
+  return _internal_addon_image_part();
+}
+inline ::dsa::control::v1::AddonImagePart* Envelope::unsafe_arena_release_addon_image_part() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.addon_image_part)
+  if (_internal_has_addon_image_part()) {
+    clear_has_body();
+    ::dsa::control::v1::AddonImagePart* temp = _impl_.body_.addon_image_part_;
+    _impl_.body_.addon_image_part_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_addon_image_part(::dsa::control::v1::AddonImagePart* addon_image_part) {
+  clear_body();
+  if (addon_image_part) {
+    set_has_addon_image_part();
+    _impl_.body_.addon_image_part_ = addon_image_part;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.addon_image_part)
+}
+inline ::dsa::control::v1::AddonImagePart* Envelope::_internal_mutable_addon_image_part() {
+  if (!_internal_has_addon_image_part()) {
+    clear_body();
+    set_has_addon_image_part();
+    _impl_.body_.addon_image_part_ = CreateMaybeMessage< ::dsa::control::v1::AddonImagePart >(GetArenaForAllocation());
+  }
+  return _impl_.body_.addon_image_part_;
+}
+inline ::dsa::control::v1::AddonImagePart* Envelope::mutable_addon_image_part() {
+  ::dsa::control::v1::AddonImagePart* _msg = _internal_mutable_addon_image_part();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.addon_image_part)
   return _msg;
 }
 
@@ -62236,6 +64232,302 @@ inline ::dsa::control::v1::NativeLibraryCrash* Envelope::mutable_native_library_
   return _msg;
 }
 
+// .dsa.control.v1.GeocodeRequest geocode_request = 470;
+inline bool Envelope::_internal_has_geocode_request() const {
+  return body_case() == kGeocodeRequest;
+}
+inline bool Envelope::has_geocode_request() const {
+  return _internal_has_geocode_request();
+}
+inline void Envelope::set_has_geocode_request() {
+  _impl_._oneof_case_[0] = kGeocodeRequest;
+}
+inline void Envelope::clear_geocode_request() {
+  if (_internal_has_geocode_request()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.geocode_request_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GeocodeRequest* Envelope::release_geocode_request() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.geocode_request)
+  if (_internal_has_geocode_request()) {
+    clear_has_body();
+    ::dsa::control::v1::GeocodeRequest* temp = _impl_.body_.geocode_request_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.geocode_request_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GeocodeRequest& Envelope::_internal_geocode_request() const {
+  return _internal_has_geocode_request()
+      ? *_impl_.body_.geocode_request_
+      : reinterpret_cast< ::dsa::control::v1::GeocodeRequest&>(::dsa::control::v1::_GeocodeRequest_default_instance_);
+}
+inline const ::dsa::control::v1::GeocodeRequest& Envelope::geocode_request() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.geocode_request)
+  return _internal_geocode_request();
+}
+inline ::dsa::control::v1::GeocodeRequest* Envelope::unsafe_arena_release_geocode_request() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.geocode_request)
+  if (_internal_has_geocode_request()) {
+    clear_has_body();
+    ::dsa::control::v1::GeocodeRequest* temp = _impl_.body_.geocode_request_;
+    _impl_.body_.geocode_request_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_geocode_request(::dsa::control::v1::GeocodeRequest* geocode_request) {
+  clear_body();
+  if (geocode_request) {
+    set_has_geocode_request();
+    _impl_.body_.geocode_request_ = geocode_request;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.geocode_request)
+}
+inline ::dsa::control::v1::GeocodeRequest* Envelope::_internal_mutable_geocode_request() {
+  if (!_internal_has_geocode_request()) {
+    clear_body();
+    set_has_geocode_request();
+    _impl_.body_.geocode_request_ = CreateMaybeMessage< ::dsa::control::v1::GeocodeRequest >(GetArenaForAllocation());
+  }
+  return _impl_.body_.geocode_request_;
+}
+inline ::dsa::control::v1::GeocodeRequest* Envelope::mutable_geocode_request() {
+  ::dsa::control::v1::GeocodeRequest* _msg = _internal_mutable_geocode_request();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.geocode_request)
+  return _msg;
+}
+
+// .dsa.control.v1.GeocodeResult geocode_result = 471;
+inline bool Envelope::_internal_has_geocode_result() const {
+  return body_case() == kGeocodeResult;
+}
+inline bool Envelope::has_geocode_result() const {
+  return _internal_has_geocode_result();
+}
+inline void Envelope::set_has_geocode_result() {
+  _impl_._oneof_case_[0] = kGeocodeResult;
+}
+inline void Envelope::clear_geocode_result() {
+  if (_internal_has_geocode_result()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.geocode_result_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GeocodeResult* Envelope::release_geocode_result() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.geocode_result)
+  if (_internal_has_geocode_result()) {
+    clear_has_body();
+    ::dsa::control::v1::GeocodeResult* temp = _impl_.body_.geocode_result_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.geocode_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GeocodeResult& Envelope::_internal_geocode_result() const {
+  return _internal_has_geocode_result()
+      ? *_impl_.body_.geocode_result_
+      : reinterpret_cast< ::dsa::control::v1::GeocodeResult&>(::dsa::control::v1::_GeocodeResult_default_instance_);
+}
+inline const ::dsa::control::v1::GeocodeResult& Envelope::geocode_result() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.geocode_result)
+  return _internal_geocode_result();
+}
+inline ::dsa::control::v1::GeocodeResult* Envelope::unsafe_arena_release_geocode_result() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.geocode_result)
+  if (_internal_has_geocode_result()) {
+    clear_has_body();
+    ::dsa::control::v1::GeocodeResult* temp = _impl_.body_.geocode_result_;
+    _impl_.body_.geocode_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_geocode_result(::dsa::control::v1::GeocodeResult* geocode_result) {
+  clear_body();
+  if (geocode_result) {
+    set_has_geocode_result();
+    _impl_.body_.geocode_result_ = geocode_result;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.geocode_result)
+}
+inline ::dsa::control::v1::GeocodeResult* Envelope::_internal_mutable_geocode_result() {
+  if (!_internal_has_geocode_result()) {
+    clear_body();
+    set_has_geocode_result();
+    _impl_.body_.geocode_result_ = CreateMaybeMessage< ::dsa::control::v1::GeocodeResult >(GetArenaForAllocation());
+  }
+  return _impl_.body_.geocode_result_;
+}
+inline ::dsa::control::v1::GeocodeResult* Envelope::mutable_geocode_result() {
+  ::dsa::control::v1::GeocodeResult* _msg = _internal_mutable_geocode_result();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.geocode_result)
+  return _msg;
+}
+
+// .dsa.control.v1.ShareToHost share_to_host = 472;
+inline bool Envelope::_internal_has_share_to_host() const {
+  return body_case() == kShareToHost;
+}
+inline bool Envelope::has_share_to_host() const {
+  return _internal_has_share_to_host();
+}
+inline void Envelope::set_has_share_to_host() {
+  _impl_._oneof_case_[0] = kShareToHost;
+}
+inline void Envelope::clear_share_to_host() {
+  if (_internal_has_share_to_host()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.share_to_host_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ShareToHost* Envelope::release_share_to_host() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.share_to_host)
+  if (_internal_has_share_to_host()) {
+    clear_has_body();
+    ::dsa::control::v1::ShareToHost* temp = _impl_.body_.share_to_host_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.share_to_host_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ShareToHost& Envelope::_internal_share_to_host() const {
+  return _internal_has_share_to_host()
+      ? *_impl_.body_.share_to_host_
+      : reinterpret_cast< ::dsa::control::v1::ShareToHost&>(::dsa::control::v1::_ShareToHost_default_instance_);
+}
+inline const ::dsa::control::v1::ShareToHost& Envelope::share_to_host() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.share_to_host)
+  return _internal_share_to_host();
+}
+inline ::dsa::control::v1::ShareToHost* Envelope::unsafe_arena_release_share_to_host() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.share_to_host)
+  if (_internal_has_share_to_host()) {
+    clear_has_body();
+    ::dsa::control::v1::ShareToHost* temp = _impl_.body_.share_to_host_;
+    _impl_.body_.share_to_host_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_share_to_host(::dsa::control::v1::ShareToHost* share_to_host) {
+  clear_body();
+  if (share_to_host) {
+    set_has_share_to_host();
+    _impl_.body_.share_to_host_ = share_to_host;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.share_to_host)
+}
+inline ::dsa::control::v1::ShareToHost* Envelope::_internal_mutable_share_to_host() {
+  if (!_internal_has_share_to_host()) {
+    clear_body();
+    set_has_share_to_host();
+    _impl_.body_.share_to_host_ = CreateMaybeMessage< ::dsa::control::v1::ShareToHost >(GetArenaForAllocation());
+  }
+  return _impl_.body_.share_to_host_;
+}
+inline ::dsa::control::v1::ShareToHost* Envelope::mutable_share_to_host() {
+  ::dsa::control::v1::ShareToHost* _msg = _internal_mutable_share_to_host();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.share_to_host)
+  return _msg;
+}
+
+// .dsa.control.v1.ShareResult share_result = 473;
+inline bool Envelope::_internal_has_share_result() const {
+  return body_case() == kShareResult;
+}
+inline bool Envelope::has_share_result() const {
+  return _internal_has_share_result();
+}
+inline void Envelope::set_has_share_result() {
+  _impl_._oneof_case_[0] = kShareResult;
+}
+inline void Envelope::clear_share_result() {
+  if (_internal_has_share_result()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.share_result_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ShareResult* Envelope::release_share_result() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.share_result)
+  if (_internal_has_share_result()) {
+    clear_has_body();
+    ::dsa::control::v1::ShareResult* temp = _impl_.body_.share_result_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.share_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ShareResult& Envelope::_internal_share_result() const {
+  return _internal_has_share_result()
+      ? *_impl_.body_.share_result_
+      : reinterpret_cast< ::dsa::control::v1::ShareResult&>(::dsa::control::v1::_ShareResult_default_instance_);
+}
+inline const ::dsa::control::v1::ShareResult& Envelope::share_result() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.share_result)
+  return _internal_share_result();
+}
+inline ::dsa::control::v1::ShareResult* Envelope::unsafe_arena_release_share_result() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.share_result)
+  if (_internal_has_share_result()) {
+    clear_has_body();
+    ::dsa::control::v1::ShareResult* temp = _impl_.body_.share_result_;
+    _impl_.body_.share_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_share_result(::dsa::control::v1::ShareResult* share_result) {
+  clear_body();
+  if (share_result) {
+    set_has_share_result();
+    _impl_.body_.share_result_ = share_result;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.share_result)
+}
+inline ::dsa::control::v1::ShareResult* Envelope::_internal_mutable_share_result() {
+  if (!_internal_has_share_result()) {
+    clear_body();
+    set_has_share_result();
+    _impl_.body_.share_result_ = CreateMaybeMessage< ::dsa::control::v1::ShareResult >(GetArenaForAllocation());
+  }
+  return _impl_.body_.share_result_;
+}
+inline ::dsa::control::v1::ShareResult* Envelope::mutable_share_result() {
+  ::dsa::control::v1::ShareResult* _msg = _internal_mutable_share_result();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.share_result)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -62248,6 +64540,12 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -62607,6 +64905,9 @@ template <> struct is_proto_enum< ::dsa::control::v1::KeyAction> : ::std::true_t
 template <> struct is_proto_enum< ::dsa::control::v1::ImeInputKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::LocationAccess> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::GeocodeStatus> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::ShareOutcome> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::AddonImage> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::RootLevel> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::BackgroundAppCommand> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::MediaPlayback> : ::std::true_type {};

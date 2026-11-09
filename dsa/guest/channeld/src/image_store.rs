@@ -1,63 +1,56 @@
-//! An image the host sends for the guest to lay over its system at the next boot (an ARM
-//! translation package, the Google apps), kept on the user's disk.
+//! An add-on image (an ARM translation package, the Google apps) that a DSA from before the
+//! add-on disk sent to the user's disk, `/data`.
 //!
-//! The image is written beside the one already there, and put in that one's place only once
-//! all of it has arrived and its length and SHA-256 match what the host announced, so a
-//! transfer that breaks off leaves the guest as it was. One transfer runs at a time; a new one
-//! drops an unfinished one.
+//! The host now keeps each add-on's image on the add-on disk it attaches read only, and the
+//! guest mounts it from there. An image an older host sent is still in `/data`, where it is
+//! cached twice (by the encrypted file and by erofs) for as long as it is mounted. The host
+//! reads it from here part by part ([`ImageStore::read`]), puts it on the add-on disk, and then
+//! has it removed ([`ImageStore::remove`]), so nothing of it stays in `/data`.
 
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-
-use sha2::{Digest, Sha256};
 
 /// The image's name in its folder.
 pub const IMAGE: &str = "system.img";
-/// The name it is written under until it is complete and checked.
+/// The name an older host's transfer wrote under until it was complete and checked.
 const PARTIAL: &str = "system.img.part";
+/// The most one part holds.
+pub const MAX_PART: u32 = 1 << 20;
 
-/// How a message about the image went: the answer's common part.
+/// How a removal went.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Progress {
-    /// The transfer this answers, or 0.
-    pub transfer_id: u32,
-    /// How many bytes of that transfer have been written.
-    pub received: u64,
-    /// The transfer is complete and the image checked and in place, or the removal is done.
+    /// The removal is done.
     pub done: bool,
-    /// Why the transfer or the removal failed, in words a person can act on; empty otherwise.
+    /// Why it failed, in words a person can act on; empty otherwise.
     pub error: String,
 }
 
-struct Transfer {
-    id: u32,
-    size: u64,
-    sha256: Vec<u8>,
-    file: File,
-    hasher: Sha256,
-    received: u64,
+/// A part of the image, answering [`ImageStore::read`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Part {
+    pub offset: u64,
+    pub data: Vec<u8>,
+    /// The whole image's size; 0 when there is none.
+    pub size: u64,
+    /// Why the image cannot be read; empty otherwise.
+    pub error: String,
 }
 
-/// One image on the user's disk and the transfer under way.
+/// One image an older host left on the user's disk.
 pub struct ImageStore {
     dir: PathBuf,
     /// What the image is called in what the host shows the user.
     name: &'static str,
-    max_bytes: u64,
-    transfer: Mutex<Option<Transfer>>,
 }
 
 impl ImageStore {
-    /// Keeps the image called `name` in `dir`, which init makes at boot, refusing one larger
-    /// than `max_bytes`.
-    pub fn new(dir: impl Into<PathBuf>, name: &'static str, max_bytes: u64) -> ImageStore {
+    /// The image called `name` in `dir`.
+    pub fn new(dir: impl Into<PathBuf>, name: &'static str) -> ImageStore {
         ImageStore {
             dir: dir.into(),
             name,
-            max_bytes,
-            transfer: Mutex::new(None),
         }
     }
 
@@ -71,132 +64,112 @@ impl ImageStore {
         self.dir.join(IMAGE).is_file()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Transfer>> {
-        self.transfer.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    fn progress(transfer_id: u32, received: u64, done: bool, error: String) -> Progress {
-        Progress {
-            transfer_id,
-            received,
-            done,
+    /// Up to `length` bytes of the image from `offset` (at most [`MAX_PART`]), with the
+    /// image's size.
+    pub fn read(&self, offset: u64, length: u32) -> Part {
+        let name = self.name;
+        let path = self.dir.join(IMAGE);
+        let failed = |error: String| Part {
+            offset,
             error,
-        }
-    }
-
-    fn failed(&self, transfer_id: u32, received: u64, why: String) -> Progress {
-        let _ = fs::remove_file(self.dir.join(PARTIAL));
-        Self::progress(transfer_id, received, false, why)
-    }
-
-    /// Starts transfer `id` of an image of `size` bytes whose SHA-256 is `sha256`.
-    pub fn begin(&self, id: u32, size: u64, sha256: &[u8]) -> Progress {
-        let name = self.name;
-        let mut transfer = self.lock();
-        // A transfer still under way has been given up by the host.
-        *transfer = None;
-        if size == 0 || size > self.max_bytes {
-            let why = format!(
-                "{name} is {size} bytes; it must have from 1 byte to {} MiB",
-                self.max_bytes >> 20
-            );
-            return self.failed(id, 0, why);
-        }
-        if sha256.len() != 32 {
-            let why = format!("{name} came without its SHA-256");
-            return self.failed(id, 0, why);
-        }
-        if let Err(error) = fs::create_dir_all(&self.dir) {
-            let why = format!("cannot make {}: {error}", self.dir.display());
-            return self.failed(id, 0, why);
-        }
-        match File::create(self.dir.join(PARTIAL)) {
-            Ok(file) => {
-                *transfer = Some(Transfer {
-                    id,
-                    size,
-                    sha256: sha256.to_vec(),
-                    file,
-                    hasher: Sha256::new(),
-                    received: 0,
-                });
-                Self::progress(id, 0, false, String::new())
-            }
-            Err(error) => {
-                let why = format!("cannot write {name} in {}: {error}", self.dir.display());
-                self.failed(id, 0, why)
-            }
-        }
-    }
-
-    /// Writes `data`, which starts at `offset` in the image, for transfer `id`.
-    pub fn write(&self, id: u32, offset: u64, data: &[u8]) -> Progress {
-        let name = self.name;
-        let mut slot = self.lock();
-        let Some(transfer) = slot.as_mut().filter(|t| t.id == id) else {
-            let why = format!("no transfer {id} of {name} is under way");
-            return Self::progress(id, 0, false, why);
+            ..Part::default()
         };
-        let (received, size) = (transfer.received, transfer.size);
-        let length = data.len() as u64;
-        if offset != received || received + length > size {
-            *slot = None;
-            let why = format!(
-                "a piece of {name} arrived out of place (at {offset}, {length} bytes, after \
-                 {received} of {size})"
-            );
-            return self.failed(id, received, why);
-        }
-        if let Err(error) = transfer.file.write_all(data) {
-            *slot = None;
-            let why = format!("cannot write {name}: {error}");
-            return self.failed(id, received, why);
-        }
-        transfer.hasher.update(data);
-        transfer.received += length;
-        let received = transfer.received;
-        if received < size {
-            return Self::progress(id, received, false, String::new());
-        }
-        let Some(Transfer {
-            file,
-            hasher,
-            sha256,
-            ..
-        }) = slot.take()
-        else {
-            return Self::progress(id, received, false, String::new());
+        let mut file = match File::open(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return failed(format!("{name} is not on the user's disk"))
+            }
+            Err(error) => return failed(format!("cannot read {name}: {error}")),
         };
-        if let Err(error) = file.sync_all() {
-            let why = format!("cannot save {name}: {error}");
-            return self.failed(id, received, why);
+        let size = match file.metadata() {
+            Ok(metadata) => metadata.len(),
+            Err(error) => return failed(format!("cannot read {name}: {error}")),
+        };
+        if offset > size {
+            return Part {
+                size,
+                ..failed(format!("{name} has {size} bytes, none at {offset}"))
+            };
         }
-        drop(file);
-        if hasher.finalize().as_slice() != sha256.as_slice() {
-            let why =
-                format!("{name} did not arrive intact (its SHA-256 differs); install it again");
-            return self.failed(id, received, why);
+        let wanted = u64::from(length.min(MAX_PART)).min(size - offset);
+        let mut data = vec![0u8; wanted as usize];
+        let read = file
+            .seek(SeekFrom::Start(offset))
+            .and_then(|_| file.read_exact(&mut data));
+        match read {
+            Ok(()) => Part {
+                offset,
+                data,
+                size,
+                error: String::new(),
+            },
+            Err(error) => Part {
+                size,
+                ..failed(format!("cannot read {name}: {error}"))
+            },
         }
-        if let Err(error) = fs::rename(self.dir.join(PARTIAL), self.dir.join(IMAGE)) {
-            let why = format!("cannot put {name} in place: {error}");
-            return self.failed(id, received, why);
-        }
-        Self::progress(id, received, true, String::new())
     }
 
-    /// Removes the image, and drops a transfer under way.
+    /// Removes the image, and what an older host's broken-off transfer left beside it.
     pub fn remove(&self) -> Progress {
-        *self.lock() = None;
         let _ = fs::remove_file(self.dir.join(PARTIAL));
         match fs::remove_file(self.dir.join(IMAGE)) {
-            Ok(()) => Self::progress(0, 0, true, String::new()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Self::progress(0, 0, true, String::new())
-            }
-            Err(error) => {
-                let why = format!("cannot remove {}: {error}", self.name);
-                Self::progress(0, 0, false, why)
-            }
+            Ok(()) => Progress {
+                done: true,
+                error: String::new(),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Progress {
+                done: true,
+                error: String::new(),
+            },
+            Err(error) => Progress {
+                done: false,
+                error: format!("cannot remove {}: {error}", self.name),
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("dsa-image-store-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn fr32_an_image_left_on_data_is_read_in_parts_and_removed() {
+        let dir = scratch("parts");
+        let store = ImageStore::new(&dir, "the image");
+        assert!(!store.installed());
+        assert!(store.read(0, 16).error.contains("not on the user's disk"));
+        let image: Vec<u8> = (0..10_000u32).map(|i| i as u8).collect();
+        fs::write(dir.join(IMAGE), &image).unwrap();
+        fs::write(dir.join(PARTIAL), b"broken off").unwrap();
+        assert!(store.installed());
+        let mut got = Vec::new();
+        while (got.len() as u64) < image.len() as u64 {
+            let part = store.read(got.len() as u64, 4096);
+            assert!(part.error.is_empty(), "{}", part.error);
+            assert_eq!(part.size, image.len() as u64);
+            assert_eq!(part.offset, got.len() as u64);
+            assert!(!part.data.is_empty());
+            got.extend(part.data);
+        }
+        assert_eq!(got, image);
+        assert!(store.read(image.len() as u64, 4096).data.is_empty());
+        assert!(!store.read(image.len() as u64 + 1, 4096).error.is_empty());
+        assert_eq!(store.read(0, u32::MAX).data.len(), image.len());
+        let removed = store.remove();
+        assert!(removed.done, "{}", removed.error);
+        assert!(!store.installed());
+        assert!(!dir.join(PARTIAL).exists());
+        assert!(store.remove().done, "removing nothing is done too");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

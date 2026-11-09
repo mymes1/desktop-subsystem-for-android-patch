@@ -508,6 +508,128 @@ pub struct ReportPrintJob {
     #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
 }
+/// Turns the connection into the geocoding of the caller's Android: after the answer (Done),
+/// the service sends a GeocodeQuery each time an app in the Android looks up an address. Each
+/// query goes to one watcher only. The client looks it up with the host's geocoding service,
+/// in the user's session, and answers each query with ReportGeocode on another connection. It
+/// sends nothing on this one. The watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchGeocoding {}
+/// One lookup of an app in the caller's Android, on a connection that watches them.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeQuery {
+    /// The service's number for the query, unique while the service runs.
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    /// True for a reverse lookup (a position to addresses), false for a forward one.
+    #[prost(bool, tag = "2")]
+    pub reverse: bool,
+    #[prost(string, tag = "3")]
+    pub query: ::prost::alloc::string::String,
+    #[prost(double, tag = "4")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "5")]
+    pub longitude_degrees: f64,
+    #[prost(bool, tag = "6")]
+    pub has_bounds: bool,
+    #[prost(double, tag = "7")]
+    pub lower_left_latitude: f64,
+    #[prost(double, tag = "8")]
+    pub lower_left_longitude: f64,
+    #[prost(double, tag = "9")]
+    pub upper_right_latitude: f64,
+    #[prost(double, tag = "10")]
+    pub upper_right_longitude: f64,
+    /// From 1.
+    #[prost(uint32, tag = "11")]
+    pub max_results: u32,
+    /// A BCP 47 tag; empty for the host's own language.
+    #[prost(string, tag = "12")]
+    pub language: ::prost::alloc::string::String,
+}
+/// One address a lookup found. Empty strings are parts the service did not give.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeAddress {
+    #[prost(string, repeated, tag = "1")]
+    pub address_lines: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "2")]
+    pub feature_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub premises: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub sub_thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub sub_locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub sub_admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub postal_code: ::prost::alloc::string::String,
+    /// ISO 3166-1 alpha-2, upper case.
+    #[prost(string, tag = "11")]
+    pub country_code: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub country_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub has_position: bool,
+    #[prost(double, tag = "14")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "15")]
+    pub longitude_degrees: f64,
+}
+/// Tells the caller's Android what a lookup found. Answered with Done, also for a query the
+/// Android no longer waits for.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReportGeocode {
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    #[prost(enumeration = "GeocodeStatus", tag = "2")]
+    pub status: i32,
+    #[prost(message, repeated, tag = "3")]
+    pub addresses: ::prost::alloc::vec::Vec<GeocodeAddress>,
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Turns the connection into a watch of what apps in the caller's Android share with the
+/// host ("Share on PC" in Android's share sheet): after the answer (Done), the service sends a
+/// ShareOffer for each share. Each share goes to one watcher only. The client reads its files
+/// with ReadDrag (the share's ID is the drag's), ends it with EndDrag, shows the host's share
+/// UI, and answers with ReportShare on another connection. It sends nothing on this one. The
+/// watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchShares {}
+/// Content an app in the caller's Android shares with the host, on a connection that watches
+/// shares.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareOffer {
+    /// The drag ID its files are read with, unique among the Android's shares and drags.
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    /// The subject or title the app gave; empty when none.
+    #[prost(string, tag = "2")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Tells the caller's Android what became of one of its shares. Answered with Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReportShare {
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    #[prost(enumeration = "ShareOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
 /// An app in the caller's Android that runs a foreground service, so it keeps running with no
 /// window: music playback, a download, a VPN. One per package.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1844,8 +1966,8 @@ pub struct ArmTranslationPackage {
 /// Installs an ARM translation package for the caller's Android. The service answers at once:
 /// Done when it takes a package with this description and size, or an error. After Done the
 /// client sends the package's system image, `size` bytes, in ApkChunk frames, and the service
-/// answers the same request id once more: ArmTranslation once Android has the image, or an
-/// error. The connection then ends. Android must be running; the package is used from its next
+/// answers the same request id once more: ArmTranslation once the image is on the caller's
+/// add-on disk, or an error. The connection then ends. The package is used from Android's next
 /// start.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstallArmTranslation {
@@ -1878,7 +2000,7 @@ pub struct ArmTranslation {
     /// then.
     #[prost(bool, tag = "3")]
     pub guest_known: bool,
-    /// A package image is on the user's Android disk.
+    /// The package image is on the caller's add-on disk, for Android's next start.
     #[prost(bool, tag = "4")]
     pub guest_installed: bool,
     /// The running Android has a package laid over its system, so ARM64 apps install and run.
@@ -1900,6 +2022,11 @@ pub struct ArmTranslation {
     /// translator), or empty for none.
     #[prost(string, tag = "9")]
     pub translator: ::prost::alloc::string::String,
+    /// The running Android still has a package image a DSA from before the add-on disk sent to
+    /// its own disk, which the service moves onto the add-on disk and then removes. Holds only
+    /// when guest_known.
+    #[prost(bool, tag = "10")]
+    pub guest_left_on_data: bool,
 }
 /// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
 /// service downloaded from LiteGapps' file host.
@@ -1936,10 +2063,11 @@ pub struct GappsPackage {
 }
 /// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
 /// build for the Android version and architecture the running Android reports, downloads it,
-/// checks it, makes a system image of its apps and permission files, and sends the image to
-/// the caller's Android, which lays it over its system from its next start. While it works it
-/// answers the request id with GappsProgress, as often as there is news; it then answers once
-/// more with Gapps, or an error. The connection then ends. Android must be running.
+/// checks it, makes a system image of its apps and permission files, and puts the image on
+/// the caller's add-on disk, from which Android lays it over its system from its next start.
+/// While it works it answers the request id with GappsProgress, as often as there is news; it
+/// then answers once more with Gapps, or an error. The connection then ends. Android must be
+/// running, because it says which Android version and processor the build is for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstallGapps {}
 /// Asks where Google Play stands for the caller. Answered with Gapps.
@@ -1970,7 +2098,7 @@ pub struct Gapps {
     /// hold only then.
     #[prost(bool, tag = "2")]
     pub guest_known: bool,
-    /// The Google apps image is on the user's Android disk.
+    /// The Google apps image is on the caller's add-on disk, for Android's next start.
     #[prost(bool, tag = "3")]
     pub guest_installed: bool,
     /// The running Android has the Google apps laid over its system.
@@ -1997,6 +2125,11 @@ pub struct Gapps {
     /// without Google's apps until the user installs Google Play again.
     #[prost(bool, tag = "10")]
     pub reinstall_needed: bool,
+    /// The running Android still has a Google apps image a DSA from before the add-on disk sent
+    /// to its own disk, which the service moves onto the add-on disk and then removes. Holds only
+    /// when guest_known.
+    #[prost(bool, tag = "11")]
+    pub guest_left_on_data: bool,
 }
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2371,7 +2504,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2517,6 +2650,14 @@ pub mod request {
         SetAppRoot(super::SetAppRoot),
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
+        #[prost(message, tag = "470")]
+        WatchGeocoding(super::WatchGeocoding),
+        #[prost(message, tag = "471")]
+        ReportGeocode(super::ReportGeocode),
+        #[prost(message, tag = "472")]
+        WatchShares(super::WatchShares),
+        #[prost(message, tag = "473")]
+        ReportShare(super::ReportShare),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2596,7 +2737,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 470, 471"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2672,6 +2813,10 @@ pub mod envelope {
         GamepadEvent(super::GamepadEvent),
         #[prost(message, tag = "301")]
         GamepadRumble(super::GamepadRumble),
+        #[prost(message, tag = "470")]
+        GeocodeQuery(super::GeocodeQuery),
+        #[prost(message, tag = "471")]
+        ShareOffer(super::ShareOffer),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -3024,6 +3169,84 @@ impl PrintOutcome {
             "PRINT_OUTCOME_PRINTED" => Some(Self::Printed),
             "PRINT_OUTCOME_CANCELED" => Some(Self::Canceled),
             "PRINT_OUTCOME_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// How a lookup ended on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GeocodeStatus {
+    Unspecified = 0,
+    Ok = 1,
+    /// No network, or the geocoding service failed.
+    Unavailable = 2,
+    /// The user turned geocoding off on the host.
+    Refused = 3,
+    /// Too many lookups in a short time.
+    Busy = 4,
+    /// The query cannot be answered as it is.
+    Invalid = 5,
+}
+impl GeocodeStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GEOCODE_STATUS_UNSPECIFIED",
+            Self::Ok => "GEOCODE_STATUS_OK",
+            Self::Unavailable => "GEOCODE_STATUS_UNAVAILABLE",
+            Self::Refused => "GEOCODE_STATUS_REFUSED",
+            Self::Busy => "GEOCODE_STATUS_BUSY",
+            Self::Invalid => "GEOCODE_STATUS_INVALID",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GEOCODE_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "GEOCODE_STATUS_OK" => Some(Self::Ok),
+            "GEOCODE_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "GEOCODE_STATUS_REFUSED" => Some(Self::Refused),
+            "GEOCODE_STATUS_BUSY" => Some(Self::Busy),
+            "GEOCODE_STATUS_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+/// What became of a share on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareOutcome {
+    Unspecified = 0,
+    Shared = 1,
+    /// The user closed the share UI without sharing.
+    Canceled = 2,
+    /// It could not be shared; the message says why.
+    Failed = 3,
+}
+impl ShareOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_OUTCOME_UNSPECIFIED",
+            Self::Shared => "SHARE_OUTCOME_SHARED",
+            Self::Canceled => "SHARE_OUTCOME_CANCELED",
+            Self::Failed => "SHARE_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_OUTCOME_SHARED" => Some(Self::Shared),
+            "SHARE_OUTCOME_CANCELED" => Some(Self::Canceled),
+            "SHARE_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
@@ -3592,7 +3815,7 @@ pub enum GappsStage {
     Downloading = 2,
     /// Checking the build and making the system image.
     Building = 3,
-    /// Sending the image to Android: `done` of `total` bytes.
+    /// Putting the image on the add-on disk: `done` of `total` bytes.
     Sending = 4,
 }
 impl GappsStage {

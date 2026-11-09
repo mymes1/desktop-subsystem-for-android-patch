@@ -34,8 +34,9 @@
 //!   on to the listeners too: the agent has the media scanner look at the folders. Its
 //!   `AndroidFiles` goes to the switch alone ([`Router::on_android_files`]), which has init
 //!   serve the shared storage to the host.
-//! - The host's ARM translation messages stop here as well: the package's image is the
-//!   daemon's to keep ([`Router::on_arm_translation`]), and the daemon answers each one.
+//! - The host's ARM translation and Google apps messages stop here as well, and so do its
+//!   reads of an add-on image an older host left on the user's disk: the daemon looks after
+//!   those images ([`Router::on_arm_translation`], [`Router::on_gapps`]) and answers each one.
 //! - So do the host's game controllers: each becomes a gamepad device of the daemon's
 //!   ([`Router::on_gamepads`]), whose rumble goes back to the host.
 //! - The diagnostics the agent gathers go to the log port ([`Router::divert_diagnostics`]),
@@ -53,8 +54,8 @@ use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    AndroidFiles, ArmTranslationState, Envelope, FileSharing, GappsState, GuestBoot,
-    LocationRequest, PowerHintKind, RootElevationConfig,
+    AddonImage, AddonImagePart, AddonImageRead, AndroidFiles, ArmTranslationState, Envelope,
+    FileSharing, GappsState, GuestBoot, LocationRequest, PowerHintKind, RootElevationConfig,
 };
 
 use crate::arm_translation::ArmTranslation;
@@ -437,16 +438,12 @@ impl Router {
                 Some(state) => state,
                 None => return false,
             },
-            (
-                Body::ArmTranslationInstall(_)
-                | Body::ArmTranslationChunk(_)
-                | Body::ArmTranslationRemove(_)
-                | Body::ArmTranslationQuery(_),
-                None,
-            ) => ArmTranslationState {
-                error: "this guest cannot keep an ARM translation package".into(),
-                ..ArmTranslationState::default()
-            },
+            (Body::ArmTranslationRemove(_) | Body::ArmTranslationQuery(_), None) => {
+                ArmTranslationState {
+                    error: "this guest cannot keep an ARM translation package".into(),
+                    ..ArmTranslationState::default()
+                }
+            }
             _ => return false,
         };
         let _ = self.to_host.send(dsa_protocol::encode(&Envelope {
@@ -463,13 +460,7 @@ impl Router {
                 Some(state) => state,
                 None => return false,
             },
-            (
-                Body::GappsInstall(_)
-                | Body::GappsChunk(_)
-                | Body::GappsRemove(_)
-                | Body::GappsQuery(_),
-                None,
-            ) => GappsState {
+            (Body::GappsRemove(_) | Body::GappsQuery(_), None) => GappsState {
                 error: "this guest cannot keep the Google apps".into(),
                 ..GappsState::default()
             },
@@ -479,6 +470,40 @@ impl Router {
             body: Some(Body::GappsState(state)),
         }));
         true
+    }
+
+    /// Answers the host's read of an add-on image an older host left on the user's disk.
+    fn addon_image_read(&self, read: &AddonImageRead) {
+        let image = read.image();
+        let part = match image {
+            AddonImage::Gapps => self
+                .gapps
+                .as_ref()
+                .map(|gapps| gapps.read(read.offset, read.length)),
+            AddonImage::ArmTranslation => self
+                .arm_translation
+                .as_ref()
+                .map(|package| package.read(read.offset, read.length)),
+            AddonImage::Unspecified => None,
+        };
+        let answer = match part {
+            Some(part) => AddonImagePart {
+                image: image as i32,
+                offset: part.offset,
+                data: part.data,
+                size: part.size,
+                error: part.error,
+            },
+            None => AddonImagePart {
+                image: image as i32,
+                offset: read.offset,
+                error: "this guest keeps no such add-on image".into(),
+                ..AddonImagePart::default()
+            },
+        };
+        let _ = self.to_host.send(dsa_protocol::encode(&Envelope {
+            body: Some(Body::AddonImagePart(answer)),
+        }));
     }
 
     fn set_developer_mode(&self, on: bool) {
@@ -623,6 +648,11 @@ impl Router {
             }
             return;
         }
+        if let Some(Body::AddonImageRead(read)) = &body {
+            // For the daemon alone: the image is on the user's disk, which only it reads.
+            self.addon_image_read(read);
+            return;
+        }
         if let Some(body) = &body {
             // For the daemon alone, like developer mode.
             if self.arm_translation_message(body) {
@@ -714,6 +744,16 @@ impl Router {
             Some(Body::GappsState(_)) => {
                 return Err(SendError::NotAllowed(
                     "where the Google apps stand is the daemon's to say".to_string(),
+                ))
+            }
+            Some(Body::ArmTranslationState(_)) => {
+                return Err(SendError::NotAllowed(
+                    "where ARM translation stands is the daemon's to say".to_string(),
+                ))
+            }
+            Some(Body::AddonImagePart(_)) => {
+                return Err(SendError::NotAllowed(
+                    "an add-on image on the user's disk is the daemon's to send".to_string(),
                 ))
             }
             Some(Body::GoogleDeviceId(_)) => {

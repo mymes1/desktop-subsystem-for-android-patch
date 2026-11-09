@@ -996,8 +996,8 @@ msgstr "Android가 이 변경 전에 시작되었습니다. Android를 멈췄다
 msgid "Remove the ARM translation package"
 msgstr "ARM 번역 묶음 제거"
 
-msgid "Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."
-msgstr "Android 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
+msgid "Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts."
+msgstr "추가 구성 요소 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
 
 msgid "Developer"
 msgstr "개발자"
@@ -1191,8 +1191,8 @@ msgstr "설치"
 msgid "Remove Google Play"
 msgstr "Google Play 제거"
 
-msgid "Deletes Google's apps from your Android disk. They are gone from the next start of Android."
-msgstr "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 Google 앱이 사라집니다."
+msgid "Deletes Google's apps from your add-on disk. They are gone from the next start of Android."
+msgstr "추가 구성 요소 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 Google 앱이 사라집니다."
 
 msgid "Google's terms"
 msgstr "Google 약관"
