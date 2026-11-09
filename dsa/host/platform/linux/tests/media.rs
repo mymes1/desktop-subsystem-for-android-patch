@@ -768,6 +768,14 @@ fn boot_check(check_media: bool, check_root: bool) {
 
     let mut problems = Vec::new();
     if check_root {
+        // Keep the first boot's init and kernel messages before the approval check restarts it.
+        for (name, command) in [
+            ("boot-logcat.txt", "logcat -d -b all"),
+            ("guard.txt", "cat /proc/filesystems; cat /proc/mounts; cat /sys/kernel/security/lsm; ls -lZ /sys/kernel/security /sys/kernel/security/dsa_su"),
+        ] {
+            let output = adb.shell(command).unwrap_or_else(|error| error);
+            let _ = std::fs::write(dir.join(name), output);
+        }
         match adb.shell("getprop init.svc.dsa_su") {
             Ok(state) if matches!(state.trim(), "" | "stopped") => {}
             Ok(state) => problems.push(format!(
