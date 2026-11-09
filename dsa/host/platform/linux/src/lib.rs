@@ -27,7 +27,9 @@
 //! - [`root_approval`]: the administrator prompt an Android app's root request waits for,
 //!   through polkit in the user's desktop session;
 //! - [`secret_service`]: each user's backup key and KeyMint root key, kept in their Secret
-//!   Service through a helper that runs as them.
+//!   Service through a helper that runs as them;
+//! - `host_services`: the app data backup in `~/DSA Backup`, the passkey check and the
+//!   KeyMint root key each user's session serves.
 //!
 //! The rules are plain functions and types, tested on every host. The parts that talk to
 //! the window system, the buses, the devices and the VM build on Linux only, so the workspace
@@ -46,6 +48,8 @@ pub mod crosvm_control;
 #[cfg(target_os = "linux")]
 pub mod devices;
 pub mod fetch;
+#[cfg(target_os = "linux")]
+pub mod host_services;
 pub mod image;
 pub mod input;
 #[cfg(target_os = "linux")]
