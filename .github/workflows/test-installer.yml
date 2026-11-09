@@ -202,10 +202,12 @@ jobs:
           Write-Host "Host Network Service: $($hns.Status)"
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test hcn_network -- --ignored --test-threads 1 --nocapture
           if ($LASTEXITCODE -ne 0) { throw "the VM's network was not made, removed or routed as it must be" }
-          # Windows takes the host's adapter of a removed network away shortly after.
+          # Windows takes the host's adapter of a removed network away shortly after. It names
+          # the adapter after the network cut short ("vEthernet (DSA dsa-test-fr)" for
+          # "DSA dsa-test-fr28-routes"), so the pattern matches that shortened start.
           $deadline = (Get-Date).AddSeconds(20)
           do {
-            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr28*'
+            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr*'
             if (-not $left) { break }
             Start-Sleep -Seconds 2
           } while ((Get-Date) -lt $deadline)

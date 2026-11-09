@@ -20,11 +20,15 @@
 //!   to it while the VM runs.
 //!
 //! Behind NAT, the guest's default route is the gateway, which is the host's own address on
-//! its adapter for the network (`vEthernet (DSA <vm>)`): the host forwards the guest's traffic
-//! and translates it, so it leaves through whatever route the host takes, a VPN's included.
-//! The host reaches the guest's address the other way, through the same adapter, whose subnet
-//! route is more specific than any default route a VPN adds. Both are checked while the VM
-//! runs ([`nat_path_problem`]) and reported in the status when they do not hold.
+//! its adapter for the network: the host forwards the guest's traffic and translates it, so it
+//! leaves through whatever route the host takes, a VPN's included. The host reaches the
+//! guest's address the other way, through the same adapter, whose subnet route is more
+//! specific than any default route a VPN adds. Both are checked while the VM runs
+//! ([`nat_path_problem`]) and reported in the status when they do not hold. That adapter is
+//! known as the one that holds the gateway address, never by its name: Windows names it
+//! `vEthernet (<network>)` with the network's name cut short (`vEthernet (DSA dsa-test-fr)`
+//! for the network `DSA dsa-test-fr28-routes`), so the name does not tell apart the networks
+//! of two VMs whose names start alike.
 //!
 //! The user's WSL network and the Hyper-V switches the user made are never touched: the
 //! networks here are named after the VM, are not persistent (Windows removes them at restart),
@@ -282,10 +286,15 @@ pub fn moved_leftover(vm_name: &str, name: &str) -> bool {
     !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// The name Windows gives the host's own adapter on the NAT network `network_name`: the
-/// connection sharing gateway, through which the host reaches the guest.
-pub fn host_side_adapter(network_name: &str) -> String {
-    format!("vEthernet ({network_name})")
+/// A host adapter as the host's routing knows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostInterface {
+    /// The interface's locally unique identifier (its LUID), which tells adapters apart.
+    pub luid: u64,
+    /// The name Windows shows for the adapter, for people to read. It does not identify the
+    /// adapter: Windows cuts a NAT network's adapter name short, so the adapters of two VMs
+    /// whose names start alike can carry the same one.
+    pub name: String,
 }
 
 /// What the host found on the way between it and a guest behind NAT, for
@@ -294,24 +303,21 @@ pub fn host_side_adapter(network_name: &str) -> String {
 pub struct NatPath {
     /// The gateway the NAT network was made with: the host's address on that network.
     pub gateway: Ipv4Addr,
-    /// Whether the gateway is one of the host's own addresses now.
-    pub host_has_gateway: bool,
-    /// The host adapter the host sends to the guest's IPv4 address through, by name, or to
-    /// the guest's side of the network ([`Ipv4Subnet::guest_side`]) before the guest has taken
-    /// an address; `None` when the host has no route there.
-    pub host_route: Option<String>,
+    /// The host adapter that holds the gateway address now, which is the host's own adapter
+    /// on the network; `None` when no adapter of the host holds it any more.
+    pub gateway_adapter: Option<HostInterface>,
+    /// The host adapter the host sends to the guest's IPv4 address through, or to the guest's
+    /// side of the network ([`Ipv4Subnet::guest_side`]) before the guest has taken an address;
+    /// `None` when the host has no route there.
+    pub host_route: Option<HostInterface>,
 }
 
 /// Why traffic between the host and a guest behind NAT would not go as it must, if it would
 /// not: the guest's default route must be the NAT gateway, an address of the host, so that the
 /// guest's traffic is forwarded by the host and follows the host's routes (a VPN's among them);
-/// and the host must send to the guest's address through its own adapter on that network, so
-/// that programs on the host reach the guest's servers.
-pub fn nat_path_problem(
-    network_name: &str,
-    endpoint: &EndpointFacts,
-    path: &NatPath,
-) -> Option<String> {
+/// and the host must send to the guest's address through its own adapter on that network (the
+/// one that holds the gateway), so that programs on the host reach the guest's servers.
+pub fn nat_path_problem(endpoint: &EndpointFacts, path: &NatPath) -> Option<String> {
     let mut problems = Vec::new();
     match endpoint.gateway {
         Some(IpAddr::V4(gateway)) if gateway != path.gateway => problems.push(format!(
@@ -321,7 +327,7 @@ pub fn nat_path_problem(
         )),
         _ => {}
     }
-    if !path.host_has_gateway {
+    if path.gateway_adapter.is_none() {
         problems.push(format!(
             "this computer does not hold the NAT gateway address {} any more, so Android's traffic \
              has nowhere to go",
@@ -333,15 +339,17 @@ pub fn nat_path_problem(
     let guest = guest_ipv4(endpoint)
         .map(|guest| format!("Android's address {guest}"))
         .unwrap_or_else(|| format!("Android's network (behind {})", path.gateway));
-    let own = host_side_adapter(network_name);
-    match path.host_route.as_deref() {
-        Some(route) if route.eq_ignore_ascii_case(&own) => {}
-        Some(route) => problems.push(format!(
-            "this computer sends to {guest} through {route} rather than its network for Android, \
+    // The adapters are compared by their interface, not by their names, which Windows
+    // shortens. With no adapter holding the gateway, no route goes through the host's own.
+    match (&path.host_route, &path.gateway_adapter) {
+        (Some(route), Some(own)) if route.luid == own.luid => {}
+        (Some(route), _) => problems.push(format!(
+            "this computer sends to {guest} through {} rather than its network for Android, \
              so programs here cannot reach Android's servers; a VPN that takes that subnet does \
-             this"
+             this",
+            route.name
         )),
-        None => problems.push(format!(
+        (None, _) => problems.push(format!(
             "this computer has no route to {guest}, so programs here cannot reach Android's \
              servers"
         )),

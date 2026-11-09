@@ -34,7 +34,7 @@ use crate::network::{
     ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
     nat_network_document, nat_path_problem, network_facts, network_name, object_name,
     properties_query, reusable, subnets_in_use, transparent_network_document, EndpointFacts,
-    HostAdapter, Ipv4Subnet, NatPath, NetworkMode, NetworkStatusFacts,
+    HostAdapter, HostInterface, Ipv4Subnet, NatPath, NetworkMode, NetworkStatusFacts,
 };
 use crate::vm::NetworkAdapter;
 
@@ -541,7 +541,7 @@ impl VmNetwork {
         let gateway = subnet.gateway();
         Some(NatPath {
             gateway,
-            host_has_gateway: host_holds(gateway),
+            gateway_adapter: host_interface_holding(gateway),
             host_route: host_route_to(guest_ipv4(guest).unwrap_or(subnet.guest_side())),
         })
     }
@@ -570,7 +570,7 @@ impl VmNetwork {
         let endpoint = self.guest(&seen);
         let path = self
             .nat_path_for(&endpoint)
-            .and_then(|path| nat_path_problem(&self.name, &endpoint, &path));
+            .and_then(|path| nat_path_problem(&endpoint, &path));
         let problem = match (self.problem.clone(), path) {
             (Some(first), Some(second)) => Some(format!("{first}; {second}")),
             (first, second) => first.or(second),
@@ -821,14 +821,69 @@ pub fn host_holds(address: Ipv4Addr) -> bool {
     std::net::UdpSocket::bind((address, 0)).is_ok()
 }
 
-/// The host adapter, by the name Windows shows, that the host sends to `address` through;
-/// `None` when it has no route there.
-pub fn host_route_to(address: Ipv4Addr) -> Option<String> {
+/// The host adapter that holds `address` as one of its own addresses now, usable (not a
+/// duplicate or still being checked); `None` when no adapter holds it.
+pub fn host_interface_holding(address: Ipv4Addr) -> Option<HostInterface> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
-        ConvertInterfaceIndexToLuid, ConvertInterfaceLuidToAlias, GetBestInterfaceEx,
+        GetUnicastIpAddressTable, MIB_UNICASTIPADDRESS_TABLE,
     };
+    use windows_sys::Win32::Networking::WinSock::IpDadStatePreferred;
+    let mut table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
+    // SAFETY: an out pointer; the table is freed below.
+    if unsafe { GetUnicastIpAddressTable(AF_INET, &mut table) } != 0 || table.is_null() {
+        return None;
+    }
+    let mut found = None;
+    // SAFETY: the table GetUnicastIpAddressTable returned, with NumEntries rows after its
+    // header; a LUID is read as its 64-bit value, which every bit pattern is.
+    unsafe {
+        let rows =
+            std::slice::from_raw_parts((*table).Table.as_ptr(), (*table).NumEntries as usize);
+        for row in rows {
+            let holds = ip_of(&row.Address as *const _ as *const SOCKADDR)
+                == Some(IpAddr::V4(address))
+                && row.DadState == IpDadStatePreferred;
+            if holds {
+                found = Some(row.InterfaceLuid.Value);
+                break;
+            }
+        }
+        FreeMibTable(table as *const c_void);
+    }
+    found.map(interface_of)
+}
+
+/// The host adapter whose LUID is `luid`, with the name Windows shows for it.
+fn interface_of(luid: u64) -> HostInterface {
+    use windows_sys::Win32::NetworkManagement::IpHelper::ConvertInterfaceLuidToAlias;
+    use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
     // NDIS_IF_MAX_STRING_SIZE in ifdef.h: the longest adapter name, without its NUL.
     const IF_MAX_STRING_SIZE: usize = 256;
+    let id = NET_LUID_LH { Value: luid };
+    let mut alias = [0u16; IF_MAX_STRING_SIZE + 1];
+    // SAFETY: a LUID and a buffer of the length given, in characters.
+    let named = unsafe { ConvertInterfaceLuidToAlias(&id, alias.as_mut_ptr(), alias.len()) } == 0;
+    let name = if named {
+        from_wide(alias.as_mut_ptr())
+    } else {
+        String::new()
+    };
+    HostInterface {
+        luid,
+        name: if name.is_empty() {
+            format!("the adapter with LUID {luid:#x}")
+        } else {
+            name
+        },
+    }
+}
+
+/// The host adapter that the host sends to `address` through; `None` when it has no route
+/// there.
+pub fn host_route_to(address: Ipv4Addr) -> Option<HostInterface> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        ConvertInterfaceIndexToLuid, GetBestInterfaceEx,
+    };
     use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
     // SAFETY: an all-zero SOCKADDR_IN is valid; its family and address are set below.
     let mut destination: SOCKADDR_IN = unsafe { std::mem::zeroed() };
@@ -851,12 +906,8 @@ pub fn host_route_to(address: Ipv4Addr) -> Option<String> {
     if unsafe { ConvertInterfaceIndexToLuid(index, &mut luid) } != 0 {
         return None;
     }
-    let mut alias = [0u16; IF_MAX_STRING_SIZE + 1];
-    // SAFETY: a LUID and a buffer of the length given, in characters.
-    if unsafe { ConvertInterfaceLuidToAlias(&luid, alias.as_mut_ptr(), alias.len()) } != 0 {
-        return None;
-    }
-    Some(from_wide(alias.as_mut_ptr()))
+    // SAFETY: a LUID is read as its 64-bit value, which every bit pattern is.
+    Some(interface_of(unsafe { luid.Value }))
 }
 
 /// An IP address from a socket address, if it is IPv4 or IPv6.

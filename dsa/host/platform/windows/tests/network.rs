@@ -6,11 +6,11 @@ use dsa_host_windows::guid::Guid;
 use dsa_host_windows::network::{
     add_adapter_request, advanced_adapter, advanced_problem, all_query, choose_nat_subnet,
     endpoint_document, endpoint_facts, endpoint_name, guest_behind_nat, guest_ipv4, guid_from,
-    host_has_ipv6, host_side_adapter, ids_from_enumeration, mac_bytes, moved_leftover, name_query,
-    nat_ipv6_subnet, nat_network_document, nat_path_problem, network_facts, network_name,
-    object_name, properties_query, remove_adapter_request, reusable, subnets_in_use,
-    transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
-    NetworkStatusFacts,
+    host_has_ipv6, ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
+    nat_network_document, nat_path_problem, network_facts, network_name, object_name,
+    properties_query, remove_adapter_request, reusable, subnets_in_use,
+    transparent_network_document, EndpointFacts, HostAdapter, HostInterface, Ipv4Subnet, NatPath,
+    NetworkMode, NetworkStatusFacts,
 };
 use dsa_host_windows::vm::NetworkAdapter;
 use serde_json::Value;
@@ -275,15 +275,36 @@ fn nat_endpoint() -> EndpointFacts {
     .unwrap()
 }
 
+/// The host's own adapter on VM `VM`'s NAT network, under the name Windows gives it.
+fn own_adapter() -> HostInterface {
+    HostInterface {
+        luid: 0x0006_0000_0100_0000,
+        name: "vEthernet (DSA dsa-android)".into(),
+    }
+}
+
+/// A path whose gateway the host holds on [`own_adapter`] and whose route to the guest goes
+/// through `route`.
+fn path_through(route: Option<HostInterface>) -> NatPath {
+    NatPath {
+        gateway: "172.28.5.1".parse().unwrap(),
+        gateway_adapter: Some(own_adapter()),
+        host_route: route,
+    }
+}
+
+fn vpn() -> HostInterface {
+    HostInterface {
+        luid: 0x0047_0000_0200_0000,
+        name: "Corporate VPN".into(),
+    }
+}
+
 #[test]
 fn fr28_the_guests_default_route_is_the_hosts_nat_so_the_hosts_routes_and_vpn_apply() {
     let name = network_name(VM);
-    let good = NatPath {
-        gateway: "172.28.5.1".parse().unwrap(),
-        host_has_gateway: true,
-        host_route: Some(host_side_adapter(&name)),
-    };
-    assert_eq!(nat_path_problem(&name, &nat_endpoint(), &good), None);
+    let good = path_through(Some(own_adapter()));
+    assert_eq!(nat_path_problem(&nat_endpoint(), &good), None);
     // The NAT document gives the guest the gateway as its default route.
     let subnet = subnet("172.28.5.0/24");
     let doc = nat_network_document(&name, subnet, None);
@@ -296,41 +317,33 @@ fn fr28_the_guests_default_route_is_the_hosts_nat_so_the_hosts_routes_and_vpn_ap
         gateway: Some("172.28.5.254".parse().unwrap()),
         ..nat_endpoint()
     };
-    let problem = nat_path_problem(&name, &elsewhere, &good).unwrap();
+    let problem = nat_path_problem(&elsewhere, &good).unwrap();
     assert!(problem.contains("VPN"), "{problem}");
-    // Nor does one whose gateway the host no longer holds.
+    // Nor does one whose gateway the host no longer holds. No adapter holds it, so none is
+    // the host's own on the network, and the route to the guest cannot go through it either.
     let gone = NatPath {
-        host_has_gateway: false,
+        gateway_adapter: None,
         ..good
     };
-    let problem = nat_path_problem(&name, &nat_endpoint(), &gone).unwrap();
-    assert!(problem.contains("172.28.5.1"), "{problem}");
+    let problem = nat_path_problem(&nat_endpoint(), &gone).unwrap();
+    assert!(
+        problem.contains("does not hold the NAT gateway address 172.28.5.1"),
+        "{problem}"
+    );
+    assert!(problem.contains("vEthernet (DSA dsa-android)"), "{problem}");
 }
 
 #[test]
 fn fr28_the_host_reaches_the_guests_address_through_its_network_for_android() {
-    let name = network_name(VM);
-    assert_eq!(host_side_adapter(&name), format!("vEthernet (DSA {VM})"));
-    let path = |route: Option<&str>| NatPath {
-        gateway: "172.28.5.1".parse().unwrap(),
-        host_has_gateway: true,
-        host_route: route.map(str::to_string),
-    };
-    let own = host_side_adapter(&name);
     assert_eq!(
-        nat_path_problem(&name, &nat_endpoint(), &path(Some(&own))),
-        None
-    );
-    // Windows' adapter names are not case sensitive.
-    assert_eq!(
-        nat_path_problem(&name, &nat_endpoint(), &path(Some(&own.to_uppercase()))),
+        nat_path_problem(&nat_endpoint(), &path_through(Some(own_adapter()))),
         None
     );
     // A VPN that takes the guest's subnet sends the host's traffic for it into the tunnel.
-    let problem = nat_path_problem(&name, &nat_endpoint(), &path(Some("Corporate VPN"))).unwrap();
+    let problem = nat_path_problem(&nat_endpoint(), &path_through(Some(vpn()))).unwrap();
     assert!(problem.contains("Corporate VPN"), "{problem}");
     assert!(problem.contains("172.28.5.2"), "{problem}");
-    let problem = nat_path_problem(&name, &nat_endpoint(), &path(None)).unwrap();
+    let problem = nat_path_problem(&nat_endpoint(), &path_through(None)).unwrap();
     assert!(problem.contains("no route"), "{problem}");
     // Before the guest has taken its address, the way to its network is checked all the same:
     // a VPN that takes the subnet breaks it before the guest is up as much as after.
@@ -339,14 +352,66 @@ fn fr28_the_host_reaches_the_guests_address_through_its_network_for_android() {
         ..nat_endpoint()
     };
     assert_eq!(
-        nat_path_problem(&name, &no_address, &path(Some(&own))),
+        nat_path_problem(&no_address, &path_through(Some(own_adapter()))),
         None
     );
-    let problem = nat_path_problem(&name, &no_address, &path(Some("Corporate VPN"))).unwrap();
+    let problem = nat_path_problem(&no_address, &path_through(Some(vpn()))).unwrap();
     assert!(problem.contains("Corporate VPN"), "{problem}");
     assert!(problem.contains("172.28.5.1"), "{problem}");
-    let problem = nat_path_problem(&name, &no_address, &path(None)).unwrap();
+    let problem = nat_path_problem(&no_address, &path_through(None)).unwrap();
     assert!(problem.contains("no route"), "{problem}");
+}
+
+#[test]
+fn fr28_the_hosts_adapter_for_a_long_vm_name_is_known_by_its_interface_not_its_shortened_name() {
+    // A real VM is named after its user's SID, so its network's name is long, and Windows
+    // cuts the host adapter's name short: the Installer test's runners name the adapter of
+    // `DSA dsa-test-fr28-routes` "vEthernet (DSA dsa-test-fr)".
+    let vm = "dsa-android-S-1-5-21-3623811015-3361044348-30300820-1013";
+    let name = network_name(vm);
+    let shortened = HostInterface {
+        luid: 0x0006_0000_0300_0000,
+        name: "vEthernet (DSA dsa-android)".into(),
+    };
+    assert_ne!(shortened.name, format!("vEthernet ({name})"));
+    let path = NatPath {
+        gateway: "172.28.5.1".parse().unwrap(),
+        gateway_adapter: Some(shortened.clone()),
+        host_route: Some(shortened.clone()),
+    };
+    assert_eq!(nat_path_problem(&nat_endpoint(), &path), None);
+    // The same on the runners, whose route was read through the shortened name.
+    let runner = HostInterface {
+        luid: 0x0006_0000_0400_0000,
+        name: "vEthernet (DSA dsa-test-fr)".into(),
+    };
+    let on_runner = NatPath {
+        gateway: "172.31.178.1".parse().unwrap(),
+        gateway_adapter: Some(runner.clone()),
+        host_route: Some(runner),
+    };
+    let before_dhcp = EndpointFacts {
+        addresses: vec![],
+        gateway: Some("172.31.178.1".parse().unwrap()),
+        ..nat_endpoint()
+    };
+    assert_eq!(nat_path_problem(&before_dhcp, &on_runner), None);
+    // Another user's VM, whose name starts alike, has an adapter of the same shortened name:
+    // a route through it is not through this VM's network, and the name does not hide that.
+    let another_users = HostInterface {
+        luid: 0x0006_0000_0500_0000,
+        ..shortened.clone()
+    };
+    let crossed = NatPath {
+        host_route: Some(another_users),
+        ..path
+    };
+    let problem = nat_path_problem(&nat_endpoint(), &crossed).unwrap();
+    assert!(
+        problem.contains("rather than its network for Android"),
+        "{problem}"
+    );
+    assert!(problem.contains("vEthernet (DSA dsa-android)"), "{problem}");
 }
 
 /// An endpoint on the NAT network as HCN describes it right after `HcnCreateEndpoint`, taken
@@ -406,13 +471,11 @@ fn fr28_a_nat_endpoint_takes_its_address_by_dhcp_and_the_host_reads_it_once_the_
     ];
     let after = guest_behind_nat(&facts, subnet, &seen);
     assert_eq!(guest_ipv4(&after), Some("172.28.5.137".parse().unwrap()));
-    let name = network_name(VM);
     let path = NatPath {
         gateway: subnet.gateway(),
-        host_has_gateway: true,
-        host_route: Some("Corporate VPN".into()),
+        ..path_through(Some(vpn()))
     };
-    let problem = nat_path_problem(&name, &after, &path).unwrap();
+    let problem = nat_path_problem(&after, &path).unwrap();
     assert!(problem.contains("172.28.5.137"), "{problem}");
 
     // An address HCN names is kept over one seen.
