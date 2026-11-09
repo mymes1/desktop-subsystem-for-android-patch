@@ -1990,18 +1990,75 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 
 guest/mesa 0007(`dsa_shadow_memory.h`): 사본은 커널이 처음 쓸 때에야 내주는 0 페이지(익명 mmap)로 만들고, 앱이 매핑한 할당만 호스트와 맞춘다. 처음 매핑할 때 한 번 다시 읽어 그전에 장치가 쓴 것을 담는다. 앱이 매핑하지 않는 메모리(이미지 등, 앱 GPU 메모리의 대부분)는 보내지도, 다시 읽지도, 건드리지도 않는다. 기대: 프레임마다의 전체 읽어 오기가 매핑된 버퍼(유니폼, 정점, 스테이징, 보통 몇 MiB)로 줄고, GPU를 쓰는 프로세스마다 이미지 메모리만큼의 익명 메모리가 빠진다. 시험: `tests/shadow_memory_test.cpp`(mincore로 상주 페이지를 센다), `test_mapped_memory_patch.py`.
 
-### Google 앱의 비용에 대한 선택지 (바꾸지 않았다)
+### Google 앱의 비용에 대한 선택지 (4는 구현했고, 3은 먼저 잰다)
 
 1. 그대로 둔다. Google 앱은 사용자의 선택이고, 부팅 직후 PSS 약 +400 MiB, 앱을 닫은 뒤 약 +50 MiB, 캐시 수백 MiB가 그 값이다.
 2. Google 앱이 있을 때 캐시 프로세스 상한(지금 8)을 더 낮추거나 Play 서비스의 비상주 프로세스를 제한 대기 버킷에 둔다. 메모리는 줄지만 푸시 알림과 동기화가 늦어질 수 있다.
 3. 유휴 회수의 되풀이에 간격 늘리기(되풀이할 때마다 두 배, 앱을 열면 처음으로)를 둔다. 다시 찬 캐시가 대부분 내려놓은 작업 집합이라면 CPU 낭비가 줄고, 그 대가로 다시 찬 메모리가 게스트에 더 오래 머문다. NFR-3(대기 CPU)을 재야 정할 수 있다.
 4. Google 앱과 번역기 이미지를 loop 없이 erofs 파일 마운트에 `directio`로 붙인다(`CONFIG_EROFS_FS_BACKED_BY_FILE`). 지금은 loop가 이미지 파일의 캐시와 erofs의 캐시를 겹쳐 두므로 읽은 만큼이 두 번 잡힌다. 겹친 쪽은 차가워서 다듬기가 먼저 거두지만, 부팅 직후의 캐시 몇백 MiB 가운데 일부가 이것이다. 커널 설정과 init 스크립트를 바꾸고 실기에서 Google Play가 그대로 붙는지 확인해야 한다.
 
+소유자는 4를 구현하고, 3은 정책을 바꾸기 전에 먼저 재도록 정했다(2026-11-10).
+
+### 선택지 4: 이미지를 loop 없이 파일에서 바로 붙인다
+
+**확인한 것.** 고정한 커널은 `linux-msft-wsl-6.18.54.1`(6.18.54)이다. 그 원본을 읽었다(GitHub의 `microsoft/WSL2-Linux-Kernel` 태그, 빌드하지 않았다). 파일 기반 erofs(`CONFIG_EROFS_FS_BACKED_BY_FILE`, 6.12부터)가 있고 기본값이 y다. `fs/erofs/super.c`는 블록 장치가 아닌 원본을 `filp_open`으로 열어 그 파일에서 바로 읽고, `directio` 마운트 옵션(6.12부터)을 받아 `/proc/self/mountinfo`에 `,directio`로 보인다. `fs/erofs/fileio.c`는 읽을 때마다 파일을 연 쪽의 자격(`override_creds(file->f_cred)`, 여기서는 init)으로 `vfs_iocb_iter_read`를 부르고, `directio`이고 아래 파일이 `FMODE_CAN_ODIRECT`일 때만 `IOCB_DIRECT`를 붙인다. 쌓인 파일 시스템 위의 파일이나 파일 기반 erofs 위의 파일은 거절하지만, 블록 장치 위 erofs(`/system`)의 파일은 받는다. 스택 깊이는 늘리지 않으므로 그 위에 overlay를 놓아도 깊이 한도(2)에 닿지 않는다.
+
+**바꾼 것.** 커널 설정에 `CONFIG_EROFS_FS_BACKED_BY_FILE=y`를 적었다(loop 드라이버는 apexd가 쓰므로 남긴다). `dsa-gapps.rc`와 `dsa-arm-translation.rc`의 세 마운트는 `loop@` 없이 이미지 파일을 원본으로 하고, 커널에 넘기는 마지막 인자를 `directio,fscontext=...,context=...`로 했다. SELinux 정책에서는 쓰지 않게 된 init의 loop 장치 규칙을 뺐다. init이 이미지 파일을 읽는 규칙(`vendor_data_file`, `system_file`)과 슈퍼블록 형식, 파일 라벨, bind와 overlay는 그대로다. 시험: `test_android_config.py`의 `test_nfr2_fr25_fr32_the_images_are_mounted_from_their_files_without_a_loop_device`(설정, 고정 커널이 6.12 이상인지, 스크립트에 `loop@`가 없고 `directio`가 있는지), 이미지 부팅 확인 "Lay the ARM translator and Google Play over the booted system"은 두 부팅 모두에서 각 이미지의 마운트가 loop 장치(주 번호 7, `/dev/block/loop*`)가 아니고 원본이 이미지 파일이며 `directio`인지 본다(`overlays.rs`의 `file_backed_problems`).
+
+**기대하는 절감.** loop일 때는 이미지에서 읽은 쪽마다 erofs의 캐시와 이미지 파일(ext4)의 캐시에 한 벌씩 있었고, erofs의 메타데이터는 loop 장치의 블록 캐시에 한 벌 더 있었다. 파일 기반이면 메타데이터는 이미지 파일의 캐시에만 있고(몇 MiB), `directio`가 실제로 걸리면 데이터의 두 번째 벌이 없어진다. 부팅 직후 Google 앱이 더하는 캐시 290-650 MiB 가운데 erofs 쪽과 같은 크기의 두 번째 벌, 많게는 그 절반(약 150-300 MiB, 추정)이다. 다만 `directio`가 걸리는지는 아래 파일 시스템이 정한다.
+
+- Google 앱 이미지(`/data/vendor/dsa/gapps/system.img`)는 `/data`의 ext4 위에 있고, `/data`는 파일 단위 암호화(`fileencryption=aes-256-xts:aes-256-hctr2`)에 `inlinecrypt`가 없다. 6.18의 ext4는 인라인 암호화가 아닌 암호화 파일에 직접 I/O를 주지 않고(`ext4_dio_alignment`, `fscrypt_dio_supported`) 보통의 캐시 읽기로 돌린다. 그래서 지금의 이미지에서는 Google 앱의 두 번째 벌이 그대로 남고, 줄어드는 것은 메타데이터와 loop 장치뿐이다. 실패는 아니다. 읽기는 예전처럼 캐시를 거친다.
+- 사용자가 설치한 번역기(`/data/vendor/dsa/arm-translation/system.img`)도 같다.
+- 기본 번역기(`/system/etc/dsa/arm-translation/default.img`)는 `/system`의 erofs 위에 있다. erofs는 압축하지 않은 파일에만 직접 I/O를 준다. 이미지의 `/system`이 그 파일을 압축해 담았는지는 확인하지 못했다. 압축하지 않았다면 ARM 앱이 도는 동안 번역기의 두 번째 벌이 없어진다.
+
+Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정할 일이라 하지 않았다. (가) `/data`를 `inlinecrypt`로 붙이고 커널에 `CONFIG_BLK_INLINE_ENCRYPTION`, `CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK`, `CONFIG_FS_ENCRYPTION_INLINE_CRYPT`를 넣는다. 정책 플래그가 같으면 디스크 형식은 같지만 `/data`의 모든 읽기와 쓰기가 블록 계층의 소프트웨어 암호화로 바뀐다. 쓰기마다 바운스 페이지가 들고 성능은 재 봐야 한다. (나) Google 앱 이미지를 암호화하지 않는 곳(호스트가 붙이는 읽기 전용 디스크 등)에 둔다. 서비스, dsa-channeld, 이미지의 위치가 함께 바뀐다.
+
+### 선택지 3을 정하기 위한 측정
+
+이미지 부팅 확인에 "Measure the idle reclaim with Google Play on the booted image"를 더했다(`overlays.rs`의 `nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image`, `tests/idle_reclaim`). 측정이므로 잴 수 없을 때만 실패한다.
+
+- 조건: 게스트 4096 MiB, 프로세서 2개, 네트워크 없음, 앱 창 없음. Google 앱은 LiteGapps가 게스트의 API 수준에 내는 최신 Core 빌드를 확인이 미러로 내려받아 설치한다(사용자가 받는 빌드). LiteGapps에 닿지 못하면 확인용의 작은 빌드로 재고 경고를 남긴다. 그 빌드에는 도는 Play 서비스가 없으므로 그때의 숫자는 이미지를 붙인 시스템의 숫자일 뿐이다. 네트워크가 없으므로 Play 스토어의 업데이트와 동기화는 일어나지 않는다. 소유자 PC의 값과는 그만큼 다르다.
+- 방법: Android가 Google 앱과 함께 다시 시작한 뒤 300초 동안 게스트 안의 셸 스크립트가 1초마다 본다. 셸 내장 명령으로만 읽으므로 한 번 보는 데 `sleep` 말고는 프로세스를 만들지 않는다. 보는 것은 `/proc/stat`, init과 그 subcontext(벤더 스크립트의 `write`를 실행한다)와 kswapd0, kcompactd0의 `/proc/<pid>/stat` 시간, `/proc/vmstat`의 `workingset_refault_file`, `pgpgin`, `pswpin`, `pswpout`, `pgmajfault`, `compact_stall`, `/proc/meminfo`의 `Cached` 등이다. 회수의 커널 일은 쓰는 프로세스 안에서 일어나므로, init이 한 번 볼 때 30 ms 이상 커널 시간을 쓴 구간을 회수 한 번으로 센다. 종류는 게스트 로그(`logcat -v monotonic`)의 dsa-channeld 줄로, 없으면 zram으로 내보낸 페이지가 있었는지로 가른다. 단계별 시간(zram, `drop_caches`, 압축, 다듬기)은 init이 50 ms 이상 걸린 명령에 남기는 줄에서 읽는다.
+- 무엇이 캐시를 다시 채우는지: 10초마다 모든 프로세스의 major fault(매핑으로 읽어 들인 파일 페이지: APK, dex, 라이브러리)와 각 최상위 cgroup의 `workingset_refault_file`을 읽어, 회수 사이의 틈마다 늘어난 만큼을 프로세스별로 모은다. user 빌드에서 셸은 자기 프로세스의 `/proc/<pid>/io`만 읽을 수 있어서 `read_bytes`는 대부분 비어 있다. `read()`로 읽는 것은 major fault에 잡히지 않는다.
+- 결과: 작업 요약과 아티팩트 `idle-reclaim-measurement`(`idle-reclaim.md`, `idle-reclaim.json`, 원자료 `idle-reclaim-samples.txt`, `idle-reclaim-log.txt`). 회수마다 시각, 종류, 앞 회수와의 간격, init의 커널 시간, 단계별 시간, 앞 회수 이후의 refault와 `pgpgin`, 전후의 캐시, zram으로 간 양을 적고, 전체로는 횟수, 평균 간격, 커널 시간 합, kswapd와 kcompactd의 시간, 게스트 CPU 합(한 프로세서의 몇 %인지)과 그 가운데 측정 스크립트 몫을 적는다.
+- 해석할 때: `pgpgin`은 블록 장치에서 읽은 양이다. loop일 때는 같은 읽기가 loop 장치와 `/data`에서 두 번 세였지만, 파일 기반 erofs는 bio를 내지 않으므로 이제 한 번만 센다. v0.2.1 로그와 견줄 때 그만큼 줄어 보인다. 아직 CI의 값은 없다. 첫 develop 실행이 남긴다.
+
+### Play 서비스의 데스크톱에 쓸모없는 상주 구성 요소를 끈다 (FR-32)
+
+**조사.** 소유자 PC의 게스트(Android 17, API 37, Play 서비스 26.43.30, 업데이트된 시스템 앱, 부팅 뒤 71분, 창 없음)에서 읽기만 했다: `dumpsys activity services com.google.android.gms`, `dumpsys package com.google.android.gms`, `dumpsys notification`, `dumpsys location`, `dumpsys meminfo -s com.google.android.gms`, `ps -A`. 상태를 바꾸는 명령은 쓰지 않았다.
+
+- Play 서비스 프로세스는 `com.google.android.gms`와 `com.google.android.gms.unstable` 둘이다. 예전의 `.persistent` 프로세스는 이 버전에서 주 프로세스에 합쳐져 따로 없다. 주 프로세스: RSS 36 MiB, TOTAL PSS 81 MiB 가운데 zram에 나간 몫 71 MiB, AppContexts 387개(Chimera 모듈마다 컨텍스트가 하나씩 있다).
+- 돌고 있는 서비스는 31개다. 그 가운데 시스템이 묶은 것(위치 제공자, 지오코더, GNSS 보조, 활동 인식 제공자, Trust의 장소 제공자)과 Play 서비스가 부팅 때 스스로 시작해 계속 두는 것(`startRequested=true`)이 있다. 여러 API는 공용 중개 서비스(`chimera.PersistentApiService`, `PersistentApiServiceNoInstantApps`, `PersistentInternalBoundBrokerService`) 하나에 `chimera-action:` 바인딩으로 들어 있다. 이것들은 구성 요소 하나로 끌 수 없고, 끄면 푸시와 계정까지 멈춘다.
+- Play 서비스는 자기 구성 요소를 스스로 켜고 끈다. `enabledComponents`에 `thunderbird.EmergencyPersistentService`, `motionsicknessassist.service.MotionSicknessAssistService` 같은 이름이 명시적으로 켜져 있고, `disabledComponents`에도 Play 서비스가 직접 끈 것(`droidguard.DroidGuardPersistentService` 등)이 있다. 모듈이 내려받히거나 서버 플래그(Phenotype)가 바뀌면 이 상태를 다시 쓴다. 그래서 한 번 끄는 것으로는 남지 않는다.
+
+**끄는 것.** 모두 Play 서비스의 주 프로세스에서 도는 서비스다. 프로세스를 끝내지 않고(`DONT_KILL_APP`) 끄면 활동 관리자가 그 서비스만 내린다.
+
+| 구성 요소 | 하는 일 | 데스크톱에서 끄는 이유 |
+|---|---|---|
+| `crisisalerts.init.CrisisAlertsPersistentService` | 위치 기반 재난 알림 | 들고 다니는 휴대폰을 위한 기능이다. PC는 한곳에 있고, 재난 알림은 사용자의 휴대폰이 받는다 |
+| `thunderbird.EmergencyPersistentService`, `thunderbird.EmergencyLocationService` | 긴급 전화·문자 때 위치 전송(ELS) | 게스트에 전화와 문자가 없다 |
+| `motionsicknessassist.persistent.MotionSicknessAssistPersistentService`, `.service.MotionSicknessAssistService`, `.service.MotionAssistSysUiService`, `.settings.MotionSicknessAssistTileService` | 차 안에서의 멀미 방지 표시 | 차 안의 휴대폰을 위한 기능이다. 표시할 SystemUI(빠른 설정 타일)도 없다 |
+| `nearby.presence.service.LifeCycleService` | 근처 기기 존재 알림(BLE) | 게스트에 블루투스가 없다(`pm list features`에 없다). 앱이 쓰는 Nearby Connections는 공용 중개 서비스에 있어 그대로다 |
+| `cast.devicesuggestions.SuggestionsProviderChimeraService` | 출력 전환기의 Cast 기기 추천 | SystemUI의 출력 전환기가 없다. 앱의 Cast API는 그대로다 |
+| `remotegestures.api.RemoteGesturesService` | 시계의 제스처로 폰 조작 | 짝지은 시계가 없다 |
+| `com.google.android.location.internal.server.HardwareArProviderService` | 센서 허브의 하드웨어 활동 인식을 플랫폼에 잇는 제공자(`ActivityRecognitionProvider`) | 게스트에 하드웨어 활동 인식이 없다. 앱의 활동 인식 API와 위치 제공자는 다른 서비스라 그대로다 |
+| `mdm.services.SecureLockService` | 내 기기 찾기의 원격 "기기 잠금" 화면 | 게스트에 잠금 화면(keyguard)이 없고, PC 잠금은 호스트가 한다. 위치 찾기, 소리 내기, 초기화는 다른 서비스(`DeviceManagerApiService`, `RingService`, 기기 관리자 수신기)라 그대로다. 대가: 내 기기 찾기의 원격 잠금이 이 VM을 잠그지 않는다 |
+| `dtdi.lifecycle.LifecycleService` | 기기 간 연동(Phone Hub, 다른 기기로 앱 넘기기) | 이 게스트가 데스크톱 자체다. 부팅 완료 방송으로 시작해 계속 남는다 |
+
+**남겨 두는 것과 그 이유.** `gcm.GcmService`와 `gcm.nts.SchedulerService`(푸시, FCM), 공용 중개 서비스 셋(Phenotype, 계정 이벤트, 텔레메트리 등이 함께 들어 있다), 위치 서비스(`FusedLocationService`, `NetworkLocationService`, `GoogleLocationManagerService`, `GoogleLocationService`, `GeocodeService`, `GnssAssistanceService`, `LocationPersistentService`: 앱의 위치), `play.integrity.api.service.IntegrityApiPersistentService`와 `droidguard.DroidGuardService`(Play Integrity), `fido.authenticator.service.AuthenticatorService`(패스키), `auth.setup.devicesignals.LockScreenService`(계정 설정의 기기 신호), `advancedprotection.service.AdvancedProtectionSyncService`(계정 보호), `contextmanager.service.ContextManagerService`(앱이 쓰는 Awareness API), `auth.proximity.firstparty.SystemMemoryCacheService`(CryptAuth 기기 등록과 이어져 있어 계정에 영향이 없다고 확인하지 못했다), `common.stats.GmsCoreStatsService`, `clearcut.debug.ClearcutDebugDumpService`. 백업 전송 서비스는 돌고 있는 목록에 없었다. 시스템의 백업 관리자가 백업할 때 묶으므로 그대로 둔다. Phone Hub의 알림 수신기(`PhoneHubNotificationListenerService`)는 켜져 있지만 알림 수신기로 허용되지 않아 묶여 있지 않으므로 끄지 않았다.
+
+**다시 켜지는 길과 다시 끄는 방법.** 에이전트(`DesktopPlayServices`)가 시작할 때(부팅마다), 그리고 `com.google.android.gms`의 `PACKAGE_ADDED`, `PACKAGE_REPLACED`, `PACKAGE_CHANGED`를 받고 2초 뒤에 상태를 읽어 켜진 것을 한 번의 `setComponentEnabledSettings`로 끄고 로그에 남긴다("turned off Google Play services components a desktop does not use: ..."). Play 서비스가 모듈을 받거나 플래그로 구성 요소를 켜는 일도 패키지 관리자를 거치므로 모두 `PACKAGE_CHANGED`로 온다. 그래서 따로 Phenotype을 막을 필요가 없다. Phenotype 플래그를 밖에서 바꾸는 길은 user 빌드에 없다(플래그 저장소는 Play 서비스의 비공개 데이터이고, 플래그 덮어쓰기 방송은 디버그 빌드에서만 받는다). 시스템 설정의 `component-override`는 매니페스트의 기본값만 바꾸므로 Play 서비스가 명시적으로 켠 구성 요소에는 효과가 없어 쓰지 않았다. Play 서비스가 같은 구성 요소를 한 시간에 다섯 번 넘게 다시 켜면 에이전트는 그 구성 요소를 그 부팅 동안 두고 경고를 남긴다. 끝없이 다투면 CPU를 쓰기 때문이다. Play 서비스의 버전이 구성 요소를 없애거나 이름을 바꾸면 그 이름은 건너뛴다(패키지 관리자는 없는 구성 요소가 섞인 묶음 전체를 거절한다).
+
+**시험.** 에이전트: `gapps/DesktopPlayServicesTest.kt`(`fr32_desktop_irrelevant_play_services_stay_off_after_updates`, 가짜 패키지 관리자). 이미지 부팅 확인: CI의 작은 Google 앱 빌드는 서명되지 않아 Play 서비스가 설치되지 않으므로, Play 서비스 이름으로 이 서비스들과 `GcmService`를 선언한 코드 없는 앱(`dsa/guest/gms-probe`)을 두 번째 부팅 뒤 설치한다. 끌 것이 꺼지고 `GcmService`가 켜져 있는지, 셸에서 다시 켜고 자기 위에 다시 설치(업데이트 방송)한 뒤 다시 꺼지는지 본다(`overlays.rs`의 `play_services_problems`).
+
+**절감.** 재지 않았다. 이 조사는 게스트의 상태를 바꾸지 않았고, 끄는 것은 프로세스를 없애지 않는다. 그래서 기대하는 몫은 Play 서비스 주 프로세스 안의 그 서비스들의 모듈 코드와 힙, 그리고 그것들이 부팅 뒤 계속 하는 일(재난 알림과 ELS의 위치 요청, 근처 기기 탐색, 기기 간 연동의 상태 유지)이다. 어림으로 주 프로세스 PSS의 수 MiB에서 20 MiB 안쪽과, 깨어남과 부팅 직후 CPU가 줄어든다. 위의 "선택지 3을 정하기 위한 측정"은 실제 LiteGapps 빌드를 쓰므로 이 변경 뒤로는 이 서비스들을 끈 상태로 잰다. 확인: 소유자 PC에서 이 변경 앞뒤로 같은 조건(Google Play 설치, 창 없음, 부팅 10분 뒤)에서 `dumpsys meminfo -s com.google.android.gms`의 TOTAL PSS와 TOTAL SWAP PSS, `dumpsys activity services com.google.android.gms`의 서비스 수, `dsa memory`의 앱 메모리를 남긴다.
+
 ### 확인하지 못한 것
 
 - 0007의 효과 전부. 이 PC에서 빌드하거나 실행하지 않았다. Graphics test와 이미지의 그래픽 부팅 확인(Vulkan CTS 일부)이 먼저 판단하고, PC에서는 같은 조건(Google Play, YouTube 창 하나)으로 `dsa memory`의 앱 메모리와 PSS, `dsa-wm.log`의 렌더러 줄, 그리고 `androidboot.hardware.dsa_input_trace=1`일 때의 `stage=driver.flush` 줄(`scanned_mb_per_submit`)을 앞뒤로 잰다.
 - 프레임마다의 다시 읽기가 실제로 몇 MiB였는지. 0005 뒤의 읽어 오기에는 추적 줄이 없다.
-- 창이 없을 때 캐시를 다시 채우는 것이 무엇인지. 게스트에서 `/proc/vmstat`의 `workingset_refault_file`과 `pgpgin`을 회수 전후로 함께 남기면 가를 수 있다.
+- 창이 없을 때 캐시를 다시 채우는 것이 무엇인지. 게스트에서 `/proc/vmstat`의 `workingset_refault_file`과 `pgpgin`을 회수 전후로 함께 남기면 가를 수 있다. 위의 측정이 그것을 남긴다. 그 값은 아직 없다.
+- 파일 기반 erofs로 바꾼 뒤 실제로 줄어든 캐시. CI는 SELinux 강제 모드에서 마운트가 되는지와 마운트의 모양만 본다. 소유자 PC에서 Google Play를 둔 채 부팅 직후의 `dsa memory` 캐시 값을 v0.2.1과 견줘야 한다. 기본 번역기가 `/system` 안에 압축되어 있는지도 확인하지 못했다.
 - VM을 줄이는 HCS 요청이 시간 초과로 실패한 원인.
 
 ### 추가 조사 (2026-11-10): Google Play 서비스가 실제로 드는 메모리와 캐시 프로세스 상한

@@ -477,7 +477,7 @@ DSA가 실행 중에 만드는 파일은 정해진 두 루트 아래 정해진 �
 ### FR-25 ARM 앱 번역 계층 플러그인 (`Agreed`)
 대부분의 안드로이드 앱은 ARM용 네이티브 라이브러리만 담고 있어 x86_64 게스트에서 설치되지 않거나 멈춘다. 배포할 수 있는 번역기는 아직 없으므로(RESEARCH R9), 사용자나 DSA가 준 번역기(네이티브 브리지)를 끼울 수 있는 구조를 둔다.
 - 번역 묶음은 디렉터리 하나다. `arm-translation.json`(이름, 버전, 브리지 라이브러리 파일 이름, ABI 목록, 라이선스)과 `system.img`(erofs, 안에 `system/lib64`, `system/bin`, `system/etc` 아래 놓일 파일)를 담는다. 브리지 라이브러리 이름은 영숫자, `.`, `_`, `-`로 된 `.so` 파일 이름이다. 이미지는 브리지를 `system/lib64/libdsa_native_bridge.so`라는 이름으로도 담는다(링크). 이미지의 속성이 번역기와 상관없이 이 이름을 가리키기 때문이다. ABI는 `arm64-v8a`만 받는다. 게스트는 64비트 전용이라 `armeabi-v7a`를 돌릴 zygote가 없기 때문이다.
-- `dsa arm-translation status|install <경로>|remove`. install은 묶음을 검사하고 게스트의 사용자 디스크(`/data/vendor/dsa/arm-translation/`)로 보낸다. 안드로이드가 꺼져 있으면 켜고 처리한다. remove는 그것을 지운다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
+- `dsa arm-translation status|install <경로>|remove`. install은 묶음을 검사하고 erofs 이미지로 만들어 호스트의 추가 구성 요소 디스크에 둔다. 안드로이드가 꺼져 있으면 켜고 처리한다. remove는 그것을 지운다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
 - 동반 서비스는 설치된 묶음의 설명을 사용자 설정에 두고, 설정 `arm-translation`(`on`, `off`, 기본 `on`)이 켜져 있고 묶음이 있을 때만 부팅 bootconfig에 `androidboot.dsa.arm_translation=on`을 넣는다.
 - 게스트는 그 값이 있을 때만 `ro.dalvik.vm.native.bridge`(`libdsa_native_bridge.so`), `ro.dalvik.vm.isa.arm64=x86_64`, `ro.enable.native.bridge.exec=1`을 정하고, `ro.product.cpu.abilist`와 `abilist64`에 `arm64-v8a`를 덧붙이며, `system.img`(erofs)를 마운트하고 그 안의 각 부분을 이미지가 미리 마련한 빈 자리에 연결(bind mount)한 뒤 binfmt_misc 처리기를 등록한다. 시스템의 `lib64`, `bin`, `etc` 전체 위에는 아무것도 얹지 않는다. 그 폴더의 프로그램이 제 SELinux 도메인으로 시작하지 못해 부팅이 깨지기 때문이다. 값이 없으면 이미지는 `x86_64`만 알리고 아무것도 마운트하지 않는다.
 - 제어 데몬은 연결할 때마다 묶음이 있는지, 얹혔는지, 패키지 관리자가 보는 ABI 목록(`ro.product.cpu.abilist`)을 호스트에 보고한다.
@@ -573,7 +573,9 @@ WSA처럼 Windows 사용자 폴더를 안드로이드 앱이 쓰고, 안드로�
 ### FR-32 Google Play 설치 도구 (`Agreed`)
 DSA는 Google Play 서비스와 스토어를 싣지 않는다(C6). 대신 사용자가 설정 앱에서 고르면 공개 GApps 패키지를 받아 설치한다. 설치하지 않는 것이 기본이고, 설치하지 않아도 DSA의 다른 기능은 그대로 쓴다.
 - 패키지는 LiteGapps의 Core 구성이다. Play 서비스, Play 스토어, 서비스 프레임워크에 더해 계정 동기화 같은 핵심 구성 요소를 담는다. Lite 구성은 동기화 구성 요소가 없어 Play에서 받은 캘린더와 주소록이 동기화되지 않을 수 있어서 쓰지 않는다. 게스트의 안드로이드 버전(API 36, 37)과 아키텍처(x86_64, arm64)에 맞는 최신 파일을 LiteGapps 배포처에서 받고, zip 구조와 공개된 체크섬(있으면)을 검사한다.
-- 호스트는 패키지의 시스템 파일(앱, 권한 목록, 설정 파일, 프레임워크 파일)을 erofs 이미지로 만들어 게스트 사용자 디스크(`/data/vendor/dsa/gapps/`)로 보낸다. 다음 시작부터 그 이미지를 마운트하고, `/product`와 `/system_ext`의 앱, 시스템 앱, 프레임워크, 권한과 설정 폴더에만 겹친다. 파티션 전체에는 겹치지 않는다. 그 파티션의 `bin`에 있는 서비스가 시작하지 못해 부팅이 깨지기 때문이다. 시스템 이미지는 바꾸지 않는다.
+- 호스트는 패키지의 시스템 파일(앱, 권한 목록, 설정 파일, 프레임워크 파일)을 erofs 이미지로 만들어 호스트의 추가 구성 요소 디스크에 둔다. 다음 시작부터 그 이미지를 마운트하고, `/product`와 `/system_ext`의 앱, 시스템 앱, 프레임워크, 권한과 설정 폴더에만 겹친다. 파티션 전체에는 겹치지 않는다. 그 파티션의 `bin`에 있는 서비스가 시작하지 못해 부팅이 깨지기 때문이다. 시스템 이미지는 바꾸지 않는다.
+- 추가 구성 요소 디스크: 사용자가 설치한 추가 구성 요소(Google 앱 FR-32, ARM 번역기 FR-25, Widevine FR-37)의 erofs 이미지는 사용자마다 하나인, 호스트가 VM에 읽기 전용으로 붙이는 디스크에 담는다. 게스트는 그 이미지들을 이 디스크에서 직접 마운트한다. 공개된 패키지라 암호화할 까닭이 없고, 암호화된 `/data`에 두면 파일 페이지가 두 번 캐시되어 메모리를 수백 MiB 더 쓰기 때문이다. 디스크 내용은 호스트만 바꾼다. 추가 구성 요소를 설치하거나 지우면 다음 안드로이드 시작부터 적용된다. 이미 `/data`에 있던 이미지는 처음 시작할 때 이 디스크로 옮긴다.
+- 수용 기준: 추가 구성 요소의 이미지가 읽기 전용 디스크에서 loop 장치 없이 마운트되고, `/data`에는 그 이미지가 남지 않는다. (`fr32_addons_mount_from_the_read_only_addon_disk`)
 - `dsa gapps status|install|remove`. 안드로이드가 꺼져 있으면 켜고 처리한다. 둘 다 다음 안드로이드 시작부터 적용되고, 그것을 알린다.
 - 설정 앱에 "Google Play" 항목을 둔다. 설치 상태, 버전, 받은 곳, 설치와 제거 단추, 다시 시작 안내를 보인다. Google 앱은 Google의 약관을 따르고 DSA가 배포하는 것이 아니라는 점과, 인증되지 않은 기기를 등록하는 방법을 알린다.
 - 제거하면 다음 시작부터 Google 앱이 사라진다.
@@ -657,11 +659,11 @@ USB로 연결한 안드로이드 폰 안의 VM에서 DSA 안드로이드를 돌�
 
 ### FR-37 보호된 콘텐츠 재생 (`Agreed`)
 WSA가 제공한 Widevine L3를 제공한다. DSA는 Google 바이너리를 싣지 않으므로(C1, C6), Google ARM 번역기(FR-25)와 Google Play(FR-32)처럼 사용자가 고르면 Google 서버에서 받아 설치한다. 2026-11-10 소유자가 정했다.
-- 설정 앱과 `dsa drm widevine install|status|remove`로 설치한다. 호스트는 그 게스트와 같은 안드로이드 버전과 아키텍처의 Google 에뮬레이터 시스템 이미지(`dl.google.com`)에서 Widevine DRM HAL(`android.hardware.drm-service.widevine`과 그 라이브러리, init 스크립트, VINTF 조각)을 꺼내 erofs 이미지로 만들어 게스트 사용자 디스크로 보낸다. 다른 출처(제3자 저장소의 추출본)는 쓰지 않는다. 출처와 라이선스를 확인할 수 없기 때문이다.
-- 게스트는 그 이미지를 `/vendor`의 정해 둔 자리에 servicemanager가 VINTF를 읽기 전에 얹는다. SELinux 정책(`hal_drm_widevine`, `/data/vendor/mediadrm`)은 DSA 이미지에 미리 둔다. 기기 인증서는 처음 쓸 때 안드로이드의 프로비저닝으로 받는다.
+- 설정 앱과 `dsa drm widevine install|status|remove`로 설치한다. 호스트는 그 게스트와 같은 안드로이드 버전과 아키텍처의 Google 에뮬레이터 시스템 이미지(`dl.google.com`)에서 Widevine APEX(`com.google.android.widevine`)를 그대로 꺼내 추가 구성 요소 디스크(FR-32)에 둔다. Google이 Widevine을 APEX 하나로만 배포하므로 그 형태 그대로 쓴다. APEX의 내용은 바꾸지 않는다. 다른 출처(제3자 저장소의 추출본)는 쓰지 않는다. 출처와 라이선스를 확인할 수 없기 때문이다.
+- 게스트는 부팅 때 apexd가 그 APEX를 활성화하게 한다(vendor APEX로, apexd가 APEX를 읽기 전에 보이는 자리에 둔다). APEX의 서명은 apexd가 Google 키로 확인한다. SELinux 정책(`hal_drm_widevine`, `/data/vendor/mediadrm`)은 DSA 이미지에 미리 둔다. 기기 인증서는 처음 쓸 때 안드로이드의 프로비저닝으로 받는다.
 - 보안 수준은 L3이다. 스트리밍 서비스는 L3 기기에 표준 화질(SD)까지만 보낼 수 있으므로, 설정 앱의 이 항목과 사용자 안내는 고화질은 호스트의 브라우저나 앱에서 보라고 알린다.
 - Google 이미지에 그 버전의 Widevine이 없으면 설치는 이유를 알리고 실패한다. 이미지에 아무것도 남기지 않는다.
-- 수용 기준: 가짜 에뮬레이터 이미지에서 Widevine 파일만 담은 erofs 이미지를 만들고, 다른 경로나 다른 아키텍처의 파일이 섞이면 거절한다. (`fr37_widevine_image_holds_only_the_drm_hal`)
+- 수용 기준: 가짜 에뮬레이터 이미지에서 Widevine APEX만 바이트 그대로 꺼내고, 다른 아키텍처나 다른 안드로이드 버전의 APEX면 거절한다. (`fr37_widevine_apex_is_taken_unchanged`)
 - 수용 기준: 설치한 게스트에서 `MediaDrm.isCryptoSchemeSupported`가 Widevine UUID에 참을 돌려주고 보안 수준이 L3로 보인다. 설치하지 않은 게스트는 거짓이다. (`fr37_widevine_is_offered_only_when_installed`)
 - 수용 기준: 실제 PC에서 설치하고 다시 시작하면 Widevine을 쓰는 스트리밍 앱이 재생된다. (수동 확인)
 

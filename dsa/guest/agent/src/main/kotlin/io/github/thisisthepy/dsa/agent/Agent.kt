@@ -11,6 +11,8 @@ import io.github.thisisthepy.dsa.agent.diagnostics.CrashRecordSource
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
 import io.github.thisisthepy.dsa.agent.diagnostics.NativeLibraryCrashes
+import io.github.thisisthepy.dsa.agent.gapps.ComponentStates
+import io.github.thisisthepy.dsa.agent.gapps.DesktopPlayServices
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
 import io.github.thisisthepy.dsa.agent.install.AppReinstaller
@@ -122,6 +124,8 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
  * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
+ * With Google Play installed, the parts of Play services a desktop does not use stay off,
+ * across Play services' updates ([DesktopPlayServices]).
  */
 class Agent(
     private val ownPackage: String,
@@ -178,6 +182,7 @@ class Agent(
     private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
     private val unhandledKeys: UnhandledKeys = UnhandledKeys.NONE,
     private val editorFocused: () -> Boolean = { false },
+    componentStates: ComponentStates = ComponentStates.NONE,
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -321,6 +326,7 @@ class Agent(
         log = log,
         clock = clock,
     )
+    private val playServices = DesktopPlayServices(componentStates, scheduler, log, clock)
     private val freeform = FreeformSetup(windowing, scheduler, log)
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
     private val captions = CaptionInsets(actions, log)
@@ -375,6 +381,7 @@ class Agent(
         scheduler.post {
             freeform.start()
             closedApps.configure()
+            playServices.start()
             try {
                 inputMethods.useHostInputMethod()
             } catch (e: Exception) {
