@@ -29,7 +29,18 @@
 //! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default]
 //! dsa gapps [status | install [--progress] | remove]
 //! dsa reset-data --yes
+//! dsa backup [status | now | restore | key show | key import <recovery key>]
 //! ```
+//!
+//! `dsa backup status` (or `dsa backup`) says where the user's app data backup stands: its
+//! folder (`DSA Backup` in the user's home folder), when an app was last backed up, how many
+//! apps it holds, and what went wrong last. `dsa backup now` has Android back up every app at
+//! once. `dsa backup restore` installs the apps of the backup that Android does not have and
+//! restores every app's data, as after `dsa reset-data` or on another computer; both start
+//! Android when it is not running. The folder is encrypted with a key the computer's credential
+//! store keeps. `dsa backup key show` prints its recovery key, to write down; on another
+//! computer, or for another user, `dsa backup key import <recovery key>` lets that folder be
+//! read there. With `--json` they print the report's fields (`recovery_key` for `key show`).
 //!
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
@@ -374,6 +385,7 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
+     backup [status | now | restore | key show | key import <recovery key>] | \
      android [version | use <major>|latest [--erase-data] | restart]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -449,6 +461,16 @@ pub enum Command {
     FilesOpen,
     /// Erase the user's Android data, once [`Invocation::yes`] confirms it.
     ResetData,
+    /// Say where the user's app data backup stands.
+    BackupStatus,
+    /// Back up every app now.
+    BackupNow,
+    /// Restore the apps and their data from the backup.
+    BackupRestore,
+    /// Print the backup's recovery key.
+    BackupKeyShow,
+    /// Keep the recovery key [`Invocation::backup_key`] as the backup key.
+    BackupKeyImport,
     /// Show the Android version that runs and the ones that can be chosen.
     AndroidVersion,
     /// Choose the Android version [`Invocation::android`] names.
@@ -807,6 +829,8 @@ pub struct Invocation {
     /// app follows an update this way while setup has stopped the service, so it does not
     /// start the old service again under setup.
     pub no_start: bool,
+    /// `dsa backup key import <key>`: the recovery key to keep.
+    pub backup_key: Option<String>,
 }
 
 /// Whether `name` can be an Android package name: dot-separated parts of letters, digits
@@ -844,6 +868,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut android = None;
     let mut erase_data = false;
     let mut no_start = false;
+    let mut backup_key = None;
     let mut progress = false;
     let mut buffers: u32 = 0;
     let mut tags = Vec::new();
@@ -1044,6 +1069,47 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     Some(other) => {
                         return Err(format!(
                             "dsa gapps takes status, install or remove, not {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
+            "backup" if command.is_none() => {
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
+                    None | Some("status") => Command::BackupStatus,
+                    Some("now") => Command::BackupNow,
+                    Some("restore") => Command::BackupRestore,
+                    Some("key") => match args.next().map(String::as_str) {
+                        Some("show") => Command::BackupKeyShow,
+                        Some("import") => {
+                            // A recovery key may be written with spaces, as several words.
+                            let mut words = Vec::new();
+                            while let Some(word) = args.peek() {
+                                if word.starts_with("--") {
+                                    break;
+                                }
+                                words.push(args.next().unwrap().clone());
+                            }
+                            if words.is_empty() {
+                                return Err(format!(
+                                    "dsa backup key import takes the recovery key\n{USAGE}"
+                                ));
+                            }
+                            backup_key = Some(words.join(" "));
+                            Command::BackupKeyImport
+                        }
+                        other => {
+                            return Err(format!(
+                                "dsa backup key takes show or import, not {other:?}\n{USAGE}"
+                            ))
+                        }
+                    },
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa backup takes status, now, restore or key, not {other:?}\n{USAGE}"
                         ))
                     }
                 });
@@ -1345,6 +1411,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         android,
         erase_data,
         no_start,
+        backup_key,
     })
 }
 
@@ -2272,6 +2339,132 @@ fn reset_data(invocation: &Invocation, client: &mut HostApiClient) -> Result<Str
         "Android's data was reset; the next start boots Android as it was first installed"
             .to_string()
     })
+}
+
+/// `dsa backup`: where the backup stands, backing up and restoring, and its recovery key.
+fn backup(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    let report = match invocation.command {
+        Command::BackupKeyShow => {
+            let key = client.backup_recovery_key().map_err(|e| e.to_string())?;
+            return Ok(if invocation.json {
+                json!({ "recovery_key": key }).to_string()
+            } else {
+                format!(
+                    "Recovery key: {key}\nWrite it down and keep it safe. With it, the backup \
+                     folder can be restored on another computer (dsa backup key import)."
+                )
+            });
+        }
+        Command::BackupKeyImport => {
+            let key = invocation.backup_key.as_deref().unwrap_or_default();
+            client
+                .set_backup_recovery_key(key)
+                .map_err(|e| e.to_string())?
+        }
+        Command::BackupNow | Command::BackupRestore => {
+            start_for_gapps(invocation, client)?;
+            if invocation.command == Command::BackupNow {
+                client.backup_now()
+            } else {
+                client.restore_backup()
+            }
+            .map_err(|e| e.to_string())?
+        }
+        _ => client.backup().map_err(|e| e.to_string())?,
+    };
+    Ok(if invocation.json {
+        backup_json(&report).to_string()
+    } else {
+        describe_backup(invocation.command, &report)
+    })
+}
+
+/// The JSON `dsa backup --json` prints.
+pub fn backup_json(report: &dsa_host_core::backup::BackupReport) -> Value {
+    json!({
+        "available": report.available,
+        "problem": report.problem,
+        "folder": report.folder.display().to_string(),
+        "last_backup_unix_ms": report.last_backup_ms,
+        "last_restore_unix_ms": report.last_restore_ms,
+        "packages": report.packages,
+        "size": report.size,
+        "last_error": report.last_error,
+        "succeeded": report.succeeded,
+        "failed": report.failed,
+        "installed": report.installed,
+    })
+}
+
+/// When, in words: `never`, or the UTC date and time.
+fn when(unix_ms: i64) -> String {
+    if unix_ms <= 0 {
+        return "never".into();
+    }
+    let secs = unix_ms / 1000;
+    let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // Days to a civil date (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        rest / 3600,
+        rest % 3600 / 60
+    )
+}
+
+/// `dsa backup` in words.
+pub fn describe_backup(command: Command, report: &dsa_host_core::backup::BackupReport) -> String {
+    let mut lines = Vec::new();
+    match command {
+        Command::BackupNow => lines.push(format!(
+            "Backed up {} apps{}",
+            report.succeeded,
+            if report.failed > 0 {
+                format!("; {} could not be backed up", report.failed)
+            } else {
+                String::new()
+            }
+        )),
+        Command::BackupRestore => lines.push(format!(
+            "Restored the data of {} apps and installed {} apps{}",
+            report.succeeded,
+            report.installed,
+            if report.failed > 0 {
+                format!("; {} could not be restored", report.failed)
+            } else {
+                String::new()
+            }
+        )),
+        Command::BackupKeyImport => {
+            lines.push("The recovery key is kept; the backup folder is read with it".into())
+        }
+        _ => {}
+    }
+    if !report.available {
+        lines.push(format!("Backup: unavailable ({})", report.problem));
+    }
+    lines.push(format!("Folder: {}", report.folder.display()));
+    lines.push(format!("Last backup: {}", when(report.last_backup_ms)));
+    lines.push(format!(
+        "Apps: {} ({} MiB before encryption)",
+        report.packages,
+        report.size / (1024 * 1024)
+    ));
+    if report.last_restore_ms > 0 {
+        lines.push(format!("Last restore: {}", when(report.last_restore_ms)));
+    }
+    if !report.last_error.is_empty() {
+        lines.push(format!("Last problem: {}", report.last_error));
+    }
+    lines.join("\n")
 }
 
 /// What moving to an older Android major erases, as the command line and the settings app
@@ -4368,6 +4561,11 @@ pub fn run_with_starter(
             });
         }
         Command::ResetData => return reset_data(invocation, &mut client),
+        Command::BackupStatus
+        | Command::BackupNow
+        | Command::BackupRestore
+        | Command::BackupKeyShow
+        | Command::BackupKeyImport => return backup(invocation, &mut client),
         Command::AndroidVersion | Command::AndroidUse => {
             return android_version(invocation, &mut client)
         }

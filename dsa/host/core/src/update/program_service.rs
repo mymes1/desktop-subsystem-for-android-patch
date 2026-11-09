@@ -1382,6 +1382,25 @@ impl UserAndroid for WithProgramStatus {
     fn print_result(&self, job_id: u32, outcome: &PrintOutcome) -> Result<(), TaskRequestError> {
         UserAndroid::print_result(&*self.android, job_id, outcome)
     }
+    fn backup(&self) -> Option<std::sync::Arc<crate::backup::BackupService>> {
+        UserAndroid::backup(&*self.android)
+    }
+    fn backup_now(&self) -> Result<dsa_protocol::control::BackupRunResult, TaskRequestError> {
+        UserAndroid::backup_now(&*self.android)
+    }
+    fn restore_backup(&self) -> Result<crate::session::RestoreOutcome, TaskRequestError> {
+        UserAndroid::restore_backup(&*self.android)
+    }
+    fn watch_passkeys(&self) -> Option<Receiver<crate::passkeys::PasskeyEvent>> {
+        UserAndroid::watch_passkeys(&*self.android)
+    }
+    fn passkey_result(
+        &self,
+        id: u64,
+        result: crate::passkeys::CeremonyResult,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::passkey_result(&*self.android, id, result)
+    }
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.android)
     }
