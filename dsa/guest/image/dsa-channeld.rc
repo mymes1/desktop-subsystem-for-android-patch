@@ -98,21 +98,6 @@ service dsa_files /vendor/bin/dsa-channeld --android-files
 on property:vendor.dsa.files=* && property:sys.boot_completed=1
     restart dsa_files
 
-# Root elevation: an app the user allowed runs a command as root once the computer's
-# administrator approves it on the host (su.cil). The kernel's su guard makes the su binary
-# exist only for the uids the host allows, and it is driven through securityfs, which nothing
-# else in Android mounts. init hides su from every task here, before any app starts and after
-# the system scripts' mounts (system scripts run first; the ARM translation package is bound
-# beside /system/bin's own files, never over them), because the guard watches the inode a path
-# names at the time it is written. A path the image lacks is
-# refused and the rest still apply.
-on post-fs-data
-    mount securityfs securityfs /sys/kernel/security nodev noexec nosuid
-    write /sys/kernel/security/dsa_su/control "path /system/bin/su"
-    write /sys/kernel/security/dsa_su/control "path /system/xbin/su"
-    write /sys/kernel/security/dsa_su/control "path /sbin/su"
-    write /sys/kernel/security/dsa_su/control enable
-
 # The elevation helper, while the host's config has root elevation on for this boot:
 # dsa-channeld sets vendor.dsa.root_elevation to 1 or 0. It runs as root, which starting a
 # command as root and writing the su guard need, in a domain of its own (su.cil). su connects
