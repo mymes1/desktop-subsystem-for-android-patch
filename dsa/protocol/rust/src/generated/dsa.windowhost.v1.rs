@@ -209,6 +209,15 @@ pub struct TaskSize {
     pub min_width: u32,
     #[prost(uint32, tag = "7")]
     pub min_height: u32,
+    /// How large the window shows each of the task's pixels: `scale_numerator` window pixels
+    /// per `scale_denominator` task pixels. The window manager scales a task that keeps its
+    /// density on a monitor of another scale, so the app keeps its size on the screen; the
+    /// window then shows its frames, and measures its pointer input, at this scale. 0 by 0, as
+    /// 1 by 1, is one window pixel per task pixel. The client sizes above are the window's.
+    #[prost(uint32, tag = "8")]
+    pub scale_numerator: u32,
+    #[prost(uint32, tag = "9")]
+    pub scale_denominator: u32,
 }
 /// Window manager to window host: where the cursor of the editor focused in the task is, in the
 /// window's client pixels, so the window puts the input method's windows beside it.

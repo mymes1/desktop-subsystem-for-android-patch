@@ -138,6 +138,13 @@ pub struct TaskUpdated {
     /// task's first screen they never do, so a key never closes the window.
     #[prost(bool, tag = "25")]
     pub can_go_back: bool,
+    /// Whether the task's top activity says it handles a change of density itself: its
+    /// manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+    /// such an activity at a new density instead of relaunching it, so the host may give the task
+    /// the density of another monitor; for any other app it keeps the task's density and scales
+    /// the window instead. False when the agent cannot read it.
+    #[prost(bool, tag = "26")]
+    pub handles_density_change: bool,
 }
 /// Guest to host, from the agent: the task ended; the host closes its window.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

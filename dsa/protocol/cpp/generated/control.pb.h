@@ -2476,6 +2476,7 @@ class TaskUpdated final :
     kTransparentCaptionFieldNumber = 23,
     kOrientationFieldNumber = 20,
     kCanGoBackFieldNumber = 25,
+    kHandlesDensityChangeFieldNumber = 26,
   };
   // repeated .dsa.control.v1.Rect caption_interactive = 24;
   int caption_interactive_size() const;
@@ -2667,6 +2668,15 @@ class TaskUpdated final :
   void _internal_set_can_go_back(bool value);
   public:
 
+  // bool handles_density_change = 26;
+  void clear_handles_density_change();
+  bool handles_density_change() const;
+  void set_handles_density_change(bool value);
+  private:
+  bool _internal_handles_density_change() const;
+  void _internal_set_handles_density_change(bool value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.TaskUpdated)
  private:
   class _Internal;
@@ -2693,6 +2703,7 @@ class TaskUpdated final :
     bool transparent_caption_;
     int orientation_;
     bool can_go_back_;
+    bool handles_density_change_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -33644,6 +33655,26 @@ inline void TaskUpdated::_internal_set_can_go_back(bool value) {
 inline void TaskUpdated::set_can_go_back(bool value) {
   _internal_set_can_go_back(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.can_go_back)
+}
+
+// bool handles_density_change = 26;
+inline void TaskUpdated::clear_handles_density_change() {
+  _impl_.handles_density_change_ = false;
+}
+inline bool TaskUpdated::_internal_handles_density_change() const {
+  return _impl_.handles_density_change_;
+}
+inline bool TaskUpdated::handles_density_change() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.handles_density_change)
+  return _internal_handles_density_change();
+}
+inline void TaskUpdated::_internal_set_handles_density_change(bool value) {
+  
+  _impl_.handles_density_change_ = value;
+}
+inline void TaskUpdated::set_handles_density_change(bool value) {
+  _internal_set_handles_density_change(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.handles_density_change)
 }
 
 // -------------------------------------------------------------------

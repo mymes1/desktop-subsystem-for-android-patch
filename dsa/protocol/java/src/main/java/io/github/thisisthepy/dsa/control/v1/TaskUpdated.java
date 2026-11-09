@@ -1017,6 +1017,56 @@ public  final class TaskUpdated extends
     canGoBack_ = false;
   }
 
+  public static final int HANDLES_DENSITY_CHANGE_FIELD_NUMBER = 26;
+  private boolean handlesDensityChange_;
+  /**
+   * <pre>
+   * Whether the task's top activity says it handles a change of density itself: its
+   * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+   * such an activity at a new density instead of relaunching it, so the host may give the task
+   * the density of another monitor; for any other app it keeps the task's density and scales
+   * the window instead. False when the agent cannot read it.
+   * </pre>
+   *
+   * <code>bool handles_density_change = 26;</code>
+   * @return The handlesDensityChange.
+   */
+  @java.lang.Override
+  public boolean getHandlesDensityChange() {
+    return handlesDensityChange_;
+  }
+  /**
+   * <pre>
+   * Whether the task's top activity says it handles a change of density itself: its
+   * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+   * such an activity at a new density instead of relaunching it, so the host may give the task
+   * the density of another monitor; for any other app it keeps the task's density and scales
+   * the window instead. False when the agent cannot read it.
+   * </pre>
+   *
+   * <code>bool handles_density_change = 26;</code>
+   * @param value The handlesDensityChange to set.
+   */
+  private void setHandlesDensityChange(boolean value) {
+    
+    handlesDensityChange_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the task's top activity says it handles a change of density itself: its
+   * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+   * such an activity at a new density instead of relaunching it, so the host may give the task
+   * the density of another monitor; for any other app it keeps the task's density and scales
+   * the window instead. False when the agent cannot read it.
+   * </pre>
+   *
+   * <code>bool handles_density_change = 26;</code>
+   */
+  private void clearHandlesDensityChange() {
+    
+    handlesDensityChange_ = false;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.TaskUpdated parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2170,6 +2220,58 @@ public  final class TaskUpdated extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Whether the task's top activity says it handles a change of density itself: its
+     * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+     * such an activity at a new density instead of relaunching it, so the host may give the task
+     * the density of another monitor; for any other app it keeps the task's density and scales
+     * the window instead. False when the agent cannot read it.
+     * </pre>
+     *
+     * <code>bool handles_density_change = 26;</code>
+     * @return The handlesDensityChange.
+     */
+    @java.lang.Override
+    public boolean getHandlesDensityChange() {
+      return instance.getHandlesDensityChange();
+    }
+    /**
+     * <pre>
+     * Whether the task's top activity says it handles a change of density itself: its
+     * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+     * such an activity at a new density instead of relaunching it, so the host may give the task
+     * the density of another monitor; for any other app it keeps the task's density and scales
+     * the window instead. False when the agent cannot read it.
+     * </pre>
+     *
+     * <code>bool handles_density_change = 26;</code>
+     * @param value The handlesDensityChange to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHandlesDensityChange(boolean value) {
+      copyOnWrite();
+      instance.setHandlesDensityChange(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the task's top activity says it handles a change of density itself: its
+     * manifest's configChanges include density (ActivityInfo.CONFIG_DENSITY). Android redraws
+     * such an activity at a new density instead of relaunching it, so the host may give the task
+     * the density of another monitor; for any other app it keeps the task's density and scales
+     * the window instead. False when the agent cannot read it.
+     * </pre>
+     *
+     * <code>bool handles_density_change = 26;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHandlesDensityChange() {
+      copyOnWrite();
+      instance.clearHandlesDensityChange();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.TaskUpdated)
   }
   @java.lang.Override
@@ -2205,12 +2307,13 @@ public  final class TaskUpdated extends
             "captionInteractive_",
             io.github.thisisthepy.dsa.control.v1.Rect.class,
             "canGoBack_",
+            "handlesDensityChange_",
           };
           java.lang.String info =
-              "\u0000\u0012\u0000\u0000\u0001\u0019\u0012\u0000\u0001\u0000\u0001\u0004\u0002\t" +
+              "\u0000\u0013\u0000\u0000\u0001\u001a\u0013\u0000\u0001\u0000\u0001\u0004\u0002\t" +
               "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b" +
               "\u000b\f\f\u0006\u0014\f\u0015\u0007\u0016\u0007\u0017\u0007\u0018\u001b\u0019\u0007" +
-              "";
+              "\u001a\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
