@@ -73,14 +73,53 @@ public struct InstalledAppInfo: Equatable, Sendable {
     public var totalBytes: UInt64 { appBytes + dataBytes + cacheBytes }
 }
 
+/// How an app's window follows a move to a monitor of another scale. No choice restarts the
+/// app.
+public enum DpiScaling: String, CaseIterable, Equatable, Sendable {
+    /// App for apps that say they handle a change of density themselves, System for the others.
+    case auto
+    /// The app redraws at the new monitor's scale.
+    case app
+    /// The app keeps its scale and its window is scaled to the new monitor, at the same
+    /// physical size.
+    case system
+    /// The app gets the new scale without a restart even when it does not say it handles one.
+    /// It needs a change to Android's framework; until a build has it, it works like `system`.
+    case systemForced = "system-forced"
+
+    /// The choice `dsa app-window` names; anything else, or nothing, is `auto`.
+    public static func read(_ code: String?) -> DpiScaling {
+        code.flatMap(DpiScaling.init(rawValue:)) ?? .auto
+    }
+
+    /// The key of its name in the string catalog.
+    var textKey: String {
+        switch self {
+        case .auto: return "Apps_DpiScaling_Auto"
+        case .app: return "Apps_DpiScaling_App"
+        case .system: return "Apps_DpiScaling_System"
+        case .systemForced: return "Apps_DpiScaling_SystemForced"
+        }
+    }
+}
+
+/// A scaling choice the Apps page offers: what the list shows, the choice, and whether it does
+/// what it says yet.
+public struct DpiScalingChoice: Equatable, Hashable, Sendable {
+    public var label: String
+    public var scaling: DpiScaling
+    public var available: Bool
+}
+
 /// The user's window settings for one app, as `dsa app-window` reports them: whether its
-/// windows keep their size, and the size they open at in density-independent pixels (nil for
-/// the size Android gives the task).
+/// windows keep their size, the size they open at in density-independent pixels (nil for the
+/// size Android gives the task), and how its windows follow a monitor of another scale.
 public struct AppWindowSetting: Equatable, Sendable {
     public var package: String
     public var fixedSize: Bool
     public var startWidth: Int?
     public var startHeight: Int?
+    public var dpiScaling: DpiScaling = .auto
 
     public static func standard(_ package: String) -> AppWindowSetting {
         AppWindowSetting(package: package, fixedSize: false, startWidth: nil, startHeight: nil)
@@ -166,14 +205,23 @@ public final class AppsService {
                 height = h.intValue
             }
             settings[package] = AppWindowSetting(package: package, fixedSize: app.bool("fixed_size"),
-                                                 startWidth: width, startHeight: height)
+                                                 startWidth: width, startHeight: height,
+                                                 dpiScaling: DpiScaling.read(app["dpi_scaling"].string))
         }
         return settings
     }
 
     /// The user's window settings for every app that has any, by package.
     public func windowSettings() async throws -> [String: AppWindowSetting] {
-        AppsService.readWindowSettings(try await service.runJson(["app-window"]))
+        try await windowSettingsList().apps
+    }
+
+    /// The user's window settings for every app that has any, by package, and whether this
+    /// build of Android scales an app the System (forced) way yet. A dsa that does not say
+    /// counts as one whose Android cannot.
+    public func windowSettingsList() async throws -> (apps: [String: AppWindowSetting], systemForcedAvailable: Bool) {
+        let json = try await service.runJson(["app-window"])
+        return (AppsService.readWindowSettings(json), json.bool("system_forced_available"))
     }
 
     /// Replaces the window settings of one app, and returns them as the service now has them.
@@ -182,6 +230,7 @@ public final class AppsService {
             "app-window", setting.package,
             "--fixed-size", setting.fixedSize ? "on" : "off",
             "--start-size", setting.startSizeArgument,
+            "--dpi-scaling", setting.dpiScaling.rawValue,
         ])
         return AppsService.readWindowSettings(json)[setting.package] ?? .standard(setting.package)
     }
@@ -248,6 +297,10 @@ public struct AppRow: Equatable, Identifiable, Sendable {
     public var resizable: Bool
     /// Where the app's start size is among the choices; -1 for a size set another way.
     public var startSizeIndex: Int
+    /// Where the app's scaling choice is among `dpiScalingChoices`, and, while it is System
+    /// (forced) and not available yet, why it works like System, in the user's language.
+    public var dpiScalingIndex = 0
+    public var dpiScalingTip: String?
     /// Whether the app runs its ARM code through the translator, whether that can be changed,
     /// and if not, why, in the user's language.
     public var runAsArm = false
@@ -277,6 +330,8 @@ public final class AppsViewModel: ObservableObject {
 
     @Published public private(set) var apps: [InstalledAppInfo]?
     @Published public private(set) var windows: [String: AppWindowSetting] = [:]
+    /// Whether this build of Android scales an app the System (forced) way yet.
+    @Published public private(set) var systemForcedAvailable = false
     /// What the user typed to find an app: matched against its name and package.
     @Published public var search = ""
     @Published public private(set) var error: String?
@@ -350,6 +405,26 @@ public final class AppsViewModel: ObservableObject {
         StartSizeChoice(label: text.format(key, width, height), width: width, height: height)
     }
 
+    /// The ways an app's window can follow a monitor of another scale, in the order of
+    /// `DpiScaling`. System (forced) is stored and can be chosen, but until Android can do it,
+    /// the list marks it as not available yet.
+    public var dpiScalingChoices: [DpiScalingChoice] {
+        DpiScaling.allCases.map { scaling in
+            if scaling == .systemForced && !systemForcedAvailable {
+                return DpiScalingChoice(label: text.get("Apps_DpiScaling_SystemForcedNotYet"), scaling: scaling,
+                                        available: false)
+            }
+            return DpiScalingChoice(label: text.get(scaling.textKey), scaling: scaling, available: true)
+        }
+    }
+
+    /// Why System (forced) works like System for now, while it is the app's choice and not
+    /// available; otherwise nil.
+    public func dpiScalingTip(_ setting: AppWindowSetting) -> String? {
+        setting.dpiScaling == .systemForced && !systemForcedAvailable
+            ? text.get("Apps_DpiScaling_SystemForcedTip") : nil
+    }
+
     /// The window settings of `package`.
     public func windowOf(_ package: String) -> AppWindowSetting { windows[package] ?? .standard(package) }
 
@@ -375,6 +450,8 @@ public final class AppsViewModel: ObservableObject {
             icon: app.iconPng.isEmpty ? nil : app.iconPng, canUninstall: !app.systemApp, isSystem: app.systemApp,
             uninstallTip: app.systemApp ? text.get("Apps_SystemTip") : nil,
             resizable: !window.fixedSize, startSizeIndex: startSizeIndex(window),
+            dpiScalingIndex: DpiScaling.allCases.firstIndex(of: window.dpiScaling) ?? 0,
+            dpiScalingTip: dpiScalingTip(window),
             runAsArm: app.runAsArm.on, canRunAsArm: app.runAsArm.available,
             runAsArmTip: runAsArmTip(app.runAsArm),
             rootIndex: RootLevel.read(app.root)?.index ?? -1, canChangeRoot: RootLevel.read(app.root) != nil,
@@ -458,9 +535,12 @@ public final class AppsViewModel: ObservableObject {
     public func loadWindowSettings() async {
         await run(reload: false) {
             do {
-                windows = try await service.windowSettings()
+                let list = try await service.windowSettingsList()
+                windows = list.apps
+                systemForcedAvailable = list.systemForcedAvailable
             } catch let failed as DsaError where failed.problem == .refused {
                 windows = [:]
+                systemForcedAvailable = false
             }
             return nil
         }
@@ -500,6 +580,21 @@ public final class AppsViewModel: ObservableObject {
         }
         wanted.startWidth = choices[index].width
         wanted.startHeight = choices[index].height
+        await setWindow(wanted)
+    }
+
+    /// Has the app's windows follow a monitor of another scale the way at `index` of
+    /// `dpiScalingChoices`. Windows that move from now on follow it; no choice restarts the app.
+    public func setDpiScaling(_ package: String, _ index: Int) async {
+        let all = DpiScaling.allCases
+        guard all.indices.contains(index) else {
+            return
+        }
+        var wanted = windowOf(package)
+        if wanted.dpiScaling == all[index] {
+            return
+        }
+        wanted.dpiScaling = all[index]
         await setWindow(wanted)
     }
 

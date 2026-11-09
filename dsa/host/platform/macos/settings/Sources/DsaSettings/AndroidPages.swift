@@ -93,6 +93,20 @@ struct AppRowView: View {
                 .help(T("AppsStartSize.ToolTip"))
                 .frame(maxWidth: 260)
                 .disabled(vm.isBusy)
+                // How the app's windows follow a monitor of another scale: the app redraws, or
+                // its window is scaled. No choice restarts the app.
+                Picker(T("AppsDpiScaling.Name"), selection: Binding(
+                    get: { row.dpiScalingIndex },
+                    set: { index in Task { await vm.setDpiScaling(row.package, index) } })) {
+                    ForEach(Array(vm.dpiScalingChoices.enumerated()), id: \.offset) { item in
+                        Text(item.element.label).tag(item.offset)
+                    }
+                }
+                .labelsHidden()
+                .help(row.dpiScalingTip ?? T("AppsDpiScaling.ToolTip"))
+                .accessibilityLabel(T("AppsDpiScaling.Name"))
+                .frame(maxWidth: 300)
+                .disabled(vm.isBusy)
                 Spacer()
                 Button(T("AppsOpenButton.Content")) { Task { await vm.open(row.package) } }
                 Button(T("AppsInfoButton.Content")) { Task { await vm.info(row.package) } }
