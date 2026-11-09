@@ -5673,3 +5673,90 @@ fn fr35_letting_an_app_keep_root_is_asked_through_the_sessions_prompt() {
         vec!["com.keep.app".to_string(), "com.keep.app".to_string()]
     );
 }
+
+fn speak_text(request_id: u32) -> Body {
+    Body::SpeakText(dsa_protocol::control::SpeakText {
+        request_id,
+        text: "Hello.".into(),
+        voice_id: "aria".into(),
+        language_tag: "en-US".into(),
+        rate: 1.0,
+        pitch: 1.0,
+    })
+}
+
+/// The next speech or spelling answer the guest is sent, past anything else it is sent.
+fn next_language_answer(agent: &mut Box<dyn Connection>) -> Body {
+    loop {
+        let body = next_body(agent);
+        if dsa_host_core::language::relay::is_answer(&body) {
+            return body;
+        }
+    }
+}
+
+#[test]
+fn fr36_the_guests_speech_requests_reach_the_host_session_and_its_answers_the_guest() {
+    let (session, mut agent, _launcher) = active_session();
+    let served = session.serve_language();
+    send_body(&mut agent, speak_text(4));
+    let request = served.requests.recv_timeout(WAIT).expect("the request");
+    assert_eq!(request.body, Some(speak_text(4)));
+    let audio = Body::SpeechAudio(dsa_protocol::control::SpeechAudio {
+        request_id: 4,
+        sample_rate_hz: 24000,
+        channel_count: 1,
+        pcm: vec![1, 0, 2, 0],
+    });
+    session
+        .language_answer(
+            served.id,
+            Envelope {
+                body: Some(audio.clone()),
+            },
+        )
+        .expect("an answer");
+    assert_eq!(next_language_answer(&mut agent), audio);
+    // Something that is no answer reaches nobody.
+    assert!(session
+        .language_answer(
+            served.id,
+            Envelope {
+                body: Some(speak_text(5)),
+            },
+        )
+        .is_err());
+    // The client goes away before it finished: the guest is told.
+    session.language_server_gone(served.id);
+    match next_language_answer(&mut agent) {
+        Body::SpeechDone(done) => {
+            assert_eq!(done.request_id, 4);
+            assert_eq!(
+                done.outcome,
+                dsa_protocol::control::SpeechOutcome::Unavailable as i32
+            );
+        }
+        other => panic!("expected the end of the speech, got {other:?}"),
+    }
+}
+
+#[test]
+fn fr36_a_spelling_request_with_no_host_session_to_serve_it_is_unsupported() {
+    let (_session, mut agent, _launcher) = active_session();
+    send_body(
+        &mut agent,
+        Body::CheckSpelling(dsa_protocol::control::CheckSpelling {
+            request_id: 2,
+            language_tag: "en-US".into(),
+            texts: vec!["teh".into()],
+            max_suggestions: 3,
+        }),
+    );
+    match next_language_answer(&mut agent) {
+        Body::SpellingResult(result) => {
+            assert_eq!(result.request_id, 2);
+            assert!(!result.supported);
+        }
+        other => panic!("expected a spelling result, got {other:?}"),
+    }
+}
