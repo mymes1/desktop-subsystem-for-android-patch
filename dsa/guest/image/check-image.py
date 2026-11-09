@@ -563,6 +563,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         ("ro.hardware.vulkan", "ranchu"),
         ("ro.hardware.gralloc", "minigbm"),
         ("ro.cpuvulkan.version", "0"),
+        # SurfaceFlinger falls back to 213 dpi without it, and the host's 160 then
+        # relaunches every app right after it opens.
+        ("ro.sf.lcd_density", str(make_image.DISPLAY_DPI)),
     ]:
         if f"{prop}={val}" not in props and f"{prop}={val}" not in vendor_props:
             problems.append(f"neither SYSTEM nor VENDOR build.prop sets {prop}={val}")
