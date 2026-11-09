@@ -42,8 +42,7 @@ pub fn font_scale(text_scale_percent: u32) -> f32 {
     } else {
         text_scale_percent.clamp(MIN_TEXT_SCALE_PERCENT, MAX_TEXT_SCALE_PERCENT)
     };
-    (f64::from(BASE_DENSITY) * f64::from(percent)
-        / (f64::from(DENSITY_AT_BASE_DPI) * 100.0)) as f32
+    (f64::from(BASE_DENSITY) * f64::from(percent) / (f64::from(DENSITY_AT_BASE_DPI) * 100.0)) as f32
 }
 
 /// The shortest side the display has, whatever the monitors.

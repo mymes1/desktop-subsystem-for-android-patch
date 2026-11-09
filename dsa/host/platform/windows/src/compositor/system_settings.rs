@@ -305,7 +305,8 @@ impl TextSizeWatch {
         let path = wide(ACCESSIBILITY_KEY);
         let mut key = std::ptr::null_mut();
         // SAFETY: a null-terminated path and a key handle to fill.
-        let status = unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_NOTIFY, &mut key) };
+        let status =
+            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_NOTIFY, &mut key) };
         if status != 0 || key.is_null() {
             return None;
         }
@@ -430,12 +431,12 @@ impl SystemSettingsSource for WindowsSettings {
     }
 
     fn wait_for_change(&mut self, timeout: Duration) -> bool {
+        use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::INFINITE;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             DispatchMessageW, MsgWaitForMultipleObjects, PeekMessageW, TranslateMessage, MSG,
             PM_REMOVE, QS_ALLINPUT,
         };
-        use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         let millis = u32::try_from(timeout.as_millis()).unwrap_or(INFINITE - 1);
         let handles: Vec<_> = self.text_size.iter().map(|watch| watch.event).collect();
         // SAFETY: the watch's event, if there is one, and this thread's messages.

@@ -46,7 +46,8 @@ interface SystemSettingsPort {
 
 /**
  * Makes the host's system settings the guest's: the time zone, the display languages with the
- * regional format's preferences, the 24-hour clock, the dark theme and the accent color.
+ * regional format's preferences, the 24-hour clock, the dark theme, the accent color and the
+ * font scale.
  *
  * The host sends every setting each time ([SystemSettings]); only what changed since the last
  * time is applied, so a change of theme does not reconfigure every app for its languages too.

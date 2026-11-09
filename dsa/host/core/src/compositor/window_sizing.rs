@@ -870,10 +870,7 @@ mod tests {
         assert_eq!(sizing.scale(), (2, 1));
         assert_eq!(sizing.view_resized((800, 600), now), None);
         // The guest resizing the task on its own resizes the window at the scale.
-        assert_eq!(
-            sizing.guest_updated(&task(500, 300, 96)),
-            Some((1000, 600))
-        );
+        assert_eq!(sizing.guest_updated(&task(500, 300, 96)), Some((1000, 600)));
     }
 
     #[test]
