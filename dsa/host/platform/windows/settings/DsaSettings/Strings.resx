@@ -1675,6 +1675,105 @@
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>The change applies the next time Android starts. Stop Android on the General page, then open an app.</value>
   </data>
+  <data name="BackupHeader.Text" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="BackupUnavailableBar.Title" xml:space="preserve">
+    <value>Backups cannot be used now</value>
+  </data>
+  <data name="BackupErrorBar.Title" xml:space="preserve">
+    <value>That did not work</value>
+  </data>
+  <data name="BackupResultBar.Title" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="BackupCard.Header" xml:space="preserve">
+    <value>Back up apps' data</value>
+  </data>
+  <data name="BackupCard.Description" xml:space="preserve">
+    <value>Android backs up its apps' data to a folder in your user folder, encrypted with a key Windows keeps for you. Restore it after a data reset, or on another PC with the recovery key.</value>
+  </data>
+  <data name="BackupNowButton.Content" xml:space="preserve">
+    <value>Back up now</value>
+  </data>
+  <data name="BackupRestoreButton.Content" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="BackupRestoreConfirm.Title" xml:space="preserve">
+    <value>Restore apps' data from the backup?</value>
+  </data>
+  <data name="BackupRestoreConfirm.Action" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="RecoveryKeyCard.Header" xml:space="preserve">
+    <value>Recovery key</value>
+  </data>
+  <data name="RecoveryKeyCard.Description" xml:space="preserve">
+    <value>The recovery key opens your backup on another PC, or after Windows was reinstalled. Without it, only this Windows account on this PC can read the backup.</value>
+  </data>
+  <data name="RecoveryKeyShowButton.Content" xml:space="preserve">
+    <value>Show recovery key</value>
+  </data>
+  <data name="RecoveryKeyHideButton.Content" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Header" xml:space="preserve">
+    <value>Use a recovery key</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Description" xml:space="preserve">
+    <value>To restore a backup made on another PC, copy its DSA Backup folder into your user folder and enter the recovery key it was made with.</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Placeholder" xml:space="preserve">
+    <value>Recovery key</value>
+  </data>
+  <data name="UseRecoveryKeyButton.Content" xml:space="preserve">
+    <value>Use key</value>
+  </data>
+  <data name="Backup_NoService" xml:space="preserve">
+    <value>The DSA service did not say where your backup stands. Open this page again in a moment.</value>
+  </data>
+  <data name="Backup_Unavailable" xml:space="preserve">
+    <value>The backup folder or its key cannot be used now.</value>
+  </data>
+  <data name="Backup_Folder" xml:space="preserve">
+    <value>Folder: {0}</value>
+  </data>
+  <data name="Backup_Last" xml:space="preserve">
+    <value>Last backup: {0}</value>
+  </data>
+  <data name="Backup_Never" xml:space="preserve">
+    <value>never</value>
+  </data>
+  <data name="Backup_Apps" xml:space="preserve">
+    <value>Apps in the backup: {0} ({1})</value>
+  </data>
+  <data name="Backup_LastError" xml:space="preserve">
+    <value>Last problem: {0}</value>
+  </data>
+  <data name="Backup_Done" xml:space="preserve">
+    <value>Backed up the data of {0} apps.</value>
+  </data>
+  <data name="Backup_DoneSome" xml:space="preserve">
+    <value>Backed up the data of {0} apps; {1} could not be backed up.</value>
+  </data>
+  <data name="Backup_Restored" xml:space="preserve">
+    <value>Restored the data of {0} apps and installed {1} apps.</value>
+  </data>
+  <data name="Backup_RestoredSome" xml:space="preserve">
+    <value>Restored the data of {0} apps and installed {1} apps; {2} could not be restored.</value>
+  </data>
+  <data name="Backup_RestoreWarning" xml:space="preserve">
+    <value>Each app in the backup gets its data from the backup, in place of what it has now. Apps that are missing are installed again. Android starts if it is not running.</value>
+  </data>
+  <data name="Backup_KeyAdvice" xml:space="preserve">
+    <value>Write the key down or keep it in a password manager, away from this PC. Anyone with the key and your backup folder can read the backup.</value>
+  </data>
+  <data name="Backup_KeyEmpty" xml:space="preserve">
+    <value>Enter the recovery key first.</value>
+  </data>
+  <data name="Backup_KeyUsed" xml:space="preserve">
+    <value>The recovery key is kept as your backup key. The backup folder made with it can now be restored here.</value>
+  </data>
   <data name="ResetDataHeader.Text" xml:space="preserve">
     <value>Reset</value>
   </data>
