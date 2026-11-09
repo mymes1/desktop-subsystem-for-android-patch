@@ -2757,7 +2757,8 @@ mod tests {
             );
             let circle = more_button(width, height, dpi);
             for radius_dp in 0..=40 {
-                let radius = px_of_dip(radius_dp, dpi) as f32;
+                // Android's dp, at the density it draws the widget at there.
+                let radius = px_of_dp(radius_dp, dpi) as f32;
                 assert!(
                     inside_rounded_window(&circle, width, height, radius),
                     "at {dpi} dpi the button leaves corners of {radius_dp} dp"
