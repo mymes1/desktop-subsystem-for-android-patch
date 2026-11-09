@@ -13,7 +13,41 @@ public enum SessionState
     Stalled,
 }
 
-public sealed record StatusInfo(SessionState State, string? LastReason, string? UpdateNotice, string? Problem = null);
+public sealed record StatusInfo(
+    SessionState State,
+    string? LastReason,
+    string? UpdateNotice,
+    string? Problem = null,
+    ProgramUpdateProgress? ProgramUpdate = null);
+
+/// <summary>How far an update of DSA itself has got, as the service and the settings app see
+/// it.</summary>
+public enum ProgramUpdatePhase
+{
+    /// <summary>No update of DSA is under way.</summary>
+    None,
+    /// <summary>The app asked the service to install now and waits for its first word.</summary>
+    Starting,
+    Downloading,
+    /// <summary>Every user's Android is being stopped so setup can run.</summary>
+    StoppingAndroid,
+    /// <summary>Setup is installing the new version.</summary>
+    Installing,
+    /// <summary>The service is restarting into the new version, or is away while setup
+    /// replaces it.</summary>
+    Restarting,
+    /// <summary>The new version runs.</summary>
+    Applied,
+    /// <summary>The update failed and the version before it is still installed.</summary>
+    Failed,
+}
+
+/// <summary>Where an update of DSA stands: its phase and the version it installs.</summary>
+public sealed record ProgramUpdateProgress(ProgramUpdatePhase Phase, string Version);
+
+/// <summary>What the service answered when asked to install the newest version now: the
+/// version setup installs, or null when there is nothing newer, and its own words.</summary>
+public sealed record ProgramUpdateAnswer(string? Installing, string Detail);
 
 /// <summary>Which GPU the window manager renders on.</summary>
 public enum RenderGpuKind

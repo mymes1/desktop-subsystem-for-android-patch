@@ -1491,6 +1491,15 @@ pub struct DiagnosticsData {
     #[prost(string, tag = "3")]
     pub error: ::prost::alloc::string::String,
 }
+/// Where an update of DSA itself stands.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ProgramUpdateProgress {
+    #[prost(enumeration = "ProgramUpdatePhase", tag = "1")]
+    pub phase: i32,
+    /// The version being installed, or the one installed or that failed.
+    #[prost(string, tag = "2")]
+    pub version: ::prost::alloc::string::String,
+}
 /// The caller's Android as the service sees it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Status {
@@ -1509,6 +1518,10 @@ pub struct Status {
     /// words a person can act on. Empty when nothing does.
     #[prost(string, tag = "4")]
     pub problem: ::prost::alloc::string::String,
+    /// Where an update of DSA itself stands. Absent when this service does not update DSA, and
+    /// from a service older than this field.
+    #[prost(message, optional, tag = "5")]
+    pub program_update: ::core::option::Option<ProgramUpdateProgress>,
 }
 /// The answer to UpdateProgram.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -3461,6 +3474,56 @@ impl AppRootStatus {
             "APP_ROOT_STATUS_NOT_PERMITTED" => Some(Self::NotPermitted),
             "APP_ROOT_STATUS_INVALID_LEVEL" => Some(Self::InvalidLevel),
             "APP_ROOT_STATUS_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// How far an update of DSA itself has got.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ProgramUpdatePhase {
+    /// No update of DSA is under way.
+    Unspecified = 0,
+    /// The new version's setup file is being downloaded.
+    Downloading = 1,
+    /// Every user's Android is being stopped so setup can run.
+    StoppingAndroid = 2,
+    /// Setup is installing the new version. It stops this service and starts the new one.
+    Installing = 3,
+    /// Setup has installed the new version and this service is restarting into it.
+    Restarting = 4,
+    /// This service is the version an update has just installed.
+    Applied = 5,
+    /// The update failed and the version before it is still installed; the update notice
+    /// says why.
+    Failed = 6,
+}
+impl ProgramUpdatePhase {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PROGRAM_UPDATE_PHASE_UNSPECIFIED",
+            Self::Downloading => "PROGRAM_UPDATE_PHASE_DOWNLOADING",
+            Self::StoppingAndroid => "PROGRAM_UPDATE_PHASE_STOPPING_ANDROID",
+            Self::Installing => "PROGRAM_UPDATE_PHASE_INSTALLING",
+            Self::Restarting => "PROGRAM_UPDATE_PHASE_RESTARTING",
+            Self::Applied => "PROGRAM_UPDATE_PHASE_APPLIED",
+            Self::Failed => "PROGRAM_UPDATE_PHASE_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PROGRAM_UPDATE_PHASE_UNSPECIFIED" => Some(Self::Unspecified),
+            "PROGRAM_UPDATE_PHASE_DOWNLOADING" => Some(Self::Downloading),
+            "PROGRAM_UPDATE_PHASE_STOPPING_ANDROID" => Some(Self::StoppingAndroid),
+            "PROGRAM_UPDATE_PHASE_INSTALLING" => Some(Self::Installing),
+            "PROGRAM_UPDATE_PHASE_RESTARTING" => Some(Self::Restarting),
+            "PROGRAM_UPDATE_PHASE_APPLIED" => Some(Self::Applied),
+            "PROGRAM_UPDATE_PHASE_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }

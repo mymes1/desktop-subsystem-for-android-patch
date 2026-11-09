@@ -1396,6 +1396,32 @@ message DiagnosticsData {
   string error = 3;
 }
 
+// How far an update of DSA itself has got.
+enum ProgramUpdatePhase {
+  // No update of DSA is under way.
+  PROGRAM_UPDATE_PHASE_UNSPECIFIED = 0;
+  // The new version's setup file is being downloaded.
+  PROGRAM_UPDATE_PHASE_DOWNLOADING = 1;
+  // Every user's Android is being stopped so setup can run.
+  PROGRAM_UPDATE_PHASE_STOPPING_ANDROID = 2;
+  // Setup is installing the new version. It stops this service and starts the new one.
+  PROGRAM_UPDATE_PHASE_INSTALLING = 3;
+  // Setup has installed the new version and this service is restarting into it.
+  PROGRAM_UPDATE_PHASE_RESTARTING = 4;
+  // This service is the version an update has just installed.
+  PROGRAM_UPDATE_PHASE_APPLIED = 5;
+  // The update failed and the version before it is still installed; the update notice
+  // says why.
+  PROGRAM_UPDATE_PHASE_FAILED = 6;
+}
+
+// Where an update of DSA itself stands.
+message ProgramUpdateProgress {
+  ProgramUpdatePhase phase = 1;
+  // The version being installed, or the one installed or that failed.
+  string version = 2;
+}
+
 // The caller's Android as the service sees it.
 message Status {
   SessionState state = 1;
@@ -1409,6 +1435,9 @@ message Status {
   // What keeps a running or starting Android from being ready, and what to do about it, in
   // words a person can act on. Empty when nothing does.
   string problem = 4;
+  // Where an update of DSA itself stands. Absent when this service does not update DSA, and
+  // from a service older than this field.
+  ProgramUpdateProgress program_update = 5;
 }
 
 // The answer to UpdateProgram.

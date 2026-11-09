@@ -44,6 +44,10 @@ public final class GeneralViewModel: ObservableObject {
 
     public func refresh() async { await run { try await service.status() } }
 
+    /// Whether an update of DSA is under way. Meanwhile a poll asks a running service only:
+    /// setup stops the service, and starting it again would run the old version under setup.
+    public var updating: (() -> Bool)?
+
     /// Reads the state again without marking the page busy, as a timer does while the page is
     /// shown. Does nothing while a start or a stop is under way.
     public func poll() async {
@@ -51,7 +55,12 @@ public final class GeneralViewModel: ObservableObject {
             return
         }
         do {
-            let now = try await service.status()
+            let now: StatusInfo
+            if updating?() == true {
+                now = try await service.runningStatus()
+            } else {
+                now = try await service.status()
+            }
             if isBusy {
                 return
             }

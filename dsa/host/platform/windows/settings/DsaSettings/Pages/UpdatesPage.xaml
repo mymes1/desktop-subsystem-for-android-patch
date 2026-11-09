@@ -116,6 +116,26 @@
                 <TextBlock Text="{l:Text UpdatesProgramHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:InfoBar x:Name="NoticeBar" Title="{l:Text UpdateNoticeBar.Title}" Severity="Informational" IsClosable="False"
                             Margin="0,0,0,4" />
+                <!-- An update of DSA while it runs, across the service's restart, and how it ended. -->
+                <StackPanel x:Name="ProgramProgress">
+                    <ui:CardControl x:Name="ProgramProgressCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
+                                    Visibility="{Binding InProgress, Converter={StaticResource Visible}}">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="{Binding PhaseText, Mode=OneWay}" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{Binding VersionText, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                           Visibility="{Binding HasVersion, Converter={StaticResource Visible}}" />
+                                <TextBlock Text="{Binding KeepOpenText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                                <ProgressBar IsIndeterminate="True" Margin="0,8,0,0"
+                                             AutomationProperties.Name="{l:Text ProgramUpdateCard.Header}" />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                    </ui:CardControl>
+                    <ui:InfoBar Title="{l:Text ProgramUpdateDone.Title}" Severity="Success" IsClosable="False" Margin="0,0,0,4"
+                                IsOpen="{Binding IsApplied, Mode=OneWay}" Message="{Binding AppliedText, Mode=OneWay}" />
+                    <ui:InfoBar Title="{l:Text UpdateNowFailed}" Severity="Error" IsClosable="False" Margin="0,0,0,4"
+                                IsOpen="{Binding IsFailed, Mode=OneWay}" Message="{Binding FailedText, Mode=OneWay}" />
+                </StackPanel>
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
                     <ui:CardControl.Header>
                         <StackPanel>
@@ -159,9 +179,12 @@
                             <TextBlock Text="{l:Text UpdateNowCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Style="{StaticResource CardControls}">
-                        <ui:ProgressRing x:Name="UpdateRing" IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
-                                         Visibility="Collapsed" />
+                    <!-- The update's own view model turns the button off while an update runs; the
+                         settings say whether this installation can update at all. -->
+                    <StackPanel x:Name="UpdateNowGate" Style="{StaticResource CardControls}"
+                                IsEnabled="{Binding CanStartUpdate, Mode=OneWay}">
+                        <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
+                                         Visibility="{Binding InProgress, Converter={StaticResource Visible}}" />
                         <ui:Button x:Name="UpdateNowButton" Content="{l:Text UpdateNowButton.Content}" Click="OnUpdateNow"
                                    IsEnabled="{Binding CanUpdateNow, Mode=OneWay}" />
                     </StackPanel>

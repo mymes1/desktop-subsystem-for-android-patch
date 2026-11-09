@@ -715,6 +715,7 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
     // Android first (what runs, its update, the version choice), then DSA itself.
     android_groups(ctx, &page, &image);
     page.add(&program);
+    program_progress(ctx, &program);
 
     {
         let page = page.clone();
@@ -745,6 +746,94 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
         );
     }
     page.root.clone().upcast()
+}
+
+/// An update of DSA while it runs, in `program`: the phase, the version and a line asking not
+/// to close DSA or start Android apps, with a moving progress bar, across the service's
+/// restart; then how it ended. The running service is asked every 1.5 seconds while the page
+/// is shown, never starting the service, so a service being replaced is not started again.
+fn program_progress(ctx: &Shared, program: &adw::PreferencesGroup) {
+    let progress_row = action_row("", "");
+    progress_row.set_subtitle_lines(0);
+    let bar = gtk::ProgressBar::builder()
+        .valign(gtk::Align::Center)
+        .width_request(120)
+        .tooltip_text(tr("Updating DSA"))
+        .build();
+    progress_row.add_suffix(&bar);
+    progress_row.set_visible(false);
+    let (ended_row, ended_label) = value_row(&tr("Update of DSA"), "");
+    ended_row.set_visible(false);
+    program.add(&progress_row);
+    program.add(&ended_row);
+
+    // The bar moves on its own while it is shown: the phase says what is happening, not how
+    // far it is.
+    {
+        let bar = bar.downgrade();
+        gtk::glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
+            let Some(bar) = bar.upgrade() else {
+                return gtk::glib::ControlFlow::Break;
+            };
+            if bar.is_mapped() {
+                bar.pulse();
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+    }
+    let follower: Rc<RefCell<view::ProgramUpdateFollower>> = Rc::default();
+    let show = {
+        let (follower, progress_row) = (follower.clone(), progress_row.clone());
+        let ended_row = ended_row.clone();
+        Rc::new(move || {
+            let follower = follower.borrow();
+            progress_row.set_visible(follower.in_progress());
+            progress_row.set_title(&follower.phase_text());
+            let mut lines: Vec<String> = follower.version_text().into_iter().collect();
+            lines.push(view::ProgramUpdateFollower::keep_open_text());
+            progress_row.set_subtitle(&lines.join("\n"));
+            match follower.ended_text() {
+                Some((succeeded, text)) => {
+                    ended_label.set_label(&text);
+                    if succeeded {
+                        ended_row.remove_css_class("error");
+                        ended_row.add_css_class("success");
+                    } else {
+                        ended_row.remove_css_class("success");
+                        ended_row.add_css_class("error");
+                    }
+                    ended_row.set_visible(true);
+                }
+                None => ended_row.set_visible(false),
+            }
+        })
+    };
+    let ctx = ctx.clone();
+    let watched = program.downgrade();
+    let asking = Rc::new(std::cell::Cell::new(false));
+    let poll = move || {
+        let Some(group) = watched.upgrade() else {
+            return gtk::glib::ControlFlow::Break;
+        };
+        if !group.is_mapped() || asking.get() {
+            return gtk::glib::ControlFlow::Continue;
+        }
+        asking.set(true);
+        let (follower, show, asking) = (follower.clone(), show.clone(), asking.clone());
+        request(
+            &ctx,
+            |c| c.running_status(),
+            move |r| {
+                asking.set(false);
+                follower
+                    .borrow_mut()
+                    .polled(r.as_ref(), std::time::Instant::now());
+                show();
+            },
+        );
+        gtk::glib::ControlFlow::Continue
+    };
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(1500), poll);
 }
 
 /// The versions, the licences, the source code and the notices.

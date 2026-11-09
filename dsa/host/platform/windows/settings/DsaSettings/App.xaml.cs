@@ -12,6 +12,7 @@ public partial class App : Application
     internal static LogViewModel Logs { get; } = new(Cli, Service, Text);
     internal static GeneralViewModel General { get; } = new(Service, Text);
     internal static SettingsViewModel Settings { get; } = new(Service, Text);
+    internal static ProgramUpdateViewModel ProgramUpdate { get; } = new(Service, Text);
     internal static MemoryViewModel Memory { get; } = new(Service, Text);
     internal static InstallViewModel Install { get; } = new(Service, Text);
     internal static AppsViewModel Apps { get; } = new(new AppsService(Cli), Text);
@@ -32,6 +33,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        General.Updating = () => ProgramUpdate.InProgress;
         // `--lang ko-KR` shows the app in another language than the user's display language,
         // for pictures of each language taken on one machine.
         var lang = Array.IndexOf(e.Args, "--lang");

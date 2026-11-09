@@ -113,6 +113,8 @@ pub struct Status {
     pub last_reason: Option<String>,
     pub update_notice: Option<String>,
     pub problem: Option<String>,
+    /// Where an update of DSA itself stands, when one is under way or has just ended.
+    pub program_update: Option<ProgramUpdate>,
 }
 
 impl Status {
@@ -122,8 +124,81 @@ impl Status {
             last_reason: optional_text(json, "last_reason"),
             update_notice: optional_text(json, "update_notice"),
             problem: optional_text(json, "problem"),
+            program_update: ProgramUpdate::read(&json["program_update"]),
         }
     }
+}
+
+/// How far an update of DSA itself has got, as the service and the settings app see it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramUpdatePhase {
+    /// No update of DSA is under way.
+    None,
+    /// The app asked the service to install now and waits for its first word.
+    Starting,
+    Downloading,
+    /// Every user's Android is being stopped so the new version can be installed.
+    StoppingAndroid,
+    Installing,
+    /// The service is restarting into the new version, or is away while it is replaced.
+    Restarting,
+    /// The new version runs.
+    Applied,
+    /// The update failed and the version before it is still installed.
+    Failed,
+}
+
+impl ProgramUpdatePhase {
+    /// The phase a name of `dsa status --json` stands for. An unknown name, as a newer service
+    /// may give, is none.
+    pub fn parse(name: &str) -> ProgramUpdatePhase {
+        match name {
+            "downloading" => ProgramUpdatePhase::Downloading,
+            "stopping_android" => ProgramUpdatePhase::StoppingAndroid,
+            "installing" => ProgramUpdatePhase::Installing,
+            "restarting" => ProgramUpdatePhase::Restarting,
+            "applied" => ProgramUpdatePhase::Applied,
+            "failed" => ProgramUpdatePhase::Failed,
+            _ => ProgramUpdatePhase::None,
+        }
+    }
+
+    /// Whether the update is still under way, so the user should leave DSA alone.
+    pub fn in_progress(self) -> bool {
+        matches!(
+            self,
+            ProgramUpdatePhase::Starting
+                | ProgramUpdatePhase::Downloading
+                | ProgramUpdatePhase::StoppingAndroid
+                | ProgramUpdatePhase::Installing
+                | ProgramUpdatePhase::Restarting
+        )
+    }
+}
+
+/// Where an update of DSA stands: its phase and the version it installs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgramUpdate {
+    pub phase: ProgramUpdatePhase,
+    pub version: String,
+}
+
+impl ProgramUpdate {
+    fn read(json: &Value) -> Option<ProgramUpdate> {
+        let phase = ProgramUpdatePhase::parse(json["phase"].as_str().unwrap_or_default());
+        (phase != ProgramUpdatePhase::None).then(|| ProgramUpdate {
+            phase,
+            version: text(json, "version"),
+        })
+    }
+}
+
+/// What the service answered when asked to install the newest version of DSA now: the version
+/// it installs, or none when there is nothing to install, and its own words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgramUpdateAnswer {
+    pub installing: Option<String>,
+    pub detail: String,
 }
 
 /// How Android reaches the network.
@@ -1216,6 +1291,21 @@ impl Client {
 
     pub fn status(&self) -> Result<Status, Failure> {
         Ok(Status::read(&self.json(&["status"])?))
+    }
+
+    /// The status from a running service only. While the service is being replaced this
+    /// fails rather than start the old service again.
+    pub fn running_status(&self) -> Result<Status, Failure> {
+        Ok(Status::read(&self.json(&["status", "--no-start"])?))
+    }
+
+    /// Asks the service to install the newest version of DSA now.
+    pub fn update_now(&self) -> Result<ProgramUpdateAnswer, Failure> {
+        let json = self.json(&["update"])?;
+        Ok(ProgramUpdateAnswer {
+            installing: optional_text(&json, "installing"),
+            detail: text(&json, "detail"),
+        })
     }
 
     /// Starts Android and waits until it has started or failed.
