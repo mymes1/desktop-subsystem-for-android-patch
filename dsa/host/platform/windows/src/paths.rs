@@ -21,7 +21,8 @@
 //!   compositor.json                  the render GPU chosen before the settings app existed
 //!   monitors.txt                     the user's monitors, for sizing the guest display
 //!   monitor-refresh.txt              their fastest monitor's refresh rate, for the guest's
-//!   start-menu.json                  the Start menu shortcuts the window manager made
+//!   monitor-density.txt              their main monitor's DPI, for the density Android starts at
+//!   start-menu.json                 the Start menu shortcuts the window manager made
 //!   tmp\                             files that cannot be avoided, in user processes
 //! ```
 //!
@@ -114,6 +115,11 @@ impl MachineRoot {
     pub fn tmp(&self) -> PathBuf {
         join(&self.0, &["tmp"])
     }
+    /// Where each user's installed Google apps package is kept, so a later DSA can make its
+    /// image again; `tmp` is cleared at every start of the service.
+    pub fn gapps(&self) -> PathBuf {
+        join(&self.0, &["gapps"])
+    }
     /// Where each user's disk was kept before it moved into their profile:
     /// `users\<SID>\data.vhdx`.
     pub fn old_user_disk(&self, sid: &str) -> PathBuf {
@@ -195,6 +201,9 @@ impl UserRoot {
     }
     pub fn monitor_refresh(&self) -> PathBuf {
         join(&self.0, &["monitor-refresh.txt"])
+    }
+    pub fn monitor_density(&self) -> PathBuf {
+        join(&self.0, &["monitor-density.txt"])
     }
     pub fn start_menu_note(&self) -> PathBuf {
         join(&self.0, &["start-menu.json"])

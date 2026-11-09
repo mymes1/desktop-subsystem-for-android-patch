@@ -32,15 +32,107 @@ public sealed record InstalledAppInfo(
     ulong DataBytes,
     ulong CacheBytes,
     byte[] IconPng,
-    RunAsArmSwitch? RunAsArm = null)
+    RunAsArmSwitch? RunAsArm = null,
+    string Root = "")
 {
     public ulong TotalBytes => AppBytes + DataBytes + CacheBytes;
 }
 
+/// <summary>How far an app may use root: su does not exist for it (<see cref="Off"/>), each
+/// su call waits for an administrator's approval (<see cref="Ask"/>), or su is approved
+/// without asking (<see cref="Remember"/>). The order is the order the Apps page lists
+/// them.</summary>
+public enum RootLevel
+{
+    Off,
+    Ask,
+    Remember,
+}
+
+/// <summary>The words dsa uses for a <see cref="RootLevel"/>.</summary>
+public static class RootLevels
+{
+    public static readonly IReadOnlyList<RootLevel> All = new[] { RootLevel.Off, RootLevel.Ask, RootLevel.Remember };
+
+    public static string Code(RootLevel level) => level switch
+    {
+        RootLevel.Ask => "ask",
+        RootLevel.Remember => "remember",
+        _ => "off",
+    };
+
+    /// <summary>The level dsa named, or null for <c>unavailable</c> (root elevation is off for
+    /// the computer) and for a service that does not say.</summary>
+    public static RootLevel? Parse(string code) => code switch
+    {
+        "off" => RootLevel.Off,
+        "ask" => RootLevel.Ask,
+        "remember" => RootLevel.Remember,
+        _ => null,
+    };
+}
+
+/// <summary>How a change of an app's root level went: whether it was set, the level the app
+/// has now, and the service's words when it was not set.</summary>
+public sealed record RootReport(bool Done, string Level, string Message);
+
+/// <summary>How an app's window follows a move to a monitor of another scale. Auto and System
+/// never restart the app.</summary>
+public enum DpiScaling
+{
+    /// <summary>App for apps that say they handle a change of density themselves, System for
+    /// the others.</summary>
+    Auto,
+    /// <summary>The app redraws at the new monitor's scale. Android recreates the screen of an
+    /// app that does not say it handles a change of density, and restores its state.</summary>
+    App,
+    /// <summary>The app keeps its scale and its window is scaled to the new monitor, at the
+    /// same physical size.</summary>
+    System,
+    /// <summary>The app gets the new scale without a restart even when it does not say it
+    /// handles one. It needs a change to Android's framework; until a build has it, it works
+    /// like <see cref="System"/>.</summary>
+    SystemForced,
+}
+
+/// <summary>The words dsa app-window --dpi-scaling takes and reports for each
+/// <see cref="DpiScaling"/>.</summary>
+public static class DpiScalings
+{
+    public static readonly IReadOnlyList<DpiScaling> All =
+        new[] { DpiScaling.Auto, DpiScaling.App, DpiScaling.System, DpiScaling.SystemForced };
+
+    public static string Code(DpiScaling scaling) => scaling switch
+    {
+        DpiScaling.App => "app",
+        DpiScaling.System => "system",
+        DpiScaling.SystemForced => "system-forced",
+        _ => "auto",
+    };
+
+    /// <summary>The choice dsa names; anything else, or nothing, is <see cref="DpiScaling.Auto"/>.</summary>
+    public static DpiScaling Parse(string? code) => code switch
+    {
+        "app" => DpiScaling.App,
+        "system" => DpiScaling.System,
+        "system-forced" => DpiScaling.SystemForced,
+        _ => DpiScaling.Auto,
+    };
+}
+
+/// <summary>Every app's window settings as dsa app-window reports them, and whether this build
+/// of Android scales an app the System (forced) way yet.</summary>
+public sealed record WindowSettingsList(IReadOnlyDictionary<string, AppWindowSetting> Apps, bool SystemForcedAvailable);
+
+/// <summary>A scaling choice the Apps page offers: what the list shows, the choice, and
+/// whether it does what it says yet.</summary>
+public sealed record DpiScalingChoice(string Label, DpiScaling Scaling, bool Available);
+
 /// <summary>The user's window settings for one app, as dsa app-window reports them: whether
-/// its windows keep their size, and the size they open at in density-independent pixels
-/// (null for the size Android gives the task).</summary>
-public sealed record AppWindowSetting(string Package, bool FixedSize, int? StartWidth, int? StartHeight)
+/// its windows keep their size, the size they open at in density-independent pixels (null for
+/// the size Android gives the task), and how its windows follow a monitor of another scale.</summary>
+public sealed record AppWindowSetting(string Package, bool FixedSize, int? StartWidth, int? StartHeight,
+    DpiScaling DpiScaling = DpiScaling.Auto)
 {
     public static AppWindowSetting Default(string package) => new(package, false, null, null);
 
@@ -155,7 +247,39 @@ public sealed class AppsService
         Number(app, "data_bytes"),
         Number(app, "cache_bytes"),
         Png(app, "icon_png"),
-        ReadRunAsArm(app));
+        ReadRunAsArm(app),
+        String(app, "root"));
+
+    /// <summary>The start of dsa's line for a root level the service did not set: the
+    /// package, then the service's words.</summary>
+    private static readonly Regex RootNotChanged = new(@"^not changed: [^:\s]+: (.*)$", RegexOptions.Singleline);
+
+    /// <summary>Sets how far <paramref name="package"/> may use root. A refusal by the service
+    /// (root elevation off for the computer, or "remember" without an administrator's
+    /// approval) is a report with its words; anything else is a <see cref="DsaException"/>.</summary>
+    public async Task<RootReport> SetRootAsync(string package, RootLevel level)
+    {
+        var result = await _cli.RunAsync(new[] { "apps", "root", package, RootLevels.Code(level), "--json" })
+            .ConfigureAwait(true);
+        if (result.ExitCode != 0)
+        {
+            var refused = RootNotChanged.Match(Detail(result));
+            if (refused.Success)
+            {
+                return new RootReport(false, "", refused.Groups[1].Value);
+            }
+            throw Failure(result);
+        }
+        var json = Parse(result.Output);
+        return new RootReport(true, String(json, "level"), "");
+    }
+
+    /// <summary>The adb shell level, or empty when developer mode is off.</summary>
+    public async Task<string> AdbShellRootAsync()
+    {
+        var json = await RunJsonAsync("settings").ConfigureAwait(true);
+        return String(json, "adb_shell_root");
+    }
 
     /// <summary>Every app installed in Android, with its size read again; Android is started
     /// first when it is not running.</summary>
@@ -202,10 +326,13 @@ public sealed class AppsService
     }
 
     /// <summary>The user's window settings for every app that has any, by package.</summary>
-    public async Task<IReadOnlyDictionary<string, AppWindowSetting>> WindowSettingsAsync()
+    public async Task<WindowSettingsList> WindowSettingsAsync()
     {
         var json = await RunJsonAsync("app-window").ConfigureAwait(true);
-        return ReadWindowSettings(json);
+        // A dsa that does not say counts as one whose Android cannot do it yet.
+        var forced = json.TryGetProperty("system_forced_available", out var available)
+            && available.ValueKind == JsonValueKind.True;
+        return new WindowSettingsList(ReadWindowSettings(json), forced);
     }
 
     private static IReadOnlyDictionary<string, AppWindowSetting> ReadWindowSettings(JsonElement json)
@@ -226,7 +353,10 @@ public sealed class AppsService
                 {
                     (width, height) = (w, h);
                 }
-                settings[package] = new AppWindowSetting(package, Bool(app, "fixed_size"), width, height);
+                var scaling = app.TryGetProperty("dpi_scaling", out var code) && code.ValueKind == JsonValueKind.String
+                    ? DpiScalings.Parse(code.GetString())
+                    : DpiScaling.Auto;
+                settings[package] = new AppWindowSetting(package, Bool(app, "fixed_size"), width, height, scaling);
             }
         }
         return settings;
@@ -239,7 +369,8 @@ public sealed class AppsService
         var json = await RunJsonAsync(
             "app-window", setting.Package,
             "--fixed-size", setting.FixedSize ? "on" : "off",
-            "--start-size", setting.StartSizeArgument).ConfigureAwait(true);
+            "--start-size", setting.StartSizeArgument,
+            "--dpi-scaling", DpiScalings.Code(setting.DpiScaling)).ConfigureAwait(true);
         return ReadWindowSettings(json).TryGetValue(setting.Package, out var now)
             ? now
             : AppWindowSetting.Default(setting.Package);
@@ -303,16 +434,24 @@ public sealed record AppRow(
     string? UninstallTip,
     bool Resizable = true,
     int StartSizeIndex = 0,
+    int DpiScalingIndex = 0,
+    string? DpiScalingTip = null,
     bool RunAsArm = false,
     bool CanRunAsArm = false,
     string? RunAsArmTip = null,
-    bool IsHighlighted = false)
+    bool IsHighlighted = false,
+    int RootIndex = -1,
+    bool CanChangeRoot = false,
+    string? RootTip = null)
 {
     public bool NoIcon => Icon is null;
 
     /// <summary>Whether the page says why the app cannot run as ARM.</summary>
     public bool HasRunAsArmTip => RunAsArmTip is not null;
 }
+
+/// <summary>A root level the Apps page offers: what the list shows, and the level.</summary>
+public sealed record RootChoice(string Label, RootLevel Level);
 
 /// <summary>The Apps page: every app installed in Android, searchable, each to open, to see
 /// in Android's own settings, or to uninstall; and Android's own list of apps.</summary>
@@ -322,11 +461,13 @@ public sealed class AppsViewModel : ObservableObject
     private readonly ITextSource _text;
     private IReadOnlyList<InstalledAppInfo>? _apps;
     private IReadOnlyDictionary<string, AppWindowSetting> _windows = new Dictionary<string, AppWindowSetting>();
+    private bool _systemForcedAvailable;
     private string _search = "";
     private string? _highlighted;
     private string? _error;
     private string? _message;
     private bool _busy;
+    private string _adbShellRoot = "";
 
     public AppsViewModel(AppsService service, ITextSource text)
     {
@@ -342,6 +483,10 @@ public sealed class AppsViewModel : ObservableObject
     public bool HasMessage => _message is not null;
     public bool HasNoApps => _apps is { Count: 0 };
     public bool HasNoMatches => _apps is { Count: > 0 } && Rows.Count == 0;
+    public bool ShowAdbShellRoot => _adbShellRoot.Length > 0;
+    public int AdbShellRootIndex => RootLevels.Parse(_adbShellRoot) is { } level ? (int)level : -1;
+    public bool CanChangeAdbShellRoot => !_busy && RootLevels.Parse(_adbShellRoot) is not null;
+    public string? AdbShellRootTip => RootTipOf(_adbShellRoot);
 
     /// <summary>How many apps are installed, and how many the search shows.</summary>
     public string Count => _apps is null
@@ -438,6 +583,25 @@ public sealed class AppsViewModel : ObservableObject
     private StartSizeChoice Choice(string key, int width, int height) =>
         new(string.Format(CultureInfo.CurrentCulture, _text.Get(key), width, height), width, height);
 
+    /// <summary>The ways an app's window can follow a monitor of another scale, in the order of
+    /// <see cref="DpiScaling"/>. System (forced) is stored and can be chosen, but until Android
+    /// can do it, the list marks it as not available yet.</summary>
+    public IReadOnlyList<DpiScalingChoice> DpiScalingChoices => DpiScalings.All
+        .Select(scaling => scaling == DpiScaling.SystemForced && !_systemForcedAvailable
+            ? new DpiScalingChoice(_text.Get("Apps_DpiScaling_SystemForcedNotYet"), scaling, false)
+            : new DpiScalingChoice(_text.Get($"Apps_DpiScaling_{scaling}"), scaling, true))
+        .ToList();
+
+    /// <summary>Whether this build of Android scales an app the System (forced) way yet.</summary>
+    public bool SystemForcedAvailable => _systemForcedAvailable;
+
+    /// <summary>What the page says beside an app's scaling choice: why System (forced) works
+    /// like System for now, while it is chosen and not available; otherwise nothing.</summary>
+    public string? DpiScalingTipOf(AppWindowSetting setting) =>
+        setting.DpiScaling == DpiScaling.SystemForced && !_systemForcedAvailable
+            ? _text.Get("Apps_DpiScaling_SystemForcedTip")
+            : null;
+
     /// <summary>The window settings of <paramref name="package"/>.</summary>
     public AppWindowSetting WindowOf(string package) =>
         _windows.TryGetValue(package, out var setting) ? setting : AppWindowSetting.Default(package);
@@ -484,10 +648,59 @@ public sealed class AppsViewModel : ObservableObject
             app.SystemApp ? _text.Get("Apps_SystemTip") : null,
             !WindowOf(app.Package).FixedSize,
             StartSizeIndexOf(WindowOf(app.Package)),
+            (int)WindowOf(app.Package).DpiScaling,
+            DpiScalingTipOf(WindowOf(app.Package)),
             arm.On,
             arm.Available,
             RunAsArmTipOf(arm),
-            app.Package == _highlighted);
+            app.Package == _highlighted,
+            RootLevels.Parse(app.Root) is { } level ? (int)level : -1,
+            RootLevels.Parse(app.Root) is not null,
+            RootTipOf(app.Root));
+    }
+
+    /// <summary>The root levels the page offers, in the order of <see cref="RootLevel"/>.</summary>
+    public IReadOnlyList<RootChoice> RootChoices => RootLevels.All
+        .Select(level => new RootChoice(_text.Get($"Apps_Root_{RootLevels.Code(level)}"), level))
+        .ToList();
+
+    /// <summary>Whether root elevation is off for this PC, so no app's level can be chosen
+    /// and the page says where to turn it on.</summary>
+    public bool RootUnavailable => _apps?.Any(a => a.Root == "unavailable") ?? false;
+
+    /// <summary>Why an app's root level cannot be chosen, in the user's language; null when
+    /// it can.</summary>
+    public string? RootTipOf(string root) => RootLevels.Parse(root) is not null
+        ? null
+        : _text.Get(root == "unavailable" ? "Apps_RootTip_unavailable" : "Apps_RootTip_unknown");
+
+    /// <summary>Sets how far the app may use root: the level at <paramref name="index"/> of
+    /// <see cref="RootChoices"/>. "Remember" needs an administrator's approval, which the
+    /// service asks for; a refusal is the page's error with the service's words.</summary>
+    public Task SetRootAsync(string package, int index)
+    {
+        if (index < 0 || index >= RootLevels.All.Count)
+        {
+            return Task.CompletedTask;
+        }
+        var level = RootLevels.All[index];
+        var current = package == "com.android.shell" ? _adbShellRoot : _apps?.FirstOrDefault(a => a.Package == package)?.Root;
+        if (current is not null && RootLevels.Parse(current) == level)
+        {
+            return Task.CompletedTask;
+        }
+        return Run(async () =>
+        {
+            var label = LabelOf(package);
+            var report = await _service.SetRootAsync(package, level).ConfigureAwait(true);
+            if (!report.Done)
+            {
+                throw new RefusedByAndroid(
+                    string.Format(CultureInfo.CurrentCulture, _text.Get("Apps_RootNotChanged"), label, report.Message));
+            }
+            var now = RootLevels.Parse(report.Level) ?? level;
+            return string.Format(CultureInfo.CurrentCulture, _text.Get($"Apps_RootSet_{RootLevels.Code(now)}"), label);
+        }, reload: true);
     }
 
     /// <summary>Why the "Run as ARM" switch cannot be changed, in the user's language; null
@@ -526,11 +739,14 @@ public sealed class AppsViewModel : ObservableObject
     {
         try
         {
-            _windows = await _service.WindowSettingsAsync().ConfigureAwait(true);
+            var list = await _service.WindowSettingsAsync().ConfigureAwait(true);
+            _windows = list.Apps;
+            _systemForcedAvailable = list.SystemForcedAvailable;
         }
         catch (DsaException e) when (e.Problem == Problem.Refused)
         {
             _windows = new Dictionary<string, AppWindowSetting>();
+            _systemForcedAvailable = false;
         }
         return null;
     }, reload: false);
@@ -574,8 +790,27 @@ public sealed class AppsViewModel : ObservableObject
         return SetWindowAsync(current with { StartWidth = choice.Width, StartHeight = choice.Height });
     }
 
+    /// <summary>Has the app's windows follow a monitor of another scale the way at
+    /// <paramref name="index"/> of <see cref="DpiScalingChoices"/>. Windows that move from now
+    /// on follow it.</summary>
+    public Task SetDpiScalingAsync(string package, int index)
+    {
+        if (index < 0 || index >= DpiScalings.All.Count)
+        {
+            return Task.CompletedTask;
+        }
+        var scaling = DpiScalings.All[index];
+        var current = WindowOf(package);
+        if (current.DpiScaling == scaling)
+        {
+            return Task.CompletedTask;
+        }
+        return SetWindowAsync(current with { DpiScaling = scaling });
+    }
+
     /// <summary>The name an app goes by on the page.</summary>
     public string LabelOf(string package) =>
+        package == "com.android.shell" ? _text.Get("AppsAdbShell.Text") :
         _apps?.FirstOrDefault(a => a.Package == package) is { Label.Length: > 0 } app ? app.Label : package;
 
     private async Task Run(Func<Task<string?>> work, bool reload)
@@ -593,6 +828,14 @@ public sealed class AppsViewModel : ObservableObject
             if (reload)
             {
                 _apps = await _service.ListAsync().ConfigureAwait(true);
+                try
+                {
+                    _adbShellRoot = await _service.AdbShellRootAsync().ConfigureAwait(true);
+                }
+                catch (DsaException)
+                {
+                    _adbShellRoot = "";
+                }
             }
             _error = null;
         }

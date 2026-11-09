@@ -10,24 +10,28 @@
 //! build for another architecture or Android version. The image goes to the user's Android,
 //! which keeps it on the user's disk (`/data/vendor/dsa/gapps/system.img`), and the build's
 //! description goes with the user's settings. While one is recorded, each boot's bootconfig
-//! carries [`BOOTCONFIG_ON`], and the guest then lays the image over its `/product` and
-//! `/system_ext` before its package manager starts. Every change applies from the next start of
-//! Android, because the package manager reads the system apps and their permissions once.
+//! carries [`BOOTCONFIG_ON`], and the guest then lays each folder of the image over the same
+//! folder of its `/product` and `/system_ext` before its package manager starts, never a
+//! partition's root, whose services would then fail to start. Every change applies from the
+//! next start of Android, because the package manager reads the system apps and their
+//! permissions once.
 //!
 //! ```text
 //! image root
-//!   product/{app,priv-app,etc,framework}/...      over /product
-//!   system_ext/{app,priv-app,etc,framework}/...   over /system_ext
+//!   product/{app,priv-app,framework}/...             over the same folders of /product
+//!   product/etc/{permissions,sysconfig,default-permissions,preferred-apps}/...
+//!   system_ext/...                                   the same folders, over /system_ext
 //! ```
 
 pub mod listing;
 pub mod md5;
 pub mod package;
+pub mod privapp;
 pub mod tar;
 pub mod xz;
 
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -37,6 +41,18 @@ use crate::update::store::Fetch;
 
 /// The bootconfig line that lays the Google apps over the system for one boot.
 pub const BOOTCONFIG_ON: &str = "androidboot.dsa.gapps = \"on\"\n";
+/// The format of the Google apps image this host makes, recorded with the package
+/// ([`GappsPackage::image_format`]). A record without one (0) is of an image an older host
+/// made: 0.1.9's, which its guest never laid over, and 0.2.0's, which lacks the folders the
+/// guest now lays over (an overlay of a folder the image lacks fails) and the privileged
+/// permission allowlist ([`privapp`]), without which Android stops at every boot when Google's
+/// apps ask for a privileged permission LiteGapps' lists leave out. Such an image is never laid
+/// over the system: it is made again from the kept package, or the user installs it again.
+///
+/// 2: every folder the guest lays over, and an allowlist in each partition.
+pub const IMAGE_FORMAT: u32 = 2;
+/// The name of the kept package, in the user's folder of the package folder.
+const KEPT_PACKAGE: &str = "gapps-package.zip";
 /// LiteGapps' name for the build DSA installs: Google Play services, the Play Store, the
 /// services framework, and the account sync adapters.
 pub const VARIANT: &str = "core";
@@ -67,6 +83,18 @@ pub struct GappsPackage {
     pub source: String,
     /// The MD5 digest the file host published for it.
     pub md5: String,
+    /// The format of the image made from it: [`IMAGE_FORMAT`] for an image this host made, 0
+    /// for one a host from before formats were recorded made.
+    #[serde(default)]
+    pub image_format: u32,
+}
+
+impl GappsPackage {
+    /// Whether the image made from it is of an older format than this host makes, so that no
+    /// boot lays it over the system.
+    pub fn outdated(&self) -> bool {
+        self.image_format < IMAGE_FORMAT
+    }
 }
 
 /// What a build must be for: the Android the user runs.
@@ -103,9 +131,9 @@ impl Target {
 }
 
 /// What a boot's bootconfig carries for the Google apps: [`BOOTCONFIG_ON`] while a build is
-/// installed, nothing otherwise.
+/// installed whose image is of the format this host makes, nothing otherwise.
 pub fn bootconfig(installed: Option<&GappsPackage>) -> &'static str {
-    if installed.is_some() {
+    if installed.is_some_and(|package| !package.outdated()) {
         BOOTCONFIG_ON
     } else {
         ""
@@ -113,12 +141,21 @@ pub fn bootconfig(installed: Option<&GappsPackage>) -> &'static str {
 }
 
 /// The bootconfig for `user`'s next boot, from what their settings record. A record that cannot
-/// be read is logged and counts as none, so Android still starts.
+/// be read is logged and counts as none, so Android still starts; so does the record of an image
+/// an older host made, which is made again once Android runs, or installed again by the user.
 pub fn bootconfig_for(store: &dyn SettingsStore, user: &str) -> String {
     let package = store.gapps(user).unwrap_or_else(|why| {
         eprintln!("gapps: {why}; starting {user}'s Android without Google's apps");
         None
     });
+    if let Some(package) = package.as_ref().filter(|package| package.outdated()) {
+        eprintln!(
+            "gapps: {user}'s Google apps image (LiteGapps {} {}) was made by an older DSA, in \
+             format {} where this one makes {IMAGE_FORMAT}; starting Android without Google's \
+             apps",
+            package.variant, package.version, package.image_format
+        );
+    }
     bootconfig(package.as_ref()).to_string()
 }
 
@@ -140,9 +177,44 @@ pub struct GuestGapps {
 }
 
 /// Whether what the user has installed differs from what the running guest booted with, so
-/// that it applies only once Android starts again.
+/// that it applies only once Android starts again. An image of an older format is never laid
+/// over, so a restart does nothing for it.
 pub fn restart_needed(installed: Option<&GappsPackage>, guest: Option<&GuestGapps>) -> bool {
-    guest.is_some_and(|guest| guest.active != installed.is_some())
+    let usable = installed.is_some_and(|package| !package.outdated());
+    guest.is_some_and(|guest| guest.active != usable)
+}
+
+/// Whether the user must install Google Play again: their package's image is of an older format
+/// and its download was not kept (`kept`), so it cannot be made again.
+pub fn reinstall_needed(installed: Option<&GappsPackage>, kept: bool) -> bool {
+    installed.is_some_and(GappsPackage::outdated) && !kept
+}
+
+/// What a boot of a user's Android that reached its desktop needs done for the Google apps,
+/// from what their settings record and what the guest says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Upkeep {
+    /// Nothing.
+    Nothing,
+    /// The user removed Google Play while Android could not hear of it: the image is still
+    /// on its disk, and goes now.
+    RemoveImage,
+    /// The image is of an older format and the package is kept: it is made again and sent.
+    Rebuild,
+    /// The image is of an older format and the package is not kept: the user installs Google
+    /// Play again, as their status says.
+    Reinstall,
+}
+
+/// What `user`'s running Android needs: see [`Upkeep`].
+pub fn upkeep(installed: Option<&GappsPackage>, guest: &GuestGapps, kept: bool) -> Upkeep {
+    match installed {
+        None if guest.installed => Upkeep::RemoveImage,
+        None => Upkeep::Nothing,
+        Some(package) if package.outdated() && kept => Upkeep::Rebuild,
+        Some(package) if package.outdated() => Upkeep::Reinstall,
+        Some(_) => Upkeep::Nothing,
+    }
 }
 
 /// What an install is doing.
@@ -178,33 +250,46 @@ pub struct Source {
     /// The folder downloads and images are made in, a folder of each user's in it; the service
     /// owns it, and nothing stays there once an install ends.
     work_dir: PathBuf,
+    /// The folder each user's installed package is kept in, a folder of each user's in it, so
+    /// that a later DSA can make its image again in a new format without a download. It must
+    /// outlast the service, unlike a temporary folder.
+    package_dir: PathBuf,
     /// Held for the length of one install, so two do not share the folder or the bandwidth.
     turn: Mutex<()>,
 }
 
 /// A build downloaded, checked and made into an image for a user's Android. The image is
-/// removed when this is dropped.
+/// removed when this is dropped, and so is the download unless it was kept ([`Source::keep`]).
 pub struct Prepared {
     pub package: GappsPackage,
     pub image: PathBuf,
     pub size: u64,
     pub sha256: Vec<u8>,
     pub built: package::Built,
+    /// The downloaded package, until it is kept; `None` for an image made from the kept one.
+    download: Option<PathBuf>,
 }
 
 impl Drop for Prepared {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.image);
+        if let Some(download) = &self.download {
+            let _ = std::fs::remove_file(download);
+        }
     }
 }
 
 impl Source {
-    /// Downloads through `fetch` from LiteGapps' project, and makes builds ready in `work_dir`.
+    /// Downloads through `fetch` from LiteGapps' project, and makes builds ready in `work_dir`,
+    /// where the installed packages are kept too unless [`with_package_dir`](Self::with_package_dir)
+    /// names another folder.
     pub fn new(fetch: Arc<dyn Fetch + Send + Sync>, work_dir: impl Into<PathBuf>) -> Source {
+        let work_dir = work_dir.into();
         Source {
             fetch,
             project: listing::PROJECT.to_string(),
-            work_dir: work_dir.into(),
+            package_dir: work_dir.clone(),
+            work_dir,
             turn: Mutex::new(()),
         }
     }
@@ -213,6 +298,98 @@ impl Source {
     pub fn with_project(mut self, project: &str) -> Source {
         self.project = project.trim_end_matches('/').to_string();
         self
+    }
+
+    /// Keeps each user's installed package in `dir`, for a work folder that does not last.
+    pub fn with_package_dir(mut self, dir: impl Into<PathBuf>) -> Source {
+        self.package_dir = dir.into();
+        self
+    }
+
+    /// Where `user`'s installed package is kept.
+    pub fn kept_package(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .package_dir
+            .join(user_file_stem(user)?)
+            .join(KEPT_PACKAGE))
+    }
+
+    /// Whether `user`'s installed package is kept, so its image can be made again.
+    pub fn is_kept(&self, user: &str) -> bool {
+        self.kept_package(user).is_ok_and(|path| path.is_file())
+    }
+
+    /// Keeps the package `prepared` was made from as `user`'s, in place of any kept before,
+    /// once its image is on their Android.
+    pub fn keep(&self, user: &str, prepared: &mut Prepared) -> Result<(), String> {
+        let Some(download) = prepared.download.take() else {
+            return Ok(());
+        };
+        let kept = self.kept_package(user)?;
+        let result = (|| {
+            if let Some(dir) = kept.parent() {
+                std::fs::create_dir_all(dir)
+                    .map_err(|e| format!("{} cannot be made: {e}", dir.display()))?;
+            }
+            if std::fs::rename(&download, &kept).is_err() {
+                std::fs::copy(&download, &kept)
+                    .map_err(|e| format!("{} cannot be written: {e}", kept.display()))?;
+            }
+            Ok(())
+        })();
+        let _ = std::fs::remove_file(&download);
+        if result.is_err() {
+            let _ = std::fs::remove_file(&kept);
+        }
+        result
+    }
+
+    /// Removes `user`'s kept package, as removing Google Play does.
+    pub fn forget(&self, user: &str) {
+        if let Ok(kept) = self.kept_package(user) {
+            match std::fs::remove_file(&kept) {
+                Ok(()) => eprintln!("gapps: removed the package kept for {user}"),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => eprintln!("gapps: {} cannot be removed: {e}", kept.display()),
+            }
+        }
+    }
+
+    /// Makes the image of `user`'s installed `package` again, from the package kept for them,
+    /// in the format this host makes. The kept file must still be the one downloaded: its MD5
+    /// digest must be the one recorded with it.
+    pub fn rebuild(&self, user: &str, package: &GappsPackage) -> Result<Prepared, String> {
+        let _turn = self.turn.lock().unwrap_or_else(|e| e.into_inner());
+        let kept = self.kept_package(user)?;
+        if !kept.is_file() {
+            return Err(format!(
+                "the package {} is no longer kept, so install Google Play again",
+                package.file
+            ));
+        }
+        let digest = file_md5(&kept)?;
+        if !digest.eq_ignore_ascii_case(&package.md5) {
+            return Err(format!(
+                "the kept package {} has MD5 {digest}, not the {} it was downloaded with",
+                kept.display(),
+                package.md5
+            ));
+        }
+        let target = Target::for_guest(
+            package.sdk,
+            match package.arch.as_str() {
+                "arm64" => "arm64-v8a",
+                other => other,
+            },
+        )?;
+        let dir = self.work_dir.join(user_file_stem(user)?);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("{} cannot be made: {e}", dir.display()))?;
+        let image = dir.join("gapps-system.img");
+        let built = package::build_image(&kept, &target, &image)?;
+        let mut package = package.clone();
+        package.image_format = IMAGE_FORMAT;
+        measure(package, image, built, None)
     }
 
     /// Finds the newest build for `target`, downloads and checks it, and makes its image for
@@ -264,28 +441,76 @@ impl Source {
             total: 0,
         });
         let image = dir.join("gapps-system.img");
-        let built = package::build_image(&zip, target, &image);
-        let _ = std::fs::remove_file(&zip);
-        let built = built?;
-        let measured = std::fs::metadata(&image)
-            .map_err(|e| format!("{} cannot be read: {e}", image.display()))
-            .and_then(|metadata| {
-                crate::arm_translation::file_sha256(&image).map(|sha| (metadata.len(), sha))
-            });
-        match measured {
-            Ok((size, sha256)) => Ok(Prepared {
-                package,
-                image,
-                size,
-                sha256,
-                built,
-            }),
+        let built = match package::build_image(&zip, target, &image) {
+            Ok(built) => built,
             Err(why) => {
-                let _ = std::fs::remove_file(&image);
-                Err(why)
+                let _ = std::fs::remove_file(&zip);
+                return Err(why);
             }
+        };
+        let mut package = package;
+        package.image_format = IMAGE_FORMAT;
+        if let Some(unread) = built.unread.first() {
+            eprintln!(
+                "gapps: {unread} and {} more privileged apps of LiteGapps {} {} have no manifest \
+                 DSA could read",
+                built.unread.len() - 1,
+                package.variant,
+                package.version
+            );
+        }
+        measure(package, image, built, Some(zip))
+    }
+}
+
+/// The size and SHA-256 digest of the image just made, which `Prepared` then holds. On a failure
+/// the image and the download are removed.
+fn measure(
+    package: GappsPackage,
+    image: PathBuf,
+    built: package::Built,
+    download: Option<PathBuf>,
+) -> Result<Prepared, String> {
+    let measured = std::fs::metadata(&image)
+        .map_err(|e| format!("{} cannot be read: {e}", image.display()))
+        .and_then(|metadata| {
+            crate::arm_translation::file_sha256(&image).map(|sha| (metadata.len(), sha))
+        });
+    match measured {
+        Ok((size, sha256)) => Ok(Prepared {
+            package,
+            image,
+            size,
+            sha256,
+            built,
+            download,
+        }),
+        Err(why) => {
+            let _ = std::fs::remove_file(&image);
+            if let Some(download) = download {
+                let _ = std::fs::remove_file(download);
+            }
+            Err(why)
         }
     }
+}
+
+/// The MD5 digest of the file at `path`, in lower-case hexadecimal.
+fn file_md5(path: &Path) -> Result<String, String> {
+    let mut file =
+        std::fs::File::open(path).map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+    let mut digest = md5::Md5::new();
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    Ok(md5::hex(&digest.finish()))
 }
 
 /// A reader that says how many bytes have been read, every [`NEWS_STEP`] bytes and at the end.
@@ -333,6 +558,7 @@ mod tests {
             file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
             source: "https://example.com/LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
             md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+            image_format: IMAGE_FORMAT,
         }
     }
 
@@ -383,5 +609,102 @@ mod tests {
         assert!(!restart_needed(Some(&installed), Some(&active)));
         assert!(restart_needed(None, Some(&active)), "removed");
         assert!(!restart_needed(None, Some(&inactive)));
+        // An image an older host made is never laid over, so a restart would change nothing.
+        let old = GappsPackage {
+            image_format: 0,
+            ..package()
+        };
+        assert!(!restart_needed(Some(&old), Some(&inactive)));
+    }
+
+    #[test]
+    fn fr32_an_image_made_by_an_older_host_is_never_laid_over() {
+        // What 0.2.0 recorded: no format, since its image had none.
+        let recorded = r#"{"variant":"core","version":"20261001","android_version":"17.0",
+            "sdk":37,"arch":"x86_64","file":"LiteGapps-core-x86_64-17.0-20261001-official.zip",
+            "source":"https://example.com/x.zip","md5":"ea9945a6d63849fa9e51782edfe613a4"}"#;
+        let old: GappsPackage = serde_json::from_str(recorded).unwrap();
+        assert_eq!(old.image_format, 0);
+        assert!(old.outdated());
+        assert_eq!(bootconfig(Some(&old)), "");
+        assert!(!package().outdated());
+        let store = crate::settings::MemorySettings::default();
+        store.set_gapps("uid:1000", Some(&old)).unwrap();
+        assert_eq!(bootconfig_for(&store, "uid:1000"), "");
+        store.set_gapps("uid:1000", Some(&package())).unwrap();
+        assert_eq!(bootconfig_for(&store, "uid:1000"), BOOTCONFIG_ON);
+        // The user is told to install it again only when it cannot be made again.
+        assert!(reinstall_needed(Some(&old), false));
+        assert!(!reinstall_needed(Some(&old), true));
+        assert!(!reinstall_needed(Some(&package()), false));
+        assert!(!reinstall_needed(None, false));
+    }
+
+    #[test]
+    fn fr32_a_boot_that_reaches_the_desktop_mends_the_google_apps() {
+        let old = GappsPackage {
+            image_format: 0,
+            ..package()
+        };
+        let on_disk = GuestGapps {
+            installed: true,
+            ..GuestGapps::default()
+        };
+        let none = GuestGapps::default();
+        assert_eq!(upkeep(None, &on_disk, false), Upkeep::RemoveImage);
+        assert_eq!(upkeep(None, &none, true), Upkeep::Nothing);
+        assert_eq!(upkeep(Some(&old), &on_disk, true), Upkeep::Rebuild);
+        assert_eq!(upkeep(Some(&old), &on_disk, false), Upkeep::Reinstall);
+        assert_eq!(upkeep(Some(&package()), &on_disk, false), Upkeep::Nothing);
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dsa-gapps-mod-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn fr32_an_old_image_is_made_again_from_the_kept_package() {
+        let dir = scratch("rebuild");
+        let source = Source::new(Arc::new(crate::update::store::FileFetch), dir.join("work"))
+            .with_package_dir(dir.join("kept"));
+        let user = "uid:1000";
+        let zip = package::fixture::sample();
+        let mut digest = md5::Md5::new();
+        digest.update(&zip);
+        let old = GappsPackage {
+            image_format: 0,
+            md5: md5::hex(&digest.finish()),
+            ..package()
+        };
+        assert!(!source.is_kept(user));
+        let why = source.rebuild(user, &old).err().unwrap();
+        assert!(why.contains("install Google Play again"), "{why}");
+
+        let kept = source.kept_package(user).unwrap();
+        std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
+        std::fs::write(&kept, &zip).unwrap();
+        assert!(source.is_kept(user));
+        let rebuilt = source.rebuild(user, &old).unwrap();
+        assert_eq!(rebuilt.package.image_format, IMAGE_FORMAT);
+        assert_eq!(rebuilt.package.md5, old.md5);
+        let image = std::fs::read(&rebuilt.image).unwrap();
+        let files = crate::erofs::read::files(&image);
+        assert!(files.contains_key("product/etc/permissions/dsa-gapps-privapp-permissions.xml"));
+        let made = rebuilt.image.clone();
+        drop(rebuilt);
+        assert!(!made.exists(), "the image goes once it is sent");
+        assert!(kept.is_file(), "the kept package stays");
+
+        // A kept file that is not the one downloaded is not used.
+        std::fs::write(&kept, b"another file").unwrap();
+        let why = source.rebuild(user, &old).err().unwrap();
+        assert!(why.contains("MD5"), "{why}");
+
+        source.forget(user);
+        assert!(!source.is_kept(user));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -36,6 +36,16 @@ fn pr5_the_command_line_is_parsed() {
 }
 
 #[test]
+fn fr35_adb_shell_asks_for_root_like_an_app() {
+    use dsa_cli::AppsAction;
+    let invocation = parse(&args("apps root adb ask")).unwrap();
+    assert_eq!(
+        invocation.apps,
+        Some(AppsAction::Root("com.android.shell".into(), "ask".into()))
+    );
+}
+
+#[test]
 fn fr21_dsa_logcat_takes_buffers_tag_filters_and_a_dump() {
     use dsa_host_core::guest_log::{LogBuffer, LogFilter, DEFAULT_BUFFERS, INFO, SILENT};
     let invocation = parse(&args(
@@ -963,6 +973,65 @@ fn fr20_adb_auto_connect_is_on_by_default_and_dsa_turns_it_off() {
         "{}",
         stdout(&output)
     );
+}
+
+#[test]
+fn fr5_touch_gestures_off_is_on_by_default_and_dsa_turns_it_off() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("settings set touch-gestures-off off"))
+            .unwrap()
+            .change,
+        Some(Change::TouchGesturesOff(false))
+    );
+    assert_eq!(
+        parse(&args("settings set touch-gestures-off on"))
+            .unwrap()
+            .change,
+        Some(Change::TouchGesturesOff(true))
+    );
+    assert!(parse(&args("settings set touch-gestures-off maybe")).is_err());
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["touch_gestures_off"], true);
+    assert_eq!(settings["touch_gestures_state"], "");
+    assert_eq!(settings["touch_gestures_problem"], "");
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set touch-gestures-off off --json",
+    ));
+    assert_eq!(changed["touch_gestures_off"], false);
+}
+
+#[test]
+fn fr5_the_touch_gestures_line_says_why_it_cannot_be_used_and_is_hidden_without_gestures() {
+    use dsa_host_core::host_api::SettingsReport;
+    use dsa_host_core::touch_gestures::TouchGesturesState;
+    let report = |state: TouchGesturesState| SettingsReport {
+        settings: dsa_host_core::settings::Settings::default(),
+        facts: Default::default(),
+        network: None,
+        adb_auto_connect_state: Default::default(),
+        touch_gestures: state,
+        adb_shell_root: String::new(),
+    };
+    let line = |report: &SettingsReport| {
+        dsa_cli::describe_settings(report)
+            .lines()
+            .find(|line| line.starts_with("Touch gestures off in DSA app windows:"))
+            .map(str::to_string)
+    };
+    let failed = line(&report(TouchGesturesState::Failed(
+        "access is denied".into(),
+    )))
+    .expect("a touch gestures line");
+    assert!(failed.contains("access is denied"), "{failed}");
+    assert!(failed.contains("ms-settings:devices-touch"), "{failed}");
+    assert_eq!(line(&report(TouchGesturesState::Unsupported)), None);
+    assert!(line(&report(TouchGesturesState::Available))
+        .unwrap()
+        .starts_with("Touch gestures off in DSA app windows: on"));
 }
 
 #[test]
@@ -2671,6 +2740,7 @@ fn fr30_dsa_app_window_is_parsed() {
             package: "com.example.notes".into(),
             fixed_size: Some(true),
             start_size: Some(Some((400, 700))),
+            dpi_scaling: None,
         })
     );
     assert_eq!(
@@ -2681,6 +2751,7 @@ fn fr30_dsa_app_window_is_parsed() {
             package: "com.example.notes".into(),
             fixed_size: None,
             start_size: Some(None),
+            dpi_scaling: None,
         })
     );
     assert_eq!(
@@ -2722,7 +2793,8 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
     let output = dsa(&endpoint, "app-window com.example.notes");
     assert_eq!(
         stdout(&output).trim(),
-        "com.example.notes: resizable, opens at 400 x 700 dp"
+        "com.example.notes: resizable, opens at 400 x 700 dp, scales its own way on another \
+         monitor"
     );
     let reset = json_of(&dsa(&endpoint, "app-window com.example.notes reset --json"));
     assert_eq!(reset["apps"][0]["start_size"], serde_json::Value::Null);
@@ -2735,6 +2807,93 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
         "{}",
         stderr(&refused)
     );
+}
+
+#[test]
+fn fr4_dsa_app_window_dpi_scaling_is_parsed() {
+    use dsa_cli::AppWindowAction;
+    use dsa_host_core::app_windows::DpiScaling;
+    for (name, scaling) in [
+        ("app", DpiScaling::App),
+        ("system", DpiScaling::System),
+        ("system-forced", DpiScaling::SystemForced),
+        ("AUTO", DpiScaling::Auto),
+    ] {
+        assert_eq!(
+            parse(&args(&format!(
+                "app-window com.example.notes --dpi-scaling {name}"
+            )))
+            .unwrap()
+            .app_window,
+            Some(AppWindowAction::Set {
+                package: "com.example.notes".into(),
+                fixed_size: None,
+                start_size: None,
+                dpi_scaling: Some(scaling),
+            })
+        );
+    }
+    // With the other settings in one call, as the settings apps send it.
+    assert_eq!(
+        parse(&args(
+            "app-window com.example.notes --fixed-size off --start-size auto --dpi-scaling system"
+        ))
+        .unwrap()
+        .app_window,
+        Some(AppWindowAction::Set {
+            package: "com.example.notes".into(),
+            fixed_size: Some(false),
+            start_size: Some(None),
+            dpi_scaling: Some(DpiScaling::System),
+        })
+    );
+    assert!(parse(&args("app-window com.example.notes --dpi-scaling enhanced")).is_err());
+    assert!(parse(&args("app-window com.example.notes --dpi-scaling")).is_err());
+    assert!(parse(&args("app-window --dpi-scaling app")).is_err());
+}
+
+#[test]
+fn fr4_dsa_app_window_sets_and_keeps_an_apps_dpi_scaling() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    // The forced way is stored but does not do what it says yet.
+    assert_eq!(none["system_forced_available"], false);
+    let set = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling system --json",
+    ));
+    assert_eq!(set["apps"][0]["dpi_scaling"], "system");
+    // Changing another setting keeps it.
+    let fixed = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --fixed-size on --json",
+    ));
+    assert_eq!(fixed["apps"][0]["dpi_scaling"], "system");
+    assert_eq!(fixed["apps"][0]["fixed_size"], true);
+    let output = dsa(&endpoint, "app-window com.example.notes");
+    assert_eq!(
+        stdout(&output).trim(),
+        "com.example.notes: fixed size, opens at the size Android gives it, is scaled by DSA on \
+         another monitor"
+    );
+    let forced = dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling system-forced",
+    );
+    assert!(
+        stdout(&forced).contains("not available yet"),
+        "{}",
+        stdout(&forced)
+    );
+    // Back to auto and resizable is the defaults: the entry goes.
+    let auto = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --dpi-scaling auto --fixed-size off --json",
+    ));
+    assert_eq!(auto["apps"][0]["dpi_scaling"], "auto");
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    assert_eq!(none["apps"], serde_json::json!([]));
 }
 
 #[test]
@@ -2825,6 +2984,8 @@ fn fr15_settings_say_where_program_updates_come_from() {
         },
         network: None,
         adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
     };
     let text = dsa_cli::describe_settings(&report);
     let line = text
@@ -3010,6 +3171,55 @@ fn fr32_dsa_installs_reports_and_removes_google_play() {
 }
 
 #[test]
+fn fr32_dsa_gapps_remove_works_while_android_is_stopped_and_starts_nothing() {
+    // An Android that Google's apps keep from starting is exactly when they must go.
+    use dsa_host_core::gapps::GappsPackage;
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::{MemorySettings, SettingsStore};
+    let ((listener, _, user), endpoint) = local_pair();
+    let store = Arc::new(MemorySettings::default());
+    // What 0.2.0 recorded, from an image this DSA no longer lays over.
+    let old = GappsPackage {
+        variant: "core".into(),
+        version: "20261001".into(),
+        android_version: "17.0".into(),
+        sdk: 37,
+        arch: "x86_64".into(),
+        file: "LiteGapps-core-x86_64-17.0-20261001-official.zip".into(),
+        source: "https://example.com/x.zip".into(),
+        md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+        image_format: 0,
+    };
+    store.set_gapps(&user, Some(&old)).unwrap();
+    let androids = Arc::new(FakeAndroids::default());
+    let work = std::env::temp_dir().join(format!("dsa-cli-gapps-stopped-{}", std::process::id()));
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), ServiceFacts::default())
+        .with_gapps(dsa_host_core::gapps::Source::new(
+            Arc::new(FakeLiteGapps(Default::default())),
+            work,
+        ));
+    let _service = RunningService::start_service(listener, service);
+
+    let status = json_of(&dsa(&endpoint, "gapps --json"));
+    assert_eq!(status["reinstall_needed"], true);
+    assert_eq!(status["package"]["image_format"], 0);
+    let text = stdout(&dsa(&endpoint, "gapps status"));
+    assert!(text.contains("Install Google Play again"), "{text}");
+    assert!(!text.contains("Restart Android"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "gapps remove --json"));
+    assert!(removed["package"].is_null());
+    assert!(removed["android"].is_null(), "Android was not started");
+    assert_eq!(removed["reinstall_needed"], false);
+    assert_eq!(store.gapps(&user).unwrap(), None);
+    let state = json_of(&dsa(&endpoint, "status --json"));
+    assert_eq!(state["state"], "Stopped", "{state}");
+    let text = stdout(&dsa(&endpoint, "gapps remove"));
+    assert!(text.contains("from its next start"), "{text}");
+}
+
+#[test]
 fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
     use dsa_cli::Change;
     let parse = |line: &str| {
@@ -3047,6 +3257,8 @@ fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
         },
         network: None,
         adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
     };
     let channel_line = |report: &SettingsReport| {
         dsa_cli::describe_settings(report)
@@ -3064,4 +3276,43 @@ fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
     let json = dsa_cli::settings_json(&report(true, true));
     assert_eq!(json["prerelease_updates"], true);
     assert_eq!(json["update_channel_available"], true);
+}
+
+#[test]
+fn fr35_the_settings_apps_read_root_elevation_and_each_apps_level() {
+    use dsa_host_core::host_api::{ServiceFacts, SettingsReport};
+    let report = SettingsReport {
+        settings: dsa_host_core::settings::Settings {
+            root_elevation: true,
+            ..Default::default()
+        },
+        facts: ServiceFacts::default(),
+        network: None,
+        adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
+    };
+    assert_eq!(dsa_cli::settings_json(&report)["root_elevation"], true);
+    let line = dsa_cli::describe_settings(&report)
+        .lines()
+        .find(|line| line.starts_with("Root elevation:"))
+        .expect("a root elevation line")
+        .to_string();
+    assert!(line.contains("on"), "{line}");
+    assert!(line.contains("next start of Android"), "{line}");
+
+    for level in ["off", "ask", "remember", "unavailable"] {
+        let app = dsa_host_core::tasks::AppInfo {
+            package_name: "com.example.backup".into(),
+            root: level.into(),
+            ..Default::default()
+        };
+        assert_eq!(dsa_cli::app_json(&app, false)["root"], level);
+        let described = dsa_cli::describe_app(&app);
+        let root = described
+            .lines()
+            .find(|line| line.starts_with("Root: "))
+            .expect("a root line");
+        assert!(root.starts_with(&format!("Root: {level}")), "{root}");
+    }
 }

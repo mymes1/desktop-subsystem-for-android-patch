@@ -97,6 +97,39 @@
   <data name="UpdateNoticeBar.Title" xml:space="preserve">
     <value>Update</value>
   </data>
+  <data name="UpdateNotice_AndroidUpdated" xml:space="preserve">
+    <value>Android was updated to {0}.</value>
+  </data>
+  <data name="UpdateNotice_AndroidInstalled" xml:space="preserve">
+    <value>Android {0} is installed.</value>
+  </data>
+  <data name="UpdateNotice_AndroidChosen" xml:space="preserve">
+    <value>Android {0} is chosen. DSA downloads it now, and it is used the next time Android starts.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBack" xml:space="preserve">
+    <value>Android {0} did not start ({1}), so Android {2} is in use again. Android {0} is not tried again until a newer build of it or a new version of DSA is available.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBackNotReady" xml:space="preserve">
+    <value>Android {0} did not start ({1}), so Android {2} is in use again, but it has not finished starting yet ({3}). Start Android again to boot Android {2}.</value>
+  </data>
+  <data name="UpdateNotice_AndroidGaveUp" xml:space="preserve">
+    <value>Android {0} did not start ({1}), and no other image is installed. DSA downloads another image if there is one, and the next version of DSA tries this one again.</value>
+  </data>
+  <data name="UpdateNotice_AndroidOnTrial" xml:space="preserve">
+    <value>Android {0} is kept on trial and is not to blame: {1}</value>
+  </data>
+  <data name="UpdateNotice_DsaUpdated" xml:space="preserve">
+    <value>DSA was updated to {0}.</value>
+  </data>
+  <data name="UpdateNotice_DsaDownloaded" xml:space="preserve">
+    <value>DSA {0} is downloaded. It installs when Android is not running.</value>
+  </data>
+  <data name="UpdateNotice_DsaInstalling" xml:space="preserve">
+    <value>Installing DSA {0}. The service restarts when it is done.</value>
+  </data>
+  <data name="UpdateNotice_DsaFailed" xml:space="preserve">
+    <value>Updating DSA to {0} failed ({1}). DSA {2} is still installed.</value>
+  </data>
   <data name="GeneralMoreHeader.Text" xml:space="preserve">
     <value>More</value>
   </data>
@@ -265,8 +298,26 @@
   <data name="DisplayGpuCard.Description" xml:space="preserve">
     <value>What the default choice renders on now.</value>
   </data>
+  <data name="RenderGpuAppliesBar.Title" xml:space="preserve">
+    <value>Applies after a restart</value>
+  </data>
   <data name="RenderGpuAppliesBar.Message" xml:space="preserve">
     <value>A new render GPU takes effect when the window manager starts again: at the next sign-in, or when you restart it below.</value>
+  </data>
+  <data name="TouchGesturesCard.Header" xml:space="preserve">
+    <value>Turn off Windows touch gestures in DSA app windows</value>
+  </data>
+  <data name="TouchGesturesCard.Description" xml:space="preserve">
+    <value>On by default. While a DSA app window is in front, Windows' three- and four-finger touch gestures are off, so games and drawing apps get up to ten fingers. Other apps keep the gestures as you set them in Windows Settings.</value>
+  </data>
+  <data name="TouchGestures_Failed" xml:space="preserve">
+    <value>This setting can't be used: Windows refused to change its touch gestures ({0}). You can turn them off for every app in Windows Settings.</value>
+  </data>
+  <data name="TouchGestures_NoReason" xml:space="preserve">
+    <value>no reason given</value>
+  </data>
+  <data name="TouchSettingsLink.Content" xml:space="preserve">
+    <value>Open touch settings</value>
   </data>
   <data name="RestartWindowManagerCard.Header" xml:space="preserve">
     <value>Restart the window manager</value>
@@ -558,6 +609,9 @@
   </data>
   <data name="Gapps_RemovedPending" xml:space="preserve">
     <value>Removed: Google's apps leave Android at its next start.</value>
+  </data>
+  <data name="Gapps_ReinstallNeeded" xml:space="preserve">
+    <value>Made by an older DSA: LiteGapps Core {0} for Android {1} ({2}) is no longer used, and Android starts without Google's apps. Install Google Play again.</value>
   </data>
   <data name="Gapps_Source" xml:space="preserve">
     <value>Downloaded from LiteGapps: {0}</value>
@@ -1492,6 +1546,30 @@
   <data name="Apps_WindowChanged" xml:space="preserve">
     <value>{0}'s windows follow the new settings from the next one that opens.</value>
   </data>
+  <data name="AppsDpiScaling.Name" xml:space="preserve">
+    <value>Scaling on another monitor</value>
+  </data>
+  <data name="AppsDpiScaling.ToolTip" xml:space="preserve">
+    <value>Who scales this app when its window moves to a monitor of another scale. App: the app redraws at the new scale, and text stays sharp; for an app that does not say it handles this, Android recreates its screen and restores its state, so it may redraw briefly when it moves. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. Automatic and System never restart the app.</value>
+  </data>
+  <data name="Apps_DpiScaling_Auto" xml:space="preserve">
+    <value>Scaling: automatic</value>
+  </data>
+  <data name="Apps_DpiScaling_App" xml:space="preserve">
+    <value>Scaling performed by: app</value>
+  </data>
+  <data name="Apps_DpiScaling_System" xml:space="preserve">
+    <value>Scaling performed by: system</value>
+  </data>
+  <data name="Apps_DpiScaling_SystemForced" xml:space="preserve">
+    <value>Scaling performed by: system (forced)</value>
+  </data>
+  <data name="Apps_DpiScaling_SystemForcedNotYet" xml:space="preserve">
+    <value>Scaling performed by: system (forced), not available yet</value>
+  </data>
+  <data name="Apps_DpiScaling_SystemForcedTip" xml:space="preserve">
+    <value>System (forced) gives the app the new scale without restarting it, even if it does not say it handles one. It is not available yet: it needs a change to Android's framework that this build does not have, so until then it works like System.</value>
+  </data>
   <data name="NavNetwork.Content" xml:space="preserve">
     <value>Network</value>
   </data>
@@ -1786,4 +1864,74 @@
   <data name="Identity_NotReported" xml:space="preserve">
     <value>Not reported</value>
   </data>
+  <data name="AppsRoot.Name" xml:space="preserve">
+    <value>Root access</value>
+  </data>
+  <data name="Apps_Root_off" xml:space="preserve">
+    <value>Root: not allowed</value>
+  </data>
+  <data name="Apps_Root_ask" xml:space="preserve">
+    <value>Root: ask each time</value>
+  </data>
+  <data name="Apps_Root_remember" xml:space="preserve">
+    <value>Root: remember (no asking)</value>
+  </data>
+  <data name="Apps_RootTip_unavailable" xml:space="preserve">
+    <value>Root access is off for this PC. An administrator turns it on in Advanced.</value>
+  </data>
+  <data name="Apps_RootTip_unknown" xml:space="preserve">
+    <value>The DSA service does not report this app's root level. Update DSA to choose it here.</value>
+  </data>
+  <data name="Apps_RootNotChanged" xml:space="preserve">
+    <value>The root level of {0} was not changed: {1}</value>
+  </data>
+  <data name="Apps_RootSet_off" xml:space="preserve">
+    <value>{0} cannot use root any more. su disappears for it from the next start of Android.</value>
+  </data>
+  <data name="Apps_RootSet_ask" xml:space="preserve">
+    <value>{0} now asks an administrator of this PC each time it uses su. If it could not see su before, it sees it from the next start of Android.</value>
+  </data>
+  <data name="Apps_RootSet_remember" xml:space="preserve">
+    <value>{0} now uses su without asking. If it could not see su before, it sees it from the next start of Android.</value>
+  </data>
+  <data name="AppsRootOffBar.Title" xml:space="preserve">
+    <value>Root access is off</value>
+  </data>
+  <data name="AppsRootOffBar.Message" xml:space="preserve">
+    <value>No app can use su. An administrator of this PC can turn root access on in Advanced, and then you choose each app's level here.</value>
+  </data>
+  <data name="AppsRootNote.Text" xml:space="preserve">
+    <value>Root access: Not allowed hides su from the app. Ask each time shows an administrator prompt with the app's name for each request, and after an approval the app is not asked again for 15 minutes. Remember approves without asking, so choosing it needs an administrator's approval.</value>
+  </data>
+  <data name="RootHeader.Text" xml:space="preserve">
+    <value>Root access</value>
+  </data>
+  <data name="RootElevationCard.Header" xml:space="preserve">
+    <value>Let Android apps ask for root</value>
+  </data>
+  <data name="RootElevationCard.Description" xml:space="preserve">
+    <value>An app you allow on the Apps page can run commands as root once an administrator of this PC approves, as sudo does. Off by default. The Android image, its build properties and SELinux stay as they are.</value>
+  </data>
+  <data name="RootElevationAdminReason.Text" xml:space="preserve">
+    <value>Only an administrator can change this, because it applies to every user of this PC. Use Change as administrator, and Windows asks for permission.</value>
+  </data>
+  <data name="RootElevationRestartBar.Title" xml:space="preserve">
+    <value>Restart Android to apply</value>
+  </data>
+  <data name="RootElevationRestartBar.Message" xml:space="preserve">
+    <value>Root access changes from the next start of Android. Stop Android on the General page, then open an app.</value>
+  </data>
+  <data name="RootLogCard.Header" xml:space="preserve">
+    <value>Where requests are recorded</value>
+  </data>
+  <data name="RootElevation_LogAt" xml:space="preserve">
+    <value>Each request is kept in the service log with the app, the time, whether it was approved and the command: {0}</value>
+  </data>
+  <data name="RootElevation_LogUnknown" xml:space="preserve">
+    <value>Each request is kept in the service log with the app, the time, whether it was approved and the command.</value>
+  </data>
+  <data name="RootNote.Text" xml:space="preserve">
+    <value>Choose each app's level on the Apps page. Each user chooses for the apps in their own Android.</value>
+  </data>
+  <data name="AppsAdbShell.Text" xml:space="preserve"><value>adb shell</value></data>
 </root>

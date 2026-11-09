@@ -111,6 +111,7 @@ pub mod profile;
 pub mod pstore_disk;
 pub mod render_gpu;
 pub mod renderer;
+pub mod root_approval;
 #[cfg(windows)]
 pub mod scheduling;
 #[cfg(windows)]

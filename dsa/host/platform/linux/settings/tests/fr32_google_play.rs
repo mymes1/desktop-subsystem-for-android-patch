@@ -184,3 +184,24 @@ fn fr32_install_works_only_without_a_package_and_remove_only_with_one() {
         assert!(!gapps.can_remove(true));
     }
 }
+
+#[test]
+fn fr32_an_image_made_by_an_older_dsa_asks_for_google_play_to_be_installed_again() {
+    let mut old = installed_json(false, false);
+    old["reinstall_needed"] = json!(true);
+    old["package"]["image_format"] = json!(0);
+    let gapps = Gapps::read(&old);
+    assert!(gapps.reinstall_needed);
+    assert_eq!(gapps.state(), GappsState::ReinstallNeeded);
+    assert_eq!(
+        view::gapps_status(&gapps),
+        "LiteGapps core 20261001 for Android 16.0 (x86_64) was installed by an older DSA and is \
+         no longer used, so Android starts without Google's apps. Install Google Play again."
+    );
+    // Installing again is the way back; removing still works.
+    assert!(gapps.can_install(false));
+    assert!(gapps.can_remove(false));
+    assert!(!gapps.can_install(true));
+    // A service from before it existed does not say it.
+    assert!(!Gapps::read(&installed_json(true, false)).reinstall_needed);
+}

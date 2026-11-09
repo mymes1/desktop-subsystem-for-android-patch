@@ -14,7 +14,7 @@
                         <TextBlock Text="{Binding Detail}" Style="{StaticResource CardDescription}" />
                     </StackPanel>
                 </ui:CardControl.Header>
-                <TextBlock Text="{Binding Size}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <TextBlock Text="{Binding Size}" Style="{StaticResource CardValue}" />
             </ui:CardControl>
         </DataTemplate>
     </Page.Resources>
@@ -60,17 +60,16 @@
                         </StackPanel>
                     </ui:CardControl.Header>
                     <StackPanel HorizontalAlignment="Right">
-                        <TextBlock Text="{Binding VmSize, Mode=OneWay}" HorizontalAlignment="Right"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{Binding VmSize, Mode=OneWay}" Style="{StaticResource CardValue}" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                     Visibility="{Binding GuestReported, Converter={StaticResource Visible}}">
-                            <TextBlock Text="{l:Text MemoryGuestUsedLabel.Text}" Margin="0,0,6,0" Style="{StaticResource CardDescription}" />
-                            <TextBlock Text="{Binding GuestUsed, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{l:Text MemoryGuestUsedLabel.Text}" Margin="0,0,6,0" Style="{StaticResource CardValueCaption}" />
+                            <TextBlock Text="{Binding GuestUsed, Mode=OneWay}" Style="{StaticResource CardValueCaption}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                     Visibility="{Binding HasVmBeyondGuest, Converter={StaticResource Visible}}">
-                            <TextBlock Text="{l:Text MemoryBeyondGuestLabel.Text}" Margin="0,0,6,0" Style="{StaticResource CardDescription}" />
-                            <TextBlock Text="{Binding VmBeyondGuest, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{l:Text MemoryBeyondGuestLabel.Text}" Margin="0,0,6,0" Style="{StaticResource CardValueCaption}" />
+                            <TextBlock Text="{Binding VmBeyondGuest, Mode=OneWay}" Style="{StaticResource CardValueCaption}" />
                         </StackPanel>
                     </StackPanel>
                 </ui:CardControl>
@@ -83,7 +82,7 @@
                             <TextBlock Text="{l:Text MemoryHostTotalCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <TextBlock Text="{Binding HostTotal, Mode=OneWay}" Style="{StaticResource SubtitleText}" />
+                    <TextBlock Text="{Binding HostTotal, Mode=OneWay}" Style="{StaticResource CardValueSubtitle}" />
                 </ui:CardControl>
                 <l:RowList ItemsSource="{Binding HostRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
                 <TextBlock Text="{l:Text MemoryHostNone.Text}" Style="{StaticResource Note}"
@@ -102,11 +101,10 @@
                         </ui:CardControl.Header>
                         <StackPanel MinWidth="220">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <TextBlock Text="{Binding GuestAvailable, Mode=OneWay}"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                <TextBlock Text="{l:Text MemoryAvailableOf.Text}" Margin="6,0"
+                                <TextBlock Text="{Binding GuestAvailable, Mode=OneWay}" Style="{StaticResource CardValue}" />
+                                <TextBlock Text="{l:Text MemoryAvailableOf.Text}" Margin="6,0" Style="{StaticResource CardValue}"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{Binding GuestTotal, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <TextBlock Text="{Binding GuestTotal, Mode=OneWay}" Style="{StaticResource CardValue}" />
                             </StackPanel>
                             <ProgressBar Value="{Binding GuestUsedPercent, Mode=OneWay}" Maximum="100" Margin="0,6,0,0" />
                         </StackPanel>

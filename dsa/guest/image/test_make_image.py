@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import re
+import stat
 import struct
 import subprocess
 import sys
@@ -33,8 +34,9 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(file \([^)]*\bunlink\b")
 
     # The SELinux type and class of every kernel file dsa-channeld opens, as the guest's kernel
-    # labels it. A path the daemon opens that is not listed here fails the test below, so a
-    # new read cannot ship without its rule (the refused /proc/vmstat read went unnoticed).
+    # labels it, and the permission an open asks of it when that is not read (dir: search). A
+    # path the daemon opens that is not listed here fails the test below, so a new read cannot
+    # ship without its rule (the refused /proc/vmstat read went unnoticed).
     CHANNELD_KERNEL_PATHS = {
         "/proc/bootconfig": [("proc_bootconfig", "file")],
         "/sys/fs/pstore": [("pstorefs", "dir"), ("pstorefs", "file")],
@@ -44,13 +46,35 @@ class ImageLayoutTests(unittest.TestCase):
         # The process listing and each app process's /proc/<pid>/cmdline.
         "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
         "/proc/{}/cmdline": [("appdomain", "file")],
+        # The kernel's su guard on securityfs, which only the elevation helper writes.
+        "/sys/kernel/security/dsa_su/control": [
+            ("securityfs", "dir"),
+            ("dsa_su_control_file", "dir"),
+            ("dsa_su_control_file", "file", "write"),
+        ],
     }
+    # Kernel files a source names for a domain that never opens them. su_relay.rs is the
+    # daemon's, and its KernelGuard writes the su guard only where a test points it at a file
+    # of its own: on the guest the daemon hands each config to the elevation helper
+    # (HelperGuard), because the guard refuses the daemon, which runs as system.
+    CHANNELD_KERNEL_NAMED_NOT_OPENED = {("su_relay.rs", "/sys/kernel/security/dsa_su/control")}
     # The modes init runs the same binary in, each in a domain of its own.
     CHANNELD_SOURCE_DOMAINS = {
         "share_mount.rs": ("dsa_sharemount", "files.cil"),
         "android_files.rs": ("dsa_files", "files.cil"),
         "webdav.rs": ("dsa_files", "files.cil"),
+        # The elevation helper (dsa-channeld --su-relay) and the commands it starts.
+        "su_helper.rs": ("dsa_su", "su.cil"),
+        "su_process.rs": ("dsa_su", "su.cil"),
     }
+    # The policy files the image installs together with the daemon, so a rule for one of its
+    # domains may live in any of them (the daemon's root elevation rules are in su.cil).
+    CHANNELD_POLICY_FILES = ("channeld.cil", "files.cil", "su.cil")
+
+    @classmethod
+    def _daemon_policy(cls, here):
+        """Every rule the image installs with the daemon, as one text."""
+        return "\n".join((here / "sepolicy" / name).read_text() for name in cls.CHANNELD_POLICY_FILES)
 
     def test_nfr2_every_kernel_file_channeld_opens_has_an_allow_rule(self):
         here = Path(__file__).parent
@@ -61,13 +85,15 @@ class ImageLayoutTests(unittest.TestCase):
             domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
                 source.name, ("dsa_channeld", "channeld.cil")
             )
-            policy = (here / "sepolicy" / policy_file).read_text()
+            policy = self._daemon_policy(here)
             for number, line in enumerate(source.read_text().splitlines(), 1):
                 if line.strip().startswith("//"):
                     continue
                 for path in literal.findall(line):
                     if path.startswith("/proc/self/"):
                         # A process's own /proc entries are every domain's to read.
+                        continue
+                    if (source.name, path) in self.CHANNELD_KERNEL_NAMED_NOT_OPENED:
                         continue
                     where = f"{source.name}:{number} opens {path}"
                     self.assertIn(
@@ -77,8 +103,8 @@ class ImageLayoutTests(unittest.TestCase):
                         f"and an allow rule for {domain} to sepolicy/{policy_file}",
                     )
                     found += 1
-                    for target, cls in self.CHANNELD_KERNEL_PATHS[path]:
-                        perm = "search" if cls == "dir" else "read"
+                    for target, cls, *asked in self.CHANNELD_KERNEL_PATHS[path]:
+                        perm = asked[0] if asked else "search" if cls == "dir" else "read"
                         self.assertRegex(
                             policy,
                             rf"\(allow\s+{domain}\s+{target}\s+\(\s*{cls}\s+\([^)]*\b{perm}\b",
@@ -94,6 +120,8 @@ class ImageLayoutTests(unittest.TestCase):
         "/data/media/0": ["system_data_root_file", "media_userdir_file", "media_rw_data_file"],
         "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
         "/data/vendor/dsa/gapps": ["system_data_root_file", "vendor_data_file"],
+        # The package manager's list, where root elevation finds each named app's uid.
+        "/data/system/packages.list": ["system_data_root_file", "system_data_file"],
     }
     # Paths the daemon names but never opens, so no folder on their way needs a rule. The
     # Google apps mount point is only compared with the mount points /proc/self/mounts lists.
@@ -164,7 +192,7 @@ class ImageLayoutTests(unittest.TestCase):
             domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
                 source.name, ("dsa_channeld", "channeld.cil")
             )
-            policy = (here / "sepolicy" / policy_file).read_text()
+            policy = self._daemon_policy(here)
             for number, line in self._production_lines(source):
                 for path in literal.findall(line):
                     if path in self.CHANNELD_NAMED_NOT_OPENED:
@@ -947,6 +975,22 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("ro.hardware.vulkan=ranchu\n", props)
         self.assertIn("ro.hardware.gralloc=minigbm\n", props)
         self.assertIn("ro.cpuvulkan.version=0\n", props)
+
+    def test_fr4_android_starts_at_the_main_monitors_density(self):
+        # Image test run 42562909966: without ro.sf.lcd_density SurfaceFlinger fell back to
+        # 213 dpi, the host then asked each task for 160, and that density change relaunched
+        # every app right after it opened; hello-vulkan crashed in the relaunch. The density
+        # is now the boot's: the image names 160 for both the hwcomposer and SurfaceFlinger,
+        # and the host replaces both with its main monitor's.
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
+        self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
+        self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
+        self.assertIn("androidboot.lcd_density=160", make_image.kernel_cmdline("", hwcomposer=False))
+        # No build.prop sets it, the input's included: init reads them before any script, and
+        # the first value would hold every boot at the image's density.
+        for vendor in (False, True):
+            props = make_image.edit_props("ro.debuggable=1\nro.sf.lcd_density=320\n", vendor=vendor)
+            self.assertNotIn("ro.sf.lcd_density", props)
 
     def test_pr3_vulkan_loader_uses_the_vendor_driver_not_the_cuttlefish_apex(self):
         # With ro.vulkan.apex set, the loader takes Cuttlefish's driver from its APEX,
@@ -2197,11 +2241,14 @@ class GuestMemoryTests(unittest.TestCase):
             for name, data in (extra or {}).items():
                 archive.writestr(name, data)
         daemon = None
+        client = None
         if channeld:
             daemon = root / "dsa-channeld"
             daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
         modified = root / "modified.zip"
-        make_image.modify(source, modified, channeld=daemon)
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
         return zipfile.ZipFile(modified)
 
     # The rules on the memfd types the published Android 16 and 17 policies already carry.
@@ -2232,6 +2279,16 @@ class GuestMemoryTests(unittest.TestCase):
                       "labelled system_server_tmpfs, so the binder calls that carry them fail", refused)
         policy = self.PLATFORM_MEMFD_RULES + make_image.SENSORS_POLICY.read_text()
         self.assertEqual(make_image.memfd_sharing_problems(policy, sharing=sensors, to_apps=[]), [])
+
+    def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
+        rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-160}\n", rc)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
+            self.assertIn(
+                "vendor/etc/init/dsa-display.rc 0 0 644 capabilities=0x0",
+                archive.read("META/vendor_filesystem_config.txt").decode(),
+            )
 
     def test_nfr1_the_guest_swaps_to_zram_of_half_its_memory(self):
         fstab = (Path(make_image.__file__).with_name("fstab.dsa")).read_text()
@@ -2428,6 +2485,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.ADB_PROPERTY_CONTEXT + "\n"
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
+            + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
 
@@ -5293,6 +5351,42 @@ class ArmTranslationImageTests(unittest.TestCase):
                "(allow system_file labeledfs (filesystem (associate)))\n")
         self.assertNotEqual(self._context_mount_problems("dsa-gapps.rc", old), [])
 
+    # The flags init's mount command knows (system/core/init/builtins.cpp, mount_flags[], and
+    # "wait"). Init passes the kernel only the last argument that is none of these, as the
+    # mount's data, and drops every other one without a word.
+    INIT_MOUNT_FLAGS = {"noatime", "noexec", "nosuid", "nodev", "nodiratime", "ro", "rw", "remount",
+                        "bind", "rec", "unbindable", "private", "slave", "shared", "nosymfollow",
+                        "defaults", "wait"}
+
+    @classmethod
+    def _dropped_mount_options(cls, rc):
+        """The options of each mount command in an init script that init drops: every argument
+        after the mount point that is not a flag init knows, except the last one."""
+        dropped = []
+        for line in rc.splitlines():
+            words = line.split()
+            if not words or words[0] != "mount":
+                continue
+            options = [word for word in words[4:-1] if word not in cls.INIT_MOUNT_FLAGS]
+            if options:
+                dropped.append((words[3], options))
+        return dropped
+
+    def test_fr25_fr32_init_hands_every_mount_option_to_the_kernel(self):
+        for name in ["dsa-arm-translation.rc", "dsa-gapps.rc"]:
+            rc = (Path(make_image.__file__).with_name(name)).read_text()
+            self.assertEqual(self._dropped_mount_options(rc), [], name)
+        # develop 406c30d7 named fscontext= and context= as two arguments. Init dropped
+        # fscontext=, so the kernel relabelled the superblock to the files' type and refused it
+        # at every boot: "avc: denied { relabelto } for comm="init" scontext=u:r:init:s0
+        # tcontext=u:object_r:system_lib_file:s0 tclass=filesystem", then "mount() failed:
+        # Permission denied".
+        old = ("    mount erofs loop@/system/etc/dsa/arm-translation/default.img /mnt/dsa-arm-translation "
+               "ro nodev nosuid fscontext=u:object_r:dsa_arm_translation_fs:s0 "
+               "context=u:object_r:system_lib_file:s0\n")
+        self.assertEqual(self._dropped_mount_options(old),
+                         [("/mnt/dsa-arm-translation", ["fscontext=u:object_r:dsa_arm_translation_fs:s0"])])
+
     def test_fr25_fr32_the_mount_rules_stay_clear_of_the_platforms_neverallows(self):
         # The platform's policy (Android 16 and 17) forbids relabelto on any fs_type that is not
         # a contextmount_type, filesystem associate from an fs_type to a file type, associate
@@ -5333,14 +5427,153 @@ class ArmTranslationImageTests(unittest.TestCase):
     def test_fr25_fr32_the_overlays_let_init_start_services_from_the_folders_they_cover(self):
         # On a nosuid mount the kernel refuses a domain change on exec (develop d69b9ff2:
         # "avc: denied { nosuid_transition } for comm="init" ... tcontext=u:r:vdc:s0", and vold
-        # failed). /system, /product and /system_ext are not nosuid, so neither are the
-        # overlays laid over them.
+        # failed). /product and /system_ext are not nosuid, so neither are the overlays laid
+        # over their folders. The translation script lays no overlay at all.
+        rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+        overlays = [line.strip() for line in rc.splitlines() if line.strip().startswith("mount overlay ")]
+        self.assertTrue(overlays)
+        for line in overlays:
+            self.assertNotIn("nosuid", line.split(), line)
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        self.assertEqual([line for line in rc.splitlines() if line.strip().startswith("mount overlay ")], [])
+
+    # What develop 3b9b304c laid over, which rebooted Android 5.6 s into the boot: an overlay
+    # over /system/bin runs bpfloader through overlayfs, which looks it up with init's
+    # credentials ("avc: denied { getattr } for comm="uprobestatsbpfl" name="bpfloader"
+    # scontext=u:r:init:s0 tcontext=u:object_r:bpfloader_platform_exec:s0", "overlayfs: failed
+    # to get metacopy (-13)", "execve('/system/bin/bpfloader'): 13[Permission denied]").
+    OLD_LAID_OVER_RC = (
+        "on post-fs-data && property:ro.boot.dsa.arm_translation=default\n"
+        "    mount overlay overlay /system/lib64 ro nodev lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64\n"
+        "    mount overlay overlay /system/bin ro nodev lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin\n"
+        "    mount overlay overlay /system/etc ro nodev lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc\n")
+    OLD_GAPPS_RC = (
+        "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
+        "    mount overlay overlay /product ro nodev lowerdir=/mnt/dsa-gapps/product:/product\n"
+        "    mount overlay overlay /system_ext ro nodev lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n")
+
+    def test_fr25_fr32_nothing_is_laid_over_the_folders_of_the_systems_programs(self):
         for rc_name in ("dsa-arm-translation.rc", "dsa-gapps.rc"):
             rc = (Path(make_image.__file__).with_name(rc_name)).read_text()
-            overlays = [line.strip() for line in rc.splitlines() if line.strip().startswith("mount overlay ")]
-            self.assertTrue(overlays, rc_name)
-            for line in overlays:
-                self.assertNotIn("nosuid", line.split(), f"{rc_name}: {line}")
+            self.assertEqual(make_image.program_folder_problems(rc_name, rc), [], rc_name)
+            for kind, point in make_image.mounts_onto(rc):
+                self.assertNotIn(point, make_image.PROGRAM_FOLDERS, f"{rc_name}: {kind} onto {point}")
+        old = make_image.program_folder_problems("dsa-arm-translation.rc", self.OLD_LAID_OVER_RC)
+        self.assertEqual(len(old), 3, old)
+        self.assertTrue(any("/system/bin" in problem for problem in old))
+        old = make_image.program_folder_problems("dsa-gapps.rc", self.OLD_GAPPS_RC)
+        self.assertEqual(len(old), 2, old)
+        # An overlay of the translator over a folder of its own is still not how it is reached.
+        sideways = "    mount overlay overlay /system/lib64/arm64 ro lowerdir=/a:/system/lib64/arm64\n"
+        self.assertEqual(len(make_image.program_folder_problems("dsa-arm-translation.rc", sideways)), 1)
+
+    def _modify_for(self, root, arch, extra=()):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("META/system_ext_filesystem_config.txt", "system_ext 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/product_filesystem_config.txt", "product 0 0 755 capabilities=0x0\n")
+            archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+            archive.writestr("PRODUCT/app/Camera/Camera.apk", "apk")
+            archive.writestr("SYSTEM_EXT/priv-app/", "")
+            for name in extra:
+                archive.writestr(name, "x")
+        modified = root / f"modified-{arch}.zip"
+        make_image.modify(source, modified, arch=arch)
+        return zipfile.ZipFile(modified)
+
+    def test_fr25_an_x86_64_image_carries_empty_places_for_the_package_and_an_arm64_image_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._modify_for(root, "x86_64") as archive:
+                names = archive.namelist()
+                for folder in make_image.ARM_TRANSLATION_FOLDERS:
+                    info = archive.getinfo(folder + "/")
+                    self.assertTrue(stat.S_ISDIR(info.external_attr >> 16), folder)
+                    self.assertFalse([n for n in names if n.startswith(folder + "/") and n != folder + "/"],
+                                     f"{folder} stays empty, so the package hides nothing")
+                self.assertEqual(archive.read("SYSTEM/etc/ld.config.arm64.txt"), b"")
+                for name, target in make_image.ARM_TRANSLATION_LINKS.items():
+                    self.assertTrue(stat.S_ISLNK(archive.getinfo(name).external_attr >> 16), name)
+                    self.assertEqual(archive.read(name).decode(), target)
+                    if name.startswith("SYSTEM/etc/"):
+                        self.assertTrue(target.startswith("/mnt/dsa-arm-translation/system/etc/"), target)
+                    else:
+                        # An older package's rule names /system/bin/<runner>; the link leads
+                        # there from beside it, to where the package's system/bin is bound.
+                        self.assertEqual(target, "dsa-arm-translation/" + name.rsplit("/", 1)[1])
+                system = archive.read("META/filesystem_config.txt").decode()
+                system_ext = archive.read("META/system_ext_filesystem_config.txt").decode()
+                for rule in make_image.ARM_TRANSLATION_REACH_FS_CONFIG["META/filesystem_config.txt"]:
+                    self.assertIn(rule, system)
+                self.assertIn("system_ext/lib64 0 0 755 capabilities=0x0", system_ext)
+                manifest = {"arch": "x86_64"}
+                self.assertEqual(make_image.check_arm_translation_reach(
+                    manifest, names, archive.read, archive.getinfo), [])
+                # An arm64 image with these would have its own linker read the empty file.
+                self.assertTrue(make_image.check_arm_translation_reach(
+                    {"arch": "arm64"}, names, archive.read, archive.getinfo))
+            with self._modify_for(root, "arm64") as archive:
+                names = archive.namelist()
+                for name in make_image.arm_translation_reach_names():
+                    self.assertNotIn(name, names)
+                self.assertNotIn("system/lib64/arm64 ", archive.read("META/filesystem_config.txt").decode())
+                self.assertEqual(make_image.check_arm_translation_reach(
+                    {"arch": "arm64"}, names, archive.read, archive.getinfo), [])
+                problems = make_image.check_arm_translation_reach(
+                    {"arch": "x86_64"}, names, archive.read, archive.getinfo)
+                self.assertEqual(len(problems), len(make_image.arm_translation_reach_names()), problems)
+
+    def test_fr25_a_build_with_files_where_the_package_goes_is_refused(self):
+        for name in ["SYSTEM_EXT/lib64/libfoo.so", "SYSTEM/lib64/arm64/libc.so", "SYSTEM/bin/arm64/linker64",
+                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt"]:
+            with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError, msg=name) as caught:
+                self._modify_for(Path(tmp), "x86_64", extra=[name]).close()
+            self.assertIn(name.split("/")[0], str(caught.exception))
+        # An arm64 build is not bound into, so its own files there stay.
+        with tempfile.TemporaryDirectory() as tmp:
+            self._modify_for(Path(tmp), "arm64", extra=["SYSTEM/lib64/arm64/libc.so"]).close()
+
+    def test_fr25_check_image_finds_a_place_of_the_package_missing_or_filled(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+            infos = {name: archive.getinfo(name) for name in archive.namelist()}
+
+        def check(files):
+            return make_image.check_arm_translation_reach({"arch": "x86_64"}, list(files), files.__getitem__,
+                                                         infos.get)
+
+        self.assertEqual(check(files), [])
+        for name in make_image.arm_translation_reach_names():
+            gone = {n: d for n, d in files.items() if n != name}
+            self.assertTrue(check(gone), name)
+        filled = dict(files, **{"SYSTEM_EXT/lib64/libfoo.so": b"x"})
+        self.assertTrue(any("hides" in problem for problem in check(filled)))
+        config = dict(files, **{"SYSTEM/etc/ld.config.arm64.txt": b"[system]\n"})
+        self.assertTrue(any("not empty" in problem for problem in check(config)))
+        elsewhere = dict(files, **{"SYSTEM/etc/berberis": b"/system/etc/other"})
+        self.assertTrue(any("does not lead" in problem for problem in check(elsewhere)))
+
+    def test_fr32_the_folders_the_google_apps_are_laid_over_are_in_every_image(self):
+        rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+        overlaid = [point for kind, point in make_image.mounts_onto(rc) if kind == "overlay"]
+        self.assertEqual(sorted(overlaid), sorted("/" + folder.lower() for folder in make_image.gapps_folders()))
+        with tempfile.TemporaryDirectory() as tmp:
+            for arch in ("x86_64", "arm64"):
+                with self._modify_for(Path(tmp), arch) as archive:
+                    names = archive.namelist()
+                    self.assertEqual(make_image.gapps_folder_problems(names), [], arch)
+                    # The build's own folders keep their entries; only the missing ones are added.
+                    self.assertNotIn("PRODUCT/app/", names)
+                    self.assertEqual(names.count("SYSTEM_EXT/priv-app/"), 1)
+                    self.assertTrue(stat.S_ISDIR(archive.getinfo("PRODUCT/framework/").external_attr >> 16))
+                    product = archive.read("META/product_filesystem_config.txt").decode()
+                    self.assertIn("product/etc/default-permissions 0 0 755 capabilities=0x0", product)
+                    self.assertNotIn("product/app ", product)
+                    system_ext = archive.read("META/system_ext_filesystem_config.txt").decode()
+                    self.assertIn("system_ext/etc/preferred-apps 0 0 755 capabilities=0x0", system_ext)
+        self.assertEqual(len(make_image.gapps_folder_problems([])), len(make_image.gapps_folders()))
 
     def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
@@ -5396,14 +5629,20 @@ class ArmTranslationImageTests(unittest.TestCase):
         for value, image in images.items():
             section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
             self.assertIn(f"mount erofs loop@{image} /mnt/dsa-arm-translation ro nodev nosuid "
-                          "fscontext=u:object_r:dsa_arm_translation_fs:s0 "
+                          "fscontext=u:object_r:dsa_arm_translation_fs:s0,"
                           "context=u:object_r:system_lib_file:s0", section)
-            for directory in ["lib64", "bin", "etc"]:
-                self.assertIn(
-                    f"mount overlay overlay /system/{directory} ro nodev "
-                    f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
-                    section,
-                )
+            erofs = section.index(next(c for c in section if c.startswith("mount erofs ")))
+            # Each part of the package is bound onto the empty place the image carries for it,
+            # once the image is mounted, and nothing else is mounted from it.
+            binds = []
+            for folder, inside in make_image.ARM_TRANSLATION_FOLDERS.items():
+                binds.append(f"mount none /mnt/dsa-arm-translation/{inside} /{folder.lower()} bind")
+            config = make_image.ARM_TRANSLATION_LINKER_CONFIG
+            binds.append(f"mount none /mnt/dsa-arm-translation/{config.lower()} /{config.lower()} bind")
+            for bind in binds:
+                self.assertIn(bind, section)
+                self.assertGreater(section.index(bind), erofs, bind)
+            self.assertEqual(sorted(c for c in section if c.startswith("mount none ")), sorted(binds))
             # Nothing else in Android mounts binfmt_misc, so the handlers are registered only
             # once it is mounted here.
             mount = section.index("mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid")
@@ -5419,7 +5658,12 @@ class ArmTranslationImageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            # The places the package is bound onto: /system_ext/lib64 and /system/lib64/arm64
+            # (system libraries), /system/bin/arm64 and /system/bin/dsa-arm-translation (system
+            # files), and /system/etc/ld.config.arm64.txt (the linker's configuration).
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init system_file (dir (mounton)))", policy)
+            self.assertIn("(allow init system_linker_config_file (file (mounton)))", policy)
             self.assertIn("(typeattributeset fs_type (dsa_arm_translation_fs))", policy)
             self.assertIn("(typeattributeset contextmount_type (dsa_arm_translation_fs))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
@@ -5537,12 +5781,29 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertEqual(product.count(product[-2]), 1)
             on = archive.read("SYSTEM/etc/dsa/gapps-on.prop").decode().splitlines()
             props = [line for line in on if line and not line.startswith("#")]
-            self.assertEqual([line.split("=", 1)[0] for line in props], ["ro.oem.build.fingerprint"])
+            self.assertEqual([line.split("=", 1)[0] for line in props],
+                             ["ro.oem.build.fingerprint", "ro.control_privapp_permissions"])
             off = archive.read("SYSTEM/etc/dsa/gapps-off.prop").decode().splitlines()
             self.assertEqual([line for line in off if line and not line.startswith("#")], [])
             config = archive.read("META/filesystem_config.txt").decode()
             for rule in make_image.GAPPS_FS_CONFIG:
                 self.assertIn(rule, config)
+
+    def test_fr32_a_boot_with_the_google_apps_logs_a_missing_privileged_permission(self):
+        # LiteGapps' lists for Android 17 left out ACCESS_COMPANION_INFO, and with the allowlist
+        # enforced system_server stopped at systemReady every ten seconds: Android never started.
+        on = (Path(make_image.__file__).with_name("gapps-on.prop")).read_text().splitlines()
+        self.assertIn(make_image.GAPPS_PRIVAPP_LOG, on)
+        self.assertEqual(make_image.GAPPS_PRIVAPP_LOG, "ro.control_privapp_permissions=log")
+        off = (Path(make_image.__file__).with_name("gapps-off.prop")).read_text()
+        self.assertNotIn("ro.control_privapp_permissions", off)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertIn(make_image.GAPPS_PRIVAPP_LOG,
+                          archive.read("SYSTEM/etc/dsa/gapps-on.prop").decode().splitlines())
+            # Nothing the product properties read after the import sets it back.
+            product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
+            after = product[product.index(make_image.GAPPS_IMPORT) + 1:]
+            self.assertFalse([line for line in after if "control_privapp_permissions" in line])
 
     def test_fr32_the_google_apps_are_laid_over_only_when_the_host_says_they_are_installed(self):
         rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
@@ -5550,13 +5811,16 @@ class ArmTranslationImageTests(unittest.TestCase):
         before, after = rc.split(trigger, 1)
         section, rest = after.split("\n\n", 1)
         self.assertIn("mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
-                      "fscontext=u:object_r:dsa_gapps_fs:s0 context=u:object_r:system_file:s0", section)
-        for partition in ["product", "system_ext"]:
+                      "fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
+        for folder in make_image.gapps_folders():
+            point = "/" + folder.lower()
             self.assertIn(
-                f"mount overlay overlay /{partition} ro nodev "
-                f"lowerdir=/mnt/dsa-gapps/{partition}:/{partition}",
+                f"mount overlay overlay {point} ro nodev "
+                f"lowerdir=/mnt/dsa-gapps{point}:{point}",
                 section,
             )
+        for partition in ["product", "system_ext"]:
+            self.assertNotIn(f"mount overlay overlay /{partition} ", section)
         # Every mount waits for the host's word.
         self.assertNotIn("mount ", before)
         self.assertNotIn("mount ", rest)
@@ -5601,7 +5865,11 @@ class ArmTranslationImageTests(unittest.TestCase):
                     else:
                         rc = gapps_rc if case != "always" else "on post-fs-data\n    mount overlay overlay /product ro\n"
                         archive.writestr("SYSTEM/etc/init/dsa-gapps.rc", rc)
-                        archive.writestr("SYSTEM/etc/dsa/gapps-on.prop", "ro.oem.build.fingerprint=x\n")
+                        # The "always" image also has 0.2.0's "on" file, which enforced the
+                        # allowlist.
+                        on = ("ro.oem.build.fingerprint=x\n" if case == "always"
+                              else (Path(make_image.__file__).with_name("gapps-on.prop")).read_text())
+                        archive.writestr("SYSTEM/etc/dsa/gapps-on.prop", on)
                         archive.writestr("SYSTEM/etc/dsa/gapps-off.prop", "# nothing\n")
                         archive.writestr("PRODUCT/etc/build.prop",
                                          make_image.add_arm_translation_import(make_image.add_gapps_import("")))
@@ -5615,6 +5883,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertNotIn(problem, good)
         self.assertIn("without waiting for the host", always)
         self.assertNotIn("without waiting for the host", good)
+        self.assertIn("stops Android at every boot", always)
+        self.assertNotIn("stops Android at every boot", good)
         self.assertIn("x86_64 is not the ABI apps are installed for first", arm_first)
         self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
 
@@ -5805,6 +6075,291 @@ class FrameworkImageTests(unittest.TestCase):
             self.assertTrue(any("never hear of a GPU reset" in p for p in problems), problems)
             # An image without a framework has nothing to check.
             self.assertEqual(make_image.check_framework({"arch": "x86_64"}, [], None), [])
+
+
+class RootElevationImageTests(unittest.TestCase):
+    """The guest image's side of root elevation: the su client's label, the elevation helper's
+    domain and sockets, and the su guard that hides su from every app the host did not allow."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "su.cil").read_text()
+    RELAY = (Path(__file__).parents[1] / "channeld" / "src" / "su_relay.rs").read_text()
+
+    def _modify(self, root, channeld=True, plat_file_contexts="/system/bin/sh u:object_r:shell_exec:s0\n"):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", plat_file_contexts)
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = None
+        client = None
+        if channeld:
+            daemon = root / "dsa-channeld"
+            daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _rules(self, text):
+        """(kind, source, target, class, permissions) of every allow, dontaudit and
+        typetransition rule in `text`, comments aside."""
+        rules = []
+        for line in text.splitlines():
+            line = line.strip()
+            m = re.match(r"\((allow|dontaudit)\s+(\S+)\s+(\S+)\s+\((\S+)\s+\(([^)]*)\)\)\)$", line)
+            if m:
+                rules.append((m.group(1), m.group(2), m.group(3), m.group(4), set(m.group(5).split())))
+            m = re.match(r"\(typetransition\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\)$", line)
+            if m:
+                rules.append(("typetransition", m.group(1), m.group(2), m.group(3), {m.group(4)}))
+        return rules
+
+    def _relay_paths(self):
+        """The su paths the daemon's su relay tells the kernel's su guard to watch."""
+        listed = re.search(r"pub const SU_PATHS: \[&str; \d+\] = \[([^\]]*)\]", self.RELAY)
+        self.assertIsNotNone(listed, "su_relay.rs no longer lists SU_PATHS")
+        return re.findall(r'"(/[^"]+)"', listed.group(1))
+
+    def test_fr35_the_image_carries_root_elevations_policy_with_the_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.root_elevation_problems(names, archive.read), [])
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            for domain in ["dsa_su", "dsa_su_root"]:
+                self.assertIn(f"(typeattributeset domain ({domain}))", policy)
+            plat_contexts = archive.read("SYSTEM/etc/selinux/plat_file_contexts").decode().splitlines()
+            self.assertIn("/system/bin/sh u:object_r:shell_exec:s0", plat_contexts)
+            self.assertIn("/system/bin/su u:object_r:dsa_su_exec:s0", plat_contexts)
+            # The system image is labelled from file_contexts.bin, not from plat_file_contexts.
+            self.assertIn("/system/bin/su u:object_r:dsa_su_exec:s0",
+                          archive.read("META/file_contexts.bin").decode().splitlines())
+            self.assertIn("vendor.dsa.root_elevation u:object_r:dsa_root_elevation_prop:s0 exact bool",
+                          archive.read("VENDOR/etc/selinux/vendor_property_contexts").decode().splitlines())
+
+    def test_fr35_without_the_daemon_the_image_has_no_root_elevation(self):
+        # The su client's type is declared with the daemon's policy; a label naming it in an
+        # image without that policy would fail to load.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=False) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertNotIn("dsa_su", policy)
+            self.assertNotIn("dsa_su_exec", archive.read("SYSTEM/etc/selinux/plat_file_contexts").decode())
+
+    def test_fr35_the_su_clients_label_replaces_one_the_build_already_has(self):
+        # Two specifications for one path conflict, so the build's own line goes.
+        text = make_image.update_plat_file_contexts(
+            "/system/bin/sh u:object_r:shell_exec:s0\n/system/bin/su u:object_r:su_exec:s0\n")
+        self.assertEqual(text.splitlines(), ["/system/bin/sh u:object_r:shell_exec:s0",
+                                             "/system/bin/su u:object_r:dsa_su_exec:s0"])
+        # AOSP's own su keeps its label, which apps may not run.
+        kept = make_image.update_plat_file_contexts("/system/xbin/su u:object_r:su_exec:s0\n")
+        self.assertIn("/system/xbin/su u:object_r:su_exec:s0", kept.splitlines())
+
+    def test_fr35_the_su_client_is_where_the_su_guard_watches(self):
+        # The guard hides only the inodes the relay names; a client anywhere else would be
+        # visible to every app.
+        self.assertIn(make_image.SU_CLIENT_PATH, self._relay_paths())
+
+    def test_fr35_the_image_installs_the_unprivileged_su_client(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/bin/su", b"old su")
+                archive.writestr("SYSTEM/xbin/su", b"aosp setuid su")
+                archive.writestr(
+                    "META/filesystem_config.txt",
+                    "system/bin/su 0 0 6755 capabilities=0x0\n"
+                    "system/xbin 0 2000 750 capabilities=0x0\n"
+                    "system/xbin/su 0 2000 4750 capabilities=0x0\n",
+                )
+            daemon = root / "dsa-channeld"
+            client = root / "su"
+            daemon.write_bytes(b"daemon")
+            client.write_bytes(b"unprivileged client")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, channeld=daemon, su_client=client)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read("SYSTEM/bin/su"), b"unprivileged client")
+                self.assertEqual(archive.namelist().count("SYSTEM/bin/su"), 1)
+                self.assertNotIn("SYSTEM/xbin/su", archive.namelist())
+                config = archive.read("META/filesystem_config.txt").decode().splitlines()
+                self.assertIn("system/bin/su 0 0 755 capabilities=0x0", config)
+                self.assertNotIn("system/bin/su 0 0 6755 capabilities=0x0", config)
+                self.assertIn("system/xbin 0 2000 755 capabilities=0x0", config)
+                self.assertNotIn("system/xbin 0 2000 750 capabilities=0x0", config)
+                self.assertNotIn("system/xbin/su 0 2000 4750 capabilities=0x0", config)
+
+    def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
+        # The guard does nothing until something writes it, and the helper runs only while root
+        # elevation is on. init hides every su the image can have on its own, before zygote
+        # starts. A system script runs the writes as init, not vendor_init.
+        rc = (self.HERE / "dsa-su-guard.rc").read_text()
+        start = rc.index("on post-fs-data\n")
+        block = rc[start:rc.index("\n\n", start)].splitlines()
+        system_paths = [path for path in self._relay_paths() if path.startswith("/system/")]
+        self.assertTrue(system_paths)
+        writes = [line.strip() for line in block[1:]]
+        for path in system_paths:
+            self.assertIn(f'write /sys/kernel/security/dsa_su/control "path {path}"', writes)
+        # Enabled last: with no uid allowed, every task gets ENOENT for the watched paths.
+        self.assertEqual(writes[-1], "write /sys/kernel/security/dsa_su/control enable")
+        self.assertNotIn("allow", " ".join(writes))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("SYSTEM/etc/init/dsa-su-guard.rc").decode(), rc)
+            self.assertNotIn("/sys/kernel/security/dsa_su/control",
+                             archive.read(make_image.CHANNELD_RC).decode())
+            files = {name: archive.read(name) for name in archive.namelist()}
+            self.assertIn("system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
+                          files[make_image.SYSTEM_FS_CONFIG].decode().splitlines())
+            del files[make_image.SU_GUARD_RC]
+            self.assertTrue(any("su is not hidden at boot" in problem for problem in
+                                make_image.root_elevation_problems(list(files), files.__getitem__)))
+
+    def test_fr35_the_helper_runs_only_while_root_elevation_is_on(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        start = rc.index(make_image.SU_HELPER_SERVICE)
+        service = rc[start:rc.index("\n\n", start)].splitlines()
+        options = [line.strip() for line in service[1:]]
+        self.assertIn("user root", options)
+        self.assertIn("seclabel u:r:dsa_su:s0", options)
+        self.assertIn("disabled", options)
+        # The sockets carry the helper's own context (init's default), which apps and the daemon
+        # may connect to; their files take the labels vendor_file_contexts gives their paths.
+        self.assertIn("socket dsa_su stream 0666 root root", options)
+        self.assertIn("socket dsa_su_relay seqpacket 0660 root system", options)
+        contexts = make_image.update_vendor_file_contexts("", channeld=True).splitlines()
+        self.assertIn("/dev/socket/dsa_su u:object_r:dsa_su_socket:s0", contexts)
+        self.assertIn("/dev/socket/dsa_su_relay u:object_r:dsa_su_relay_socket:s0", contexts)
+        self.assertNotIn("dsa_su", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertEqual(Path(make_image.SU_SOCKET).name, "dsa_su")
+        self.assertEqual(Path(make_image.SU_RELAY_SOCKET).name, "dsa_su_relay")
+        self.assertIn("on property:vendor.dsa.root_elevation=1\n    start dsa_su", rc)
+        self.assertIn("on property:vendor.dsa.root_elevation=0\n    stop dsa_su", rc)
+        # Nothing else starts it.
+        self.assertEqual(rc.count("start dsa_su\n"), 1)
+
+    def test_fr35_apps_reach_the_helper_only_through_its_socket(self):
+        apps = {"appdomain", "untrusted_app_all", "untrusted_app", "platform_app", "priv_app", "system_app"}
+        granted = {(target, cls, frozenset(perms)) for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and source in apps}
+        self.assertEqual(granted, {
+            # Running the su client, in the app's own domain.
+            ("dsa_su_exec", "file", frozenset({"read", "open", "getattr", "map", "execute", "execute_no_trans"})),
+            # Its socket, and the helper behind it.
+            ("dsa_su_socket", "sock_file", frozenset({"write"})),
+            ("dsa_su", "unix_stream_socket", frozenset({"connectto"})),
+        })
+        # No app changes domain by running su: it gains nothing by itself.
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "typetransition":
+                self.assertNotIn(source, apps)
+
+    def test_fr35_adb_shell_asks_for_root_like_an_app(self):
+        # adb shell gets exactly what an app gets: the su client, its socket and the helper.
+        granted = {(target, cls, frozenset(perms)) for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and source == "shell"}
+        self.assertEqual(granted, {
+            ("dsa_su_exec", "file", frozenset({"read", "open", "getattr", "map", "execute", "execute_no_trans"})),
+            ("dsa_su_socket", "sock_file", frozenset({"write"})),
+            ("dsa_su", "unix_stream_socket", frozenset({"connectto"})),
+        })
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "typetransition":
+                self.assertNotEqual(source, "shell")
+
+    def test_fr35_only_the_helper_enters_the_root_domain(self):
+        rules = self._rules(self.POLICY)
+        entries = {source for kind, source, target, cls, perms in rules
+                   if (kind == "typetransition" and perms == {"dsa_su_root"})
+                   or (kind == "allow" and target == "dsa_su_root" and cls == "process"
+                       and perms & {"transition", "dyntransition"})}
+        self.assertEqual(entries, {"dsa_su"})
+        # Only through a shell, which runs the approved command.
+        self.assertIn(("typetransition", "dsa_su", "shell_exec", "process", {"dsa_su_root"}), rules)
+        self.assertIn("(typepermissive dsa_su_root)", self.POLICY)
+        # The helper itself stays enforcing.
+        self.assertNotIn("(typepermissive dsa_su)", self.POLICY)
+
+    def test_fr35_only_init_and_the_helper_write_the_su_guard(self):
+        writers = {source for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and target == "dsa_su_control_file" and cls == "file"
+                   and perms & {"write", "append"}}
+        self.assertEqual(writers, {"init", "dsa_su"})
+        self.assertIn('(genfscon securityfs "/dsa_su" (u object_r dsa_su_control_file ((s0) (s0))))', self.POLICY)
+
+    def test_fr35_only_the_daemon_reaches_the_helpers_link_to_the_host(self):
+        rules = self._rules(self.POLICY)
+        relay = {source for kind, source, target, cls, perms in rules
+                 if kind == "allow" and target == "dsa_su_relay_socket"}
+        self.assertEqual(relay, {"dsa_channeld"})
+        setters = {source for kind, source, target, cls, perms in rules
+                   if kind == "allow" and target == "dsa_root_elevation_prop" and cls == "property_service"}
+        self.assertEqual(setters, {"dsa_channeld"})
+
+    def test_fr35_the_helper_holds_no_part_of_the_control_channel(self):
+        # The host's decision reaches the helper only through the daemon: the helper may not
+        # read the boot's secret or open a socket to the host itself.
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "allow" and source == "dsa_su":
+                self.assertNotEqual(cls, "vsock_socket")
+                self.assertNotEqual(target, "proc_bootconfig")
+                self.assertNotIn("dsa_channel_service", target)
+
+    def test_fr35_check_image_finds_what_root_elevation_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        policy = files["SYSTEM/etc/selinux/plat_sepolicy.cil"].decode()
+        # A rule gone, another domain let into the root domain, another writer of the guard.
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] = (
+            policy.replace("(allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))\n", "")
+            + "(typetransition untrusted_app shell_exec process dsa_su_root)\n"
+            + "(allow dsa_channeld dsa_su_control_file (file (write open)))\n"
+            + "(allow system_server dsa_root_elevation_prop (property_service (set)))\n"
+        ).encode()
+        files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
+        del files["SYSTEM/bin/su"]
+        files["SYSTEM/xbin/su"] = b"aosp su"
+        files[make_image.SYSTEM_FS_CONFIG] = (
+            b"system/xbin 0 2000 750 capabilities=0x0\n"
+            b"system/xbin/su 0 2000 4750 capabilities=0x0\n"
+        )
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_su:s0"
+        ).encode()
+        problems = make_image.root_elevation_problems(list(files), files.__getitem__)
+        expected = [
+            "SYSTEM/bin/su is missing",
+            "SYSTEM/xbin/su is in the image",
+            "apps cannot connect to the elevation helper",
+            "untrusted_app may enter dsa_su_root",
+            "dsa_channeld may write the su guard",
+            "system_server may start the elevation helper",
+            "META/file_contexts.bin does not label /system/bin/su dsa_su_exec",
+            'lacks "seclabel u:r:dsa_su:s0"',
+            "does not make system/xbin mode 755",
+            "still lists system/xbin/su",
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+    def test_fr35_the_policy_has_only_rules_the_tests_can_read(self):
+        # Every statement is one the checks above parse, so none slips past them.
+        for line in self.POLICY.splitlines():
+            line = line.strip()
+            if not line or line.startswith(";"):
+                continue
+            self.assertTrue(
+                re.match(r"\((type|roletype|typeattributeset|typepermissive|genfscon)\s", line)
+                or self._rules(line),
+                line,
+            )
 
 
 if __name__ == "__main__":

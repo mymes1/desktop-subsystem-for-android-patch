@@ -3,15 +3,20 @@
 //!
 //! ```text
 //! <dir>/state.json            the downloaded update, and the version that failed here
+//! <dir>/setup-process.json    the setup that runs, for a service that starts meanwhile
 //! <dir>/<version>/<file>      the setup file, as the list's URL names it
 //! <dir>/.download-<version>   a download in progress
 //! ```
 //!
 //! Setup stops the service, replaces it and starts the new one. Before it runs, the state
 //! records that it is installing; the service that starts next compares its own version
-//! with that record and tells the user whether the update worked. A failed version is not
-//! installed again on its own, since it would most likely fail the same way; `dsa update`
-//! tries it again, and a newer version replaces it.
+//! with that record and tells the user whether the update worked. A service that starts
+//! while setup still runs (something started it again after setup stopped it) waits for
+//! setup instead of calling the update failed, and a service still running once setup has
+//! installed past it (exit code "installed" or "installed, restart to finish") restarts into
+//! the new program files; so does one that finds the files newer than itself. A failed
+//! version is not installed again on its own, since it would most likely fail the same way;
+//! `dsa update` tries it again, and a newer version replaces it.
 //!
 //! The service follows one release channel ([`ReleaseChannel`]): on the stable channel it
 //! reads the stable program list alone, and on the pre-release channel it reads the
@@ -59,18 +64,132 @@ use crate::tasks::{AppSettingsPage, TaskRequest, TaskRequestError, TaskWatch};
 use crate::widgets::{WidgetError, WidgetProvider, WidgetSize};
 use std::sync::mpsc::Receiver;
 
-/// Runs a setup file.
+/// Runs a setup file, and knows what the platform's setup and service do around it.
 pub trait ProgramInstaller: Send + Sync {
     /// Starts `setup` quietly, writing its log to `log`, as a process apart from the
     /// service: setup stops the service and replaces it, and must outlive it. Returns
     /// once setup has started.
     fn install(&self, setup: &Path, log: &Path) -> Result<Box<dyn RunningSetup>, String>;
+
+    /// What setup's exit code `code` means. Only 0 counts as installed unless the platform
+    /// says more: some setups end with a code of their own for "installed, and the computer
+    /// should restart to finish".
+    fn outcome(&self, code: u32) -> SetupOutcome {
+        if code == 0 {
+            SetupOutcome::Installed
+        } else {
+            SetupOutcome::Failed
+        }
+    }
+
+    /// The setup that [`RunningSetup::id`] named, if it is still running. A service that
+    /// starts while setup is still replacing it finds setup this way and waits for it,
+    /// instead of reporting the update as failed while it is still going on.
+    fn reattach(&self, _id: &str) -> Option<Box<dyn RunningSetup>> {
+        None
+    }
+
+    /// The version of the program files installed now, read from the files rather than
+    /// from this process. Setup can replace the files of a service that is still running,
+    /// so the two can differ. `None` when it cannot be read.
+    fn installed_version(&self) -> Option<String> {
+        None
+    }
+
+    /// Whether some installation is running on this computer now, so the program files may
+    /// be half replaced.
+    fn installation_running(&self) -> bool {
+        false
+    }
+
+    /// Stops this service and starts it again from the program files installed now. Returns
+    /// once the restart is arranged; the service then stops on its own.
+    fn restart_into_installed(&self) -> Result<(), String> {
+        Err("this platform cannot restart the service by itself".into())
+    }
 }
 
 /// A setup that has started.
 pub trait RunningSetup: Send {
     /// Waits for setup to end and returns its exit code.
     fn wait(self: Box<Self>) -> Result<u32, String>;
+
+    /// Names this setup for [`ProgramInstaller::reattach`], so a service that starts while
+    /// it runs can find it again. `None` when the platform cannot.
+    fn id(&self) -> Option<String> {
+        None
+    }
+}
+
+/// What setup's exit code says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupOutcome {
+    /// The new version is installed.
+    Installed,
+    /// The new version is installed, and the computer should restart to finish (to remove
+    /// files that were in use). The update worked; the restart only tidies up.
+    InstalledRestartPending,
+    /// Setup failed and the version before it stays.
+    Failed,
+}
+
+/// What a service that is still running once setup has ended does next.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AfterSetup {
+    /// Setup installed the new version, but this process is the one before it: it restarts
+    /// into the files setup put in place.
+    RestartIntoInstalled,
+    /// The update failed; the text says why.
+    Failed(String),
+}
+
+/// Decides what a service still running after setup ended does: setup ended with `code`,
+/// which the platform read as `outcome`, while installing `wanted`; `on_disk` is the version
+/// of the program files now, when it can be read. Setup that says it installed counts as
+/// installed, a restart pending included, unless the files show an older version; and then
+/// the service restarts, since the process still running is the old one.
+pub fn after_setup(
+    outcome: SetupOutcome,
+    code: u32,
+    wanted: &str,
+    on_disk: Option<&str>,
+) -> AfterSetup {
+    if outcome == SetupOutcome::Failed {
+        return AfterSetup::Failed(format!(
+            "setup ended with exit code {code} and the service was not replaced"
+        ));
+    }
+    let disk = on_disk.and_then(|disk| Version::parse(disk).ok().map(|v| (disk, v)));
+    match (disk, Version::parse(wanted)) {
+        (Some((text, disk)), Ok(wanted)) if disk < wanted => AfterSetup::Failed(format!(
+            "setup ended with exit code {code}, yet the program files are still DSA {text}"
+        )),
+        _ => AfterSetup::RestartIntoInstalled,
+    }
+}
+
+/// Whether a service of version `running` restarts into program files of version `on_disk`:
+/// only when the files are newer, which means setup replaced them under it. An installation
+/// still running (`installing`) may not be done replacing them, so the service waits for it.
+pub fn restart_into_files(running: &str, on_disk: Option<&str>, installing: bool) -> bool {
+    if installing {
+        return false;
+    }
+    match (
+        on_disk.and_then(|disk| Version::parse(disk).ok()),
+        Version::parse(running),
+    ) {
+        (Some(disk), Ok(running)) => disk > running,
+        _ => false,
+    }
+}
+
+/// The setup that is running, as the service that started it records it, so a service that
+/// starts meanwhile can find it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct SetupRecord {
+    version: String,
+    id: String,
 }
 
 /// How the service updates the program.
@@ -200,6 +319,8 @@ pub struct ProgramUpdates {
     switch: OnceLock<Box<dyn Fn() -> bool + Send + Sync>>,
     /// The user's setting that chooses the release channel, if it follows one.
     channel: OnceLock<Box<dyn Fn() -> ReleaseChannel + Send + Sync>>,
+    /// Set once this service has asked to be restarted into newer program files.
+    restarting: AtomicBool,
 }
 
 /// When the service checks and installs.
@@ -234,6 +355,7 @@ impl ProgramUpdates {
             me: me.clone(),
             switch: OnceLock::new(),
             channel: OnceLock::new(),
+            restarting: AtomicBool::new(false),
         });
         if let Err(error) = updates.report_last_install() {
             updates.log(&error.to_string());
@@ -303,6 +425,61 @@ impl ProgramUpdates {
         fs::rename(&temporary, &path).map_err(|e| store_error("replacing", &path, e))
     }
 
+    fn setup_record_path(&self) -> PathBuf {
+        self.settings.dir.join("setup-process.json")
+    }
+
+    /// Records the setup that runs, so a service that starts meanwhile can find it. A
+    /// record that cannot be written only costs that.
+    fn record_setup(&self, version: &str, running: &dyn RunningSetup) {
+        let Some(id) = running.id() else {
+            return;
+        };
+        let record = SetupRecord {
+            version: version.to_string(),
+            id,
+        };
+        let path = self.setup_record_path();
+        let text = serde_json::to_vec_pretty(&record).expect("the record serialises");
+        if let Err(error) = fs::write(&path, text) {
+            self.log(&format!("recording setup in {}: {error}", path.display()));
+        }
+    }
+
+    fn forget_setup(&self) {
+        let _ = fs::remove_file(self.setup_record_path());
+    }
+
+    /// The setup installing `version`, if it is still running.
+    fn running_setup(&self, version: &str) -> Option<Box<dyn RunningSetup>> {
+        let bytes = fs::read(self.setup_record_path()).ok()?;
+        let record: SetupRecord = serde_json::from_slice(&bytes).ok()?;
+        if record.version != version {
+            return None;
+        }
+        self.installer.reattach(&record.id)
+    }
+
+    /// Waits for `running` on a thread of its own, as [`watch_setup`](Self::watch_setup).
+    fn watch_in_background(
+        &self,
+        running: Box<dyn RunningSetup>,
+        version: &str,
+        log: &Path,
+    ) -> Result<(), ProgramError> {
+        let updates = self
+            .me
+            .upgrade()
+            .expect("the updates are alive while they run");
+        let (version, log) = (version.to_string(), log.to_path_buf());
+        let watch = move || updates.watch_setup(running, &version, &log);
+        thread::Builder::new()
+            .name("dsa-setup".into())
+            .spawn(watch)
+            .map(|_| ())
+            .map_err(|e| ProgramError::Install(format!("watching setup: {e}")))
+    }
+
     fn setup_path(&self, pending: &Pending) -> PathBuf {
         self.settings.dir.join(&pending.version).join(&pending.file)
     }
@@ -350,15 +527,27 @@ impl ProgramUpdates {
         let arrived = matches!((&running, &wanted), (Some(r), Some(w)) if r >= w);
         if pending.installing {
             if arrived {
-                self.tell(format!("DSA was updated to {}", self.settings.running));
-                self.status.notices.raise(UpdateAlert::new(
-                    Subject::Program,
-                    AlertKind::Applied,
-                    self.settings.running.clone(),
-                ));
+                self.forget_setup();
+                self.tell_applied();
                 state = ProgramState::default();
                 self.remove_downloads(None);
+            } else if let Some(setup) = self.running_setup(&pending.version) {
+                // This service was started while setup is still replacing it: setup is not
+                // done, so nothing has failed yet. Android waits, as it does while setup
+                // runs, and the service decides once setup has ended.
+                self.log(&format!(
+                    "setup is still installing DSA {}; this service waits for it to end",
+                    pending.version
+                ));
+                self.status.set_installing(Some(pending.version.clone()));
+                let log = pending.log.clone().unwrap_or_default();
+                if let Err(error) = self.watch_in_background(setup, &pending.version, &log) {
+                    self.status.set_installing(None);
+                    self.log(&error.to_string());
+                }
+                return Ok(());
             } else {
+                self.forget_setup();
                 let log = pending
                     .log
                     .as_ref()
@@ -374,12 +563,57 @@ impl ProgramUpdates {
             return self.write_state(&state);
         }
         if arrived {
-            // Installed some other way meanwhile.
+            // Installed some other way meanwhile, or by a setup this service took for failed:
+            // a service that setup ran under was started again before setup was done, and
+            // the version it reported as failed is the one running now.
+            if state.failed.as_deref() == Some(pending.version.as_str()) {
+                state.failed = None;
+                self.tell_applied();
+            }
             state.pending = None;
             self.remove_downloads(None);
             return self.write_state(&state);
         }
         Ok(())
+    }
+
+    /// Tells the users that the version running now is the one an update installed.
+    fn tell_applied(&self) {
+        self.tell(format!("DSA was updated to {}", self.settings.running));
+        self.status.notices.raise(UpdateAlert::new(
+            Subject::Program,
+            AlertKind::Applied,
+            self.settings.running.clone(),
+        ));
+    }
+
+    /// Restarts into the program files when they are newer than this service: setup
+    /// replaced them while this process kept running, so every client from the new files is
+    /// refused by an old service until it restarts. Not while this service's own setup or
+    /// any other installation still runs. Returns whether a restart was asked for.
+    pub fn restart_if_replaced(&self) -> bool {
+        if self.restarting.load(Ordering::Relaxed) || self.status.installing().is_some() {
+            return false;
+        }
+        let on_disk = self.installer.installed_version();
+        let installing = self.installer.installation_running();
+        if !restart_into_files(&self.settings.running, on_disk.as_deref(), installing) {
+            return false;
+        }
+        self.log(&format!(
+            "the program files are DSA {}, newer than this service (DSA {}): setup replaced \
+             them while it ran; restarting into them",
+            on_disk.unwrap_or_default(),
+            self.settings.running
+        ));
+        self.restarting.store(true, Ordering::Relaxed);
+        if let Err(why) = self.installer.restart_into_installed() {
+            self.log(&format!(
+                "restarting the service failed: {why}; restart the DSA service or the computer"
+            ));
+            return false;
+        }
+        true
     }
 
     /// Reads the program list and downloads the version it offers when that is newer
@@ -758,21 +992,16 @@ impl ProgramUpdates {
                 return Err(ProgramError::Install(why));
             }
         };
-        let updates = self
-            .me
-            .upgrade()
-            .expect("the updates are alive while they run");
-        let version = pending.version.clone();
-        let watch = move || updates.watch_setup(running, &version, &log);
-        thread::Builder::new()
-            .name("dsa-setup".into())
-            .spawn(watch)
-            .map_err(|e| ProgramError::Install(format!("watching setup: {e}")))?;
+        self.record_setup(&pending.version, running.as_ref());
+        self.watch_in_background(running, &pending.version, &log)?;
         Ok(pending.version)
     }
 
-    /// Waits for setup to end. A setup that worked has replaced this service by then, so
-    /// a service still running a little after setup ended means the update failed.
+    /// Waits for setup to end. A setup that worked has replaced this service by then. A
+    /// service still running a little after setup ended either is the old one, which setup
+    /// installed past (it was started again while setup ran, or setup could not stop it),
+    /// and restarts into the new files; or setup failed, and the update is reported as
+    /// failed.
     fn watch_setup(&self, running: Box<dyn RunningSetup>, version: &str, log: &Path) {
         let code = match running.wait() {
             Ok(code) => code,
@@ -789,19 +1018,41 @@ impl ProgramUpdates {
         if !pending.installing || pending.version != version {
             return;
         }
+        self.forget_setup();
+        let outcome = self.installer.outcome(code);
+        let on_disk = self.installer.installed_version();
+        let detail = match after_setup(outcome, code, version, on_disk.as_deref()) {
+            AfterSetup::RestartIntoInstalled => {
+                let restart = if outcome == SetupOutcome::InstalledRestartPending {
+                    " (it asks for the computer to restart to remove files that were in use)"
+                } else {
+                    ""
+                };
+                self.log(&format!(
+                    "setup installed DSA {version} with exit code {code}{restart}, and this \
+                     service is still DSA {}; restarting into the new version",
+                    self.settings.running
+                ));
+                // The record stays as it is, installing, so the new service reports the
+                // update once it runs.
+                self.restarting.store(true, Ordering::Relaxed);
+                match self.installer.restart_into_installed() {
+                    Ok(()) => return,
+                    Err(why) => format!(
+                        "setup installed it, but the service could not restart into it: {why}; \
+                         restart the DSA service or the computer"
+                    ),
+                }
+            }
+            AfterSetup::Failed(why) => format!("{why}; see {}", log.display()),
+        };
         pending.installing = false;
         state.failed = Some(version.to_string());
         if let Err(error) = self.write_state(&state) {
             self.log(&error.to_string());
         }
         self.status.set_installing(None);
-        self.tell_failure(
-            version,
-            &format!(
-                "setup ended with exit code {code} and the service was not replaced; see {}",
-                log.display()
-            ),
-        );
+        self.tell_failure(version, &detail);
     }
 
     /// Removes setup files no longer needed. The one setup ran from cannot be removed by
@@ -819,34 +1070,43 @@ impl ProgramUpdates {
     pub fn run(&self, stop: &AtomicBool, timing: Timing) {
         // The configuration cannot change while the service runs; the settings can, so a
         // loop that the settings turned off keeps waiting for them to turn it on again.
-        if !self.settings.enabled
-            || (self.settings.list_url.is_none() && self.settings.prerelease_list_url.is_none())
-        {
-            return;
-        }
+        // Without updates the loop still looks for program files that setup replaced under
+        // this service, which a setup run by hand does too.
+        let updates_on = self.settings.enabled
+            && (self.settings.list_url.is_some() || self.settings.prerelease_list_url.is_some());
         let mut next_check = Instant::now() + timing.first_check;
         let mut next_install = Instant::now();
         while !stop.load(Ordering::Relaxed) {
             let now = Instant::now();
-            if now >= next_check && self.switched_off() {
-                next_check = Instant::now() + timing.retry;
-            } else if now >= next_check {
-                match self.check() {
-                    Ok(CheckOutcome::Downloaded(_)) => {}
-                    Ok(CheckOutcome::NotNewer(why) | CheckOutcome::FailedBefore(why)) => {
-                        self.log(&why)
+            if now >= next_install {
+                self.restart_if_replaced();
+            }
+            // A service that asked to restart stops on its own soon and installs nothing
+            // meanwhile.
+            let active = updates_on && !self.restarting.load(Ordering::Relaxed);
+            if active && now >= next_check {
+                if self.switched_off() {
+                    next_check = Instant::now() + timing.retry;
+                } else {
+                    match self.check() {
+                        Ok(CheckOutcome::Downloaded(_)) => {}
+                        Ok(CheckOutcome::NotNewer(why) | CheckOutcome::FailedBefore(why)) => {
+                            self.log(&why)
+                        }
+                        Ok(CheckOutcome::AlreadyDownloaded(version)) => self.log(&format!(
+                            "DSA {version} is downloaded and waits for no Android to be running"
+                        )),
+                        Err(error) => self.log(&format!("checking for a new version: {error}")),
                     }
-                    Ok(CheckOutcome::AlreadyDownloaded(version)) => self.log(&format!(
-                        "DSA {version} is downloaded and waits for no Android to be running"
-                    )),
-                    Err(error) => self.log(&format!("checking for a new version: {error}")),
+                    next_check = Instant::now() + timing.check_interval;
                 }
-                next_check = Instant::now() + timing.check_interval;
             }
             if now >= next_install {
-                self.remove_leftovers();
-                if let Err(error) = self.install_when_idle() {
-                    self.log(&error.to_string());
+                if active {
+                    self.remove_leftovers();
+                    if let Err(error) = self.install_when_idle() {
+                        self.log(&error.to_string());
+                    }
                 }
                 next_install = Instant::now() + timing.retry;
             }
@@ -992,6 +1252,12 @@ impl UserAndroid for WithProgramStatus {
     }
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         self.android.share_folders(on, folders)
+    }
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        self.android.set_root_elevation_config(on, apps)
+    }
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        self.android.approve_keep_root(package)
     }
     fn android_files(&self) -> Result<String, String> {
         self.android.android_files()

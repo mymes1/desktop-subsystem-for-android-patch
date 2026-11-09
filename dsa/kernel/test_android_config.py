@@ -35,6 +35,79 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn(".unlocked_ioctl\t= shmem_file_ioctl,", patch)
         self.assertIn("config MEMFD_ASHMEM_SHIM", patch)
 
+    def test_fr35_the_su_guard_is_built_in_and_hides_su_by_inode(self):
+        # su exists only for the uids the host allows; the guard returns -ENOENT for any
+        # other task, so an app that may not ask never finds su (INTENT D28).
+        config = CONFIG.read_text()
+        self.assertIn("CONFIG_DSA_SU_GUARD=y", config)
+        self.assertIn("CONFIG_SECURITYFS=y", config)
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertIn("security/dsa_su/dsa_su.c", patch)
+        self.assertIn("return -ENOENT;", patch)
+        self.assertIn("LSM_HOOK_INIT(inode_permission", patch)
+        self.assertIn("LSM_HOOK_INIT(bprm_creds_for_exec", patch)
+        self.assertIn("securityfs_create_dir(\"dsa_su\"", patch)
+
+    def test_fr35_the_su_guard_is_in_the_lsm_list_before_selinux(self):
+        # A security module CONFIG_LSM does not name never initialises, and the guard must
+        # answer before SELinux so a hidden su is a missing file, not a denial.
+        match = re.search(r'^CONFIG_LSM="([^"]*)"$', CONFIG.read_text(), re.MULTILINE)
+        self.assertIsNotNone(match, "android.config sets CONFIG_LSM")
+        modules = match.group(1).split(",")
+        self.assertIn("dsa_su", modules)
+        self.assertIn("selinux", modules)
+        self.assertLess(modules.index("dsa_su"), modules.index("selinux"))
+
+    def test_fr35_a_disabled_guard_hides_su_from_every_uid(self):
+        # With root elevation off, su is a missing file for every app; the guard switched
+        # off never shows a watched su to all.
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertIn("+\tif (watched && dsa_su_state.enabled) {", patch)
+        self.assertIn("+\tif (!watched || allowed)", patch)
+
+    def test_fr35_a_missing_su_path_does_not_stop_the_rest_of_a_write(self):
+        # The image keeps su at one of the watched paths; a path that does not exist is
+        # skipped, and a write applies as a whole or not at all.
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertIn("+\tif (err == -ENOENT || err == -ENOTDIR)\n+\t\treturn 0;", patch)
+        self.assertIn("+\t*next = dsa_su_state;", patch)
+        self.assertIn("+\t\tdsa_su_state = *next;", patch)
+
+    def test_fr35_the_su_guard_builds_against_the_pinned_kernel_and_has_an_lsm_slot(self):
+        # The pinned tree declares securityfs in <linux/security.h> and has no
+        # <linux/securityfs.h>. It sizes the LSM id list and every hook's static call slots
+        # by the modules lsm_count.h knows, and panics at boot on a module it does not count.
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertNotIn("linux/securityfs.h", patch)
+        self.assertIn("+#include <linux/security.h>", patch)
+        self.assertIn("+++ b/include/linux/lsm_count.h", patch)
+        self.assertIn("+#if IS_ENABLED(CONFIG_DSA_SU_GUARD)\n+#define DSA_SU_ENABLED 1,", patch)
+        self.assertIn("+\t\tDSA_SU_ENABLED)", patch)
+
+    def test_fr35_the_su_guard_patch_hunks_count_their_lines(self):
+        # git apply refuses a hunk whose header miscounts its lines.
+        header = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+        old_left = new_left = 0
+        current = None
+        for line in (PATCHES / "dsa-su-guard-lsm.patch").read_text().splitlines():
+            match = header.match(line)
+            if match:
+                self.assertEqual((old_left, new_left), (0, 0), current)
+                current = line
+                old_left = int(match.group(1) or 1)
+                new_left = int(match.group(2) or 1)
+                continue
+            if old_left == 0 and new_left == 0:
+                continue
+            if line.startswith("+"):
+                new_left -= 1
+            elif line.startswith("-"):
+                old_left -= 1
+            else:
+                old_left -= 1
+                new_left -= 1
+        self.assertEqual((old_left, new_left), (0, 0), current)
+
     def test_nfr1_reclaim_ages_pages_with_the_multi_generational_lru(self):
         # The guest's gradual trim reclaims a bounded amount of the coldest cache; without
         # MGLRU it cannot tell cold cache from the visible app's working set as well.
@@ -347,8 +420,20 @@ class AndroidKernelConfigTests(unittest.TestCase):
         merged = os.environ.get("DSA_KERNEL_MERGED_CONFIG")
         if not merged:
             self.skipTest("DSA_KERNEL_MERGED_CONFIG names no merged configuration")
-        arch = os.environ.get("DSA_KERNEL_ARCH", "x86_64")
         lines = Path(merged).read_text().splitlines()
+        # The architecture comes from the merged file's own header ("# Linux/arm64 ..."), so
+        # a run that forgets to name it cannot check an arm64 configuration against the
+        # x86_64 fragments, or skip the arm64 fragment.
+        built = next((line[len("# Linux/"):].split()[0] for line in lines
+                      if line.startswith("# Linux/")), None)
+        # The header names the kernel's ARCH as make was given it: "x86" or "x86_64" for
+        # the x86_64 kernel, "arm64" for arm64. Map it to this repository's names.
+        known = {"x86": "x86_64", "x86_64": "x86_64", "arm64": "arm64"}
+        self.assertIn(built, known, f"{merged} names no known architecture")
+        arch = known[built]
+        named = os.environ.get("DSA_KERNEL_ARCH")
+        if named:
+            self.assertEqual(arch, named, f"{merged} is a {built} configuration, not {named}")
         fragments = [CONFIG] + ([ARM64_CONFIG] if arch == "arm64" else []) + [VIRTIO_CONFIG]
         for fragment in fragments:
             for line in fragment_lines(fragment):

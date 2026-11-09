@@ -137,6 +137,19 @@ jobs:
           -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY
           -ProgramListUrl "$env:MIRROR\program.json"
 
+      # The setting that turns Windows 11's three- and four-finger touch gestures off while a
+      # task window is in front: with the gestures on and the setting turned on through the
+      # local API, a task window in front makes SystemParametersInfo 0x2030 read 0, another
+      # window in front makes it read the user's value again, and so does the window manager
+      # stopping. The test puts the gestures back as it found them. Server 2022 has no such
+      # gestures, so the test is left out there.
+      - name: fr5_touch_gestures_are_off_only_while_a_task_window_is_in_front
+        if: matrix.version != '2022'
+        working-directory: dsa
+        run: |
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input::fr5_real_touch_gestures_are_off_only_while_a_task_window_is_in_front
+          if ($LASTEXITCODE -ne 0) { throw "the touch gestures were not off only while a task window was in front" }
+
       # Fingers and a pen put into this machine's input with Windows' synthetic pointer
       # devices, on a task window opened over a fake Android: ten fingers and a pinch reach
       # the task as ten touch pointers, a pen with its pressure, barrel button and eraser, and
@@ -166,7 +179,7 @@ jobs:
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
-          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input --skip fr5_real_touch_gestures
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
 
       # The Android VM's network made through this machine's Host Compute Network, as the
@@ -189,10 +202,12 @@ jobs:
           Write-Host "Host Network Service: $($hns.Status)"
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test hcn_network -- --ignored --test-threads 1 --nocapture
           if ($LASTEXITCODE -ne 0) { throw "the VM's network was not made, removed or routed as it must be" }
-          # Windows takes the host's adapter of a removed network away shortly after.
+          # Windows takes the host's adapter of a removed network away shortly after. It names
+          # the adapter after the network cut short ("vEthernet (DSA dsa-test-fr)" for
+          # "DSA dsa-test-fr28-routes"), so the pattern matches that shortened start.
           $deadline = (Get-Date).AddSeconds(20)
           do {
-            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr28*'
+            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr*'
             if (-not $left) { break }
             Start-Sleep -Seconds 2
           } while ((Get-Date) -lt $deadline)
@@ -353,7 +368,7 @@ jobs:
           # Each picture is of one fresh start, on the page its pane item opens through UI Automation.
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about', 'logs') {
+            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'logs', 'about') {
               $app = Start-Process $exe -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) {
@@ -539,7 +554,7 @@ jobs:
             Set-AppTheme
           }
 
-      # Every item of the navigation pane, the footer's About too, is a list item named by its
+      # Every item of the navigation pane, the footer's Logs and About too, is a list item named by its
       # label that UI Automation can select, as Narrator does, and selecting it opens its page:
       # the item reports itself selected and the page's title shows beside the pane. Invoking
       # an item opens its page as well.
@@ -803,7 +818,7 @@ jobs:
             [Dsa.Input]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # left up
             Start-Sleep -Seconds 1
             Set-Foreground $window
-            # About sits in the pane's footer, and Tab may visit the pane toggle and the page
+            # Logs and About sit in the pane's footer, and Tab may visit the pane toggle and the page
             # before it, so the presses go on until every item was in view (at most 40).
             for ($i = 0; $i -lt 40; $i++) {
               [System.Windows.Forms.SendKeys]::SendWait('{TAB}')

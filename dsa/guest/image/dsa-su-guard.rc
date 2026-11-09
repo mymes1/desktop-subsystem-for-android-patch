@@ -1,0 +1,9 @@
+# Android mounts securityfs during early boot. This system script runs as init, which may
+# write the guard; a vendor script's writes run as vendor_init and SELinux refuses them.
+# Register each existing su before apps start. A missing path does not stop the other writes.
+on post-fs-data
+    write /sys/kernel/security/dsa_su/control "path /system/bin/su"
+    write /sys/kernel/security/dsa_su/control "path /system/xbin/su"
+    write /sys/kernel/security/dsa_su/control "path /sbin/su"
+    write /sys/kernel/security/dsa_su/control enable
+

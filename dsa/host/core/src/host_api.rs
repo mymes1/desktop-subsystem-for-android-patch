@@ -62,6 +62,9 @@ use dsa_protocol::host_api::{
 use dsa_transport::local::{LocalListener, Peer};
 use dsa_transport::{Connection, Connector, TransportError};
 
+/// How setting an app's root level went, as [`HostApiClient::set_app_root`] reports it.
+pub use dsa_protocol::host_api::types::AppRootStatus;
+
 use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
@@ -84,7 +87,7 @@ use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::gapps::{self, GappsPackage, GuestGapps};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
-use crate::ime::{ImeCursor, ImeEvent};
+use crate::ime::{ImeCursor, ImeEditor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
 use crate::keys::KeyEvent;
 use crate::location::{Fix, LocationEvent, Wanted};
@@ -102,6 +105,7 @@ use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
     TaskRequest, TaskRequestError, TaskWatch,
 };
+use crate::touch_gestures::TouchGesturesState;
 use crate::update::alerts::{self as update_alerts, UpdateAlert};
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
@@ -247,6 +251,18 @@ pub trait UserAndroid: Send + Sync {
     /// while `on`, as the user's file sharing setting says.
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         let _ = (on, folders);
+    }
+    /// Sets the user's root elevation settings: the computer's switch and the apps with a
+    /// level other than off. The running Android is told at once (see
+    /// [`Session::set_root_elevation_config`]).
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        let _ = (on, apps);
+    }
+    /// Asks the computer's administrator, in this user's session and through the prompt su
+    /// calls use, to let `package` keep root without asking each time. `Err` says why not.
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        let _ = package;
+        Err("this computer cannot ask its administrator for root approval".into())
     }
     /// The address (a WebDAV URL on the loopback address) the host's file manager opens this
     /// Android's shared storage at. It starts this Android when it is stopped.
@@ -711,6 +727,12 @@ impl UserAndroid for Session {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         Session::share_folders(self, on, folders)
     }
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        Session::set_root_elevation_config(self, on, apps)
+    }
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        Session::approve_keep_root(self, package)
+    }
     fn android_files(&self) -> Result<String, String> {
         Session::android_files(self)
     }
@@ -907,6 +929,11 @@ pub trait UserAndroids: Send + Sync {
     /// Stops every user's Android and waits at most `timeout` for all of them. Returns the
     /// users whose Android had not stopped by then, with its state.
     fn stop_all(&self, timeout: Duration) -> Vec<(String, SessionState)>;
+    /// Every user's Android made so far, running or not, for a change to a setting of the
+    /// computer's that each of them follows.
+    fn existing(&self) -> Vec<(String, Arc<dyn UserAndroid>)> {
+        Vec::new()
+    }
 }
 
 /// The answer to a request to update DSA itself.
@@ -1003,6 +1030,9 @@ where
     fn stop_all(&self, timeout: Duration) -> Vec<(String, SessionState)> {
         stop_every(self.snapshot(), timeout)
     }
+    fn existing(&self) -> Vec<(String, Arc<dyn UserAndroid>)> {
+        self.snapshot()
+    }
 }
 
 fn to_wire(state: SessionState) -> types::SessionState {
@@ -1059,6 +1089,7 @@ fn task_to_wire(task: Task) -> types::Task {
             })
             .collect(),
         can_go_back: task.can_go_back,
+        handles_density_change: task.handles_density_change,
     }
 }
 
@@ -1107,6 +1138,7 @@ fn task_from_wire(task: types::Task) -> Task {
             })
             .collect(),
         can_go_back: task.can_go_back,
+        handles_density_change: task.handles_density_change,
     }
 }
 
@@ -1183,6 +1215,7 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         primary_abi: app.primary_abi,
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
+        root: app.root,
     }
 }
 
@@ -1203,6 +1236,7 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         native_libraries: NativeLibraries::from_wire(&app.native_libraries),
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
+        root: app.root,
     }
 }
 
@@ -1229,6 +1263,7 @@ fn event_to_wire(event: TaskEvent) -> types::TaskEvent {
                 bottom: cursor.bottom,
             }),
         }),
+        TaskEvent::ImeEditor { task_id, editor } => Event::ImeEditor(editor.to_wire(task_id)),
     };
     types::TaskEvent { body: Some(body) }
 }
@@ -1258,6 +1293,11 @@ fn event_from_wire(event: types::TaskEvent) -> Option<TaskEvent> {
                 },
             }
         }
+        // A description that makes no sense is dropped; the next one replaces it.
+        Event::ImeEditor(editor) => {
+            let (task_id, editor) = ImeEditor::from_wire(&editor).ok()?;
+            TaskEvent::ImeEditor { task_id, editor }
+        }
     })
 }
 
@@ -1277,7 +1317,9 @@ fn tasks_to_wire(events: Vec<TaskEvent>) -> types::Tasks {
             }),
             TaskEvent::App(app) => tasks.apps.push(app_to_wire(app)),
             TaskEvent::Installed(apps) => tasks.installed = Some(installed_to_wire(Some(apps))),
-            TaskEvent::Removed { .. } | TaskEvent::ImeCursor { .. } => {}
+            TaskEvent::Removed { .. }
+            | TaskEvent::ImeCursor { .. }
+            | TaskEvent::ImeEditor { .. } => {}
         }
     }
     tasks
@@ -1404,6 +1446,13 @@ pub struct SettingsReport {
     /// Where adb auto-connect stands for the caller's Android. Off from a service that does
     /// not report it.
     pub adb_auto_connect_state: AutoConnectState,
+    /// Whether the caller's window manager can turn the host's touch gestures off, as it last
+    /// told the service. Unknown until it has, and from a service that does not report it.
+    pub touch_gestures: TouchGesturesState,
+    /// How far `adb shell` may elevate to root: "off", "ask" or "remember" while developer
+    /// mode is on, "unavailable" while root elevation is off, and empty while developer mode is
+    /// off (adb is closed) or from a service that does not report it.
+    pub adb_shell_root: String,
 }
 
 /// How a user's Android reaches the network.
@@ -1532,6 +1581,9 @@ pub struct GappsStatus {
     pub guest: Option<GuestGapps>,
     /// What is installed applies only once Android starts again.
     pub restart_needed: bool,
+    /// The installed package's image was made by an older DSA and cannot be made again here,
+    /// so Android starts without Google's apps until the user installs Google Play again.
+    pub reinstall_needed: bool,
 }
 
 impl GappsStatus {
@@ -1547,7 +1599,9 @@ impl GappsStatus {
                 file: package.file.clone(),
                 source: package.source.clone(),
                 md5: package.md5.clone(),
+                image_format: package.image_format,
             }),
+            reinstall_needed: self.reinstall_needed,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
             guest_active: guest.active,
@@ -1570,6 +1624,7 @@ impl GappsStatus {
                 file: package.file,
                 source: package.source,
                 md5: package.md5,
+                image_format: package.image_format,
             }),
             guest: status.guest_known.then_some(GuestGapps {
                 installed: status.guest_installed,
@@ -1580,7 +1635,55 @@ impl GappsStatus {
                 device_id: status.device_id,
             }),
             restart_needed: status.restart_needed,
+            reinstall_needed: status.reinstall_needed,
         }
+    }
+}
+
+/// How often the service looks for a user's Android that has just reached its desktop, for the
+/// Google apps' upkeep of that boot.
+const GAPPS_UPKEEP_POLL: Duration = Duration::from_secs(2);
+/// How many times one boot's upkeep is tried while the guest has not said where its Google apps
+/// stand, before that boot goes without it.
+const GAPPS_UPKEEP_TRIES: u32 = 30;
+
+/// Runs each boot's upkeep of the Google apps ([`HostApiService::gapps_upkeep`]) once that boot
+/// reaches its desktop, until `stop` is set or the service is gone. A user's boot counts as new
+/// again once their Android leaves the running states.
+fn gapps_upkeep_loop(service: std::sync::Weak<HostApiService>, stop: Arc<AtomicBool>) {
+    let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut tries: HashMap<String, u32> = HashMap::new();
+    while !stop.load(Ordering::Relaxed) {
+        let Some(running) = service.upgrade() else {
+            return;
+        };
+        let users = running.androids.running();
+        let up = |user: &str| {
+            users.iter().any(|(u, state)| {
+                u == user
+                    && matches!(
+                        state,
+                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
+                    )
+            })
+        };
+        done.retain(|user| up(user));
+        tries.retain(|user, _| up(user));
+        for (user, state) in &users {
+            if *state != SessionState::Active || done.contains(user) {
+                continue;
+            }
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                running.gapps_upkeep(user)
+            }));
+            let tried = tries.entry(user.clone()).or_insert(0);
+            *tried += 1;
+            if caught.unwrap_or(true) || *tried >= GAPPS_UPKEEP_TRIES {
+                done.insert(user.clone());
+            }
+        }
+        drop(running);
+        thread::sleep(GAPPS_UPKEEP_POLL);
     }
 }
 
@@ -1667,9 +1770,15 @@ pub struct HostApiService {
     /// Which Android version runs, and choosing another.
     versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
     /// Where Google Play is downloaded from, and where it is made ready.
-    gapps: Option<gapps::Source>,
+    gapps: Option<Arc<gapps::Source>>,
+    /// Held while one change to a user's Google apps is made (an install, a removal, or what a
+    /// boot needs done for them), so a boot's upkeep never takes an image another change just
+    /// sent for one it must remove.
+    gapps_change: Mutex<()>,
     /// The default ARM translation package of the image each user's Android starts from.
     default_arm_translation: Option<DefaultArmTranslationSource>,
+    /// What each user's window manager last said about the host's touch gestures, by user.
+    touch_gestures: Mutex<HashMap<String, TouchGesturesState>>,
 }
 
 /// Says what the build of the image a user's Android starts from is, by user.
@@ -1707,7 +1816,9 @@ impl HostApiService {
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
             gapps: None,
+            gapps_change: Mutex::new(()),
             default_arm_translation: None,
+            touch_gestures: Mutex::new(HashMap::new()),
         }
     }
 
@@ -1723,7 +1834,7 @@ impl HostApiService {
 
     /// Installs Google Play for users who ask, downloading it through `source`.
     pub fn with_gapps(mut self, source: gapps::Source) -> HostApiService {
-        self.gapps = Some(source);
+        self.gapps = Some(Arc::new(source));
         self
     }
 
@@ -1849,6 +1960,15 @@ impl HostApiService {
     /// Accepts connections until `stop` is set, serving each on its own thread. A failed
     /// accept is logged and the loop goes on; only `stop` ends it.
     pub fn serve(self: Arc<Self>, mut listener: Box<dyn LocalListener>, stop: Arc<AtomicBool>) {
+        if self.gapps.is_some() && self.settings.is_some() {
+            let (service, stop) = (Arc::downgrade(&self), Arc::clone(&stop));
+            if let Err(error) = thread::Builder::new()
+                .name("dsa-gapps-upkeep".into())
+                .spawn(move || gapps_upkeep_loop(service, stop))
+            {
+                eprintln!("gapps: cannot look after the Google apps of each boot: {error}");
+            }
+        }
         while !stop.load(Ordering::Relaxed) {
             match listener.accept(Duration::from_millis(200)) {
                 Ok((connection, peer)) => {
@@ -2413,6 +2533,16 @@ impl HostApiService {
                 }) => ImeEvent::from_wire_delete(&delete)
                     .map(InputEvent::Ime)
                     .map_err(|why| format!("dropped a deletion: {why}")),
+                Ok(Envelope {
+                    body: Some(Body::ImeSetSelection(selection)),
+                }) => ImeEvent::from_wire_selection(&selection)
+                    .map(InputEvent::Ime)
+                    .map_err(|why| format!("dropped a selection: {why}")),
+                Ok(Envelope {
+                    body: Some(Body::ImeSetComposingRegion(region)),
+                }) => ImeEvent::from_wire_composing_region(&region)
+                    .map(InputEvent::Ime)
+                    .map_err(|why| format!("dropped a composing region: {why}")),
                 Ok(_) => {
                     eprintln!(
                         "local API: a client of {} sent something other than input on a \
@@ -3162,6 +3292,137 @@ impl HostApiService {
         }
     }
 
+    /// Sets how far one app may elevate to root. The feature must be on. Moving an app to
+    /// "remember" needs an administrator: a caller who is not one gets the administrator
+    /// prompt in their own session. A change clears that app's grace, and the running Android
+    /// is sent the new config at once.
+    fn set_app_root(&self, peer: &Peer, set: types::SetAppRoot) -> response::Body {
+        use crate::root_elevation::Level;
+        if !apk::valid_package_name(&set.package_name) {
+            return not_a_package(&set.package_name);
+        }
+        let Some((store, _facts)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let app_root = |status: types::AppRootStatus, level: &str, message: &str| {
+            response::Body::AppRootResult(types::AppRootResult {
+                package_name: set.package_name.clone(),
+                status: status.into(),
+                level: level.to_string(),
+                message: message.to_string(),
+            })
+        };
+        let Some(level) = Level::from_code(&set.level) else {
+            return app_root(
+                types::AppRootStatus::InvalidLevel,
+                "off",
+                "the level must be off, ask or remember",
+            );
+        };
+        if !store.machine().root_elevation {
+            return app_root(
+                types::AppRootStatus::FeatureOff,
+                "off",
+                "root elevation is off for this computer; turn it on first",
+            );
+        }
+        let current = store
+            .root_apps(&peer.user)
+            .ok()
+            .and_then(|apps| {
+                apps.into_iter()
+                    .find(|a| a.package == set.package_name)
+                    .map(|a| a.level)
+            })
+            .unwrap_or_else(|| {
+                crate::root_elevation::default_level(&set.package_name)
+                    .code()
+                    .to_string()
+            });
+        if level.change_needs_admin() && !peer.administrator && current != level.code() {
+            // The caller is not an administrator, so one is asked in the caller's own session,
+            // through the prompt the app's su calls use. Running the command elevated would
+            // not do: it would connect as another account and set that account's level.
+            let approved = self
+                .androids
+                .android(&peer.user)
+                .and_then(|android| android.approve_keep_root(&set.package_name));
+            if let Err(why) = approved {
+                eprintln!(
+                    "local API: {} was not allowed to let {} keep root: {why}",
+                    peer.user, set.package_name
+                );
+                return app_root(
+                    types::AppRootStatus::NotPermitted,
+                    &current,
+                    &format!(
+                        "letting an app keep root without asking needs the approval of one \
+                         of the computer's administrators, and it was not given: {why}"
+                    ),
+                );
+            }
+        }
+        match store.set_root_app(&peer.user, &set.package_name, level.code()) {
+            Ok(()) => {
+                // The running Android follows the new level at once: the guest's su guard
+                // shows su to the app, or hides it, from this message on.
+                if let Ok(android) = self.androids.android(&peer.user) {
+                    crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
+                }
+                eprintln!(
+                    "local API: {} set the root level of {} to {}",
+                    peer.user,
+                    set.package_name,
+                    level.code()
+                );
+                app_root(types::AppRootStatus::Success, level.code(), "")
+            }
+            Err(why) => app_root(types::AppRootStatus::Other, "off", &why),
+        }
+    }
+
+    /// The adb shell item's level for `user`, as the Settings message reports it: empty while
+    /// developer mode is off, "unavailable" while root elevation is off for the computer, and
+    /// otherwise its level (ask unless the user set another).
+    fn adb_shell_root_now(&self, user: &str, settings: &Settings) -> String {
+        let Some((store, _facts)) = &self.settings else {
+            return String::new();
+        };
+        if !settings.developer_mode {
+            return String::new();
+        }
+        if !store.machine().root_elevation {
+            return "unavailable".to_string();
+        }
+        let Ok(saved) = store.root_apps(user) else {
+            return String::new();
+        };
+        crate::root_elevation::adb_shell_level(&saved)
+            .code()
+            .to_string()
+    }
+    /// Fills each listed app's `root` with its level: "unavailable" when the feature is off
+    /// for the computer, otherwise the per-app level ("off", "ask" or "remember").
+    fn fill_app_root(&self, user: &str, installed: &mut types::InstalledApps) {
+        let Some((store, _facts)) = &self.settings else {
+            return;
+        };
+        if !store.machine().root_elevation {
+            for app in &mut installed.apps {
+                app.root = "unavailable".to_string();
+            }
+            return;
+        }
+        let levels = store.root_apps(user).unwrap_or_default();
+        for app in &mut installed.apps {
+            app.root = levels
+                .iter()
+                .find(|a| a.package == app.package_name)
+                .map(|a| a.level.clone())
+                .unwrap_or_else(|| "off".to_string());
+        }
+    }
+
     fn drag_out(&self, peer: &Peer, out: types::DragOut) -> response::Body {
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -3800,11 +4061,15 @@ impl HostApiService {
                         error(ErrorCode::NotRunning, why)
                     }
                     Some(Err(TaskRequestError::Failed(why))) => error(ErrorCode::Unavailable, why),
-                    Some(Ok(())) | None => response::Body::InstalledApps(installed_to_wire(
-                        android
-                            .watch_tasks()
-                            .and_then(|watch| installed_of(watch.current)),
-                    )),
+                    Some(Ok(())) | None => {
+                        let mut installed = installed_to_wire(
+                            android
+                                .watch_tasks()
+                                .and_then(|watch| installed_of(watch.current)),
+                        );
+                        self.fill_app_root(&peer.user, &mut installed);
+                        response::Body::InstalledApps(installed)
+                    }
                 },
             },
             Some(request::Body::OpenAppSettings(open)) => {
@@ -3819,6 +4084,7 @@ impl HostApiService {
                 self.uninstall_app(peer, &uninstall.package_name)
             }
             Some(request::Body::SetRunAsArm(set)) => self.set_run_as_arm(peer, set),
+            Some(request::Body::SetAppRoot(set)) => self.set_app_root(peer, set),
             Some(request::Body::CloseTask(close)) => self.request(
                 peer,
                 TaskRequest::Close {
@@ -3875,6 +4141,9 @@ impl HostApiService {
             ),
             Some(request::Body::SetWindowsShown(shown)) => {
                 self.request(peer, TaskRequest::WindowsShown { shown: shown.shown })
+            }
+            Some(request::Body::ReportTouchGestures(report)) => {
+                self.report_touch_gestures(peer, report)
             }
             Some(request::Body::ActOnNotification(act)) => self.act_on_notification(peer, act),
             Some(request::Body::ReportPrintJob(report)) => self.report_print_job(peer, report),
@@ -3976,7 +4245,9 @@ impl HostApiService {
                         | request::Body::ResetData(_)
                         | request::Body::GetAndroidVersions(_)
                         | request::Body::UseAndroidVersion(_)
-                        | request::Body::SetRunAsArm(_) => unreachable!("answered above"),
+                        | request::Body::SetRunAsArm(_)
+                        | request::Body::SetAppRoot(_)
+                        | request::Body::ReportTouchGestures(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -4278,11 +4549,117 @@ impl HostApiService {
                 .ok()
                 .and_then(|android| android.gapps())
         });
+        let kept = self
+            .gapps
+            .as_ref()
+            .is_some_and(|source| source.is_kept(&peer.user));
         Ok(GappsStatus {
             restart_needed: gapps::restart_needed(package.as_ref(), guest.as_ref()),
+            reinstall_needed: gapps::reinstall_needed(package.as_ref(), kept),
             package,
             guest,
         })
+    }
+
+    /// Does what `user`'s Android, which has just reached its desktop, needs done for the Google
+    /// apps ([`gapps::upkeep`]): removes the image of Google apps they removed while it could not
+    /// hear of it, and makes an image an older DSA made again from the kept package. `false`
+    /// when it is to be tried again: another change is being made, or the guest has not said
+    /// yet where its Google apps stand.
+    fn gapps_upkeep(&self, user: &str) -> bool {
+        let (Some((store, _)), Some(source)) = (&self.settings, &self.gapps) else {
+            return true;
+        };
+        let _change = match self.gapps_change.try_lock() {
+            Ok(held) => held,
+            Err(std::sync::TryLockError::Poisoned(held)) => held.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        let Ok(android) = self.androids.android(user) else {
+            return true;
+        };
+        if android.state() != SessionState::Active {
+            return false;
+        }
+        let Some(guest) = android.gapps() else {
+            return false;
+        };
+        let installed = match store.gapps(user) {
+            Ok(installed) => installed,
+            Err(why) => {
+                eprintln!("gapps: {user}'s Google apps are not known ({why})");
+                return true;
+            }
+        };
+        match gapps::upkeep(installed.as_ref(), &guest, source.is_kept(user)) {
+            gapps::Upkeep::Nothing => {}
+            gapps::Upkeep::RemoveImage => match android.remove_gapps() {
+                Ok(_) => eprintln!(
+                    "gapps: removed the Google apps image from {user}'s Android, as they removed \
+                     Google Play while it could not hear of it"
+                ),
+                Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                    "gapps: {user}'s Android did not remove the Google apps image ({why}); it \
+                     starts without them all the same"
+                ),
+            },
+            gapps::Upkeep::Rebuild => {
+                if let Some(package) = &installed {
+                    self.rebuild_gapps(user, package, &**store, source, &*android);
+                }
+            }
+            gapps::Upkeep::Reinstall => eprintln!(
+                "gapps: {user}'s Google apps image was made by an older DSA and its package is \
+                 not kept; Android runs without Google's apps until they install Google Play \
+                 again"
+            ),
+        }
+        true
+    }
+
+    /// Makes `user`'s Google apps image again from their kept `package` and sends it to their
+    /// running Android, which lays it over its system from its next start. A kept package that
+    /// cannot be made into an image is removed, so the user is told to install Google Play
+    /// again.
+    fn rebuild_gapps(
+        &self,
+        user: &str,
+        package: &GappsPackage,
+        store: &dyn SettingsStore,
+        source: &gapps::Source,
+        android: &dyn UserAndroid,
+    ) {
+        eprintln!(
+            "gapps: {user}'s Google apps image (LiteGapps {} {}) was made by an older DSA; making \
+             it again from the kept package",
+            package.variant, package.version
+        );
+        let prepared = match source.rebuild(user, package) {
+            Ok(prepared) => prepared,
+            Err(why) => {
+                eprintln!("gapps: {user}'s Google apps image cannot be made again: {why}");
+                source.forget(user);
+                return;
+            }
+        };
+        let sent = std::fs::File::open(&prepared.image)
+            .map_err(|e| format!("the Google apps image cannot be read: {e}"))
+            .and_then(|mut image| {
+                android
+                    .install_gapps(prepared.size, &prepared.sha256, &mut image)
+                    .map_err(|(InstallError::NotRunning(why) | InstallError::Refused(why))| why)
+            });
+        match sent.and_then(|_| store.set_gapps(user, Some(&prepared.package))) {
+            Ok(()) => eprintln!(
+                "gapps: {user}'s Google apps image is made again ({} privileged permissions \
+                 allowlisted); Android lays it over from its next start",
+                prepared.built.allowlisted
+            ),
+            Err(why) => eprintln!(
+                "gapps: {user}'s Google apps image did not reach Android ({why}); it is made \
+                 again at the next start"
+            ),
+        }
     }
 
     fn get_gapps(&self, peer: &Peer) -> response::Body {
@@ -4295,29 +4672,46 @@ impl HostApiService {
         }
     }
 
-    /// Removes the caller's Google apps: from their Android's disk when it runs, and from
-    /// their settings, so no later boot lays them over the system.
+    /// Removes the caller's Google apps: from their settings first, so no later boot lays them
+    /// over the system, then from their Android's disk when it runs and answers. An Android that
+    /// is stopped, still starting, or cannot finish starting (as one whose Google apps stop it
+    /// at every boot) loses the image at its next boot that reaches the desktop
+    /// ([`gapps::Upkeep::RemoveImage`]).
     fn remove_gapps(&self, peer: &Peer) -> response::Body {
         let Some((store, _)) = &self.settings else {
             return Self::no_settings();
         };
+        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(why) = store.set_gapps(&peer.user, None) {
+            return error(ErrorCode::Unavailable, why);
+        }
+        if let Some(source) = &self.gapps {
+            source.forget(&peer.user);
+        }
+        eprintln!("gapps: {} removed Google Play", peer.user);
         let mut guest = None;
         if let Ok(android) = self.androids.android(&peer.user) {
+            let state = android.state();
             if matches!(
-                android.state(),
+                state,
                 SessionState::Active | SessionState::Dozing | SessionState::Frozen
             ) {
                 match android.remove_gapps() {
                     Ok(state) => guest = Some(state),
-                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
-                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
+                    Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                        "gapps: {}'s Android did not remove the image now ({why}); it goes at \
+                         the next start",
+                        peer.user
+                    ),
                 }
+            } else if state != SessionState::Stopped {
+                eprintln!(
+                    "gapps: {}'s Android is {state}; the image goes at its next start, which \
+                     starts without Google's apps",
+                    peer.user
+                );
             }
         }
-        if let Err(why) = store.set_gapps(&peer.user, None) {
-            return error(ErrorCode::Unavailable, why);
-        }
-        eprintln!("gapps: {} removed Google Play", peer.user);
         match self.gapps_status(peer, &**store, guest) {
             Ok(status) => response::Body::Gapps(status.to_wire()),
             Err(why) => error(ErrorCode::Unavailable, why),
@@ -4377,13 +4771,14 @@ impl HostApiService {
             "gapps: {} is installing Google Play for {} Android at API level {}",
             peer.user, target.arch, target.sdk
         );
+        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
         let prepared = source.prepare(&peer.user, &target, &mut |progress| {
             answer(
                 &mut *connection,
                 response::Body::GappsProgress(gapps_progress_to_wire(progress)),
             )
         });
-        let prepared = match prepared {
+        let mut prepared = match prepared {
             Ok(prepared) => prepared,
             Err(why) => {
                 eprintln!("gapps: refused the build for {}: {why}", peer.user);
@@ -4417,10 +4812,15 @@ impl HostApiService {
         let body = match installed {
             Ok(guest) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
                 Ok(()) => {
+                    // Kept so that a later DSA can make the image again in a new format.
+                    if let Err(why) = source.keep(&peer.user, &mut prepared) {
+                        eprintln!("gapps: the package is not kept for {}: {why}", peer.user);
+                    }
                     let package = &prepared.package;
-                    let files = prepared.built.files;
+                    let (files, allowlisted) = (prepared.built.files, prepared.built.allowlisted);
                     eprintln!(
-                        "gapps: {} installed LiteGapps {} {} ({files} files)",
+                        "gapps: {} installed LiteGapps {} {} ({files} files, {allowlisted} \
+                         privileged permissions allowlisted beside LiteGapps' own lists)",
                         peer.user, package.variant, package.version
                     );
                     match self.gapps_status(peer, &**store, Some(guest)) {
@@ -4613,10 +5013,58 @@ impl HostApiService {
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
+                wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
+                self.touch_gestures_now(&peer.user, &mut wire);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::Unavailable, why),
         }
+    }
+
+    /// What the caller's window manager last said about the host's touch gestures, into
+    /// `wire`.
+    fn touch_gestures_now(&self, user: &str, wire: &mut types::Settings) {
+        let reports = self
+            .touch_gestures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let state = reports.get(user).cloned().unwrap_or_default();
+        wire.touch_gestures_state = state.as_str().to_string();
+        wire.touch_gestures_problem = state.problem().to_string();
+    }
+
+    /// Keeps what the caller's window manager says about the host's touch gestures, for the
+    /// settings it reports next.
+    fn report_touch_gestures(
+        &self,
+        peer: &Peer,
+        report: types::ReportTouchGestures,
+    ) -> response::Body {
+        let state = TouchGesturesState::from_wire(&report.state, &report.problem);
+        let mut reports = self
+            .touch_gestures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if reports.get(&peer.user) != Some(&state) {
+            match &state {
+                TouchGesturesState::Failed(problem) => eprintln!(
+                    "local API: the window manager of {} cannot turn the host's touch gestures \
+                     off: {problem}",
+                    peer.user
+                ),
+                other => eprintln!(
+                    "local API: the window manager of {} says the host's touch gestures are {}",
+                    peer.user,
+                    if other.as_str().is_empty() {
+                        "unknown"
+                    } else {
+                        other.as_str()
+                    }
+                ),
+            }
+        }
+        reports.insert(peer.user.clone(), state);
+        response::Body::Done(types::Done {})
     }
 
     /// Where adb auto-connect stands for the caller's Android, or off when it has none.
@@ -4660,12 +5108,14 @@ impl HostApiService {
             image_updates: wanted.image_updates,
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
+            root_elevation: wanted.root_elevation,
             developer_mode: wanted.developer_mode,
             adb_auto_connect: wanted.adb_auto_connect,
             arm_translation: wanted.arm_translation,
             file_sharing: wanted.file_sharing,
             shared_folders: wanted.shared_folders,
             advanced_networking: wanted.advanced_networking,
+            touch_gestures_off: wanted.touch_gestures_off,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -4697,6 +5147,10 @@ impl HostApiService {
             ),
             ("input trace", wanted.input_trace != machine.input_trace),
             ("resize trace", wanted.resize_trace != machine.resize_trace),
+            (
+                "root elevation",
+                wanted.root_elevation != machine.root_elevation,
+            ),
         ]
         .into_iter()
         .filter_map(|(name, changed)| changed.then_some(name))
@@ -4721,6 +5175,7 @@ impl HostApiService {
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
                     android.adb_auto_connect(settings.adb_auto_connect);
+                    crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
                     {
@@ -4739,7 +5194,8 @@ impl HostApiService {
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
                      {}, links in Android {}, program updates {} ({} channel), image updates \
                      {}, input trace {}, resize trace {}, developer mode {} (adb port {}, \
-                     auto-connect {}), file sharing {} ({}), advanced networking {}",
+                     auto-connect {}), file sharing {} ({}), advanced networking {}, touch \
+                     gestures off in task windows {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -4757,11 +5213,39 @@ impl HostApiService {
                     on_off(settings.adb_auto_connect),
                     on_off(settings.file_sharing),
                     settings.shared_folders.join(", "),
-                    on_off(settings.advanced_networking)
+                    on_off(settings.advanced_networking),
+                    on_off(settings.touch_gestures_off)
                 );
+                if settings.root_elevation != machine.root_elevation {
+                    // The switch is the computer's, so every user's Android follows it. The
+                    // feature is set up at boot (the kernel hook and the guest relay), so
+                    // turning it on applies from the next start of Android; turning it off
+                    // hides su from every app of a running Android at once.
+                    let mut users = self.androids.existing();
+                    if !users.iter().any(|(user, _)| *user == peer.user) {
+                        if let Ok(android) = self.androids.android(&peer.user) {
+                            users.push((peer.user.clone(), android));
+                        }
+                    }
+                    for (user, android) in &users {
+                        crate::root_elevation::apply(android.as_ref(), store.as_ref(), user);
+                    }
+                    eprintln!(
+                        "local API: {} turned root elevation {} ({})",
+                        peer.user,
+                        on_off(settings.root_elevation),
+                        if settings.root_elevation {
+                            "it applies from the next start of Android"
+                        } else {
+                            "su is hidden from every app of a running Android now"
+                        }
+                    );
+                }
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
+                wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
+                self.touch_gestures_now(&peer.user, &mut wire);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::InvalidSetting, why),
@@ -4801,6 +5285,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         stop_without_asking: settings.stop_without_asking,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
+        root_elevation: settings.root_elevation,
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
         adb_auto_connect: settings.adb_auto_connect,
@@ -4809,6 +5294,10 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         file_sharing: settings.file_sharing,
         shared_folders: settings.shared_folders.clone(),
         advanced_networking: settings.advanced_networking,
+        touch_gestures_off: settings.touch_gestures_off,
+        touch_gestures_state: String::new(),
+        touch_gestures_problem: String::new(),
+        adb_shell_root: String::new(),
         network: None,
         program_updates_available: facts.program_updates_available,
         update_channel_available: facts.update_channel_available,
@@ -4833,6 +5322,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
             resize_trace: settings.resize_trace,
+            root_elevation: settings.root_elevation,
             developer_mode: settings.developer_mode,
             adb_port: crate::settings::normalise_adb_port(
                 u16::try_from(settings.adb_port).unwrap_or(0),
@@ -4842,6 +5332,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             file_sharing: settings.file_sharing,
             shared_folders: settings.shared_folders,
             advanced_networking: settings.advanced_networking,
+            touch_gestures_off: settings.touch_gestures_off,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -4853,6 +5344,11 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
         },
         network: settings.network.map(NetworkStatus::from_wire),
         adb_auto_connect_state: AutoConnectState::parse(&settings.adb_auto_connect_state),
+        touch_gestures: TouchGesturesState::from_wire(
+            &settings.touch_gestures_state,
+            &settings.touch_gestures_problem,
+        ),
+        adb_shell_root: settings.adb_shell_root,
     }
 }
 
@@ -5066,6 +5562,17 @@ impl HostApiClient {
         self.done(request::Body::SetWindowsShown(types::SetWindowsShown {
             shown,
         }))
+    }
+
+    /// Tells the service whether the caller's window manager can turn the host's touch
+    /// gestures off, which the settings then report.
+    pub fn report_touch_gestures(&mut self, state: &TouchGesturesState) -> Result<(), ClientError> {
+        self.done(request::Body::ReportTouchGestures(
+            types::ReportTouchGestures {
+                state: state.as_str().to_string(),
+                problem: state.problem().to_string(),
+            },
+        ))
     }
 
     /// Asks the service to install the newest version of DSA now. Downloading it can take
@@ -5441,6 +5948,28 @@ impl HostApiClient {
             response::Body::RunAsArmResult(result) => Ok(RunAsArmOutcome::from_wire(result)),
             _ => Err(ClientError::Malformed(
                 "expected how installing the app again went".into(),
+            )),
+        }
+    }
+
+    /// Sets how far one app may elevate to root: "off", "ask" or "remember".
+    /// Returns the level as it stands now and a message. Moving an app to "remember" needs
+    /// the caller to be an administrator, as turning the whole feature on does.
+    pub fn set_app_root(
+        &mut self,
+        package: &str,
+        level: &str,
+    ) -> Result<types::AppRootResult, ClientError> {
+        match self.exchange(
+            request::Body::SetAppRoot(types::SetAppRoot {
+                package_name: package.to_string(),
+                level: level.to_string(),
+            }),
+            self.timeout,
+        )? {
+            response::Body::AppRootResult(result) => Ok(result),
+            _ => Err(ClientError::Malformed(
+                "expected how setting the app's root level went".into(),
             )),
         }
     }

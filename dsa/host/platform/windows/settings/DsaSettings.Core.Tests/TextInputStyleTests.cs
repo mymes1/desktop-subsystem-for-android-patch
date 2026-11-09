@@ -132,14 +132,58 @@ public class TextInputStyleTests
         Assert.Contains(border.Descendants(Ui + "Button"), b => (string?)b.Attribute("Click") == "OnCopyAdbCommand");
     }
 
+    // The command line card once showed "dsa status | dsa settings | dsa memory" on one line,
+    // which reads as a shell pipeline and could not be copied. Each command is its own filled
+    // row with a copy button, as the adb command is, and the button copies only that command.
+    [Fact]
+    public void Fr17_the_command_line_card_offers_one_copy_button_per_command()
+    {
+        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var card = page.Descendants(Wpf + "TextBlock")
+            .Single(t => (string?)t.Attribute("Text") == "{l:Text CommandLineCard.Header}")
+            .Ancestors(Ui + "CardControl").First();
+        var texts = card.Descendants(Wpf + "TextBox").Select(t => (string?)t.Attribute("Text") ?? "").ToList();
+        Assert.Equal(new[] { "dsa status", "dsa settings", "dsa memory" }, texts);
+        Assert.DoesNotContain(texts, t => t.Contains(" | "));
+
+        var buttons = card.Descendants(Ui + "Button").ToList();
+        Assert.Equal(texts.Count, buttons.Count);
+        foreach (var box in card.Descendants(Wpf + "TextBox"))
+        {
+            Assert.Equal("{StaticResource SelectableCode}", (string?)box.Attribute("Style"));
+            var border = box.Ancestors(Wpf + "Border").First();
+            Assert.Equal("{StaticResource CodeBlock}", (string?)border.Attribute("Style"));
+            var button = border.Descendants(Ui + "Button").Single();
+            Assert.Equal((string?)box.Attribute("Text"), (string?)button.Attribute("Tag"));
+            Assert.Equal("OnCopyCommand", (string?)button.Attribute("Click"));
+            Assert.Equal("Transparent", (string?)button.Attribute("Appearance"));
+            Assert.Equal("{ui:SymbolIcon Copy24}", (string?)button.Attribute("Icon"));
+            Assert.Equal("{l:Text CopyButton.ToolTip}", (string?)button.Attribute("ToolTip"));
+            Assert.Equal("{l:Text CopyButton.ToolTip}",
+                (string?)button.Attribute(XName.Get("AutomationProperties.Name")));
+        }
+
+        var code = File.ReadAllText(Path.Combine(SettingsFolder(), "DsaSettings", "Pages", "AdvancedPage.xaml.cs"));
+        var handler = code[code.IndexOf("void OnCopyCommand", StringComparison.Ordinal)..];
+        Assert.Contains("button.Tag is not string command", handler);
+        Assert.Contains("SymbolRegular.Checkmark24", handler);
+    }
+
     [Fact]
     public void Fr17_the_adb_port_is_a_library_box_with_a_body_text_label()
     {
         var page = File_(Path.Combine("Pages", "NetworkPage.xaml"));
         var box = page.Descendants(Ui + "TextBox").Single(e => (string?)e.Attribute(X + "Name") == "AdbPortBox");
         var label = box.Parent!.Elements(Wpf + "TextBlock").Single();
-        Assert.Equal("{StaticResource CardTitle}", (string?)label.Attribute("Style"));
-        Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment"));
+        // The label is a text in the card's content, so it takes CardValue like every other one.
+        // CardValue is body text (the card title's size and weight, not a heading) and centres
+        // itself on the box beside it.
+        Assert.Equal("{StaticResource CardValue}", (string?)label.Attribute("Style"));
+        var value = Style("CardValue");
+        var title = Style("CardTitle");
+        Assert.Equal(Setter(title, "FontSize"), Setter(value, "FontSize"));
+        Assert.Equal(Setter(title, "FontWeight"), Setter(value, "FontWeight"));
+        Assert.Equal("Center", (string?)label.Attribute("VerticalAlignment") ?? Setter(value, "VerticalAlignment"));
     }
 
     [Fact]
@@ -165,7 +209,7 @@ public class TextInputStyleTests
     }
 
     [Fact]
-    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_above_about()
+    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_sits_directly_above_about_in_the_footer()
     {
         var window = File_("MainWindow.xaml");
         var menu = window.Descendants(Ui + "NavigationView.MenuItems").Single().Elements()
@@ -174,11 +218,12 @@ public class TextInputStyleTests
         Assert.Equal(new[]
         {
             "NavGeneral", "NavMemory", "NavApps", "NavBackground", "NavWidgets", "NavDisplay",
-            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced", "NavLogs",
+            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced",
         }, menu);
+        // Logs is not in the main list: it sits at the foot of the pane, directly above About.
         var footer = window.Descendants(Ui + "NavigationView.FooterMenuItems").Single().Elements()
             .Select(e => (string?)e.Attribute("Content")).ToList();
-        Assert.Equal(new[] { "{l:Text NavAbout.Content}" }, footer);
+        Assert.Equal(new[] { "{l:Text NavLogs.Content}", "{l:Text NavAbout.Content}" }, footer);
         var updates = File_(Path.Combine("Pages", "UpdatesPage.xaml"));
         foreach (var name in new[] { "Choice", "CheckNowButton", "ImageSwitch", "ProgramSwitch", "PrereleaseSwitch", "UpdateNowButton" })
         {

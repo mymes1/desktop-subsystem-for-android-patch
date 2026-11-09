@@ -116,7 +116,7 @@
                             <TextBlock Text="{l:Text ResetDataCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsResetting, Converter={StaticResource Visible}}" />
                         <ui:Button Content="{l:Text ResetDataButton.Content}" Click="OnResetData"
@@ -148,7 +148,7 @@
                             <TextBlock Text="{l:Text ArmGoogleCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsFetchingGoogleArm, Converter={StaticResource Visible}}" />
                         <ui:HyperlinkButton Content="{l:Text ArmGoogleTermsLink.Content}" Click="OnOpenGoogleArmTerms"
@@ -194,7 +194,7 @@
                             <TextBlock Text="{l:Text GappsCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsInstallingGapps, Converter={StaticResource Visible}}" />
                         <ui:Button Content="{l:Text GappsInstallButton.Content}" Click="OnInstallGapps"
@@ -253,6 +253,39 @@
                     <ui:HyperlinkButton Content="{l:Text GappsRegisterLink.Content}" Click="OnOpenGappsRegistration" />
                 </ui:CardControl>
 
+                <TextBlock Text="{l:Text RootHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ShieldKeyhole24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{l:Text RootElevationCard.Header}" Style="{StaticResource CardTitle}" />
+                                <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                            </StackPanel>
+                            <TextBlock Text="{l:Text RootElevationCard.Description}" Style="{StaticResource CardDescription}" />
+                            <!-- Why the switch does not move for this user. -->
+                            <TextBlock Text="{l:Text RootElevationAdminReason.Text}" Style="{StaticResource CardDescription}"
+                                       Visibility="{Binding RootElevationNeedsAdministrator, Converter={StaticResource Visible}}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Style="{StaticResource CardControls}">
+                        <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
+                                   Visibility="{Binding RootElevationNeedsAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnRootElevationAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="RootElevationSwitch" IsChecked="{Binding RootElevation, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangeRootElevation, Mode=OneWay}" Click="OnRootElevationToggled" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:InfoBar Title="{l:Text RootElevationRestartBar.Title}" Message="{l:Text RootElevationRestartBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding RootElevationRestartNeeded, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:CardAction Icon="{ui:SymbolIcon DocumentBulletList24}" Click="OnOpenServiceLogs" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="{l:Text RootLogCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{Binding RootElevationLog, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardAction>
+                <TextBlock Text="{l:Text RootNote.Text}" Style="{StaticResource Note}" />
+
                 <TextBlock Text="{l:Text DiagnosticsHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Bug24}">
                     <ui:CardControl.Header>
@@ -264,7 +297,7 @@
                             <TextBlock Text="{l:Text InputTraceCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnInputTraceAsAdministrator" />
@@ -282,7 +315,7 @@
                             <TextBlock Text="{l:Text ResizeTraceCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnResizeTraceAsAdministrator" />
@@ -312,7 +345,42 @@
                         <StackPanel>
                             <TextBlock Text="{l:Text CommandLineCard.Header}" Style="{StaticResource CardTitle}" />
                             <TextBlock Text="{l:Text CommandLineCard.Description}" Style="{StaticResource CardDescription}" />
-                            <TextBox Style="{StaticResource SelectableCode}" Margin="0,8,0,0" Text="dsa status | dsa settings | dsa memory" />
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa status" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa status"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa settings" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa settings"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource CodeBlock}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Style="{StaticResource SelectableCode}" VerticalAlignment="Center" Text="dsa memory" />
+                                    <ui:Button Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyCommand" Tag="dsa memory"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </ui:CardControl.Header>
                 </ui:CardControl>

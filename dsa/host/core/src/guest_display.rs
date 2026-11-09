@@ -9,6 +9,17 @@
 //! The display's size cannot change while Android runs. A monitor larger than the display
 //! that appears later caps its windows at the display's size, shown 1:1 and centred when
 //! maximised, until the next start of Android.
+//!
+//! The display's density is the main monitor's, as a task's window gives it
+//! ([`density_for_dpi`]): 160 dpi at a scale of 100%, 240 at 150%. Every app starts at the
+//! display's density. Android relaunches an activity whose density changes unless the app
+//! says it handles that itself, so an app that started at another density than its monitor's
+//! would be relaunched the moment its window asked for the right one. Starting at the main
+//! monitor's density means a window that opens there asks for nothing. SurfaceFlinger takes
+//! the density from `ro.sf.lcd_density`, which the guest sets from `androidboot.lcd_density`,
+//! and the hwcomposer reports `androidboot.dsa.display_dpi`; both carry the same number.
+
+use crate::compositor::window_sizing::{density_for_dpi, BASE_DPI};
 
 /// The shortest side the display has, whatever the monitors.
 pub const MIN_SIDE: u32 = 1920;
@@ -23,6 +34,57 @@ const HEIGHT_KEY: &str = "androidboot.dsa.display_height";
 
 /// The most monitors read from a record, far past any desktop.
 const MAX_RECORDED: usize = 64;
+
+/// The kernel command line words that set the display's density: the one the hwcomposer
+/// reports, and the one SurfaceFlinger, and so every app, starts at.
+const DPI_KEY: &str = "androidboot.dsa.display_dpi";
+const LCD_DENSITY_KEY: &str = "androidboot.lcd_density";
+
+/// The lowest and the highest density the guest's hwcomposer accepts.
+pub const MIN_DENSITY: u32 = 72;
+pub const MAX_DENSITY: u32 = 960;
+
+/// The density Android starts at for a main monitor of `dpi` (96 is 100%): the density a
+/// task's window on that monitor gives its task, within what the guest accepts. A main
+/// monitor that is not known counts as 100%.
+pub fn boot_density(main_monitor_dpi: Option<u32>) -> u32 {
+    density_for_dpi(main_monitor_dpi.unwrap_or(BASE_DPI)).clamp(MIN_DENSITY, MAX_DENSITY)
+}
+
+/// `cmdline` with the display's density set to `density`, for the hwcomposer and for
+/// SurfaceFlinger alike. The image's own values are removed, because an appended value would
+/// lose to them.
+pub fn with_display_density(cmdline: &str, density: u32) -> String {
+    let is_density = |word: &str| {
+        [DPI_KEY, LCD_DENSITY_KEY]
+            .iter()
+            .any(|key| word.strip_prefix(key).is_some_and(|v| v.starts_with('=')))
+    };
+    let mut words: Vec<String> = cmdline
+        .split_whitespace()
+        .filter(|word| !is_density(word))
+        .map(str::to_string)
+        .collect();
+    words.push(format!("{DPI_KEY}={density}"));
+    words.push(format!("{LCD_DENSITY_KEY}={density}"));
+    words.join(" ")
+}
+
+/// The most a recorded monitor DPI can be; anything above is not a monitor's.
+const MAX_RECORDED_DPI: u32 = 2000;
+
+/// The text a user's session records its main monitor's DPI in (96 is 100%), where a service
+/// that cannot see the user's monitors reads it.
+pub fn density_record_text(main_monitor_dpi: u32) -> String {
+    format!("{main_monitor_dpi}\n")
+}
+
+/// The main monitor's DPI in a record, or `None` when it holds no plausible DPI. The user's
+/// own session writes it, so anything else is ignored.
+pub fn parse_density_record(text: &str) -> Option<u32> {
+    let dpi: u32 = text.lines().next()?.trim().parse().ok()?;
+    (1..=MAX_RECORDED_DPI).contains(&dpi).then_some(dpi)
+}
 
 /// The display for these monitors, each a width and height in physical pixels. `None` when
 /// there is no usable monitor among them, which leaves the size the image names.
@@ -132,6 +194,30 @@ mod tests {
     fn fr4_only_the_size_words_are_replaced() {
         let out = with_display_size("androidboot.dsa.display_width_x=1 a=b", (1920, 1920));
         assert!(out.starts_with("androidboot.dsa.display_width_x=1 a=b "));
+    }
+
+    #[test]
+    fn fr4_android_starts_at_the_main_monitors_density() {
+        assert_eq!(boot_density(Some(96)), 160);
+        assert_eq!(boot_density(Some(144)), 240);
+        assert_eq!(boot_density(Some(192)), 320);
+        assert_eq!(boot_density(None), 160, "an unknown main monitor is 100%");
+        assert_eq!(boot_density(Some(1)), MIN_DENSITY);
+        assert_eq!(boot_density(Some(2000)), MAX_DENSITY);
+        // The image's 160 is replaced, for the hwcomposer and for SurfaceFlinger both, so the
+        // first value init reads is the main monitor's.
+        let cmdline = "init=/init androidboot.dsa.display_dpi=160 androidboot.lcd_density=160 \
+                       androidboot.dsa.display_dpi_x=1";
+        assert_eq!(
+            with_display_density(cmdline, boot_density(Some(144))),
+            "init=/init androidboot.dsa.display_dpi_x=1 androidboot.dsa.display_dpi=240 \
+             androidboot.lcd_density=240"
+        );
+        // A record of the main monitor reads back, and nothing else counts as one.
+        assert_eq!(parse_density_record(&density_record_text(144)), Some(144));
+        assert_eq!(parse_density_record("junk\n"), None);
+        assert_eq!(parse_density_record("0\n"), None);
+        assert_eq!(parse_density_record("99999\n"), None);
     }
 
     #[test]

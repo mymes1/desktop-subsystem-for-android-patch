@@ -1,4 +1,4 @@
-//! Sound and codecs in an ordinary app on the real image, end to end, with SELinux enforcing:
+//! Sound, codecs and root approval in an ordinary app on the real image, with SELinux enforcing:
 //! the service boots the image under crosvm, the test installs the media probe
 //! (`dsa/guest/media-probe/`) through adb (developer mode) and runs its instrumentation, which
 //! plays sound and encodes and decodes H.264 and AAC in the app's own process.
@@ -23,12 +23,13 @@
 //! `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when the folder carries none,
 //! `DSA_MEDIA_PROBE` the probe's APK, and `DSA_ADB` the adb to reach the guest with (`adb` on
 //! the path when not set). It needs `/dev/kvm` and `/dev/vhost-vsock`. What it read stays in
-//! its folder (`/tmp/media-test-<pid>`) for the job to keep.
+//! its folder (`.scratch/media-<pid>`) for the job to keep.
 #![cfg(target_os = "linux")]
 
 mod boot_check;
 
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -38,6 +39,7 @@ use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 
 use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
+use dsa_host_core::session::SessionState;
 use dsa_host_unix::socket::UnixLocalConnector;
 
 const PROBE_PACKAGE: &str = "io.github.thisisthepy.dsa.mediaprobe";
@@ -64,20 +66,29 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
     // The codec services' buffer pool queues.
     "dsa_codec2_tmpfs",
 ];
-/// The whole test, boot included, stays under twelve minutes.
-const BUDGET: Duration = Duration::from_secs(690);
-/// How long past its budget the test may run before it stops everything it started and
-/// ends: inside the job step's 14 minutes, so the step never kills it with its VM still
-/// running.
+/// The media check, boot included, stays under twelve minutes.
+const MEDIA_BUDGET: Duration = Duration::from_secs(690);
+/// The root check boots three times (as it starts, then with root elevation on and off), so
+/// it stays under twenty-one minutes.
+const ROOT_BUDGET: Duration = Duration::from_secs(1260);
+/// How long past its budget a check may run before it stops everything it started and ends:
+/// inside its job step's limit (14 minutes for media, 23 for root), so the step never kills
+/// it with its VM still running.
 const OVERRUN: Duration = Duration::from_secs(60);
 /// How long one adb command may take. The probe's longest check plays a second of sound and
 /// encodes and decodes a second of video and audio with each decoder; a log dump of the
 /// whole boot takes seconds.
 const ADB_LIMIT: Duration = Duration::from_secs(240);
 
-fn scratch() -> PathBuf {
+fn scratch(kind: &str) -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
-    let dir = std::env::temp_dir().join(format!("media-test-{}", std::process::id()));
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dir = manifest
+        .ancestors()
+        .nth(4)
+        .unwrap()
+        .join(".scratch")
+        .join(format!("{kind}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -239,6 +250,189 @@ fn number(results: &BTreeMap<String, String>, key: &str) -> Result<i64, String> 
     value
         .parse()
         .map_err(|_| format!("the probe reported {key}={value}, which is not a number"))
+}
+
+fn root_absent_problems(results: &BTreeMap<String, String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    for path in ["/system/bin/su", "/system/xbin/su", "/sbin/su"] {
+        for operation in ["stat", "procstat", "access", "exec"] {
+            let key = format!("root.{path}.{operation}");
+            if results.get(&key).map(String::as_str) != Some("ENOENT") {
+                problems.push(format!(
+                    "{key} did not report ENOENT: {:?}",
+                    results.get(&key)
+                ));
+            }
+        }
+    }
+    if results.get("root.path_lookup_exit").map(String::as_str) != Some("1") {
+        problems.push(format!(
+            "PATH found su: {:?}",
+            results.get("root.path_lookup_exit")
+        ));
+    }
+    problems
+}
+
+fn restart_for_root(
+    api: &mut HostApiClient,
+    adb: &Adb,
+    dir: &Path,
+    enabled: bool,
+) -> Result<(), String> {
+    api.stop().map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        if api.status().map_err(|e| e.to_string())?.state == SessionState::Stopped {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err("Android did not stop".into());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let output = Command::new("sudo")
+        .arg("env")
+        .arg(format!(
+            "DSA_ROOT_TEST_SOCKET={}",
+            dir.join("host.sock").display()
+        ))
+        .arg(format!("DSA_ROOT_TEST_ENABLED={}", u8::from(enabled)))
+        .arg(executable)
+        .args(["--exact", "fr35_set_machine_switch_as_admin", "--nocapture"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "setting root elevation: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    if enabled {
+        let result = api
+            .set_app_root(PROBE_PACKAGE, "ask")
+            .map_err(|e| e.to_string())?;
+        if result.level != "ask" {
+            return Err(format!(
+                "setting the probe's root level: {}",
+                result.message
+            ));
+        }
+    }
+    api.ensure_running(Duration::from_secs(360), Duration::from_secs(2), |_| {})
+        .map_err(|e| e.to_string())?;
+    adb.connect(Duration::from_secs(120))
+}
+
+#[test]
+fn fr35_set_machine_switch_as_admin() {
+    let Some(socket) = std::env::var_os("DSA_ROOT_TEST_SOCKET") else {
+        return;
+    };
+    let enabled = std::env::var("DSA_ROOT_TEST_ENABLED").unwrap() == "1";
+    let mut api = client(Path::new(&socket), Duration::from_secs(10));
+    let mut settings = api.settings().unwrap().settings;
+    settings.root_elevation = enabled;
+    api.set_settings(&settings).unwrap();
+}
+
+fn root_approval_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(), String> {
+    let approver = dir.join("approver");
+    std::fs::write(approver.join("answer"), "deny").map_err(|e| e.to_string())?;
+    restart_for_root(api, adb, dir, true)?;
+    let visible_until = Instant::now() + Duration::from_secs(90);
+    loop {
+        let results = adb.probe(dir, "root_visible")?;
+        if results.get("root.visible").map(String::as_str) == Some("yes") {
+            break;
+        }
+        if Instant::now() >= visible_until {
+            return Err(format!("the allowed app cannot see su: {results:?}"));
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    let requests = approver.join("requests.jsonl");
+    let count = || -> Result<usize, String> {
+        std::fs::read_to_string(&requests)
+            .map(|text| text.lines().count())
+            .map_err(|e| e.to_string())
+    };
+    let denied = adb.probe(dir, "root_request")?;
+    if number(&denied, "root.exit")? == 0 || count()? != 1 {
+        return Err(format!("a refused root call did not fail once: {denied:?}"));
+    }
+    let records = std::fs::read_to_string(&requests).map_err(|e| e.to_string())?;
+    let first: serde_json::Value =
+        serde_json::from_str(records.lines().next().unwrap_or("")).map_err(|e| e.to_string())?;
+    if first["package"] != PROBE_PACKAGE
+        || first["app_name"] != "DSA media probe"
+        || first["command"][0] != "id"
+        || first["uid"].as_u64().unwrap_or(0) < 10_000
+        || first["icon_bytes"].as_u64().unwrap_or(0) == 0
+    {
+        return Err(format!(
+            "the approval prompt did not identify the calling app and command: {first}"
+        ));
+    }
+    std::fs::remove_file(approver.join("answer")).map_err(|e| e.to_string())?;
+    let waited = Instant::now();
+    let unanswered = adb.probe(dir, "root_request")?;
+    if number(&unanswered, "root.exit")? == 0
+        || count()? != 2
+        || waited.elapsed() < Duration::from_secs(55)
+    {
+        return Err(format!(
+            "an unanswered root call did not time out: {unanswered:?}"
+        ));
+    }
+    // Let the host's own deadline finish before changing the shared answer file.
+    std::thread::sleep(Duration::from_secs(3));
+    std::fs::write(approver.join("answer"), "approve").map_err(|e| e.to_string())?;
+    let approved = adb.probe(dir, "root_request")?;
+    if number(&approved, "root.exit")? != 0
+        || !approved
+            .get("root.output")
+            .is_some_and(|out| out.contains("uid=0"))
+        || count()? != 3
+    {
+        return Err(format!(
+            "the approved command did not run as root: {approved:?}"
+        ));
+    }
+    let grace = adb.probe(dir, "root_request")?;
+    if number(&grace, "root.exit")? != 0 || count()? != 3 {
+        return Err(format!(
+            "the app's second root call did not use its grace: {grace:?}"
+        ));
+    }
+    restart_for_root(api, adb, dir, false)?;
+    let off = adb.probe(dir, "root_absent")?;
+    let problems = root_absent_problems(&off);
+    if !problems.is_empty() {
+        return Err(problems.join("\n"));
+    }
+    let helper = adb.shell("getprop init.svc.dsa_su")?;
+    if !matches!(helper.trim(), "" | "stopped") {
+        return Err(format!(
+            "the helper still runs after root elevation is off: {helper}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn fr35_the_boot_check_rejects_a_visible_su() {
+    let mut results = BTreeMap::new();
+    for path in ["/system/bin/su", "/system/xbin/su", "/sbin/su"] {
+        for operation in ["stat", "procstat", "access", "exec"] {
+            results.insert(format!("root.{path}.{operation}"), "ENOENT".into());
+        }
+    }
+    results.insert("root.path_lookup_exit".into(), "1".into());
+    assert!(root_absent_problems(&results).is_empty());
+    results.insert("root./system/bin/su.stat".into(), "visible".into());
+    assert_eq!(root_absent_problems(&results).len(), 1);
 }
 
 /// What is wrong with the probe's audio results: each track must initialise, take the whole
@@ -452,6 +646,15 @@ fn fr26_the_sensors_hal_refused_its_event_queue_is_found_in_the_log() {
 
 #[test]
 fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
+    boot_check(true, false);
+}
+
+#[test]
+fn fr35_an_app_needs_approval_and_su_is_hidden_when_disabled() {
+    boot_check(false, true);
+}
+
+fn boot_check(check_media: bool, check_root: bool) {
     let (Some(crosvm), Some(image), Some(probe)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
         std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
@@ -467,9 +670,17 @@ fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("adb"));
     let started = Instant::now();
-    let deadline = started + BUDGET;
-    let _watchdog = Watchdog::start("the media check", BUDGET + OVERRUN);
-    let dir = scratch();
+    let (budget, what) = if check_root {
+        (ROOT_BUDGET, "the root check")
+    } else {
+        (MEDIA_BUDGET, "the media check")
+    };
+    let deadline = started + budget;
+    let _watchdog = Watchdog::start(what, budget + OVERRUN);
+    let dir = scratch(if check_root { "root" } else { "media" });
+    let approver = dir.join("approver");
+    std::fs::create_dir_all(&approver).unwrap();
+    std::fs::set_permissions(&approver, std::fs::Permissions::from_mode(0o700)).unwrap();
     let socket = dir.join("host.sock");
     let config = dir.join("dsa-hostd.json");
     let settings = serde_json::json!({
@@ -482,6 +693,7 @@ fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
         "memory_mb": 4096,
         "processors": 2,
         "data_disk_size_gb": 8,
+        "test_root_approver": approver,
     });
     std::fs::write(&config, settings.to_string()).unwrap();
     let service = Service::spawn(
@@ -588,27 +800,64 @@ fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
     }
 
     let mut problems = Vec::new();
-    match adb.probe(&dir, "audio") {
-        Ok(results) => {
-            eprintln!("audio: {results:?}");
-            problems.extend(audio_problems(&results));
+    if check_root {
+        // Keep the first boot's init and kernel messages before the approval check restarts it.
+        for (name, command) in [
+            ("boot-logcat.txt", "logcat -d -b all"),
+            ("guard.txt", "ls -ldZ /system/xbin /system/xbin/su; stat /system/xbin /system/xbin/su; cat /proc/filesystems; cat /proc/mounts; cat /sys/kernel/security/lsm; ls -lZ /sys/kernel/security /sys/kernel/security/dsa_su"),
+        ] {
+            let output = adb.shell(command).unwrap_or_else(|error| error);
+            let _ = std::fs::write(dir.join(name), output);
         }
-        Err(why) => problems.push(why),
-    }
-    match adb.probe(&dir, "decode") {
-        Ok(results) => {
-            eprintln!("decode: {results:?}");
-            problems.extend(decode_problems(&results));
+        match adb.shell("getprop init.svc.dsa_su") {
+            Ok(state) if matches!(state.trim(), "" | "stopped") => {}
+            Ok(state) => problems.push(format!(
+                "the root helper is running while root elevation is off: {state}"
+            )),
+            Err(why) => problems.push(why),
         }
-        Err(why) => problems.push(why),
+        match adb.shell("getprop ro.debuggable") {
+            Ok(value) if value.trim() == "0" => {}
+            Ok(value) => problems.push(format!("ro.debuggable is not 0: {value}")),
+            Err(why) => problems.push(why),
+        }
+        match adb.shell("getprop ro.build.tags") {
+            Ok(value) if value.trim() == "release-keys" => {}
+            Ok(value) => problems.push(format!("ro.build.tags is not release-keys: {value}")),
+            Err(why) => problems.push(why),
+        }
+        match adb.probe(&dir, "root_absent") {
+            Ok(results) => problems.extend(root_absent_problems(&results)),
+            Err(why) => problems.push(why),
+        }
     }
-
-    // Every denial since the boot, from the guest's own log, where logd keeps the kernel's
-    // audit messages.
-    let guest_log = adb.shell("logcat -d -b all").unwrap_or_default();
-    let _ = std::fs::write(dir.join("logcat.txt"), &guest_log);
-    for line in denials(&guest_log, SHARED_MEMORY_TYPES) {
-        problems.push(format!("SELinux refused shared memory: {line}"));
+    if check_media {
+        match adb.probe(&dir, "audio") {
+            Ok(results) => {
+                eprintln!("audio: {results:?}");
+                problems.extend(audio_problems(&results));
+            }
+            Err(why) => problems.push(why),
+        }
+        match adb.probe(&dir, "decode") {
+            Ok(results) => {
+                eprintln!("decode: {results:?}");
+                problems.extend(decode_problems(&results));
+            }
+            Err(why) => problems.push(why),
+        }
+        // Every denial since the boot, from the guest's own log, where logd keeps the kernel's
+        // audit messages.
+        let guest_log = adb.shell("logcat -d -b all").unwrap_or_default();
+        let _ = std::fs::write(dir.join("logcat.txt"), &guest_log);
+        for line in denials(&guest_log, SHARED_MEMORY_TYPES) {
+            problems.push(format!("SELinux refused shared memory: {line}"));
+        }
+    }
+    if check_root {
+        if let Err(why) = root_approval_check(&mut api, &adb, &dir) {
+            problems.push(format!("root elevation: {why}"));
+        }
     }
 
     if !problems.is_empty() {

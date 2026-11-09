@@ -28,6 +28,34 @@ public struct RunAsArmReport: Equatable, Sendable {
     public var on: Bool
 }
 
+
+/// How far an app may use root: su does not exist for it (`off`), each su call waits for an
+/// administrator's approval (`ask`), or su is approved without asking (`remember`). The order
+/// is the order the Apps page lists them.
+public enum RootLevel: String, CaseIterable, Sendable {
+    case off, ask, remember
+
+    /// The level dsa named, or nil for `unavailable` (root elevation is off for the Mac) and
+    /// for a dsa that does not say.
+    public static func read(_ code: String) -> RootLevel? { RootLevel(rawValue: code) }
+
+    /// Where the level is among the choices the Apps page offers.
+    public var index: Int { RootLevel.allCases.firstIndex(of: self) ?? 0 }
+}
+
+/// How a change of an app's root level went: whether it was set, the level the app has now,
+/// and the service's words when it was not set.
+public struct RootReport: Equatable, Sendable {
+    public var done: Bool
+    public var level: String
+    public var message: String
+}
+
+/// A root level the Apps page offers: what the list shows, and the level.
+public struct RootChoice: Equatable, Hashable, Sendable {
+    public var label: String
+    public var level: RootLevel
+}
 /// One app installed in Android, as `dsa apps list` reports it.
 public struct InstalledAppInfo: Equatable, Sendable {
     public var package, label, versionName: String
@@ -37,18 +65,62 @@ public struct InstalledAppInfo: Equatable, Sendable {
     public var appBytes, dataBytes, cacheBytes: UInt64
     public var iconPng: Data
     public var runAsArm: RunAsArmSwitch = .unknown
+    /// How far the app may use root, as dsa says it: `off`, `ask` or `remember`, or
+    /// `unavailable` while root elevation is off for the Mac. Empty from a dsa that does not
+    /// say.
+    public var root = ""
 
     public var totalBytes: UInt64 { appBytes + dataBytes + cacheBytes }
 }
 
+/// How an app's window follows a move to a monitor of another scale. `auto` and `system` never
+/// restart the app.
+public enum DpiScaling: String, CaseIterable, Equatable, Sendable {
+    /// App for apps that say they handle a change of density themselves, System for the others.
+    case auto
+    /// The app redraws at the new monitor's scale. Android recreates the screen of an app that
+    /// does not say it handles a change of density, and restores its state.
+    case app
+    /// The app keeps its scale and its window is scaled to the new monitor, at the same
+    /// physical size.
+    case system
+    /// The app gets the new scale without a restart even when it does not say it handles one.
+    /// It needs a change to Android's framework; until a build has it, it works like `system`.
+    case systemForced = "system-forced"
+
+    /// The choice `dsa app-window` names; anything else, or nothing, is `auto`.
+    public static func read(_ code: String?) -> DpiScaling {
+        code.flatMap(DpiScaling.init(rawValue:)) ?? .auto
+    }
+
+    /// The key of its name in the string catalog.
+    var textKey: String {
+        switch self {
+        case .auto: return "Apps_DpiScaling_Auto"
+        case .app: return "Apps_DpiScaling_App"
+        case .system: return "Apps_DpiScaling_System"
+        case .systemForced: return "Apps_DpiScaling_SystemForced"
+        }
+    }
+}
+
+/// A scaling choice the Apps page offers: what the list shows, the choice, and whether it does
+/// what it says yet.
+public struct DpiScalingChoice: Equatable, Hashable, Sendable {
+    public var label: String
+    public var scaling: DpiScaling
+    public var available: Bool
+}
+
 /// The user's window settings for one app, as `dsa app-window` reports them: whether its
-/// windows keep their size, and the size they open at in density-independent pixels (nil for
-/// the size Android gives the task).
+/// windows keep their size, the size they open at in density-independent pixels (nil for the
+/// size Android gives the task), and how its windows follow a monitor of another scale.
 public struct AppWindowSetting: Equatable, Sendable {
     public var package: String
     public var fixedSize: Bool
     public var startWidth: Int?
     public var startHeight: Int?
+    public var dpiScaling: DpiScaling = .auto
 
     public static func standard(_ package: String) -> AppWindowSetting {
         AppWindowSetting(package: package, fixedSize: false, startWidth: nil, startHeight: nil)
@@ -101,7 +173,7 @@ public final class AppsService {
             versionCode: app.int64("version_code"), firstInstallMs: app.uint("first_install_time_ms"),
             lastUpdateMs: app.uint("last_update_time_ms"), systemApp: app.bool("system_app"),
             appBytes: app.uint("app_bytes"), dataBytes: app.uint("data_bytes"), cacheBytes: app.uint("cache_bytes"),
-            iconPng: app.base64("icon_png"), runAsArm: readRunAsArm(app))
+            iconPng: app.base64("icon_png"), runAsArm: readRunAsArm(app), root: app.string("root"))
     }
 
     /// Every app installed in Android, with its size read again; Android is started first when
@@ -134,14 +206,23 @@ public final class AppsService {
                 height = h.intValue
             }
             settings[package] = AppWindowSetting(package: package, fixedSize: app.bool("fixed_size"),
-                                                 startWidth: width, startHeight: height)
+                                                 startWidth: width, startHeight: height,
+                                                 dpiScaling: DpiScaling.read(app["dpi_scaling"].string))
         }
         return settings
     }
 
     /// The user's window settings for every app that has any, by package.
     public func windowSettings() async throws -> [String: AppWindowSetting] {
-        AppsService.readWindowSettings(try await service.runJson(["app-window"]))
+        try await windowSettingsList().apps
+    }
+
+    /// The user's window settings for every app that has any, by package, and whether this
+    /// build of Android scales an app the System (forced) way yet. A dsa that does not say
+    /// counts as one whose Android cannot.
+    public func windowSettingsList() async throws -> (apps: [String: AppWindowSetting], systemForcedAvailable: Bool) {
+        let json = try await service.runJson(["app-window"])
+        return (AppsService.readWindowSettings(json), json.bool("system_forced_available"))
     }
 
     /// Replaces the window settings of one app, and returns them as the service now has them.
@@ -150,6 +231,7 @@ public final class AppsService {
             "app-window", setting.package,
             "--fixed-size", setting.fixedSize ? "on" : "off",
             "--start-size", setting.startSizeArgument,
+            "--dpi-scaling", setting.dpiScaling.rawValue,
         ])
         return AppsService.readWindowSettings(json)[setting.package] ?? .standard(setting.package)
     }
@@ -172,6 +254,23 @@ public final class AppsService {
         let json = try Json.parse(result.output)
         return RunAsArmReport(done: json.string("status") == "done", status: json.string("status"),
                               message: json.string("message"), on: json.bool("on"))
+    }
+
+    /// Sets how far `package` may use root. A refusal by the service (root elevation off for
+    /// the Mac, or `remember` without an administrator's approval) is a report with its words;
+    /// anything else is a `DsaError`.
+    public func setRoot(_ package: String, _ level: RootLevel) async throws -> RootReport {
+        let result = try await service.cli.run(["apps", "root", package, level.rawValue, "--json"])
+        if result.exitCode != 0 {
+            let detail = DsaError.detail(of: result)
+            let prefix = "not changed: \(package): "
+            if detail.hasPrefix(prefix) {
+                return RootReport(done: false, level: "", message: String(detail.dropFirst(prefix.count)))
+            }
+            throw DsaError.failure(result)
+        }
+        let json = try Json.parse(result.output)
+        return RootReport(done: true, level: json.string("level"), message: "")
     }
 
     /// Uninstalls `package`. A refusal by Android is a report with its reason; anything else
@@ -199,11 +298,20 @@ public struct AppRow: Equatable, Identifiable, Sendable {
     public var resizable: Bool
     /// Where the app's start size is among the choices; -1 for a size set another way.
     public var startSizeIndex: Int
+    /// Where the app's scaling choice is among `dpiScalingChoices`, and, while it is System
+    /// (forced) and not available yet, why it works like System, in the user's language.
+    public var dpiScalingIndex = 0
+    public var dpiScalingTip: String?
     /// Whether the app runs its ARM code through the translator, whether that can be changed,
     /// and if not, why, in the user's language.
     public var runAsArm = false
     public var canRunAsArm = false
     public var runAsArmTip: String?
+    /// Where the app's root level is among `rootChoices`; -1 when it cannot be chosen, and
+    /// then why, in the user's language.
+    public var rootIndex = -1
+    public var canChangeRoot = false
+    public var rootTip: String?
 
     public var id: String { package }
 }
@@ -223,6 +331,8 @@ public final class AppsViewModel: ObservableObject {
 
     @Published public private(set) var apps: [InstalledAppInfo]?
     @Published public private(set) var windows: [String: AppWindowSetting] = [:]
+    /// Whether this build of Android scales an app the System (forced) way yet.
+    @Published public private(set) var systemForcedAvailable = false
     /// What the user typed to find an app: matched against its name and package.
     @Published public var search = ""
     @Published public private(set) var error: String?
@@ -296,6 +406,26 @@ public final class AppsViewModel: ObservableObject {
         StartSizeChoice(label: text.format(key, width, height), width: width, height: height)
     }
 
+    /// The ways an app's window can follow a monitor of another scale, in the order of
+    /// `DpiScaling`. System (forced) is stored and can be chosen, but until Android can do it,
+    /// the list marks it as not available yet.
+    public var dpiScalingChoices: [DpiScalingChoice] {
+        DpiScaling.allCases.map { scaling in
+            if scaling == .systemForced && !systemForcedAvailable {
+                return DpiScalingChoice(label: text.get("Apps_DpiScaling_SystemForcedNotYet"), scaling: scaling,
+                                        available: false)
+            }
+            return DpiScalingChoice(label: text.get(scaling.textKey), scaling: scaling, available: true)
+        }
+    }
+
+    /// Why System (forced) works like System for now, while it is the app's choice and not
+    /// available; otherwise nil.
+    public func dpiScalingTip(_ setting: AppWindowSetting) -> String? {
+        setting.dpiScaling == .systemForced && !systemForcedAvailable
+            ? text.get("Apps_DpiScaling_SystemForcedTip") : nil
+    }
+
     /// The window settings of `package`.
     public func windowOf(_ package: String) -> AppWindowSetting { windows[package] ?? .standard(package) }
 
@@ -321,13 +451,53 @@ public final class AppsViewModel: ObservableObject {
             icon: app.iconPng.isEmpty ? nil : app.iconPng, canUninstall: !app.systemApp, isSystem: app.systemApp,
             uninstallTip: app.systemApp ? text.get("Apps_SystemTip") : nil,
             resizable: !window.fixedSize, startSizeIndex: startSizeIndex(window),
+            dpiScalingIndex: DpiScaling.allCases.firstIndex(of: window.dpiScaling) ?? 0,
+            dpiScalingTip: dpiScalingTip(window),
             runAsArm: app.runAsArm.on, canRunAsArm: app.runAsArm.available,
-            runAsArmTip: runAsArmTip(app.runAsArm))
+            runAsArmTip: runAsArmTip(app.runAsArm),
+            rootIndex: RootLevel.read(app.root)?.index ?? -1, canChangeRoot: RootLevel.read(app.root) != nil,
+            rootTip: rootTip(app.root))
     }
 
     /// Why the "Run as ARM" switch cannot be changed, in the user's language; nil when it can.
     public func runAsArmTip(_ arm: RunAsArmSwitch) -> String? {
         arm.available ? nil : text.get("Apps_RunAsArm_\(arm.reason.isEmpty ? "unknown" : arm.reason)")
+    }
+
+    /// The root levels the page offers, in the order of `RootLevel`.
+    public var rootChoices: [RootChoice] {
+        RootLevel.allCases.map { RootChoice(label: text.get("Apps_Root_\($0.rawValue)"), level: $0) }
+    }
+
+    /// Whether root elevation is off for the Mac, so no app's level can be chosen and the page
+    /// says where to turn it on.
+    public var rootUnavailable: Bool { apps?.contains { $0.root == "unavailable" } ?? false }
+
+    /// Why an app's root level cannot be chosen, in the user's language; nil when it can.
+    public func rootTip(_ root: String) -> String? {
+        RootLevel.read(root) != nil ? nil : text.get(root == "unavailable" ? "Apps_RootTip_unavailable" : "Apps_RootTip_unknown")
+    }
+
+    /// Sets how far the app may use root: the level at `index` of `rootChoices`. `remember`
+    /// needs an administrator's approval, which the service asks for; a refusal is the page's
+    /// error with the service's words.
+    public func setRoot(_ package: String, _ index: Int) async {
+        guard RootLevel.allCases.indices.contains(index) else {
+            return
+        }
+        let level = RootLevel.allCases[index]
+        if let current = apps?.first(where: { $0.package == package }), RootLevel.read(current.root) == level {
+            return
+        }
+        await run(reload: true) {
+            let label = labelOf(package)
+            let report = try await service.setRoot(package, level)
+            if !report.done {
+                throw RefusedByAndroid(message: text.format("Apps_RootNotChanged", label, report.message))
+            }
+            let now = RootLevel.read(report.level) ?? level
+            return text.format("Apps_RootSet_\(now.rawValue)", label)
+        }
     }
 
     /// The name an app goes by on the page.
@@ -366,9 +536,12 @@ public final class AppsViewModel: ObservableObject {
     public func loadWindowSettings() async {
         await run(reload: false) {
             do {
-                windows = try await service.windowSettings()
+                let list = try await service.windowSettingsList()
+                windows = list.apps
+                systemForcedAvailable = list.systemForcedAvailable
             } catch let failed as DsaError where failed.problem == .refused {
                 windows = [:]
+                systemForcedAvailable = false
             }
             return nil
         }
@@ -408,6 +581,21 @@ public final class AppsViewModel: ObservableObject {
         }
         wanted.startWidth = choices[index].width
         wanted.startHeight = choices[index].height
+        await setWindow(wanted)
+    }
+
+    /// Has the app's windows follow a monitor of another scale the way at `index` of
+    /// `dpiScalingChoices`. Windows that move from now on follow it.
+    public func setDpiScaling(_ package: String, _ index: Int) async {
+        let all = DpiScaling.allCases
+        guard all.indices.contains(index) else {
+            return
+        }
+        var wanted = windowOf(package)
+        if wanted.dpiScaling == all[index] {
+            return
+        }
+        wanted.dpiScaling = all[index]
         await setWindow(wanted)
     }
 

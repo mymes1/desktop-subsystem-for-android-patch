@@ -1,31 +1,51 @@
-//! The images init lays over the system on the real image, with SELinux enforcing: the default
+//! The images init puts in the system on the real image, with SELinux enforcing: the default
 //! ARM translation package and a user's Google apps.
 //!
 //! Each is an erofs image that init mounts through a loop device with `context=` (the
-//! translation labelled as system libraries, the Google apps as system files) and lays over a
-//! partition with overlayfs, before the zygote starts. A `context=` mount is checked against
-//! the type it names as well as the filesystem's own, and when the policy allowed only the
-//! latter every boot refused both mounts ("avc: denied { relabelfrom } ... tclass=filesystem"):
-//! Android started with no translator and no Google Play, and nothing but the log said so.
+//! translation labelled as system libraries, the Google apps as system files), before the
+//! zygote starts. A `context=` mount is checked against the type it names as well as the
+//! filesystem's own, and when the policy allowed only the latter every boot refused both mounts
+//! ("avc: denied { relabelfrom } ... tclass=filesystem"): Android started with no translator and
+//! no Google Play, and nothing but the log said so.
 //!
-//! Once laid over, the images are read by every program. statfs on an overlay is checked
-//! against the superblock of its top lower layer, the image's, so while that superblock
-//! carried the files' type every program but init was refused it, and bpfloader's refusal
-//! rebooted Android 6.4 s into every boot ("avc: denied { getattr } ... scontext=u:r:bpfloader:s0
-//! tcontext=u:object_r:system_lib_file:s0 tclass=filesystem"). And an overlay mounted nosuid
-//! made the kernel refuse init's domain change into every service in it ("avc: denied
-//! { nosuid_transition }"), vold among them.
+//! Nothing is laid over a folder of the system's own programs. While the translation package
+//! was laid over `/system/bin`, every service there ran through overlayfs, which looked it up
+//! with init's credentials; init may not read most services' programs, so bpfloader's exec
+//! failed and Android rebooted 5.6 s into every boot ("avc: denied { getattr } ...
+//! name="bpfloader" scontext=u:r:init:s0 tcontext=u:object_r:bpfloader_platform_exec:s0",
+//! "overlayfs: failed to get metacopy (-13)"). The package is instead bound, folder by folder,
+//! onto empty places the image carries: its libraries onto `/system_ext/lib64`, where the
+//! zygote finds the bridge by name, its ARM64 libraries, linker and app_process onto
+//! `/system/lib64/arm64` and `/system/bin/arm64`, its runners onto
+//! `/system/bin/dsa-arm-translation`, and its linker configuration onto
+//! `/system/etc/ld.config.arm64.txt`. The Google apps are laid over the folders of `/product`
+//! and `/system_ext` that hold apps and their configuration, never over a partition's root,
+//! whose `bin` holds services too. statfs on any of those is checked against the image's
+//! superblock, so every program may read it only while the superblock has a type of its own.
 //!
 //! The service boots the image, which carries its default translator: the package must be
-//! mounted and laid over `/system`, binfmt_misc mounted with the package's rules in place, and
-//! the bridge library and the ARM64 ABI there. Then a small Google apps build, laid out as
-//! LiteGapps publishes one, is installed through the local API from a mirror in the test's
-//! folder, and Android starts again: the image must be mounted and laid over `/product` and
-//! `/system_ext`, with the translator still in place. Across both boots, the guest log and the
-//! Android console log must show no init command of either script failing, no denial of init's
-//! mounts, no program of any domain refused filesystem getattr on an image's superblock, and no
-//! service refused its domain change from a nosuid overlay. A boot that never gets far enough to
-//! be checked fails with those refusals in its message.
+//! mounted, each part of it bound where it belongs, nothing mounted on `/system/bin`,
+//! `/system/lib64` or `/system/etc`, binfmt_misc mounted, an ARM64 program of each kind the
+//! package's two rules take (a fixed-address executable and a position-independent one)
+//! running through the translator and writing what it was made to write, the bridge library
+//! where the zygote looks, and the ARM64 ABI offered, with no native bridge failure in the log.
+//! The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
+//! registered rules; a program that runs proves its rule is registered, enabled, and starts a
+//! runner that is there and works, which reading the rule never did. Then a small Google apps build, laid
+//! out as LiteGapps publishes one, is installed through the local API from a mirror in the
+//! test's folder, and Android starts again: the image must be mounted and laid over each of
+//! its folders, with the translator still in place, the host's privileged permission allowlist
+//! granting the privileged permission the build's Google Play services asks for and the build's
+//! own list leaves out, and `ro.control_privapp_permissions` at `log`, so that a permission no
+//! list names is logged rather than stopping Android at every boot; no boot may log one. The
+//! small build's APKs are not signed, so the package manager does not install them; the
+//! allowlist is read from the system as the package manager would read it. Across both boots,
+//! the guest log and the Android console log must show no init command of either script
+//! failing, no denial of init's
+//! mounts, no denial that names the translator or one of its places, no overlayfs failure, no
+//! program of any domain refused filesystem getattr on an image's superblock, and no service
+//! refused its domain change from a nosuid mount. A boot that never gets far enough to be
+//! checked fails with those refusals in its message.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
@@ -51,27 +71,95 @@ use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_unix::socket::UnixLocalConnector;
 
-/// The init scripts that lay the images over the system.
+/// The init scripts that put the images in the system.
 const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc"];
-/// Where the translation package is mounted, and the folders of `/system` it is laid over.
+/// Where the translation package is mounted.
 const TRANSLATION_POINT: &str = "/mnt/dsa-arm-translation";
-const TRANSLATION_FOLDERS: &[&str] = &["/system/lib64", "/system/bin", "/system/etc"];
-/// Where the Google apps image is mounted, and the partitions it is laid over.
-const GAPPS_POINT: &str = "/mnt/dsa-gapps";
-const GAPPS_PARTITIONS: &[&str] = &["/product", "/system_ext"];
-/// What the package lays over `/system`: its binfmt_misc rules, which init registers, and
-/// the bridge library its properties name.
-const TRANSLATION_FILES: &[&str] = &[
-    "/system/etc/binfmt_misc/arm64_exe",
-    "/system/etc/binfmt_misc/arm64_dyn",
-    "/system/lib64/libdsa_native_bridge.so",
+/// Where each part of the package is bound, and the part, as a path inside the image.
+const TRANSLATION_BINDS: &[(&str, &str)] = &[
+    ("/system_ext/lib64", "/system/lib64"),
+    ("/system/lib64/arm64", "/system/lib64/arm64"),
+    ("/system/bin/arm64", "/system/bin/arm64"),
+    ("/system/bin/dsa-arm-translation", "/system/bin"),
+    (
+        "/system/etc/ld.config.arm64.txt",
+        "/system/etc/ld.config.arm64.txt",
+    ),
 ];
-/// What the small Google apps build lays over the partitions.
+/// The folders of the system's own programs, which nothing may be mounted on.
+const PROGRAM_FOLDERS: &[&str] = &["/system/bin", "/system/lib64", "/system/etc"];
+/// The partitions, which are mounted where they are and which nothing may be laid over.
+const PARTITIONS: &[&str] = &["/", "/system", "/product", "/system_ext", "/vendor"];
+/// Where the Google apps image is mounted, and the folders it is laid over.
+const GAPPS_POINT: &str = "/mnt/dsa-gapps";
+const GAPPS_FOLDERS: &[&str] = &[
+    "/product/app",
+    "/product/priv-app",
+    "/product/framework",
+    "/product/etc/permissions",
+    "/product/etc/sysconfig",
+    "/product/etc/default-permissions",
+    "/product/etc/preferred-apps",
+    "/system_ext/app",
+    "/system_ext/priv-app",
+    "/system_ext/framework",
+    "/system_ext/etc/permissions",
+    "/system_ext/etc/sysconfig",
+    "/system_ext/etc/default-permissions",
+    "/system_ext/etc/preferred-apps",
+];
+/// What the package puts where the runtime and the translator look: the bridge library its
+/// properties name, on the zygote's linker search path, and the ARM64 linker the translator
+/// starts every ARM64 program with.
+const TRANSLATION_FILES: &[&str] = &[
+    "/system_ext/lib64/libdsa_native_bridge.so",
+    "/system/bin/arm64/linker64",
+];
+/// The binfmt_misc rules init registers from the package, each with the ELF type of the ARM64
+/// programs it takes: `arm64_exe` matches a fixed-address executable (`ET_EXEC`), `arm64_dyn`
+/// a position-independent one (`ET_DYN`).
+const TRANSLATION_RULES: &[(&str, u16)] = &[("arm64_exe", 2), ("arm64_dyn", 3)];
+/// Where the check puts its ARM64 programs in the guest: the one place the shell may run a
+/// file it wrote.
+const PROGRAM_DIR: &str = "/data/local/tmp";
+/// The places of the translator, as an audit line names them.
+const TRANSLATION_PLACES: &[&str] = &[
+    "/mnt/dsa-arm-translation",
+    "/system_ext/lib64",
+    "/system/lib64/arm64",
+    "/system/bin/arm64",
+    "/system/bin/dsa-arm-translation",
+    "ld.config.arm64.txt",
+    "libdsa_native_bridge",
+    "binfmt_misc",
+];
+/// What libnativebridge (its log tag is `nativebridge`) logs when the zygote cannot load the
+/// bridge, or rejects its name.
+const BRIDGE_FAILURES: &[&str] = &[
+    "Failed to load native bridge implementation",
+    "Unsupported native bridge API",
+    "has been rejected for",
+    "native bridge is expected to be opened",
+];
+/// What the small Google apps build lays over the partitions, with the privileged permission
+/// allowlists the host adds to its image.
 const GAPPS_FILES: &[&str] = &[
     "/product/priv-app/GmsCore/GmsCore.apk",
     "/product/priv-app/Phonesky/Phonesky.apk",
     "/system_ext/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk",
+    "/product/etc/permissions/dsa-gapps-privapp-permissions.xml",
+    "/system_ext/etc/permissions/dsa-gapps-privapp-permissions.xml",
 ];
+/// Where the host's allowlist for the small build's Google Play services is, and the privileged
+/// permission it must grant that LiteGapps' list in the build leaves out, as the Android 17
+/// build left out `ACCESS_COMPANION_INFO`.
+const GAPPS_ALLOWLIST: (&str, &str) = (
+    "/product/etc/permissions/dsa-gapps-privapp-permissions.xml",
+    build::GMS_PERMISSIONS[1],
+);
+/// What system_server says when a privileged app asks for a privileged permission no list
+/// names; with the allowlist enforced it then stops at every boot.
+const ALLOWLIST_VIOLATION: &str = "not in privileged permission allowlist";
 /// The types of an erofs image's superblock while init mounts it and lays it over: the
 /// filesystem's own (an overlay's own superblock has it too), the ones init gives the images
 /// with `fscontext=`, and the file types they are labelled with, which a superblock carried
@@ -269,47 +357,119 @@ impl Adb {
     }
 }
 
-/// One line of `/proc/mounts`: what is mounted, where, its type and its options.
+/// One line of `/proc/self/mountinfo`: the device, the folder of its filesystem that is
+/// mounted (`/` for the whole of it, a folder for a bind), where, the mount's own options, the
+/// filesystem type and the filesystem's options.
 struct Mount<'a> {
+    device: &'a str,
+    root: &'a str,
     point: &'a str,
-    kind: &'a str,
     options: &'a str,
+    kind: &'a str,
+    super_options: &'a str,
 }
 
 fn mounts(table: &str) -> Vec<Mount<'_>> {
     table
         .lines()
         .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            let _source = fields.next()?;
+            let (mine, theirs) = line.split_once(" - ")?;
+            let mut fields = mine.split_whitespace();
+            let _id = fields.next()?;
+            let _parent = fields.next()?;
+            let device = fields.next()?;
+            let root = fields.next()?;
             let point = fields.next()?;
-            let kind = fields.next()?;
             let options = fields.next().unwrap_or("");
+            let mut fields = theirs.split_whitespace();
+            let kind = fields.next()?;
+            let _source = fields.next();
+            let super_options = fields.next().unwrap_or("");
             Some(Mount {
+                device,
+                root,
                 point,
-                kind,
                 options,
+                kind,
+                super_options,
             })
         })
         .collect()
 }
 
-/// What is wrong with the mount table `table` for an erofs image mounted at `point` and laid
-/// over each of `over` with overlayfs, the image's folder as the upper of the lower layers. An
-/// overlay must not be nosuid: the folders it covers are not, and on a nosuid mount the kernel
-/// refuses init's domain change into each service it starts from there.
-fn overlay_problems(table: &str, point: &str, over: &[&str]) -> Vec<String> {
+fn has_option(options: &str, wanted: &str) -> bool {
+    options.split(',').any(|option| option == wanted)
+}
+
+/// What is wrong with the mount table `table` for the translation package: it must be mounted
+/// at [`TRANSLATION_POINT`] and each part bound where [`TRANSLATION_BINDS`] says, from that
+/// same image; nothing may be mounted on [`PROGRAM_FOLDERS`] or laid over a partition.
+fn translation_mount_problems(table: &str) -> Vec<String> {
     let table = mounts(table);
     let mut problems = Vec::new();
-    if !table.iter().any(|m| m.point == point && m.kind == "erofs") {
-        problems.push(format!("no erofs image is mounted at {point}"));
+    let image = table
+        .iter()
+        .find(|m| m.point == TRANSLATION_POINT && m.kind == "erofs" && m.root == "/");
+    match image {
+        None => problems.push(format!("no erofs image is mounted at {TRANSLATION_POINT}")),
+        Some(image) => {
+            for (point, part) in TRANSLATION_BINDS {
+                let bound = table.iter().find(|m| m.point == *point);
+                match bound {
+                    Some(m) if m.device == image.device && m.root == *part => {}
+                    Some(m) => problems.push(format!(
+                        "{point} holds {} of {} ({}), not the package's {part}",
+                        m.root, m.device, m.kind
+                    )),
+                    None => {
+                        problems.push(format!("the package's {part} is not bound onto {point}"))
+                    }
+                }
+            }
+        }
     }
-    for folder in over {
-        let layer = format!("{point}{folder}");
-        let laid = table.iter().find(|m| {
+    problems.extend(program_folder_problems(&table));
+    problems
+}
+
+/// The mounts of `table` on a folder of the system's own programs, or laid over a partition:
+/// a service started from there runs through them, and fails.
+fn program_folder_problems(table: &[Mount<'_>]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for m in table {
+        if PROGRAM_FOLDERS.contains(&m.point) {
+            problems.push(format!(
+                "{} {} is mounted on {}, so the services there run through it",
+                m.kind, m.root, m.point
+            ));
+        } else if PARTITIONS.contains(&m.point) && m.kind == "overlay" {
+            problems.push(format!(
+                "an overlay is laid over {}, so the services in it run through overlayfs",
+                m.point
+            ));
+        }
+    }
+    problems
+}
+
+/// What is wrong with the mount table `table` for the Google apps image: it must be mounted at
+/// [`GAPPS_POINT`] and laid over each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder
+/// as the upper of the lower layers, and not nosuid, as the partitions are not.
+fn gapps_mount_problems(table: &str) -> Vec<String> {
+    let parsed = mounts(table);
+    let mut problems = Vec::new();
+    if !parsed
+        .iter()
+        .any(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+    {
+        problems.push(format!("no erofs image is mounted at {GAPPS_POINT}"));
+    }
+    for folder in GAPPS_FOLDERS {
+        let layer = format!("{GAPPS_POINT}{folder}");
+        let laid = parsed.iter().find(|m| {
             m.point == *folder
                 && m.kind == "overlay"
-                && m.options.split(',').any(|option| {
+                && m.super_options.split(',').any(|option| {
                     option
                         .strip_prefix("lowerdir=")
                         .is_some_and(|dirs| dirs.split(':').next() == Some(layer.as_str()))
@@ -317,12 +477,13 @@ fn overlay_problems(table: &str, point: &str, over: &[&str]) -> Vec<String> {
         });
         match laid {
             None => problems.push(format!("{layer} is not laid over {folder}")),
-            Some(m) if m.options.split(',').any(|option| option == "nosuid") => problems.push(format!(
-                "{layer} is laid over {folder} nosuid, so init cannot start the services in {folder} in their own domains"
+            Some(m) if has_option(m.options, "nosuid") => problems.push(format!(
+                "{layer} is laid over {folder} nosuid, as {folder} is not"
             )),
             Some(_) => {}
         }
     }
+    problems.extend(program_folder_problems(&parsed));
     problems
 }
 
@@ -331,6 +492,143 @@ fn binfmt_mounted(table: &str) -> bool {
     mounts(table)
         .iter()
         .any(|m| m.point == "/proc/sys/fs/binfmt_misc" && m.kind == "binfmt_misc")
+}
+
+/// A movz instruction of AArch64: `rd` = `imm`.
+fn movz(rd: u32, imm: u16) -> u32 {
+    0xD280_0000 | (u32::from(imm) << 5) | rd
+}
+
+/// An adr instruction of AArch64: `rd` = its own address + `offset`.
+fn adr(rd: u32, offset: u32) -> u32 {
+    0x1000_0000 | ((offset & 3) << 29) | (((offset >> 2) & 0x7_FFFF) << 5) | rd
+}
+
+/// What the ARM64 program for `rule` writes when it runs.
+fn program_output(rule: &str) -> String {
+    format!("DSA ran an ARM64 program through {rule}\n")
+}
+
+/// A small ARM64 Linux program of ELF type `e_type` (2, a fixed-address executable, or 3, a
+/// position-independent one) that writes [program_output] for `rule` to its standard output
+/// and exits with 0. It needs no library and no linker: no x86_64 kernel runs it, so only a
+/// registered binfmt_misc rule and the translator's runner can make it do anything. It
+/// carries the dynamic section (an empty symbol table and its hash) the translator's loader
+/// reads from every position-independent file, and its code addresses its message relative to
+/// itself, so it runs wherever it is loaded.
+fn arm64_program(rule: &str, e_type: u16) -> Vec<u8> {
+    const EHDR: usize = 64;
+    const PHDR: usize = 56;
+    const CODE: usize = EHDR + 2 * PHDR;
+    const CODE_LEN: usize = 8 * 4;
+    let message = program_output(rule).into_bytes();
+    let message_at = CODE + CODE_LEN;
+    let align8 = |n: usize| n.div_ceil(8) * 8;
+    let hash_at = align8(message_at + message.len());
+    let symtab_at = hash_at + 16;
+    let strtab_at = symtab_at + 24;
+    let dynamic_at = align8(strtab_at + 1);
+    let dynamic_len = 6 * 16;
+    let size = dynamic_at + dynamic_len;
+    // A fixed-address executable is loaded where it says: the usual place for one.
+    let base: u64 = if e_type == 2 { 0x40_0000 } else { 0 };
+    let at = |offset: usize| base + offset as u64;
+
+    let mut elf = Vec::with_capacity(size);
+    // The ELF header: 64-bit, little-endian, version 1, System V, AArch64 (0xb7).
+    elf.extend_from_slice(b"\x7fELF\x02\x01\x01\x00");
+    elf.extend_from_slice(&[0; 8]);
+    elf.extend_from_slice(&e_type.to_le_bytes());
+    elf.extend_from_slice(&0xb7u16.to_le_bytes());
+    elf.extend_from_slice(&1u32.to_le_bytes());
+    elf.extend_from_slice(&at(CODE).to_le_bytes()); // e_entry
+    elf.extend_from_slice(&(EHDR as u64).to_le_bytes()); // e_phoff
+    elf.extend_from_slice(&0u64.to_le_bytes()); // e_shoff: no sections
+    elf.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+    elf.extend_from_slice(&(EHDR as u16).to_le_bytes());
+    elf.extend_from_slice(&(PHDR as u16).to_le_bytes());
+    elf.extend_from_slice(&2u16.to_le_bytes()); // e_phnum
+                                                // The translator's loader refuses a section header size other than ELF64's and a section
+                                                // name table index of 0, even with no sections.
+    elf.extend_from_slice(&64u16.to_le_bytes()); // e_shentsize
+    elf.extend_from_slice(&0u16.to_le_bytes()); // e_shnum
+    elf.extend_from_slice(&1u16.to_le_bytes()); // e_shstrndx
+    let mut phdr = |kind: u32, flags: u32, offset: usize, len: usize, align: u64| {
+        elf.extend_from_slice(&kind.to_le_bytes());
+        elf.extend_from_slice(&flags.to_le_bytes());
+        elf.extend_from_slice(&(offset as u64).to_le_bytes());
+        elf.extend_from_slice(&at(offset).to_le_bytes()); // p_vaddr
+        elf.extend_from_slice(&at(offset).to_le_bytes()); // p_paddr
+        elf.extend_from_slice(&(len as u64).to_le_bytes()); // p_filesz
+        elf.extend_from_slice(&(len as u64).to_le_bytes()); // p_memsz
+        elf.extend_from_slice(&align.to_le_bytes());
+    };
+    // The whole file, readable and executable (the loader refuses one that is writable too),
+    // and its dynamic section.
+    phdr(1, 5, 0, size, 0x1000);
+    phdr(2, 4, dynamic_at, dynamic_len, 8);
+    // write(1, message, len); exit_group(0), AArch64 Linux's system calls 64 and 94.
+    let code = [
+        movz(0, 1),
+        adr(1, (message_at - (CODE + 4)) as u32),
+        movz(2, message.len() as u16),
+        movz(8, 64),
+        0xD400_0001, // svc #0
+        movz(0, 0),
+        movz(8, 94),
+        0xD400_0001,
+    ];
+    for instruction in code {
+        elf.extend_from_slice(&instruction.to_le_bytes());
+    }
+    elf.extend_from_slice(&message);
+    elf.resize(hash_at, 0);
+    // A System V hash of one bucket and one chain, both empty; the null symbol; an empty name.
+    for word in [1u32, 1, 0, 0] {
+        elf.extend_from_slice(&word.to_le_bytes());
+    }
+    elf.extend_from_slice(&[0; 24]);
+    elf.push(0);
+    elf.resize(dynamic_at, 0);
+    let dynamic: [(u64, u64); 6] = [
+        (4, at(hash_at)),   // DT_HASH
+        (5, at(strtab_at)), // DT_STRTAB
+        (6, at(symtab_at)), // DT_SYMTAB
+        (10, 1),            // DT_STRSZ
+        (11, 24),           // DT_SYMENT
+        (0, 0),             // DT_NULL
+    ];
+    for (tag, value) in dynamic {
+        elf.extend_from_slice(&tag.to_le_bytes());
+        elf.extend_from_slice(&value.to_le_bytes());
+    }
+    assert_eq!(elf.len(), size);
+    elf
+}
+
+/// What is wrong with what the guest's shell printed running the ARM64 program for `rule`,
+/// which ends with the line `exit <status>` the check adds.
+fn run_problems(rule: &str, shown: &str) -> Vec<String> {
+    let status = shown
+        .lines()
+        .rev()
+        .find_map(|line| line.trim().strip_prefix("exit "))
+        .map(str::trim);
+    let wrote = shown.contains(program_output(rule).trim_end());
+    match (wrote, status) {
+        (true, Some("0")) => Vec::new(),
+        _ => vec![format!(
+            "an ARM64 program that {rule} takes did not run through the translator: {shown:?}"
+        )],
+    }
+}
+
+/// The lines of `log` where libnativebridge says it could not load the bridge.
+fn bridge_failures(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("nativebridge"))
+        .filter(|line| BRIDGE_FAILURES.iter().any(|failure| line.contains(failure)))
+        .collect()
 }
 
 /// The lines of `log` where init says a command of one of the overlay scripts failed.
@@ -356,7 +654,11 @@ fn mount_denials(log: &str) -> Vec<&str> {
                 && OVERLAY_TYPES
                     .iter()
                     .any(|kind| line.contains(&format!("tcontext=u:object_r:{kind}:")));
-            mount || line.contains("tcontext=u:object_r:binfmt_miscfs:")
+            // mounton: binding a part of the package onto its place, or the image onto its
+            // mount point.
+            mount
+                || line.contains("tcontext=u:object_r:binfmt_miscfs:")
+                || permissions(line).contains(&"mounton")
         })
         .collect()
 }
@@ -399,9 +701,55 @@ fn nosuid_denials(log: &str) -> Vec<&str> {
         .collect()
 }
 
+/// Whether an audit line records a refusal of the shell, the domain of every command this check
+/// runs through adb. Nothing of the translator runs as the shell but the check's own ARM64
+/// programs, and when one of those is refused, its run fails and is reported with what the
+/// shell printed. Any other refusal of the shell is the check looking where it may not (it
+/// once read binfmt_misc, which the platform lets no domain but init search), not the
+/// translator failing.
+fn own_command(line: &str) -> bool {
+    line.contains("scontext=u:r:shell:s0")
+}
+
+/// The lines of `log` that record SELinux refusing anything of the translator: its superblock,
+/// one of its places, or init a mount onto a file or folder. The check's own commands are
+/// left out ([own_command]).
+fn translator_denials(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("avc:") && line.contains("denied"))
+        .filter(|line| !own_command(line))
+        .filter(|line| {
+            line.contains("tcontext=u:object_r:dsa_arm_translation_fs:")
+                || TRANSLATION_PLACES.iter().any(|place| line.contains(place))
+                || (line.contains("scontext=u:r:init:s0") && permissions(line).contains(&"mounton"))
+        })
+        .collect()
+}
+
+/// The lines of `log` where overlayfs says it could not do what a program asked through it,
+/// as it did for every service laid over ("overlayfs: failed to get metacopy (-13)").
+fn overlayfs_failures(log: &str) -> Vec<&str> {
+    log.lines()
+        .filter(|line| line.contains("overlayfs:"))
+        .filter(|line| line.contains("failed") || line.contains("-13"))
+        .collect()
+}
+
 /// Adds what `log` (named `from` in each line) says SELinux refused programs through the
 /// overlays to `problems`.
 fn refusal_problems(log: &str, from: &str, problems: &mut Vec<String>) {
+    for line in translator_denials(log) {
+        problems.push(format!(
+            "{from}: SELinux refused something of the ARM translator: {}",
+            line.trim()
+        ));
+    }
+    for line in overlayfs_failures(log) {
+        problems.push(format!(
+            "{from}: overlayfs failed a program through an overlay: {}",
+            line.trim()
+        ));
+    }
     for line in statfs_denials(log) {
         problems.push(format!(
             "{from}: SELinux refused a program statfs through an overlay: {}",
@@ -441,43 +789,194 @@ fn write_mirror(mirror: &Path, arch: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The mount table of a boot with the translation package in place, as `/proc/self/mountinfo`
+/// shows it.
+const BOUND: &str = "\
+20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n\
+21 1 254:3 / /system_ext ro,relatime shared:2 - erofs /dev/block/dm-3 ro,seclabel\n\
+22 1 254:2 / /product ro,relatime shared:3 - erofs /dev/block/dm-2 ro,seclabel\n\
+90 30 7:8 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+91 21 7:8 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+92 20 7:8 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+93 20 7:8 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+94 20 7:8 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+95 20 7:8 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+96 31 0:41 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:41 - binfmt_misc binfmt_misc rw\n";
+
 #[test]
-fn fr25_a_translation_image_that_is_not_laid_over_is_found_in_the_mount_table() {
-    let good = "/dev/block/dm-0 / erofs ro,seclabel,relatime 0 0\n\
-                /dev/block/loop8 /mnt/dsa-arm-translation erofs ro,seclabel,nosuid,nodev,relatime 0 0\n\
-                overlay /system/lib64 overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64 0 0\n\
-                overlay /system/bin overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin 0 0\n\
-                overlay /system/etc overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc 0 0\n\
-                binfmt_misc /proc/sys/fs/binfmt_misc binfmt_misc rw,nosuid,nodev,noexec,relatime 0 0\n";
-    assert!(overlay_problems(good, TRANSLATION_POINT, TRANSLATION_FOLDERS).is_empty());
-    assert!(binfmt_mounted(good));
+fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
+    assert_eq!(translation_mount_problems(BOUND), Vec::<String>::new());
+    assert!(binfmt_mounted(BOUND));
 
-    // What develop d69b9ff2 laid over: nosuid, which kept init from starting vold and apexd.
-    let nosuid = good.replace(
-        "ro,seclabel,nodev,relatime,lowerdir=",
-        "ro,seclabel,nosuid,nodev,relatime,lowerdir=",
-    );
-    let problems = overlay_problems(&nosuid, TRANSLATION_POINT, TRANSLATION_FOLDERS);
-    assert_eq!(problems.len(), 3, "{problems:?}");
-    assert!(problems.iter().all(|problem| problem.contains("nosuid")));
-
-    // What every boot of 0.1.9 had: the image refused, so nothing was laid over.
-    let refused = "/dev/block/dm-0 / erofs ro,seclabel,relatime 0 0\n";
+    // What develop 3b9b304c laid over, which rebooted Android: overlays on /system's own
+    // folders of programs, libraries and configuration.
+    let laid_over = "\
+20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n\
+90 30 7:8 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+91 20 0:40 / /system/lib64 ro,nodev,relatime shared:42 - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64\n\
+92 20 0:41 / /system/bin ro,nodev,relatime shared:43 - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin\n\
+93 20 0:42 / /system/etc ro,nodev,relatime shared:44 - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc\n";
+    let problems = translation_mount_problems(laid_over);
     assert_eq!(
-        overlay_problems(refused, TRANSLATION_POINT, TRANSLATION_FOLDERS).len(),
-        4
+        problems
+            .iter()
+            .filter(|p| p.contains("so the services there run through it"))
+            .count(),
+        3,
+        "{problems:?}"
     );
+    assert_eq!(
+        problems
+            .iter()
+            .filter(|p| p.contains("is not bound onto"))
+            .count(),
+        TRANSLATION_BINDS.len(),
+        "{problems:?}"
+    );
+
+    // What every boot of 0.1.9 had: the image refused, so nothing is anywhere.
+    let refused = "20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n";
+    assert_eq!(translation_mount_problems(refused).len(), 1);
     assert!(!binfmt_mounted(refused));
 
-    // A layer laid over the wrong folder does not count.
-    let crossed = good.replace(
-        "lowerdir=/mnt/dsa-arm-translation/system/bin:",
-        "lowerdir=/mnt/dsa-arm-translation/system/etc:",
+    // A part bound onto the wrong place, or from another image, does not count.
+    let crossed = BOUND.replace(
+        "7:8 /system/bin /system/bin/dsa-arm-translation",
+        "7:8 /system/etc /system/bin/dsa-arm-translation",
     );
+    assert_eq!(translation_mount_problems(&crossed).len(), 1);
+    let other = BOUND.replace(
+        "7:8 /system/lib64 /system_ext/lib64",
+        "7:9 /system/lib64 /system_ext/lib64",
+    );
+    assert_eq!(translation_mount_problems(&other).len(), 1);
+    // A partition laid over is found too.
+    let partition = format!(
+        "{BOUND}97 20 0:43 / /system_ext ro,relatime - overlay overlay ro,lowerdir=/a:/system_ext\n"
+    );
+    assert_eq!(translation_mount_problems(&partition).len(), 1);
+}
+
+#[test]
+fn fr25_the_arm64_programs_match_their_rules_and_write_their_message() {
+    for (rule, e_type) in TRANSLATION_RULES {
+        let elf = arm64_program(rule, *e_type);
+        let u16_at = |at: usize| u16::from_le_bytes([elf[at], elf[at + 1]]);
+        let u32_at = |at: usize| u32::from_le_bytes(elf[at..at + 4].try_into().unwrap());
+        let u64_at = |at: usize| u64::from_le_bytes(elf[at..at + 8].try_into().unwrap());
+        // What the package's rule compares: the ELF identification, the type and AArch64.
+        let mut magic = b"\x7fELF\x02\x01\x01\x00".to_vec();
+        magic.extend_from_slice(&[0; 8]);
+        magic.extend_from_slice(&[*e_type as u8, 0, 0xb7]);
+        assert_eq!(&elf[..magic.len()], &magic[..], "{rule}");
+        // What the translator's loader checks in the header.
+        assert_eq!(u32_at(20), 1, "{rule}: e_version");
+        assert_eq!(u16_at(58), 64, "{rule}: e_shentsize");
+        assert_ne!(u16_at(62), 0, "{rule}: e_shstrndx");
+        assert_eq!(u16_at(56), 2, "{rule}: e_phnum");
+        // The one loaded segment covers the file, readable and executable, not writable.
+        assert_eq!(u32_at(64), 1, "{rule}: PT_LOAD");
+        assert_eq!(u32_at(68), 5, "{rule}: R+X");
+        assert_eq!(u64_at(64 + 32), elf.len() as u64, "{rule}: p_filesz");
+        let base = u64_at(64 + 16);
+        assert_eq!(base, if *e_type == 2 { 0x40_0000 } else { 0 }, "{rule}");
+        // The code at the entry: the adr names the message, and the length is its length.
+        let entry = (u64_at(24) - base) as usize;
+        let code: Vec<u32> = (0..8).map(|i| u32_at(entry + 4 * i)).collect();
+        assert_eq!(code[0], 0xD280_0020, "{rule}: mov x0, #1");
+        let adr = code[1];
+        assert_eq!(adr & 0x9F00_001F, 0x1000_0001, "{rule}: adr x1");
+        let offset = ((adr >> 29) & 3) | (((adr >> 5) & 0x7_FFFF) << 2);
+        let message = entry + 4 + offset as usize;
+        let len = ((code[2] >> 5) & 0xFFFF) as usize;
+        assert_eq!(
+            &elf[message..message + len],
+            program_output(rule).as_bytes(),
+            "{rule}"
+        );
+        assert_eq!(code[3], 0xD280_0808, "{rule}: mov x8, #64 (write)");
+        assert_eq!(code[4], 0xD400_0001, "{rule}: svc #0");
+        assert_eq!(code[6], 0xD280_0BC8, "{rule}: mov x8, #94 (exit_group)");
+        // The dynamic section names a hash, the names, the symbol table and their sizes.
+        assert_eq!(u32_at(64 + 56), 2, "{rule}: PT_DYNAMIC");
+        let dynamic = u64_at(64 + 56 + 8) as usize;
+        let tags: Vec<u64> = (0..6).map(|i| u64_at(dynamic + 16 * i)).collect();
+        assert_eq!(tags, [4, 5, 6, 10, 11, 0], "{rule}");
+    }
+}
+
+#[test]
+fn fr25_an_arm64_program_that_did_not_run_is_found() {
+    let ran = format!("{}exit 0\n", program_output("arm64_exe"));
+    assert!(run_problems("arm64_exe", &ran).is_empty());
+    // No rule took it: the kernel found no handler for an AArch64 file.
+    let unregistered =
+        "/system/bin/sh: /data/local/tmp/dsa-arm64_exe: can't execute: Exec format error\nexit 126\n";
+    assert_eq!(run_problems("arm64_exe", unregistered).len(), 1);
+    // The rule names a runner that is not there.
+    let no_runner =
+        "/system/bin/sh: /data/local/tmp/dsa-arm64_dyn: No such file or directory\nexit 127\n";
+    assert_eq!(run_problems("arm64_dyn", no_runner).len(), 1);
+    // The translator failed it after the message, or refused to load it.
+    let crashed = format!("{}exit 139\n", program_output("arm64_dyn"));
+    assert_eq!(run_problems("arm64_dyn", &crashed).len(), 1);
+    let refused =
+        "Error running /data/local/tmp/dsa-arm64_dyn: \"x\" has invalid e_shstrndx\nexit 255\n";
+    assert_eq!(run_problems("arm64_dyn", refused).len(), 1);
+    // The other rule's message does not count.
+    assert_eq!(run_problems("arm64_dyn", &ran).len(), 1);
+}
+
+#[test]
+fn fr25_a_refusal_of_the_checks_own_commands_is_not_the_translators() {
+    // What the check's own read of binfmt_misc caused in develop 97ef3caf's run.
+    let log = "11-09 05:04:14.662  2635  2635 I auditd  : type=1400 audit(0.0:6): avc:  denied  { search } for  comm=\"cat\" name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n\
+               11-09 05:04:14.662  2635  2635 W cat     : type=1400 audit(0.0:6): avc:  denied  { search } for  name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n\
+               [   43.674664] type=1400 audit(1794200654.662:6): avc:  denied  { search } for  comm=\"cat\" name=\"/\" dev=\"binfmt_misc\" ino=1 scontext=u:r:shell:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n";
+    assert!(
+        translator_denials(log).is_empty(),
+        "{:?}",
+        translator_denials(log)
+    );
+    let mut problems = Vec::new();
+    refusal_problems(log, "guest log", &mut problems);
+    assert!(problems.is_empty(), "{problems:?}");
+    // The same refusal of an app is the translator's.
+    let app = log.replace("u:r:shell:s0", "u:r:untrusted_app:s0:c512,c768");
+    assert_eq!(translator_denials(&app).len(), 3);
+    // And init's, which registers the rules, is a mount denial too.
+    let init = "avc:  denied  { search } for  comm=\"init\" name=\"/\" dev=\"binfmt_misc\" scontext=u:r:init:s0 tcontext=u:object_r:binfmt_miscfs:s0 tclass=dir permissive=0\n";
+    assert_eq!(translator_denials(init).len(), 1);
+    assert_eq!(mount_denials(init).len(), 1);
+}
+
+#[test]
+fn fr25_a_bridge_the_zygote_could_not_load_is_found_in_the_log() {
+    let log = "11-09 10:00:01.000   400   400 W nativebridge: Failed to load native bridge implementation: dlopen failed: library \"libdsa_native_bridge.so\" not found\n\
+               11-09 10:00:01.001   400   400 E nativebridge: Native bridge library /system/lib64/x.so has been rejected for first character /\n\
+               11-09 10:00:01.002   400   400 I zygote64: Native bridge library loaded\n\
+               11-09 10:00:01.003   900   900 W SomeApp : Failed to load native bridge implementation\n";
+    assert_eq!(bridge_failures(log).len(), 2);
+}
+
+#[test]
+fn fr25_a_denial_of_the_translator_or_an_overlayfs_failure_is_found_in_the_log() {
+    let log = "[    5.580284] type=1400 audit(1794192860.536:9): avc:  denied  { getattr } for  comm=\"uprobestatsbpfl\" name=\"bpfloader\" dev=\"dm-9\" ino=18062390 scontext=u:r:init:s0 tcontext=u:object_r:bpfloader_platform_exec:s0 tclass=file permissive=0\n\
+               [    5.580284] overlayfs: failed to get metacopy (-13)\n\
+               avc:  denied  { mounton } for  comm=\"init\" path=\"/system/etc/ld.config.arm64.txt\" scontext=u:r:init:s0 tcontext=u:object_r:system_linker_config_file:s0 tclass=file permissive=0\n\
+               avc:  denied  { execute } for  comm=\"app\" path=\"/system/bin/dsa-arm-translation/runner\" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_lib_file:s0 tclass=file permissive=0\n\
+               avc:  denied  { read } for  comm=\"x\" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:dsa_arm_translation_fs:s0 tclass=filesystem permissive=0\n\
+               avc:  denied  { read } for  comm=\"uiautomator\" scontext=u:r:shell:s0 tcontext=u:object_r:qemu_sf_lcd_density_prop:s0 tclass=file permissive=0\n";
     assert_eq!(
-        overlay_problems(&crossed, TRANSLATION_POINT, TRANSLATION_FOLDERS).len(),
-        1
+        translator_denials(log).len(),
+        3,
+        "{:?}",
+        translator_denials(log)
     );
+    assert_eq!(overlayfs_failures(log).len(), 1);
+    let mut problems = Vec::new();
+    refusal_problems(log, "console log", &mut problems);
+    assert_eq!(problems.len(), 4, "{problems:?}");
 }
 
 #[test]
@@ -506,18 +1005,34 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(failed_commands(log).len(), 2);
     assert_eq!(mount_denials(log).len(), 1);
 
-    let good = "/dev/block/loop9 /mnt/dsa-gapps erofs ro,seclabel,nosuid,nodev,relatime 0 0\n\
-                overlay /product overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-gapps/product:/product 0 0\n\
-                overlay /system_ext overlay ro,seclabel,nodev,relatime,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext 0 0\n";
-    assert!(overlay_problems(good, GAPPS_POINT, GAPPS_PARTITIONS).is_empty());
-    assert_eq!(overlay_problems("", GAPPS_POINT, GAPPS_PARTITIONS).len(), 3);
+    let mut good =
+        String::from("80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n");
+    for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
+        good.push_str(&format!(
+            "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
+            81 + at,
+            50 + at
+        ));
+    }
+    assert_eq!(gapps_mount_problems(&good), Vec::<String>::new());
+    assert_eq!(gapps_mount_problems("").len(), GAPPS_FOLDERS.len() + 1);
     let nosuid = good.replace(
-        "ro,seclabel,nodev,relatime,lowerdir=",
-        "ro,seclabel,nosuid,nodev,relatime,lowerdir=",
+        "ro,nodev,relatime - overlay",
+        "ro,nosuid,nodev,relatime - overlay",
     );
+    assert_eq!(gapps_mount_problems(&nosuid).len(), GAPPS_FOLDERS.len());
+    // What develop 3b9b304c laid over: the partitions' roots, whose services then fail.
+    let roots = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n\
+                 81 1 0:50 / /product ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/product:/product\n\
+                 82 1 0:51 / /system_ext ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n";
+    let problems = gapps_mount_problems(roots);
     assert_eq!(
-        overlay_problems(&nosuid, GAPPS_POINT, GAPPS_PARTITIONS).len(),
-        2
+        problems
+            .iter()
+            .filter(|p| p.contains("services in it run through overlayfs"))
+            .count(),
+        2,
+        "{problems:?}"
     );
 }
 
@@ -577,10 +1092,13 @@ fn fr32_the_mirror_holds_a_build_the_service_takes() {
     }
 }
 
-/// Reads `/proc/mounts` and the log of the running boot, and adds what is wrong with the
-/// translation package's mounts to `problems`.
-fn translation_problems(adb: &Adb, table: &str, problems: &mut Vec<String>) {
-    for problem in overlay_problems(table, TRANSLATION_POINT, TRANSLATION_FOLDERS) {
+/// Reads the running boot through adb and adds what is wrong with the translation package to
+/// `problems`: its mounts (`table`, the guest's `/proc/self/mountinfo`), its files where the
+/// runtime and the translator look, an ARM64 program of each rule init registered running
+/// through the translator (written to `dir` first), the ABIs the package manager installs for,
+/// and whether the zygote loaded the bridge.
+fn translation_problems(adb: &Adb, dir: &Path, table: &str, problems: &mut Vec<String>) {
+    for problem in translation_mount_problems(table) {
         problems.push(format!("ARM translation: {problem}"));
     }
     if !binfmt_mounted(table) {
@@ -597,6 +1115,29 @@ fn translation_problems(adb: &Adb, table: &str, problems: &mut Vec<String>) {
         }
         Err(why) => problems.push(why),
     }
+    // Each rule is judged by an ARM64 program it takes running through the translator: the
+    // shell may not read binfmt_misc.
+    for (rule, e_type) in TRANSLATION_RULES {
+        let program = dir.join(format!("dsa-{rule}"));
+        let guest = format!("{PROGRAM_DIR}/dsa-{rule}");
+        let shown = std::fs::write(&program, arm64_program(rule, *e_type))
+            .map_err(|why| format!("writing {}: {why}", program.display()))
+            .and_then(|()| adb.run(&["push", &program.to_string_lossy(), &guest]))
+            .and_then(|_| adb.shell(&format!("chmod 755 {guest} && {guest} 2>&1; echo exit $?")))
+            .unwrap_or_else(|why| why);
+        for problem in run_problems(rule, &shown) {
+            problems.push(format!("ARM translation: {problem}"));
+        }
+    }
+    // The ARM64 linker reads its namespaces from this path only; the image's own is empty.
+    match adb.shell("[ -s /system/etc/ld.config.arm64.txt ] && echo full || echo empty") {
+        Ok(out) if out.trim() == "full" => {}
+        Ok(_) => problems.push(
+            "ARM translation: /system/etc/ld.config.arm64.txt is empty, so the ARM64 linker has no namespaces"
+                .into(),
+        ),
+        Err(why) => problems.push(why),
+    }
     match adb.shell("getprop ro.product.cpu.abilist") {
         Ok(abis) if abis.split(',').any(|abi| abi.trim() == "arm64-v8a") => {}
         Ok(abis) => problems.push(format!(
@@ -604,6 +1145,24 @@ fn translation_problems(adb: &Adb, table: &str, problems: &mut Vec<String>) {
             abis.trim()
         )),
         Err(why) => problems.push(why),
+    }
+    match adb.shell("getprop ro.dalvik.vm.native.bridge") {
+        Ok(bridge) if bridge.trim() == "libdsa_native_bridge.so" => {}
+        Ok(bridge) => problems.push(format!(
+            "ARM translation: the native bridge property is {:?}, not libdsa_native_bridge.so",
+            bridge.trim()
+        )),
+        Err(why) => problems.push(why),
+    }
+    // libnativebridge logs only when the zygote fails to load the bridge.
+    let log = adb
+        .shell("logcat -d -b main -b system -s nativebridge")
+        .unwrap_or_default();
+    for line in bridge_failures(&log) {
+        problems.push(format!(
+            "ARM translation: the zygote did not load the bridge: {}",
+            line.trim()
+        ));
     }
 }
 
@@ -617,6 +1176,15 @@ fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     }
     for line in mount_denials(&log) {
         problems.push(format!("{boot}: SELinux refused init: {line}"));
+    }
+    for line in log
+        .lines()
+        .filter(|line| line.contains(ALLOWLIST_VIOLATION))
+    {
+        problems.push(format!(
+            "{boot}: a privileged permission is in no allowlist: {}",
+            line.trim()
+        ));
     }
     refusal_problems(&log, boot, problems);
 }
@@ -733,13 +1301,13 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
 
     // The first boot: the image's default translator, and no Google apps.
     let mut problems = Vec::new();
-    let table = adb.shell("cat /proc/mounts").unwrap_or_default();
+    let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
     let _ = std::fs::write(dir.join("mounts-first.txt"), &table);
-    translation_problems(&adb, &table, &mut problems);
+    translation_problems(&adb, &dir, &table, &mut problems);
     match api.arm_translation() {
         Ok(status) if status.guest.as_ref().is_some_and(|guest| guest.active) => {}
         Ok(status) => problems.push(format!(
-            "ARM translation: the guest says no translator is laid over its system ({:?})",
+            "ARM translation: the guest says no translator is in place ({:?})",
             status.guest
         )),
         Err(why) => problems.push(format!("reading where ARM translation stands: {why}")),
@@ -828,9 +1396,9 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         );
     }
 
-    let table = adb.shell("cat /proc/mounts").unwrap_or_default();
+    let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
     let _ = std::fs::write(dir.join("mounts-second.txt"), &table);
-    for problem in overlay_problems(&table, GAPPS_POINT, GAPPS_PARTITIONS) {
+    for problem in gapps_mount_problems(&table) {
         problems.push(format!("Google Play: {problem}"));
     }
     match adb.missing(GAPPS_FILES) {
@@ -849,7 +1417,27 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         )),
         Err(why) => problems.push(format!("reading where Google Play stands: {why}")),
     }
-    translation_problems(&adb, &table, &mut problems);
+    // The host's allowlist grants what the build's own list leaves out, and a boot with the
+    // Google apps logs a miss instead of stopping at it.
+    let (allowlist, permission) = GAPPS_ALLOWLIST;
+    match adb.shell(&format!("cat {allowlist}")) {
+        Ok(text) if text.contains(&format!("<permission name=\"{permission}\"/>")) => {}
+        Ok(text) => problems.push(format!(
+            "Google Play: {allowlist} does not grant {permission}: {}",
+            text.trim()
+        )),
+        Err(why) => problems.push(format!("reading {allowlist}: {why}")),
+    }
+    match adb.shell("getprop ro.control_privapp_permissions") {
+        Ok(mode) if mode.trim() == "log" => {}
+        Ok(mode) => problems.push(format!(
+            "Google Play: ro.control_privapp_permissions is {:?} with the Google apps, not \
+             \"log\", so a permission no list names stops Android at every boot",
+            mode.trim()
+        )),
+        Err(why) => problems.push(format!("reading ro.control_privapp_permissions: {why}")),
+    }
+    translation_problems(&adb, &dir, &table, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
 
     // The service's own copy of the guest log, across both boots.
@@ -860,6 +1448,15 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     }
     for line in mount_denials(&whole) {
         problems.push(format!("SELinux refused init: {line}"));
+    }
+    for line in whole
+        .lines()
+        .filter(|line| line.contains(ALLOWLIST_VIOLATION))
+    {
+        problems.push(format!(
+            "Google Play: a privileged permission is in no allowlist: {}",
+            line.trim()
+        ));
     }
     refusal_problems(&whole, "guest log", &mut problems);
     // The console logs of both boots, which hold what the kernel refused before logd ran.

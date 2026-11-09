@@ -207,6 +207,9 @@ pub struct Settings {
     pub prerelease_updates: bool,
     /// Whether this installation follows a release channel at all.
     pub update_channel_available: bool,
+    /// Whether apps in Android may ask for root through an administrator's approval. The
+    /// machine's, off by default; it applies from the next start of Android.
+    pub root_elevation: bool,
 }
 
 /// Where attaching developer mode's port to the user's adb server stands.
@@ -283,6 +286,7 @@ impl Settings {
             )),
             prerelease_updates: flag(json, "prerelease_updates", false),
             update_channel_available: flag(json, "update_channel_available", false),
+            root_elevation: flag(json, "root_elevation", false),
         }
     }
 
@@ -434,6 +438,9 @@ pub struct App {
     pub icon_png: Vec<u8>,
     /// The app's "Run as ARM" switch.
     pub run_as_arm: RunAsArm,
+    /// How far the app may use root: `off`, `ask` or `remember`, or `unavailable` while root
+    /// elevation is off for the computer. Empty from a `dsa` that does not say.
+    pub root: String,
 }
 
 /// The "Run as ARM" switch of an app, as `dsa apps list` reports it.
@@ -477,7 +484,56 @@ impl App {
                 .max(number(json, "app_bytes") + number(json, "data_bytes")),
             icon_png: base64_decode(json["icon_png"].as_str().unwrap_or_default()),
             run_as_arm: RunAsArm::read(&json["run_as_arm"]),
+            root: text(json, "root"),
         }
+    }
+}
+
+/// How an app's window follows a move to a monitor of another scale. Auto and System never
+/// restart the app.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DpiScaling {
+    /// App for apps that say they handle a change of density themselves, System for the
+    /// others.
+    #[default]
+    Auto,
+    /// The app redraws at the new monitor's scale. Android recreates the screen of an app that
+    /// does not say it handles a change of density, and restores its state.
+    App,
+    /// The app keeps its scale and its window is scaled to the new monitor, at the same
+    /// physical size.
+    System,
+    /// The app gets the new scale without a restart even when it does not say it handles one.
+    /// It needs a change to Android's framework; until a build has it, it works like
+    /// [`DpiScaling::System`].
+    SystemForced,
+}
+
+impl DpiScaling {
+    /// Every choice, in the order the settings app offers them.
+    pub const ALL: [DpiScaling; 4] = [
+        DpiScaling::Auto,
+        DpiScaling::App,
+        DpiScaling::System,
+        DpiScaling::SystemForced,
+    ];
+
+    /// The word `dsa app-window --dpi-scaling` takes.
+    pub fn code(self) -> &'static str {
+        match self {
+            DpiScaling::Auto => "auto",
+            DpiScaling::App => "app",
+            DpiScaling::System => "system",
+            DpiScaling::SystemForced => "system-forced",
+        }
+    }
+
+    /// The choice `dsa` names; anything else, or nothing, is [`DpiScaling::Auto`].
+    pub fn read(code: &str) -> DpiScaling {
+        DpiScaling::ALL
+            .into_iter()
+            .find(|scaling| scaling.code() == code)
+            .unwrap_or_default()
     }
 }
 
@@ -487,6 +543,15 @@ pub struct AppWindow {
     pub package: String,
     pub fixed_size: bool,
     pub start_size: Option<(u32, u32)>,
+    pub dpi_scaling: DpiScaling,
+}
+
+/// Every app's window settings, and whether this build of Android scales an app the System
+/// (forced) way yet.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppWindows {
+    pub apps: Vec<AppWindow>,
+    pub system_forced_available: bool,
 }
 
 impl AppWindow {
@@ -501,6 +566,7 @@ impl AppWindow {
             package: text(json, "package"),
             fixed_size: flag(json, "fixed_size", false),
             start_size: size,
+            dpi_scaling: DpiScaling::read(json["dpi_scaling"].as_str().unwrap_or_default()),
         }
     }
 }
@@ -786,6 +852,9 @@ pub enum GappsState {
     /// What is installed differs from what the running Android booted with: a new package
     /// waits for a restart, or a removed one is still in use until then.
     RestartPending,
+    /// The installed package's image was made by an older DSA, which this one no longer
+    /// uses: Android starts without Google's apps until Google Play is installed again.
+    ReinstallNeeded,
 }
 
 /// Where Google Play stands for the user.
@@ -799,6 +868,8 @@ pub struct Gapps {
     /// once Android knows it.
     pub device_id: Option<String>,
     pub restart_needed: bool,
+    /// The package must be installed again: see [`GappsState::ReinstallNeeded`].
+    pub reinstall_needed: bool,
     pub terms_url: String,
     pub registration_url: String,
 }
@@ -823,6 +894,7 @@ impl Gapps {
             active: android.map(|a| flag(a, "active", false)),
             device_id: android.and_then(|a| optional_text(a, "device_id")),
             restart_needed: flag(json, "restart_needed", false),
+            reinstall_needed: flag(json, "reinstall_needed", false),
             terms_url: optional_text(json, "terms_url")
                 .unwrap_or_else(|| GAPPS_TERMS_URL.to_string()),
             registration_url: optional_text(json, "registration_url")
@@ -831,7 +903,9 @@ impl Gapps {
     }
 
     pub fn state(&self) -> GappsState {
-        if self.restart_needed {
+        if self.reinstall_needed && self.package.is_some() {
+            GappsState::ReinstallNeeded
+        } else if self.restart_needed {
             GappsState::RestartPending
         } else if self.package.is_some() {
             GappsState::Installed
@@ -840,10 +914,10 @@ impl Gapps {
         }
     }
 
-    /// Whether the install button may be pressed: only without a package, and not while a
-    /// request is under way.
+    /// Whether the install button may be pressed: without a package, or with one that must
+    /// be installed again, and not while a request is under way.
     pub fn can_install(&self, busy: bool) -> bool {
-        !busy && self.package.is_none()
+        !busy && (self.package.is_none() || self.state() == GappsState::ReinstallNeeded)
     }
 
     /// Whether the remove button may be pressed: only with a package, and not while a
@@ -1283,7 +1357,8 @@ impl Client {
         Ok(Gapps::read(&self.json(&["gapps", "install"])?))
     }
 
-    /// Removes the Google apps package, starting Android first when it is not running.
+    /// Removes the Google apps package. Android is not started for it, so this works while
+    /// Google's apps keep Android from starting; Android goes without them from its next start.
     pub fn remove_gapps(&self) -> Result<Gapps, Failure> {
         Ok(Gapps::read(&self.json(&["gapps", "remove"])?))
     }
@@ -1344,18 +1419,58 @@ impl Client {
         }
     }
 
-    pub fn app_windows(&self) -> Result<Vec<AppWindow>, Failure> {
-        let json = self.json(&["app-window"])?;
-        Ok(items(&json, "apps").iter().map(AppWindow::read).collect())
+    /// Sets how far an app may use root: `off`, `ask` or `remember`. A refusal by the service
+    /// (root elevation off for the computer, or `remember` without an administrator's
+    /// approval) is an outcome with the service's words.
+    pub fn set_app_root(&self, package: &str, level: &str) -> Result<Outcome, Failure> {
+        match self.json(&["apps", "root", package, level]) {
+            Ok(json) => Ok(Outcome {
+                done: true,
+                status: text(&json, "level"),
+                package: Some(package.to_string()),
+                detail: String::new(),
+            }),
+            Err(failure) => {
+                let refused = failure
+                    .detail
+                    .strip_prefix("not changed: ")
+                    .and_then(|rest| rest.strip_prefix(package))
+                    .and_then(|rest| rest.strip_prefix(": "));
+                match refused {
+                    Some(why) => Ok(Outcome {
+                        done: false,
+                        status: "refused".into(),
+                        package: Some(package.to_string()),
+                        detail: why.to_string(),
+                    }),
+                    None => Err(failure),
+                }
+            }
+        }
     }
 
-    /// Changes an app's window settings: whether it may be resized, and the size it opens
-    /// at (`None` is the size Android chooses).
+    pub fn app_windows(&self) -> Result<Vec<AppWindow>, Failure> {
+        Ok(self.app_window_list()?.apps)
+    }
+
+    /// Every app's window settings, and whether Android scales the System (forced) way yet.
+    /// A `dsa` that does not say counts as one whose Android cannot.
+    pub fn app_window_list(&self) -> Result<AppWindows, Failure> {
+        let json = self.json(&["app-window"])?;
+        Ok(AppWindows {
+            apps: items(&json, "apps").iter().map(AppWindow::read).collect(),
+            system_forced_available: flag(&json, "system_forced_available", false),
+        })
+    }
+
+    /// Changes an app's window settings: whether it may be resized, the size it opens at
+    /// (`None` is the size Android chooses), and how it follows a monitor of another scale.
     pub fn set_app_window(
         &self,
         package: &str,
         fixed_size: bool,
         start_size: Option<(u32, u32)>,
+        dpi_scaling: DpiScaling,
     ) -> Result<(), Failure> {
         let size = match start_size {
             Some((w, h)) => format!("{w}x{h}"),
@@ -1368,6 +1483,8 @@ impl Client {
             on_off(fixed_size),
             "--start-size",
             &size,
+            "--dpi-scaling",
+            dpi_scaling.code(),
         ])
         .map(|_| ())
     }

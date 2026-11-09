@@ -299,6 +299,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "META/file_contexts.bin" in names and b"dsa_channeld_exec" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-channeld, so the vendor image leaves it "
                         "vendor_file and init refuses to start it")
+    # Root elevation: the su client apps run, the elevation helper only it reaches, and the su
+    # guard that hides su from every app the host did not allow.
+    if "VENDOR/bin/dsa-channeld" in names:
+        problems += make_image.root_elevation_problems(names, z.read)
 
     # The binder service the agent and the hwcomposer reach the daemon through.
     # servicemanager refuses it unless the vendor manifest declares it, and checks who may
@@ -375,6 +379,14 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # The default translator: in an x86_64 image's system partition when image.json describes
     # one, and nowhere in an arm64 image.
     problems += make_image.check_builtin_arm_translation(manifest, names, z.read)
+    # Where a package is bound: an x86_64 image's empty folders, empty linker configuration and
+    # links into the mount, and none of them in an arm64 image. Nothing is laid over a folder
+    # of the system's programs, by either script.
+    problems += make_image.check_arm_translation_reach(manifest, names, z.read, z.getinfo)
+    for rc_name in ["dsa-arm-translation.rc", "dsa-gapps.rc"]:
+        if f"SYSTEM/etc/init/{rc_name}" in names:
+            problems += make_image.program_folder_problems(
+                rc_name, z.read(f"SYSTEM/etc/init/{rc_name}").decode(errors="replace"))
     # The patched framework: the Framework build's files, for this build and architecture.
     problems += make_image.check_framework(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
@@ -409,6 +421,14 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                                 "for the host to say they are installed")
         if "on post-fs-data && property:ro.boot.dsa.gapps=on" not in rc:
             problems.append("dsa-gapps.rc never lays the Google apps over the system")
+        # Each folder the Google apps are laid over is in the system, so its overlay mounts.
+        problems += make_image.gapps_folder_problems(names)
+    if "SYSTEM/etc/dsa/gapps-on.prop" in names:
+        on = [line.strip() for line in
+              z.read("SYSTEM/etc/dsa/gapps-on.prop").decode(errors="replace").splitlines()]
+        if make_image.GAPPS_PRIVAPP_LOG not in on:
+            problems.append("gapps-on.prop does not set " + make_image.GAPPS_PRIVAPP_LOG + ", so a "
+                            "privileged permission LiteGapps' lists miss stops Android at every boot")
     if "SYSTEM/etc/dsa/gapps-off.prop" in names:
         off = [line for line in z.read("SYSTEM/etc/dsa/gapps-off.prop").decode(errors="replace").splitlines()
                if line.strip() and not line.startswith("#")]
@@ -552,6 +572,16 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     ]:
         if f"{prop}={val}" not in props and f"{prop}={val}" not in vendor_props:
             problems.append(f"neither SYSTEM nor VENDOR build.prop sets {prop}={val}")
+    # The density every app starts at is the boot's (the user's main monitor's). A build.prop
+    # value comes before the script that sets it and would hold every boot at one density.
+    for name, text in [("SYSTEM", props), ("VENDOR", vendor_props)]:
+        if any(line.startswith("ro.sf.lcd_density=") for line in text.splitlines()):
+            problems.append(f"{name} build.prop sets ro.sf.lcd_density, so the boot's density "
+                            "never reaches SurfaceFlinger")
+    if make_image.DISPLAY_RC not in names or "setprop ro.sf.lcd_density ${ro.boot.lcd_density" not in \
+            z.read(make_image.DISPLAY_RC).decode(errors="replace"):
+        problems.append(f"{make_image.DISPLAY_RC} does not set ro.sf.lcd_density from the boot, so "
+                        "SurfaceFlinger falls back to 213 dpi and every app is relaunched after it opens")
 
     # init reads these as vendor_init, which may not set the user build's properties.
     for name in sorted(make_image.VENDOR_PROP_FILES & set(names)):
@@ -642,7 +672,8 @@ for boot_arg in [
     if boot_arg not in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line does not contain {boot_arg}")
 # The freeform display DSA's composer sets up, and nothing left over from Cuttlefish's.
-for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_height=", "androidboot.dsa.display_dpi="]:
+for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_height=", "androidboot.dsa.display_dpi=",
+                 "androidboot.lcd_density="]:
     if boot_arg not in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line does not contain {boot_arg}")
 for boot_arg in ["androidboot.hardware.hwcomposer.mode=", "androidboot.vendor.apex.com.android.hardware.graphics.composer="]:

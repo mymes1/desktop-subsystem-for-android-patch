@@ -4,8 +4,9 @@
 //! Android may be frozen when idle, whether their clipboard is shared with it, whether web
 //! links open in apps in their Android instead of the host's browser, and developer mode
 //! (whether adb reaches their Android) with the loopback port adb connects to and whether that
-//! port is attached to their adb server by itself, and file sharing
-//! (which of their host folders their Android shows in its shared storage). The others are the
+//! port is attached to their adb server by itself, file sharing
+//! (which of their host folders their Android shows in its shared storage), and whether the
+//! host's own touch gestures are off while one of their task windows is in front. The others are the
 //! machine's, shared by every user: whether the service updates DSA itself, whether it takes
 //! pre-releases of DSA as well as stable releases, whether it downloads new Android images,
 //! and whether DSA's processes write the input trace and the per-stage resize trace to their
@@ -25,7 +26,8 @@
 //!                              "arm_translation": true,
 //!                              "file_sharing": true,
 //!                              "shared_folders": ["Documents", "Pictures"],
-//!                              "advanced_networking": false}
+//!                              "advanced_networking": false,
+//!                              "touch_gestures_off": true}
 //! <dir>/users/<user>.app-windows.json
 //!                             the user's window settings for each app
 //! <dir>/users/<user>.arm-translation.json
@@ -117,6 +119,14 @@ pub struct Settings {
     /// The host folders shared while file sharing is on, by name, in the order of
     /// [`file_share::FOLDERS`]. All of them by default.
     pub shared_folders: Vec<String>,
+    /// Whether the host's three- and four-finger touch gestures are off while one of the
+    /// user's task windows is in front, so apps get every finger. On by default; the user's
+    /// window manager applies it.
+    pub touch_gestures_off: bool,
+    /// Whether apps may elevate to root through the host's administrator approval. The
+    /// machine's, shared by every user; off by default. It takes effect from the next start
+    /// of Android.
+    pub root_elevation: bool,
 }
 
 impl Default for Settings {
@@ -140,6 +150,8 @@ impl Default for Settings {
             arm_translation: true,
             file_sharing: true,
             shared_folders: file_share::all_folders(),
+            touch_gestures_off: true,
+            root_elevation: false,
         }
     }
 }
@@ -159,6 +171,10 @@ pub struct MachineSettings {
     pub input_trace: bool,
     #[serde(default)]
     pub resize_trace: bool,
+    /// Whether apps may elevate to root through the host's administrator approval. Off
+    /// unless an administrator turns it on. It takes effect from the next start of Android.
+    #[serde(default)]
+    pub root_elevation: bool,
 }
 
 impl MachineSettings {
@@ -176,6 +192,7 @@ impl Default for MachineSettings {
             image_updates: true,
             input_trace: false,
             resize_trace: false,
+            root_elevation: false,
         }
     }
 }
@@ -231,6 +248,8 @@ pub struct UserSettings {
     pub shared_folders: Vec<String>,
     #[serde(default)]
     pub advanced_networking: bool,
+    #[serde(default = "yes")]
+    pub touch_gestures_off: bool,
 }
 
 impl Default for UserSettings {
@@ -249,6 +268,7 @@ impl Default for UserSettings {
             file_sharing: true,
             shared_folders: file_share::all_folders(),
             advanced_networking: false,
+            touch_gestures_off: true,
         }
     }
 }
@@ -275,6 +295,7 @@ impl UserSettings {
             file_sharing: settings.file_sharing,
             shared_folders,
             advanced_networking: settings.advanced_networking,
+            touch_gestures_off: settings.touch_gestures_off,
         }
     }
 }
@@ -371,6 +392,26 @@ pub trait SettingsStore: Send + Sync {
         let _ = (user, package);
         Err("this service keeps no Google apps".into())
     }
+    /// The root elevation level of each of `user`'s apps that has one other than off, by
+    /// package name. Apps the user has not set are off and are not listed.
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        let _ = user;
+        Ok(Vec::new())
+    }
+    /// Records the root elevation level of one of `user`'s apps. The package's default level
+    /// (off for an app, ask for adb shell) forgets it.
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let _ = (user, package, level);
+        Err("this service keeps no app root levels".into())
+    }
+}
+
+/// One app's stored root elevation level: the package and its level ("off", "ask" or
+/// "remember"). Kept per user in `<dir>/users/<user>.root-apps.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RootApp {
+    pub package: String,
+    pub level: String,
 }
 
 /// Finds the render GPU a user chose before they first saved settings, if any.
@@ -458,6 +499,13 @@ impl FileSettings {
             .join(format!("{}.gapps.json", user_file_stem(user)?)))
     }
 
+    fn root_apps_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.root-apps.json", user_file_stem(user)?)))
+    }
+
     fn arm_translation_boot_file(&self, user: &str) -> Result<PathBuf, String> {
         Ok(self.dir.join("users").join(format!(
             "{}.arm-translation-boot.json",
@@ -536,6 +584,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
         resize_trace: machine.resize_trace,
+        root_elevation: machine.root_elevation,
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
         adb_auto_connect: mine.adb_auto_connect,
@@ -545,6 +594,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         // a file kept by another release still reads.
         shared_folders: file_share::normalise_folders(&mine.shared_folders)
             .unwrap_or_else(|_| file_share::known_folders(&mine.shared_folders)),
+        touch_gestures_off: mine.touch_gestures_off,
     }
 }
 
@@ -556,6 +606,7 @@ fn machine_part(settings: &Settings) -> MachineSettings {
         image_updates: settings.image_updates,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
+        root_elevation: settings.root_elevation,
     }
 }
 
@@ -673,6 +724,35 @@ impl SettingsStore for FileSettings {
             },
         }
     }
+
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        let file = self.root_apps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(read_json::<Vec<RootApp>>(&file)?.unwrap_or_default())
+    }
+
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let file = self.root_apps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mut apps = read_json::<Vec<RootApp>>(&file)?.unwrap_or_default();
+        apps.retain(|app| app.package != package);
+        if level != crate::root_elevation::default_level(package).code() {
+            apps.push(RootApp {
+                package: package.to_string(),
+                level: level.to_string(),
+            });
+        }
+        apps.sort_by(|a, b| a.package.cmp(&b.package));
+        if apps.is_empty() {
+            match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            }
+        } else {
+            write_json(&file, &apps)
+        }
+    }
 }
 
 /// Settings kept in memory, for tests and for a service that keeps no folder.
@@ -684,6 +764,7 @@ pub struct MemorySettings {
     arm_translation_boot: Mutex<std::collections::HashMap<String, Translator>>,
     app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
     gapps: Mutex<std::collections::HashMap<String, GappsPackage>>,
+    root_apps: Mutex<std::collections::HashMap<String, Vec<RootApp>>>,
 }
 
 impl SettingsStore for MemorySettings {
@@ -804,6 +885,30 @@ impl SettingsStore for MemorySettings {
         };
         Ok(())
     }
+
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        Ok(self
+            .root_apps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        let mut all = self.root_apps.lock().unwrap_or_else(|e| e.into_inner());
+        let apps = all.entry(user.to_string()).or_default();
+        apps.retain(|app| app.package != package);
+        if level != crate::root_elevation::default_level(package).code() {
+            apps.push(RootApp {
+                package: package.to_string(),
+                level: level.to_string(),
+            });
+        }
+        apps.sort_by(|a, b| a.package.cmp(&b.package));
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -893,6 +998,8 @@ mod tests {
                     arm_translation: false,
                     file_sharing: false,
                     shared_folders: vec!["Pictures".into()],
+                    touch_gestures_off: false,
+                    root_elevation: false,
                 },
             )
             .unwrap();
@@ -1172,6 +1279,37 @@ mod tests {
     }
 
     #[test]
+    fn fr5_touch_gestures_off_is_on_by_default_and_kept_per_user() {
+        let dir = scratch("touch-gestures");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().touch_gestures_off);
+        let saved = store
+            .set(
+                "uid:1000",
+                &Settings {
+                    touch_gestures_off: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!saved.touch_gestures_off);
+        let again = FileSettings::new(&dir);
+        assert!(!again.get("uid:1000").unwrap().touch_gestures_off);
+        assert!(
+            again.get("uid:1001").unwrap().touch_gestures_off,
+            "the user's own"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr5_a_settings_file_from_before_touch_gestures_reads_it_as_on() {
+        let kept: UserSettings = serde_json::from_str(r#"{"clipboard": false}"#).unwrap();
+        assert!(!kept.clipboard);
+        assert!(kept.touch_gestures_off);
+    }
+
+    #[test]
     fn fr20_a_settings_file_from_before_auto_connect_reads_it_as_on() {
         let kept: UserSettings =
             serde_json::from_str(r#"{"developer_mode": true, "adb_port": 58526}"#).unwrap();
@@ -1274,6 +1412,7 @@ mod tests {
             file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
             source: "https://example.com/build.zip".into(),
             md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+            image_format: crate::gapps::IMAGE_FORMAT,
         };
         store.set_gapps("uid:1000", Some(&package)).unwrap();
         let again = FileSettings::new(&dir);

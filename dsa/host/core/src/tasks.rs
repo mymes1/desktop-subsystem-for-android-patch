@@ -75,6 +75,9 @@ pub struct Task {
     pub caption_interactive: Vec<Bounds>,
     /// Whether the task is past its first screen, so it has somewhere to go back to.
     pub can_go_back: bool,
+    /// Whether the task's top activity says it handles a change of density itself, so
+    /// Android redraws it at a new density instead of relaunching it.
+    pub handles_density_change: bool,
 }
 
 /// The orientation a task's top activity asks for.
@@ -155,6 +158,10 @@ pub struct AppInfo {
     pub caption_icon_png: Vec<u8>,
     /// Whether the app supports several windows at once, so its windows offer New window.
     pub multiple_windows: bool,
+    /// How far the app may elevate to root, as the service's list of installed apps reports
+    /// it: `off`, `ask` or `remember`, or `unavailable` while root elevation is off for the
+    /// computer. Empty where nothing reported it, as for an app that only has a task.
+    pub root: String,
 }
 
 impl AppInfo {
@@ -184,6 +191,13 @@ pub enum TaskEvent {
         task_id: i32,
         cursor: crate::ime::ImeCursor,
     },
+    /// The editor focused in the task changed: its kind, its text or its selection. The
+    /// window's input method reads the editor from it, so like the cursor it is passed on as
+    /// it comes and is not part of the tasks a late watcher starts from.
+    ImeEditor {
+        task_id: i32,
+        editor: crate::ime::ImeEditor,
+    },
     /// The apps installed in the guest that a launcher lists changed. It carries the whole
     /// list, in package order, as the host's start menu shows it.
     Installed(Vec<AppInfo>),
@@ -196,7 +210,8 @@ impl TaskEvent {
             TaskEvent::Updated(task) => Some(task.task_id),
             TaskEvent::Removed { task_id }
             | TaskEvent::Frames { task_id, .. }
-            | TaskEvent::ImeCursor { task_id, .. } => Some(*task_id),
+            | TaskEvent::ImeCursor { task_id, .. }
+            | TaskEvent::ImeEditor { task_id, .. } => Some(*task_id),
             TaskEvent::App(_) | TaskEvent::Installed(_) => None,
         }
     }
@@ -432,6 +447,9 @@ pub struct TaskTable {
     /// Where the cursor of each task's focused editor last was, so a cursor that did not
     /// move is not passed on again.
     cursors: BTreeMap<i32, crate::ime::ImeCursor>,
+    /// The editor last focused in each task, so a description that did not change is not
+    /// passed on again.
+    editors: BTreeMap<i32, crate::ime::ImeEditor>,
     /// The apps installed in the guest that a launcher lists, once the guest has said which.
     /// They stay while the guest is stopped, because its apps stay installed.
     installed: Option<Vec<AppInfo>>,
@@ -463,6 +481,7 @@ impl TaskTable {
                 let removed = self.tasks.remove(task_id);
                 let had_frames = self.frames.remove(task_id).is_some();
                 self.cursors.remove(task_id);
+                self.editors.remove(task_id);
                 if let Some(task) = &removed {
                     let package = &task.package_name;
                     if !self.tasks.values().any(|t| &t.package_name == package) {
@@ -504,6 +523,14 @@ impl TaskTable {
                     return false;
                 }
                 self.cursors.insert(*task_id, *cursor);
+                true
+            }
+            TaskEvent::ImeEditor { task_id, editor } => {
+                // Only for a task there is a window of.
+                if !self.knows(*task_id) || self.editors.get(task_id) == Some(editor) {
+                    return false;
+                }
+                self.editors.insert(*task_id, editor.clone());
                 true
             }
             TaskEvent::Installed(apps) => {
@@ -1029,5 +1056,30 @@ mod tests {
         table.apply(&TaskEvent::Removed { task_id: 7 });
         table.apply(&TaskEvent::Updated(task(7, "Notes")));
         assert!(table.apply(&cursor(6)), "a new task's cursor is news");
+    }
+
+    #[test]
+    fn fr6_an_editor_description_is_passed_on_when_it_changes_and_only_for_a_known_task() {
+        let mut table = TaskTable::new();
+        let editor = |text: &str| TaskEvent::ImeEditor {
+            task_id: 7,
+            editor: crate::ime::ImeEditor {
+                kind: crate::ime::InputKind::Text,
+                text: text.into(),
+                text_start: 0,
+                selection: (1, 1),
+                composition: None,
+            },
+        };
+        assert!(!table.apply(&editor("a")), "no such task");
+        table.apply(&TaskEvent::Updated(task(7, "Notes")));
+        assert!(table.apply(&editor("a")));
+        assert!(!table.apply(&editor("a")), "nothing changed");
+        assert!(table.apply(&editor("ab")));
+        // A late watcher starts from the tasks alone.
+        assert_eq!(table.snapshot(), vec![TaskEvent::Updated(task(7, "Notes"))]);
+        table.apply(&TaskEvent::Removed { task_id: 7 });
+        table.apply(&TaskEvent::Updated(task(7, "Notes")));
+        assert!(table.apply(&editor("ab")), "a new task's editor is news");
     }
 }

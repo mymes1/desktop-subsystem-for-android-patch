@@ -6,9 +6,15 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState,
-    GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
+    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
+    GappsState, GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status,
+    ALL_FOLDERS,
 };
+
+/// The dsa commands the Advanced page's command line group shows, each on its own row with a
+/// copy button that copies only that command. They are separate commands, not a pipeline, and
+/// they are typed as they are in every language.
+pub const COMMAND_LINE_COMMANDS: [&str; 3] = ["dsa status", "dsa settings", "dsa memory"];
 
 /// A problem in the user's language, with what the client said after it.
 pub fn problem_text(failure: &Failure) -> String {
@@ -440,6 +446,45 @@ pub fn start_size_index(window: Option<&AppWindow>) -> Option<usize> {
     start_size_choices().iter().position(|(_, s)| *s == size)
 }
 
+/// The ways an app's window can follow a monitor of another scale, in the order of
+/// [`DpiScaling::ALL`]. System (forced) is stored and can be chosen, but while Android cannot
+/// do it (`system_forced_available` is false), its label says it is not available yet.
+pub fn dpi_scaling_choices(system_forced_available: bool) -> Vec<(String, DpiScaling)> {
+    DpiScaling::ALL
+        .into_iter()
+        .map(|scaling| {
+            let label = match scaling {
+                DpiScaling::Auto => tr("Automatic"),
+                DpiScaling::App => tr("App"),
+                DpiScaling::System => tr("System"),
+                DpiScaling::SystemForced if system_forced_available => tr("System (forced)"),
+                DpiScaling::SystemForced => tr("System (forced), not available yet"),
+            };
+            (label, scaling)
+        })
+        .collect()
+}
+
+/// Where an app's scaling choice is among [`dpi_scaling_choices`].
+pub fn dpi_scaling_index(window: Option<&AppWindow>) -> usize {
+    let scaling = window.map(|w| w.dpi_scaling).unwrap_or_default();
+    DpiScaling::ALL
+        .iter()
+        .position(|s| *s == scaling)
+        .unwrap_or(0)
+}
+
+/// What the scaling row says under its title: why System (forced) works like System for now,
+/// while it is the app's choice and not available; otherwise what the choices do.
+pub fn dpi_scaling_subtitle(window: Option<&AppWindow>, system_forced_available: bool) -> String {
+    let scaling = window.map(|w| w.dpi_scaling).unwrap_or_default();
+    if scaling == DpiScaling::SystemForced && !system_forced_available {
+        tr("System (forced) gives the app the new scale without restarting it, even if it does not say it handles one. It is not available yet: it needs a change to Android's framework that this build does not have, so until then it works like System.")
+    } else {
+        tr("App: the app redraws at the new scale, and text stays sharp; for an app that does not say it handles this, Android recreates its screen and restores its state, so it may redraw briefly when it moves. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. Automatic and System never restart the app.")
+    }
+}
+
 /// What an app's "Run as ARM" switch shows: whether it is on, whether it can be changed, and
 /// what its row says under its title.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -507,6 +552,94 @@ pub fn run_as_arm_next(label: &str, on: bool, outcome: &Outcome) -> RunAsArmNext
         "{0} was not installed again: {1} ({2})",
         &[label, &reason, &outcome.detail],
     ))
+}
+
+/// The root levels an app can have, as `dsa apps root` names them, in the order the Apps
+/// page lists them.
+pub const ROOT_LEVELS: [&str; 3] = ["off", "ask", "remember"];
+
+/// The root levels as the Apps page lists them.
+pub fn root_choices() -> Vec<String> {
+    vec![
+        tr("Not allowed"),
+        tr("Ask each time"),
+        tr("Remember (no asking)"),
+    ]
+}
+
+/// What an app's root level shows: the level chosen, whether it can be changed, and what its
+/// row says under its title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootView {
+    /// Where the level is among [`root_choices`]; `None` when there is none to show.
+    pub index: Option<usize>,
+    pub sensitive: bool,
+    pub subtitle: String,
+}
+
+/// The root level of `app`: insensitive, with the reason, while it cannot be chosen.
+pub fn root_view(app: &App) -> RootView {
+    let index = ROOT_LEVELS.iter().position(|level| *level == app.root);
+    let subtitle = match (index, app.root.as_str()) {
+        (Some(_), _) => tr("Not allowed hides su from the app. Ask each time asks an administrator for each request, then not again for 15 minutes. Remember approves without asking, and choosing it needs an administrator's approval."),
+        (None, "unavailable") => {
+            tr("Root access is off for this computer. An administrator turns it on under Advanced.")
+        }
+        (None, _) => tr("This version of DSA cannot say how far the app may use root."),
+    };
+    RootView {
+        index,
+        sensitive: index.is_some(),
+        subtitle,
+    }
+}
+
+/// Whether root elevation is off for the computer, as the apps' levels say, so the Apps page
+/// says where to turn it on.
+pub fn root_unavailable(apps: &[App]) -> bool {
+    apps.iter().any(|app| app.root == "unavailable")
+}
+
+/// What follows `outcome` of setting `label`'s root level: the toast when it is done, or why
+/// it was not.
+pub fn root_next(label: &str, outcome: &Outcome) -> Result<String, String> {
+    if !outcome.done {
+        return Err(trf(
+            "The root level of {0} was not changed: {1}",
+            &[label, &outcome.detail],
+        ));
+    }
+    Ok(match outcome.status.as_str() {
+        "off" => trf(
+            "{0} cannot use root any more. su disappears for it from the next start of Android.",
+            &[label],
+        ),
+        "remember" => trf(
+            "{0} now uses su without asking. If it could not see su before, it sees it from the next start of Android.",
+            &[label],
+        ),
+        _ => trf(
+            "{0} now asks an administrator of this computer each time it uses su. If it could not see su before, it sees it from the next start of Android.",
+            &[label],
+        ),
+    })
+}
+
+/// Whether root elevation differs from what it was when the page first read it: the change
+/// applies from the next start of Android.
+pub fn root_restart_needed(at_start: Option<bool>, now: bool) -> bool {
+    at_start.is_some_and(|before| before != now)
+}
+
+/// Where each root request and its result is recorded: the service log.
+pub fn root_log_text(log_dir: Option<&str>) -> String {
+    match log_dir.filter(|dir| !dir.is_empty()) {
+        Some(dir) => trf(
+            "Each request is kept in the service log with the app, the time, whether it was approved and the command: {0}",
+            &[dir],
+        ),
+        None => tr("Each request is kept in the service log with the app, the time, whether it was approved and the command."),
+    }
 }
 
 /// Why Android refused to uninstall an app, in words.
@@ -633,6 +766,10 @@ pub fn gapps_status(gapps: &Gapps) -> String {
         GappsState::RestartPending => {
             tr("Removed. The Google apps stay in Android until it restarts.")
         }
+        GappsState::ReinstallNeeded => trf(
+            "{0} was installed by an older DSA and is no longer used, so Android starts without Google's apps. Install Google Play again.",
+            &[&package],
+        ),
         GappsState::Installed if gapps.package.is_some() => trf("Installed: {0}.", &[&package]),
         _ => tr("Not installed."),
     }

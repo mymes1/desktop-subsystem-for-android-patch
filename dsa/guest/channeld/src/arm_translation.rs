@@ -8,8 +8,8 @@
 //! `ArmTranslationRemove` deletes it, and `ArmTranslationQuery` asks how things stand. Every
 //! one of them is answered with `ArmTranslationState`.
 //!
-//! The image takes effect at the next boot: init mounts it over the system then
-//! (`dsa-arm-translation.rc`), when the host says one is installed. What the running boot has
+//! The image takes effect at the next boot: init mounts it and binds its parts onto empty
+//! places of the system then (`dsa-arm-translation.rc`), when the host says one is installed. What the running boot has
 //! comes from the system: whether the bridge library is in place and which ABIs the package
 //! manager installs apps for. The platform supplies those, so this runs and is tested off
 //! Android.
@@ -30,9 +30,10 @@ const IMAGE_NAME: &str = "the ARM translation image";
 /// hundred MiB at most.
 pub const MAX_IMAGE_BYTES: u64 = 2 << 30;
 
-/// The native bridge library the image's properties name, once a package is laid over the
-/// system.
-pub const BRIDGE_LIBRARY: &str = "/system/lib64/libdsa_native_bridge.so";
+/// The native bridge library the image's properties name, once init has bound the package's
+/// libraries onto `/system_ext/lib64`, where the zygote finds the bridge by name. The image's
+/// system_ext partition has no libraries of its own there, so it exists only then.
+pub const BRIDGE_LIBRARY: &str = "/system_ext/lib64/libdsa_native_bridge.so";
 
 /// What the running boot has, which the platform reads from the system.
 pub struct BootFacts {

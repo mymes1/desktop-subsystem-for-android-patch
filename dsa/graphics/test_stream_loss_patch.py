@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MESA_PATCH = next((HERE / "patches/guest/mesa").glob("*.patch"))
-GFXSTREAM_PATCH = next((HERE / "patches/guest/gfxstream").glob("*.patch"))
+MESA_PATCH = next((HERE / "patches/guest/mesa").glob("0001-*.patch"))
+GFXSTREAM_PATCH = next((HERE / "patches/guest/gfxstream").glob("0001-*.patch"))
 FETCH = HERE / "fetch.sh"
 HEADER = HERE / "include/dsa_lost_stream.h"
 

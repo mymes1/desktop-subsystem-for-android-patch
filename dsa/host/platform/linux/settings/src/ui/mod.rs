@@ -177,6 +177,21 @@ fn build(app: &adw::Application, start: &Start, opener: &Rc<RefCell<Option<Opene
         row.append(&label);
         list.append(&row);
     }
+    // Logs and About end the list as their own group, under a separator, as the Windows app
+    // keeps them in its pane's footer.
+    list.set_header_func(|row, _| {
+        let starts = Page::ALL
+            .get(row.index() as usize)
+            .is_some_and(|page| page.starts_footer());
+        if starts {
+            let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+            separator.set_margin_top(6);
+            separator.set_margin_bottom(6);
+            row.set_header(Some(&separator));
+        } else {
+            row.set_header(None::<&gtk::Widget>);
+        }
+    });
     let sidebar_view = adw::ToolbarView::new();
     let sidebar_header = adw::HeaderBar::new();
     sidebar_header.set_title_widget(Some(&adw::WindowTitle::new(&tr("DSA Settings"), "")));

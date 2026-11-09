@@ -25,11 +25,10 @@
                             <TextBlock Text="{l:Text GeneralStateCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
-                        <TextBlock Text="{Binding StateText, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,12,0"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{Binding StateText, Mode=OneWay}" Margin="0,0,12,0" Style="{StaticResource CardValue}" />
                         <ui:Button Content="{l:Text StartButton.Content}" Appearance="Primary" Click="OnStart" Margin="0,0,8,0"
                                    IsEnabled="{Binding CanStart, Mode=OneWay}" />
                         <ui:Button Content="{l:Text StopButton.Content}" Click="OnStop" IsEnabled="{Binding CanStop, Mode=OneWay}" />

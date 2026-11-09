@@ -100,9 +100,36 @@ pub fn picture_in_picture(visible: Rect, task: (u32, u32)) -> Rect {
     }
 }
 
+/// The layer's contents scale that shows a drawable at `frame_scale` window pixels per
+/// drawable pixel on a display of backing scale `backing`: each of the task's pixels is then
+/// `frame_scale` device pixels, and the layer scales the drawable from its top left. A task
+/// that keeps its density on a display of another scale is shown so, the same size to the eye.
+pub fn contents_scale(backing: f64, (numerator, denominator): (u32, u32)) -> f64 {
+    let backing = if backing.is_finite() && backing > 0.0 {
+        backing
+    } else {
+        1.0
+    };
+    if numerator == 0 || denominator == 0 {
+        return backing;
+    }
+    backing * f64::from(denominator) / f64::from(numerator)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fr4_a_task_that_keeps_its_density_is_shown_at_its_windows_scale() {
+        // One to one on a Retina display.
+        assert_eq!(contents_scale(2.0, (1, 1)), 2.0);
+        // A 160 dpi task on a Retina display: two device pixels a task pixel, one point.
+        assert_eq!(contents_scale(2.0, (2, 1)), 1.0);
+        // A 320 dpi task on a display at 1x: half a device pixel a task pixel.
+        assert_eq!(contents_scale(1.0, (1, 2)), 2.0);
+        assert_eq!(contents_scale(f64::NAN, (0, 0)), 1.0);
+    }
 
     #[test]
     fn fr4_a_retina_window_asks_the_guest_for_twice_its_points() {

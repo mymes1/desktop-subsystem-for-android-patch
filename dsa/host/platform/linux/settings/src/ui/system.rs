@@ -447,6 +447,12 @@ struct Switches {
     freeze: Switch,
     input_trace: Switch,
     resize_trace: Switch,
+    root_elevation: Switch,
+    root_restart: adw::ActionRow,
+    root_log: adw::ActionRow,
+    /// Root elevation as the page first read it, to tell when a change waits for the next
+    /// start of Android.
+    root_at_start: Cell<Option<bool>>,
 }
 
 /// Files, links, ARM apps, the clipboard, freezing, the diagnostics, the logs, the command line
@@ -660,6 +666,37 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     developer_group.add(&freeze.row);
     page.add(&developer_group);
 
+    // Root access: it applies to every user of the computer, from the next start of Android.
+    let root_group = group(
+        &tr("Root access"),
+        Some(&tr("This applies to every user of this computer, so changing it asks for an administrator's permission. Choose each app's level under Apps.")),
+    );
+    let root_elevation = machine_switch(
+        "root-elevation",
+        tr("Let Android apps ask for root"),
+        tr("An app you allow under Apps can run commands as root once an administrator of this computer approves, as sudo does. Off by default. The Android image, its build properties and SELinux stay as they are."),
+    );
+    root_group.add(&root_elevation.row);
+    let root_restart = action_row(
+        &tr("Restart Android to apply"),
+        &tr("Root access changes from the next start of Android. Stop Android on the General page, then open an app."),
+    );
+    root_restart.set_visible(false);
+    root_group.add(&root_restart);
+    let root_log = link_row(
+        &tr("Where requests are recorded"),
+        &view::root_log_text(None),
+    );
+    root_group.add(&root_log);
+    {
+        let (ctx, settings) = (ctx.clone(), settings.clone());
+        root_log.connect_activated(move |_| {
+            let reported = settings.borrow().as_ref().and_then(|s| s.log_dir.clone());
+            open_folder(&ctx, &view::service_log_folder(reported.as_deref()));
+        });
+    }
+    page.add(&root_group);
+
     // Diagnostics: they apply to every user of the computer.
     let diagnostics = group(
         &tr("Diagnostics"),
@@ -703,11 +740,17 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         });
     }
     let command = group(&tr("Command line"), None);
-    let (cli_row, _) = value_row(&tr("The dsa command"), "dsa --help");
-    cli_row.set_subtitle(&tr(
-        "Everything on these pages is also available from a terminal.",
-    ));
+    let cli_row = action_row(
+        &tr("The dsa command"),
+        &tr("Everything on these pages is also available from a terminal."),
+    );
     command.add(&cli_row);
+    // Each command is its own row with its own copy button: they are separate commands, and
+    // one line with all of them would read as a shell pipeline.
+    for cli_command in view::COMMAND_LINE_COMMANDS {
+        let (row, _) = command_row(cli_command);
+        command.add(&row);
+    }
     page.add(&logs);
     page.add(&command);
 
@@ -759,6 +802,10 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         freeze,
         input_trace,
         resize_trace,
+        root_elevation,
+        root_restart,
+        root_log,
+        root_at_start: Cell::new(None),
     });
     request(ctx, |c| c.settings(), move |r| show(r));
     page.root.clone().upcast()
@@ -836,6 +883,7 @@ fn developer(ctx: &Shared, page: &Rc<Page>) -> adw::PreferencesGroup {
         "While developer mode is on and Android is running, run this command:",
     ));
     adb_command.add_css_class("monospace");
+    adb_row.add_suffix(&copy_button(&adb_command));
     developer_group.add(&adb_row);
     {
         let (ctx, show) = (ctx.clone(), show.clone());
@@ -1124,4 +1172,14 @@ fn apply(s: &Switches, now: &Settings) {
     s.freeze.set(now.freeze);
     s.input_trace.set(now.input_trace);
     s.resize_trace.set(now.resize_trace);
+    s.root_elevation.set(now.root_elevation);
+    if s.root_at_start.get().is_none() {
+        s.root_at_start.set(Some(now.root_elevation));
+    }
+    s.root_restart.set_visible(view::root_restart_needed(
+        s.root_at_start.get(),
+        now.root_elevation,
+    ));
+    s.root_log
+        .set_subtitle(&view::root_log_text(now.log_dir.as_deref()));
 }

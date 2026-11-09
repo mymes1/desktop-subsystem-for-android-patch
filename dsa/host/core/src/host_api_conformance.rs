@@ -1174,6 +1174,14 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::watcher_receives_cursor(&mut || $make);
         }
         #[test]
+        fn fr6_a_watcher_hears_the_editor_focused_in_a_task() {
+            $crate::host_api_conformance::watcher_receives_editor(&mut || $make);
+        }
+        #[test]
+        fn fr6_the_input_methods_selection_and_reconversion_reach_the_callers_android() {
+            $crate::host_api_conformance::selection_reaches_the_caller(&mut || $make);
+        }
+        #[test]
         fn nfr5_a_client_that_streams_input_and_sends_a_request_is_disconnected() {
             $crate::host_api_conformance::input_stream_that_sends_a_request_is_disconnected(
                 &mut || $make,
@@ -1291,11 +1299,29 @@ macro_rules! host_api_conformance {
             );
         }
         #[test]
+        fn fr32_an_image_made_by_an_older_host_is_made_again_or_installed_again() {
+            $crate::host_api_conformance::old_gapps_images_are_never_laid_over(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
+        }
+        #[test]
+        fn fr32_google_play_is_removed_while_android_is_stopped() {
+            $crate::host_api_conformance::gapps_are_removed_while_android_cannot_start(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
+        }
+        #[test]
         fn fr32_a_build_that_is_refused_leaves_the_settings_as_they_were() {
             $crate::host_api_conformance::refused_gapps_leave_nothing(
                 &mut || $make,
                 ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
             );
+        }
+        #[test]
+        fn fr5_touch_gestures_off_is_on_by_default_and_reports_what_the_window_manager_said() {
+            $crate::host_api_conformance::touch_gestures_report_reaches_the_settings(&mut || $make);
         }
         #[test]
         fn fr20_adb_auto_connect_is_on_by_default_reaches_the_callers_android_and_reports_its_state(
@@ -2106,6 +2132,64 @@ pub fn bad_text_input_is_dropped(make: MakeLocal<'_>) {
     input.send_ime(&good).expect("the event is sent");
     let android = androids.of(&user).unwrap();
     assert_eq!(text_given(&android, 1), vec![good]);
+}
+
+pub fn watcher_receives_editor(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut stream = connect(&mut *connector).watch_tasks().expect("watching");
+    let android = androids.of(&user).unwrap();
+    android.publish(TaskEvent::Updated(sample_task(4, "Notes")));
+    let editor = TaskEvent::ImeEditor {
+        task_id: 4,
+        editor: crate::ime::ImeEditor {
+            kind: crate::ime::InputKind::Url,
+            text: "https://\u{d55c}".into(),
+            text_start: 100,
+            selection: (109, 109),
+            composition: Some((108, 109)),
+        },
+    };
+    android.publish(editor.clone());
+    assert_eq!(
+        next_event(&mut stream),
+        TaskEvent::Updated(sample_task(4, "Notes"))
+    );
+    assert_eq!(next_event(&mut stream), editor);
+}
+
+pub fn selection_reaches_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let mut input = connect(&mut *connector)
+        .stream_input()
+        .expect("streaming input");
+    // Reconverting the first word: select it, make it the composition, compose over it.
+    let text = [
+        ImeEvent::SetSelection {
+            task_id: 4,
+            start: 0,
+            end: 1,
+        },
+        ImeEvent::SetComposingRegion {
+            task_id: 4,
+            start: 0,
+            end: 1,
+        },
+        ImeEvent::Composition {
+            task_id: 4,
+            text: "\u{6f22}".into(),
+            cursor: 1,
+        },
+    ];
+    for event in &text {
+        input.send_ime(event).expect("the event is sent");
+    }
+    let android = androids.of(&user).unwrap();
+    assert_eq!(text_given(&android, 3), text);
 }
 
 pub fn watcher_receives_cursor(make: MakeLocal<'_>) {
@@ -2963,6 +3047,49 @@ pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
     );
 }
 
+pub fn touch_gestures_report_reaches_the_settings(make: MakeLocal<'_>) {
+    use crate::touch_gestures::TouchGesturesState;
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids, "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let fresh = client.settings().unwrap();
+    assert!(fresh.settings.touch_gestures_off, "on by default");
+    assert_eq!(fresh.touch_gestures, TouchGesturesState::Unknown);
+
+    client
+        .report_touch_gestures(&TouchGesturesState::Available)
+        .expect("the window manager's report");
+    assert_eq!(
+        client.settings().unwrap().touch_gestures,
+        TouchGesturesState::Available
+    );
+
+    let failed = TouchGesturesState::Failed("access is denied".into());
+    client.report_touch_gestures(&failed).unwrap();
+    // A client that turns the setting off still sees why it cannot be used.
+    let off = client
+        .set_settings(&Settings {
+            touch_gestures_off: false,
+            ..Settings::default()
+        })
+        .expect("turning the setting off");
+    assert!(!off.settings.touch_gestures_off);
+    assert_eq!(off.touch_gestures, failed);
+    assert!(!store.get(&user).unwrap().touch_gestures_off);
+
+    client
+        .report_touch_gestures(&TouchGesturesState::Unsupported)
+        .unwrap();
+    assert_eq!(
+        client.settings().unwrap().touch_gestures,
+        TouchGesturesState::Unsupported
+    );
+}
+
 pub fn adb_auto_connect_reaches_the_caller(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
@@ -3261,6 +3388,134 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
     assert!(!removed.restart_needed, "this boot never had them");
     assert!(android.gapps_image.lock().unwrap().is_none());
     assert_eq!(store.gapps(&user).unwrap(), None);
+}
+
+/// Waits up to ten seconds for `done`.
+fn eventually(mut done: impl FnMut() -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < until {
+        if done() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    done()
+}
+
+/// What 0.2.0 recorded for the sample build: no image format, since its image had none.
+fn old_gapps_record(zip: &[u8]) -> gapps::GappsPackage {
+    gapps::GappsPackage {
+        variant: "core".into(),
+        version: "20261001".into(),
+        android_version: "16.0".into(),
+        sdk: 36,
+        arch: "x86_64".into(),
+        file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
+        source: format!("{FAKE_PROJECT}/files/LiteGapps-core-x86_64-16.0-20261001-official.zip"),
+        md5: md5_of(zip),
+        image_format: 0,
+    }
+}
+
+pub fn old_gapps_images_are_never_laid_over(make: MakeLocal<'_>, scratch: &std::path::Path) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    store
+        .set_gapps(&user, Some(&old_gapps_record(&zip)))
+        .unwrap();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let work = scratch.join(format!("dsa-conformance-gapps-old-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    let kept = gapps::Source::new(Arc::new(crate::update::store::FileFetch), &work)
+        .kept_package(&user)
+        .unwrap();
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), facts())
+        .with_gapps(gapps::Source::new(Arc::new(lite), &work).with_project(FAKE_PROJECT));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+
+    // The package was not kept, so the image cannot be made again: the user installs it again,
+    // and no boot lays the old image over.
+    let status = client.gapps().unwrap();
+    assert_eq!(status.package.as_ref().map(|p| p.image_format), Some(0));
+    assert!(status.reinstall_needed);
+    assert!(!status.restart_needed);
+    assert_eq!(gapps::bootconfig_for(&*store, &user), "");
+
+    // With the package kept, the first boot that reaches the desktop makes the image again and
+    // sends it, and the next boot lays it over.
+    std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
+    std::fs::write(&kept, &zip).unwrap();
+    assert!(!client.gapps().unwrap().reinstall_needed);
+    client.start().unwrap();
+    let android = androids.of(&user).unwrap();
+    assert!(
+        eventually(|| android.gapps_image.lock().unwrap().is_some()),
+        "the image was not made again"
+    );
+    assert!(eventually(|| store
+        .gapps(&user)
+        .unwrap()
+        .is_some_and(|p| p.image_format == gapps::IMAGE_FORMAT)));
+    let image = android.gapps_image.lock().unwrap().clone().unwrap();
+    let files = crate::erofs::read::files(&image);
+    for partition in ["product", "system_ext"] {
+        let allowlist = format!("{partition}/etc/permissions/{}", gapps::privapp::FILE_NAME);
+        assert!(files.contains_key(&allowlist), "{allowlist}");
+    }
+    let status = client.gapps().unwrap();
+    assert!(!status.reinstall_needed);
+    assert!(status.restart_needed, "it is laid over from the next start");
+    assert_eq!(gapps::bootconfig_for(&*store, &user), gapps::BOOTCONFIG_ON);
+    let _ = std::fs::remove_dir_all(&work);
+}
+
+pub fn gapps_are_removed_while_android_cannot_start(
+    make: MakeLocal<'_>,
+    scratch: &std::path::Path,
+) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    let installed = gapps::GappsPackage {
+        image_format: gapps::IMAGE_FORMAT,
+        ..old_gapps_record(&zip)
+    };
+    store.set_gapps(&user, Some(&installed)).unwrap();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let service = gapps_service(androids.clone(), store.clone(), lite, "stopped", scratch);
+    let _service = RunningService::start_service(listener, service);
+    // The image is on the stopped Android's disk, as after a boot that never finished.
+    let android = {
+        let _ = androids.android(&user).unwrap();
+        androids.of(&user).unwrap()
+    };
+    *android.gapps_image.lock().unwrap() = Some(b"an image".to_vec());
+
+    let mut client = connect(&mut *connector);
+    let removed = client
+        .remove_gapps()
+        .expect("removing Google Play while Android is stopped");
+    assert_eq!(removed.package, None);
+    assert!(removed.guest.is_none(), "Android was not started for it");
+    assert_eq!(android.state(), SessionState::Stopped);
+    assert_eq!(store.gapps(&user).unwrap(), None);
+    assert_eq!(
+        gapps::bootconfig_for(&*store, &user),
+        "",
+        "the next start goes without Google's apps"
+    );
+
+    // The next boot that reaches the desktop takes the image off the disk.
+    client.start().unwrap();
+    assert!(
+        eventually(|| android.gapps_image.lock().unwrap().is_none()),
+        "the image stayed on the disk"
+    );
 }
 
 pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>, scratch: &std::path::Path) {

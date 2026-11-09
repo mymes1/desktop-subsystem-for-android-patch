@@ -25,6 +25,8 @@
 #   icons                    DSA's and DSA Settings' icons in the hicolor theme
 #   translations             DSA Settings' gettext catalogues
 #   GeoClue                  DSA's entry, so the desktop's agent can let it read the location
+#   polkit action            root elevation for Android apps, which asks for an administrator
+#                            (/usr/share/polkit-1/actions/io.github.thisisthepy.DSA.policy)
 #   AppStream metainfo       what the software center shows when the package is opened
 #   the repository key       /usr/share/keyrings/dsa-archive-keyring.gpg in the .deb,
 #                            /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa in the .rpm
@@ -243,6 +245,11 @@ install -m 0644 "$here"/desktop/*.desktop "$stage/usr/share/applications/"
 install -d "$stage/usr/share/mime/packages"
 install -m 0644 "$here"/mime/*.xml "$stage/usr/share/mime/packages/"
 install -m 0644 "$here/geoclue/dsa.conf" "$stage/etc/geoclue/conf.d/90-dsa.conf"
+
+# polkit's action for root elevation: the service asks polkit for it before an Android app's
+# command runs as root, and the desktop's polkit agent asks for an administrator's password.
+install -d "$stage/usr/share/polkit-1/actions"
+install -m 0644 "$here/polkit/io.github.thisisthepy.DSA.policy" "$stage/usr/share/polkit-1/actions/"
 
 # DSA's icons, in the hicolor theme: the colour icon and the symbolic one of DSA and of
 # its companion apps (Settings, APK Installer, Files).
@@ -472,7 +479,7 @@ if [[ "$make_deb" -eq 1 ]]; then
         echo "Maintainer: thisisthepy <noreply@github.com>"
         echo "Installed-Size: $size_kb"
         echo "Depends: libc6, libstdc++6, libcap2, libwayland-client0, libdrm2, libvulkan1, libgtk-4-1, libadwaita-1-0, systemd, udev"
-        echo "Recommends: pipewire-pulse | pulseaudio, libpulse0, geoclue-2.0, xdg-desktop-portal, cups-client, upower, power-profiles-daemon, iio-sensor-proxy, xdg-utils"
+        echo "Recommends: pipewire-pulse | pulseaudio, libpulse0, geoclue-2.0, xdg-desktop-portal, cups-client, upower, power-profiles-daemon, iio-sensor-proxy, xdg-utils, polkitd | policykit-1"
         echo "Section: otherosfs"
         echo "Priority: optional"
         echo "Homepage: https://github.com/thisisthepy/desktop-subsystem-for-android"

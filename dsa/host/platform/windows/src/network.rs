@@ -20,11 +20,15 @@
 //!   to it while the VM runs.
 //!
 //! Behind NAT, the guest's default route is the gateway, which is the host's own address on
-//! its adapter for the network (`vEthernet (DSA <vm>)`): the host forwards the guest's traffic
-//! and translates it, so it leaves through whatever route the host takes, a VPN's included.
-//! The host reaches the guest's address the other way, through the same adapter, whose subnet
-//! route is more specific than any default route a VPN adds. Both are checked while the VM
-//! runs ([`nat_path_problem`]) and reported in the status when they do not hold.
+//! its adapter for the network: the host forwards the guest's traffic and translates it, so it
+//! leaves through whatever route the host takes, a VPN's included. The host reaches the
+//! guest's address the other way, through the same adapter, whose subnet route is more
+//! specific than any default route a VPN adds. Both are checked while the VM runs
+//! ([`nat_path_problem`]) and reported in the status when they do not hold. That adapter is
+//! known as the one that holds the gateway address, never by its name: Windows names it
+//! `vEthernet (<network>)` with the network's name cut short (`vEthernet (DSA dsa-test-fr)`
+//! for the network `DSA dsa-test-fr28-routes`), so the name does not tell apart the networks
+//! of two VMs whose names start alike.
 //!
 //! The user's WSL network and the Hyper-V switches the user made are never touched: the
 //! networks here are named after the VM, are not persistent (Windows removes them at restart),
@@ -117,6 +121,18 @@ impl Ipv4Subnet {
     /// The gateway: the first address of the subnet.
     pub fn gateway(&self) -> Ipv4Addr {
         Ipv4Addr::from(u32::from(self.prefix) + 1)
+    }
+
+    /// Whether `address` is in this subnet.
+    pub fn contains(&self, address: Ipv4Addr) -> bool {
+        let mask = Ipv4Subnet::mask(self.length);
+        u32::from(address) & mask == u32::from(self.prefix) & mask
+    }
+
+    /// An address on the guest's side of the subnet, the one after the gateway: what the host
+    /// routes to when it checks its way to the guest before the guest has taken an address.
+    pub fn guest_side(&self) -> Ipv4Addr {
+        Ipv4Addr::from(u32::from(self.prefix) + 2)
     }
 }
 
@@ -220,7 +236,8 @@ pub fn transparent_network_document(name: &str, adapter: &str) -> Value {
 }
 
 /// The document that creates the VM's endpoint `name` on network `network`. HCN gives it its
-/// MAC address and, on a NAT network, its addresses.
+/// MAC address; the guest takes its addresses by DHCP, from the NAT network's connection
+/// sharing or from the LAN.
 pub fn endpoint_document(name: &str, network: Guid) -> Value {
     json!({
         "SchemaVersion": schema(),
@@ -243,6 +260,14 @@ pub fn all_query() -> String {
     json!({ "SchemaVersion": schema() }).to_string()
 }
 
+/// The query that reads a network's or endpoint's properties. It names the schema the
+/// documents here are written in: an empty query gets the older schema 1 layout from some
+/// Windows builds (Windows Server 2022 among them), which names the subnets, addresses and
+/// routes differently. The readers below accept both layouts all the same.
+pub fn properties_query() -> String {
+    json!({ "SchemaVersion": schema() }).to_string()
+}
+
 /// The name in an HCN network's or endpoint's properties, if it has one.
 pub fn object_name(properties: &str) -> Option<String> {
     let value: Value = serde_json::from_str(properties).ok()?;
@@ -261,10 +286,15 @@ pub fn moved_leftover(vm_name: &str, name: &str) -> bool {
     !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// The name Windows gives the host's own adapter on the NAT network `network_name`: the
-/// connection sharing gateway, through which the host reaches the guest.
-pub fn host_side_adapter(network_name: &str) -> String {
-    format!("vEthernet ({network_name})")
+/// A host adapter as the host's routing knows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostInterface {
+    /// The interface's locally unique identifier (its LUID), which tells adapters apart.
+    pub luid: u64,
+    /// The name Windows shows for the adapter, for people to read. It does not identify the
+    /// adapter: Windows cuts a NAT network's adapter name short, so the adapters of two VMs
+    /// whose names start alike can carry the same one.
+    pub name: String,
 }
 
 /// What the host found on the way between it and a guest behind NAT, for
@@ -273,23 +303,21 @@ pub fn host_side_adapter(network_name: &str) -> String {
 pub struct NatPath {
     /// The gateway the NAT network was made with: the host's address on that network.
     pub gateway: Ipv4Addr,
-    /// Whether the gateway is one of the host's own addresses now.
-    pub host_has_gateway: bool,
-    /// The host adapter the host sends to the guest's IPv4 address through, by name; `None`
-    /// when the host has no route to it.
-    pub host_route: Option<String>,
+    /// The host adapter that holds the gateway address now, which is the host's own adapter
+    /// on the network; `None` when no adapter of the host holds it any more.
+    pub gateway_adapter: Option<HostInterface>,
+    /// The host adapter the host sends to the guest's IPv4 address through, or to the guest's
+    /// side of the network ([`Ipv4Subnet::guest_side`]) before the guest has taken an address;
+    /// `None` when the host has no route there.
+    pub host_route: Option<HostInterface>,
 }
 
 /// Why traffic between the host and a guest behind NAT would not go as it must, if it would
 /// not: the guest's default route must be the NAT gateway, an address of the host, so that the
 /// guest's traffic is forwarded by the host and follows the host's routes (a VPN's among them);
-/// and the host must send to the guest's address through its own adapter on that network, so
-/// that programs on the host reach the guest's servers.
-pub fn nat_path_problem(
-    network_name: &str,
-    endpoint: &EndpointFacts,
-    path: &NatPath,
-) -> Option<String> {
+/// and the host must send to the guest's address through its own adapter on that network (the
+/// one that holds the gateway), so that programs on the host reach the guest's servers.
+pub fn nat_path_problem(endpoint: &EndpointFacts, path: &NatPath) -> Option<String> {
     let mut problems = Vec::new();
     match endpoint.gateway {
         Some(IpAddr::V4(gateway)) if gateway != path.gateway => problems.push(format!(
@@ -299,33 +327,69 @@ pub fn nat_path_problem(
         )),
         _ => {}
     }
-    if !path.host_has_gateway {
+    if path.gateway_adapter.is_none() {
         problems.push(format!(
             "this computer does not hold the NAT gateway address {} any more, so Android's traffic \
              has nowhere to go",
             path.gateway
         ));
     }
-    let guest = endpoint.addresses.iter().find_map(|a| match a {
-        IpAddr::V4(v4) => Some(*v4),
-        IpAddr::V6(_) => None,
-    });
-    if let Some(guest) = guest {
-        let own = host_side_adapter(network_name);
-        match path.host_route.as_deref() {
-            Some(route) if route.eq_ignore_ascii_case(&own) => {}
-            Some(route) => problems.push(format!(
-                "this computer sends to Android's address {guest} through {route} rather than its \
-                 network for Android, so programs here cannot reach Android's servers; a VPN that \
-                 takes {guest}'s subnet does this"
-            )),
-            None => problems.push(format!(
-                "this computer has no route to Android's address {guest}, so programs here cannot \
-                 reach Android's servers"
-            )),
-        }
+    // Before the guest has taken its address by DHCP, the route checked is the one to its
+    // network, which a VPN takes just the same.
+    let guest = guest_ipv4(endpoint)
+        .map(|guest| format!("Android's address {guest}"))
+        .unwrap_or_else(|| format!("Android's network (behind {})", path.gateway));
+    // The adapters are compared by their interface, not by their names, which Windows
+    // shortens. With no adapter holding the gateway, no route goes through the host's own.
+    match (&path.host_route, &path.gateway_adapter) {
+        (Some(route), Some(own)) if route.luid == own.luid => {}
+        (Some(route), _) => problems.push(format!(
+            "this computer sends to {guest} through {} rather than its network for Android, \
+             so programs here cannot reach Android's servers; a VPN that takes that subnet does \
+             this",
+            route.name
+        )),
+        (None, _) => problems.push(format!(
+            "this computer has no route to {guest}, so programs here cannot reach Android's \
+             servers"
+        )),
     }
     (!problems.is_empty()).then(|| problems.join("; "))
+}
+
+/// The guest's IPv4 address in `endpoint`, if it has one.
+pub fn guest_ipv4(endpoint: &EndpointFacts) -> Option<Ipv4Addr> {
+    endpoint.addresses.iter().find_map(|a| match a {
+        IpAddr::V4(v4) => Some(*v4),
+        IpAddr::V6(_) => None,
+    })
+}
+
+/// The guest's side of a NAT endpoint on `subnet`, as the host knows it once the VM runs.
+///
+/// HCN gives an endpoint on a connection sharing (`ICS`) network no address: the endpoint asks
+/// for DHCP (see [`EndpointFacts::dhcp`]), and the guest takes its address from the network's
+/// DHCP server when it brings eth0 up. So the guest's IPv4 address is the one the host has seen
+/// it use on `subnet` (`seen`, its neighbour entries for the VM's MAC address) until HCN names
+/// one, and there is none before the guest has taken it. The default route the DHCP server
+/// gives is the network's gateway, which the network was made with.
+pub fn guest_behind_nat(
+    endpoint: &EndpointFacts,
+    subnet: Ipv4Subnet,
+    seen: &[IpAddr],
+) -> EndpointFacts {
+    let mut facts = endpoint.clone();
+    if guest_ipv4(&facts).is_none() {
+        let leased = seen.iter().find_map(|a| match a {
+            IpAddr::V4(v4) if subnet.contains(*v4) && *v4 != subnet.gateway() => Some(*v4),
+            _ => None,
+        });
+        facts.addresses.splice(0..0, leased.map(IpAddr::V4));
+    }
+    if facts.gateway.is_none() {
+        facts.gateway = Some(IpAddr::V4(subnet.gateway()));
+    }
+    facts
 }
 
 /// The IDs in an HCN enumeration (a JSON array of GUID strings, with or without braces).
@@ -364,11 +428,13 @@ fn field<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
         .map(|(_, v)| v)
 }
 
-/// Reads a network's properties document.
+/// Reads a network's properties document, in the schema 2 layout (`Ipams[].Subnets[]
+/// .IpAddressPrefix`, the adapter in a `NetAdapterName` policy) or the schema 1 layout
+/// (`Subnets[].AddressPrefix`, `NetworkAdapterName`).
 pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
     let value: Value = serde_json::from_str(properties).ok()?;
     let kind = field(&value, "Type")?.as_str()?.to_string();
-    let subnets = field(&value, "Ipams")
+    let mut subnets: Vec<Ipv4Subnet> = field(&value, "Ipams")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -377,6 +443,15 @@ pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
         .filter_map(|subnet| field(subnet, "IpAddressPrefix").and_then(Value::as_str))
         .filter_map(parse_ipv4_subnet)
         .collect();
+    if subnets.is_empty() {
+        subnets = field(&value, "Subnets")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|subnet| field(subnet, "AddressPrefix").and_then(Value::as_str))
+            .filter_map(parse_ipv4_subnet)
+            .collect();
+    }
     let adapter = field(&value, "Policies")
         .and_then(Value::as_array)
         .into_iter()
@@ -385,7 +460,13 @@ pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
         .filter_map(|policy| field(policy, "Settings"))
         .filter_map(|settings| field(settings, "NetworkAdapterName").and_then(Value::as_str))
         .map(str::to_string)
-        .next();
+        .next()
+        .or_else(|| {
+            field(&value, "NetworkAdapterName")
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+        });
     Some(NetworkFacts {
         kind,
         subnets,
@@ -411,27 +492,52 @@ pub struct EndpointFacts {
     pub addresses: Vec<IpAddr>,
     pub gateway: Option<IpAddr>,
     pub dns_servers: Vec<IpAddr>,
+    /// Whether the endpoint asks for DHCP (`EnableDhcp` in its `Flags`), as HCN makes every
+    /// endpoint on a connection sharing network: the guest takes its address from the
+    /// network's DHCP server, so HCN names none.
+    pub dhcp: bool,
 }
 
-/// Reads an endpoint's properties document.
+/// HCN endpoint flag: the endpoint's addresses come from DHCP rather than from HCN.
+const ENDPOINT_FLAG_ENABLE_DHCP: u64 = 32;
+
+/// An address field of a schema 1 document, if it holds one that is not unspecified.
+fn address_field(value: &Value, name: &str) -> Option<IpAddr> {
+    field(value, name)?
+        .as_str()?
+        .parse()
+        .ok()
+        .filter(|ip: &IpAddr| !ip.is_unspecified())
+}
+
+/// Reads an endpoint's properties document, in the schema 2 layout (`IpConfigurations`,
+/// `Routes`, `Dns.ServerList`) or the schema 1 layout (`IPAddress`, `IPv6Address`,
+/// `GatewayAddress`, `DNSServerList` as a comma separated list).
 pub fn endpoint_facts(properties: &str) -> Option<EndpointFacts> {
     let value: Value = serde_json::from_str(properties).ok()?;
     let mac_address = field(&value, "MacAddress")?.as_str()?.to_string();
-    let addresses = field(&value, "IpConfigurations")
+    let mut addresses: Vec<IpAddr> = field(&value, "IpConfigurations")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|config| field(config, "IpAddress").and_then(Value::as_str))
         .filter_map(|ip| ip.parse().ok())
         .collect();
+    if addresses.is_empty() {
+        addresses = ["IPAddress", "IPv6Address"]
+            .iter()
+            .filter_map(|name| address_field(&value, name))
+            .collect();
+    }
     let gateway = field(&value, "Routes")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|route| field(route, "NextHop").and_then(Value::as_str))
         .filter_map(|ip| ip.parse().ok())
-        .find(|ip: &IpAddr| !ip.is_unspecified());
-    let dns_servers = field(&value, "Dns")
+        .find(|ip: &IpAddr| !ip.is_unspecified())
+        .or_else(|| address_field(&value, "GatewayAddress"));
+    let mut dns_servers: Vec<IpAddr> = field(&value, "Dns")
         .and_then(|dns| field(dns, "ServerList"))
         .and_then(Value::as_array)
         .into_iter()
@@ -439,11 +545,23 @@ pub fn endpoint_facts(properties: &str) -> Option<EndpointFacts> {
         .filter_map(Value::as_str)
         .filter_map(|ip| ip.parse().ok())
         .collect();
+    if dns_servers.is_empty() {
+        dns_servers = field(&value, "DNSServerList")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|ip| ip.trim().parse().ok())
+            .collect();
+    }
+    let dhcp = field(&value, "Flags")
+        .and_then(Value::as_u64)
+        .is_some_and(|flags| flags & ENDPOINT_FLAG_ENABLE_DHCP != 0);
     Some(EndpointFacts {
         mac_address,
         addresses,
         gateway,
         dns_servers,
+        dhcp,
     })
 }
 

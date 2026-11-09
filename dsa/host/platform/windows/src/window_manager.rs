@@ -144,8 +144,86 @@ fn wide(text: &str) -> Vec<u16> {
 /// Runs `program` in the session `token` belongs to, as its user, with the user's environment,
 /// and lets it go.
 fn run_in_session(token: &OwnedHandle, program: &Path) -> io::Result<()> {
+    start_in_session(token, program, "").map(drop)
+}
+
+/// Starts `program` with `arguments` as the user with SID `sid`, in their active session (or
+/// another they are signed in to), and returns the process. Not SYSTEM, as `dsa-hostd serve`
+/// run by hand is, it can start a program only as its own user.
+pub(crate) fn start_as_user(
+    sid: &str,
+    program: &Path,
+    arguments: &str,
+) -> Result<OwnedHandle, String> {
+    let sessions = match sessions_of(sid) {
+        Ok(sessions) => sessions,
+        Err(_) if current_user_sid().is_ok_and(|own| own == sid) => {
+            return start_own(program, arguments)
+                .map_err(|error| format!("could not run {}: {error}", program.display()));
+        }
+        Err(error) => {
+            return Err(format!(
+                "this service may not start programs in another user's session ({error}); run \
+                 it as the installed service"
+            ))
+        }
+    };
+    let Some(session) = sessions
+        .iter()
+        .find(|session| session.active)
+        .or(sessions.first())
+    else {
+        return Err("you have no signed-in Windows session on this computer".to_string());
+    };
+    start_in_session(&session.token, program, arguments)
+        .map_err(|error| format!("could not run {}: {error}", program.display()))
+}
+
+/// Starts `program` with `arguments` as this process's own user, and returns the process.
+fn start_own(program: &Path, arguments: &str) -> io::Result<OwnedHandle> {
+    use windows_sys::Win32::System::Threading::CreateProcessW;
     let application = wide(&program.to_string_lossy());
-    let mut command_line = wide(&format!("\"{}\"", program.display()));
+    let mut command_line = wide(&format!("\"{}\" {arguments}", program.display()));
+    // SAFETY: plain structures, zero is their documented initial state.
+    let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
+    startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+    let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: NUL-terminated strings that outlive the call and a writable command line.
+    let created = unsafe {
+        CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+            &startup,
+            &mut process,
+        )
+    };
+    if created == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: the thread handle CreateProcessW returned, closed once.
+    unsafe { CloseHandle(process.hThread) };
+    Ok(OwnedHandle(process.hProcess))
+}
+
+/// Starts `program` with `arguments` in the session `token` belongs to, as its user, with the
+/// user's environment, and returns the process.
+fn start_in_session(
+    token: &OwnedHandle,
+    program: &Path,
+    arguments: &str,
+) -> io::Result<OwnedHandle> {
+    let application = wide(&program.to_string_lossy());
+    let mut command_line = if arguments.is_empty() {
+        wide(&format!("\"{}\"", program.display()))
+    } else {
+        wide(&format!("\"{}\" {arguments}", program.display()))
+    };
     let folder = program.parent().map(|dir| wide(&dir.to_string_lossy()));
     let mut desktop = wide("winsta0\\default");
     let mut environment = std::ptr::null_mut();
@@ -183,12 +261,10 @@ fn run_in_session(token: &OwnedHandle, program: &Path) -> io::Result<()> {
     if created == 0 {
         return Err(error);
     }
-    // SAFETY: handles CreateProcessAsUserW returned, closed once.
-    unsafe {
-        CloseHandle(process.hProcess);
-        CloseHandle(process.hThread);
-    }
-    Ok(())
+    // SAFETY: the thread handle CreateProcessAsUserW returned, closed once; the process
+    // handle is the caller's.
+    unsafe { CloseHandle(process.hThread) };
+    Ok(OwnedHandle(process.hProcess))
 }
 
 /// The window manager of the user with SID `sid`.

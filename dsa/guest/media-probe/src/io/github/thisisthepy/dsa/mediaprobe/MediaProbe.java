@@ -15,6 +15,9 @@ import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 import android.util.Log;
 
 import java.io.IOException;
@@ -94,6 +97,12 @@ public final class MediaProbe extends Instrumentation {
                 audio(results);
             } else if (check.equals("decode")) {
                 decode(results);
+            } else if (check.equals("root_absent")) {
+                rootAbsent(results);
+            } else if (check.equals("root_visible")) {
+                rootVisible(results);
+            } else if (check.equals("root_request")) {
+                rootRequest(results);
             } else {
                 results.putString("error", "no check named " + check);
             }
@@ -102,6 +111,58 @@ public final class MediaProbe extends Instrumentation {
             results.putString("error", t.toString());
         }
         finish(Activity.RESULT_OK, results);
+    }
+
+    private void rootVisible(Bundle results) {
+        try {
+            Os.stat("/system/bin/su");
+            results.putString("root.visible", "yes");
+        } catch (ErrnoException e) {
+            results.putString("root.visible", e.errno == OsConstants.ENOENT ? "ENOENT" : e.toString());
+        }
+    }
+
+    private void rootRequest(Bundle results) throws Exception {
+        Process process = new ProcessBuilder("/system/bin/su", "-c", "id")
+                .redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        results.putString("root.output", output.trim());
+        results.putInt("root.exit", process.waitFor());
+    }
+
+    /** Checks su from the app's own uid while root elevation is off. */
+    private void rootAbsent(Bundle results) throws Exception {
+        String[] paths = {"/system/bin/su", "/system/xbin/su", "/sbin/su"};
+        for (String path : paths) {
+            String key = "root." + path;
+            try {
+                Os.stat(path);
+                results.putString(key + ".stat", "visible");
+            } catch (ErrnoException e) {
+                results.putString(key + ".stat", e.errno == OsConstants.ENOENT ? "ENOENT" : e.toString());
+            }
+            try {
+                Os.stat("/proc/self/root" + path);
+                results.putString(key + ".procstat", "visible");
+            } catch (ErrnoException e) {
+                results.putString(key + ".procstat", e.errno == OsConstants.ENOENT ? "ENOENT" : e.toString());
+            }
+            try {
+                results.putString(key + ".access", Os.access(path, OsConstants.X_OK) ? "visible" : "false");
+            } catch (ErrnoException e) {
+                results.putString(key + ".access", e.errno == OsConstants.ENOENT ? "ENOENT" : e.toString());
+            }
+            try {
+                Process process = new ProcessBuilder(path, "-c", "id").start();
+                results.putString(key + ".exec", "started:" + process.waitFor());
+            } catch (IOException e) {
+                results.putString(key + ".exec", e.getMessage() != null
+                        && (e.getMessage().contains("ENOENT") || e.getMessage().contains("error=2"))
+                        ? "ENOENT" : e.toString());
+            }
+        }
+        Process lookup = new ProcessBuilder("/system/bin/sh", "-c", "command -v su").start();
+        results.putInt("root.path_lookup_exit", lookup.waitFor());
     }
 
     /** One second of a 440 Hz tone, 16-bit stereo at 48 kHz. */

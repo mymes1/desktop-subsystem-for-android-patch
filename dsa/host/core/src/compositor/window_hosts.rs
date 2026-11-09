@@ -76,18 +76,24 @@ pub enum ToHost {
         task_id: i32,
     },
     /// The task's size in the guest and the largest and smallest client areas the window may
-    /// have.
+    /// have, and how large the window shows each task pixel (window pixels per task pixels).
     TaskSize {
         task_id: i32,
         width: u32,
         height: u32,
         max: Option<(u32, u32)>,
         min: Option<(u32, u32)>,
+        scale: (u32, u32),
     },
     /// Where the cursor of the task's focused editor is, in the window's client pixels.
     ImeCursor {
         task_id: i32,
         cursor: crate::ime::ImeCursor,
+    },
+    /// The editor focused in the task, as the window's input method reads it.
+    ImeEditor {
+        task_id: i32,
+        editor: crate::ime::ImeEditor,
     },
     /// The tone of the window's caption buttons, which follows the app's status bar.
     CaptionTone {
@@ -129,6 +135,7 @@ impl ToHost {
             | ToHost::Resize { task_id, .. }
             | ToHost::TaskSize { task_id, .. }
             | ToHost::ImeCursor { task_id, .. }
+            | ToHost::ImeEditor { task_id, .. }
             | ToHost::CaptionTone { task_id, .. }
             | ToHost::Mode { task_id, .. }
             | ToHost::CaptionMode { task_id, .. }
@@ -210,7 +217,7 @@ pub enum HostAction {
     /// known.
     Start {
         package: String,
-        app: Option<AppInfo>,
+        app: Option<Box<AppInfo>>,
     },
     /// Send `message` to the window host on connection `host`.
     Send { host: HostId, message: ToHost },
@@ -297,7 +304,7 @@ impl WindowHosts {
                 *since = now;
                 vec![HostAction::Start {
                     package: app.package_name.clone(),
-                    app: Some(app.clone()),
+                    app: Some(Box::new(app.clone())),
                 }]
             }
             _ => Vec::new(),
@@ -409,7 +416,7 @@ impl WindowHosts {
                     if named {
                         actions.push(HostAction::Start {
                             package: package_name.clone(),
-                            app: info,
+                            app: info.map(Box::new),
                         });
                     }
                     AppHost {
@@ -457,16 +464,22 @@ impl WindowHosts {
                 height,
                 max,
                 min,
+                scale,
             } => self.forward(ToHost::TaskSize {
                 task_id: *task_id,
                 width: *width,
                 height: *height,
                 max: *max,
                 min: *min,
+                scale: *scale,
             }),
             WindowChange::ImeCursor { task_id, cursor } => self.forward(ToHost::ImeCursor {
                 task_id: *task_id,
                 cursor: *cursor,
+            }),
+            WindowChange::ImeEditor { task_id, editor } => self.forward(ToHost::ImeEditor {
+                task_id: *task_id,
+                editor: editor.clone(),
             }),
             WindowChange::CaptionTone { task_id, tone } => self.forward(ToHost::CaptionTone {
                 task_id: *task_id,
@@ -704,7 +717,7 @@ impl WindowHosts {
                     *since = now;
                     actions.push(HostAction::Start {
                         package: package.clone(),
-                        app: self.apps.get(package).cloned(),
+                        app: self.apps.get(package).cloned().map(Box::new),
                     });
                 }
             }
@@ -808,6 +821,7 @@ pub fn to_wire(message: &ToHost) -> Body {
             height,
             max,
             min,
+            scale: (scale_numerator, scale_denominator),
         } => {
             let (max_width, max_height) = max.unwrap_or((0, 0));
             let (min_width, min_height) = min.unwrap_or((0, 0));
@@ -819,6 +833,8 @@ pub fn to_wire(message: &ToHost) -> Body {
                 max_height,
                 min_width,
                 min_height,
+                scale_numerator,
+                scale_denominator,
             })
         }
         ToHost::ImeCursor { task_id, cursor } => {
@@ -828,6 +844,21 @@ pub fn to_wire(message: &ToHost) -> Body {
                 top: cursor.top,
                 right: cursor.right,
                 bottom: cursor.bottom,
+            })
+        }
+        ToHost::ImeEditor { task_id, editor } => {
+            let (composition_start, composition_end) = editor
+                .composition
+                .unwrap_or((editor.selection.1, editor.selection.1));
+            Body::ImeEditor(dsa_protocol::window_host::types::ImeEditor {
+                task_id,
+                kind: editor.kind.number(),
+                text: editor.text,
+                text_start: editor.text_start,
+                selection_start: editor.selection.0,
+                selection_end: editor.selection.1,
+                composition_start,
+                composition_end,
             })
         }
         ToHost::CaptionTone { task_id, tone } => {
@@ -917,6 +948,12 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 .then_some((size.max_width, size.max_height)),
             min: (size.min_width > 0 || size.min_height > 0)
                 .then_some((size.min_width, size.min_height)),
+            // 0 by 0, or anything with a 0 in it, is 1:1.
+            scale: if size.scale_numerator > 0 && size.scale_denominator > 0 {
+                (size.scale_numerator, size.scale_denominator)
+            } else {
+                (1, 1)
+            },
         },
         Body::ImeCursor(cursor) => ToHost::ImeCursor {
             task_id: cursor.task_id,
@@ -926,6 +963,18 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 right: cursor.right,
                 bottom: cursor.bottom,
             },
+        },
+        // A description that makes no sense is dropped; the next one replaces it.
+        Body::ImeEditor(editor) => ToHost::ImeEditor {
+            task_id: editor.task_id,
+            editor: crate::ime::ImeEditor::checked(
+                editor.kind,
+                &editor.text,
+                editor.text_start,
+                (editor.selection_start, editor.selection_end),
+                (editor.composition_start, editor.composition_end),
+            )
+            .ok()?,
         },
         Body::SetCaptionTone(set) => {
             use dsa_protocol::window_host::types::CaptionTone as WireTone;
@@ -1210,7 +1259,7 @@ mod tests {
             hosts.change(&open(1, CLOCK), now),
             vec![HostAction::Start {
                 package: CLOCK.into(),
-                app: Some(clock)
+                app: Some(Box::new(clock))
             }]
         );
         // An app whose name is not known yet waits for it.
@@ -1219,7 +1268,7 @@ mod tests {
             hosts.app(&info(MAPS), now),
             vec![HostAction::Start {
                 package: MAPS.into(),
-                app: Some(info(MAPS))
+                app: Some(Box::new(info(MAPS)))
             }]
         );
         // A second task of the same app goes to the same window host.
@@ -1241,7 +1290,7 @@ mod tests {
             hosts.app(&info(CLOCK), now + APP_INFO_WAIT / 2),
             vec![HostAction::Start {
                 package: CLOCK.into(),
-                app: Some(info(CLOCK))
+                app: Some(Box::new(info(CLOCK)))
             }]
         );
         assert!(hosts.app(&info(CLOCK), now + APP_INFO_WAIT).is_empty());
@@ -1613,6 +1662,7 @@ mod tests {
                 height: 400,
                 max: Some((1920, 1080)),
                 min: Some((700, 500)),
+                scale: (1, 1),
             },
             ToHost::TaskSize {
                 task_id: 6,
@@ -1620,6 +1670,7 @@ mod tests {
                 height: 400,
                 max: None,
                 min: None,
+                scale: (3, 2),
             },
             ToHost::ImeCursor {
                 task_id: 7,
@@ -1629,6 +1680,20 @@ mod tests {
                     right: 14,
                     bottom: 60,
                 },
+            },
+            ToHost::ImeEditor {
+                task_id: 7,
+                editor: crate::ime::ImeEditor {
+                    kind: crate::ime::InputKind::Email,
+                    text: "\u{d55c}a\u{1f600}".into(),
+                    text_start: 40,
+                    selection: (44, 41),
+                    composition: Some((40, 41)),
+                },
+            },
+            ToHost::ImeEditor {
+                task_id: 7,
+                editor: crate::ime::ImeEditor::none(),
             },
             ToHost::CaptionTone {
                 task_id: 8,

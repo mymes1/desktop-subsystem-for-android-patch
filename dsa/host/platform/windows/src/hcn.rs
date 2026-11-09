@@ -30,11 +30,11 @@ use windows_sys::Win32::System::LibraryLoader::{
 use crate::guid::Guid;
 use crate::network::{
     advanced_adapter, advanced_problem, all_query, choose_nat_subnet, endpoint_document,
-    endpoint_facts, endpoint_name, guid_from, host_has_ipv6, ids_from_enumeration, mac_bytes,
-    moved_leftover, name_query, nat_ipv6_subnet, nat_network_document, nat_path_problem,
-    network_facts, network_name, object_name, reusable, subnets_in_use,
-    transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
-    NetworkStatusFacts,
+    endpoint_facts, endpoint_name, guest_behind_nat, guest_ipv4, guid_from, host_has_ipv6,
+    ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
+    nat_network_document, nat_path_problem, network_facts, network_name, object_name,
+    properties_query, reusable, subnets_in_use, transparent_network_document, EndpointFacts,
+    HostAdapter, HostInterface, Ipv4Subnet, NatPath, NetworkMode, NetworkStatusFacts,
 };
 use crate::vm::NetworkAdapter;
 
@@ -182,7 +182,7 @@ fn network_properties(api: &Api, id: &Guid) -> Result<String, String> {
     // SAFETY: a live GUID and out pointers.
     let hresult = unsafe { (api.open_network)(guid_ptr(id), &mut handle, &mut record) };
     check("HcnOpenNetwork", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -200,7 +200,7 @@ fn endpoint_properties(api: &Api, id: &Guid) -> Result<String, String> {
     // SAFETY: a live GUID and out pointers.
     let hresult = unsafe { (api.open_endpoint)(guid_ptr(id), &mut handle, &mut record) };
     check("HcnOpenEndpoint", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -305,7 +305,7 @@ fn create_endpoint(
         )
     };
     check("HcnCreateEndpoint", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -314,9 +314,23 @@ fn create_endpoint(
     // SAFETY: closed once; the endpoint stays until it is deleted.
     unsafe { (api.close_endpoint)(handle) };
     check("HcnQueryEndpointProperties", hresult, record)?;
-    endpoint_facts(&properties).ok_or_else(|| {
+    let facts = endpoint_facts(&properties).ok_or_else(|| {
         format!("HCN described the new endpoint in a way DSA cannot read: {properties}")
-    })
+    })?;
+    if facts.addresses.is_empty() && facts.dhcp {
+        eprintln!(
+            "network: the new endpoint {} takes its address by DHCP once the VM runs",
+            facts.mac_address
+        );
+    } else if facts.addresses.is_empty() {
+        // An endpoint that neither asks for DHCP nor names an address: the description shows
+        // where its address is.
+        eprintln!(
+            "network: HCN gave the new endpoint no address DSA can read: {}",
+            properties.trim()
+        );
+    }
+    Ok(facts)
 }
 
 /// The network a VM's adapter is connected to, made for that VM.
@@ -330,8 +344,9 @@ pub struct VmNetwork {
     /// The host adapter an advanced network is bound to.
     host_adapter: Option<String>,
     endpoint: EndpointFacts,
-    /// The gateway of a NAT network: the host's address on it, the guest's default route.
-    nat_gateway: Option<Ipv4Addr>,
+    /// The subnet of a NAT network. Its gateway is the host's address on it and the guest's
+    /// default route; the guest takes its address in it by DHCP.
+    nat_subnet: Option<Ipv4Subnet>,
     problem: Option<String>,
 }
 
@@ -372,11 +387,30 @@ impl VmNetwork {
             }
         }
         let mut network_id = None;
-        let mut nat_gateway = None;
+        let mut nat_subnet = None;
         for existing in enumerate(api.enumerate_networks, "HcnEnumerateNetworks", &name)? {
-            let facts = network_properties(api, &existing)
+            let properties = network_properties(api, &existing);
+            let facts = properties
+                .as_ref()
                 .ok()
-                .and_then(|properties| network_facts(&properties));
+                .and_then(|properties| network_facts(properties));
+            if network_id.is_some()
+                || !facts
+                    .as_ref()
+                    .is_some_and(|f| reusable(f, mode, host_adapter.as_deref()))
+            {
+                // Said with what HCN described, so a Windows that describes it another way
+                // shows here rather than as a network made again at every start.
+                eprintln!(
+                    "network: the network {name} left from before is replaced, as it is not a \
+                     {} network DSA can use again: {}",
+                    mode.name(),
+                    match &properties {
+                        Ok(properties) => properties.trim(),
+                        Err(why) => why.as_str(),
+                    }
+                );
+            }
             if network_id.is_none()
                 && facts
                     .as_ref()
@@ -385,10 +419,7 @@ impl VmNetwork {
                 eprintln!("network: using the network {name} left from before");
                 network_id = Some(existing);
                 if mode == NetworkMode::Nat {
-                    nat_gateway = facts
-                        .as_ref()
-                        .and_then(|f| f.subnets.first())
-                        .map(Ipv4Subnet::gateway);
+                    nat_subnet = facts.as_ref().and_then(|f| f.subnets.first()).copied();
                 }
             } else if let Err(why) = delete(api.delete_network, "HcnDeleteNetwork", &existing) {
                 eprintln!(
@@ -426,7 +457,7 @@ impl VmNetwork {
                         }
                         let (handle, subnet, ipv6_problem) =
                             create_nat(api, &id, vm_name, &name, &adapters)?;
-                        nat_gateway = Some(subnet.gateway());
+                        nat_subnet = Some(subnet);
                         // SAFETY: closed once.
                         unsafe { (api.close_network)(handle) };
                         if problem.is_none() {
@@ -472,7 +503,7 @@ impl VmNetwork {
             mode,
             host_adapter,
             endpoint,
-            nat_gateway,
+            nat_subnet,
             problem,
         })
     }
@@ -497,36 +528,57 @@ impl VmNetwork {
     /// The way between the host and a guest behind NAT, as it stands now: whether the host
     /// still holds the gateway and which adapter it reaches the guest through. `None` on the
     /// LAN, where the host's NAT is not on the way.
+    ///
+    /// The guest's address is the one it took by DHCP, which the host reads from its neighbour
+    /// entries once the guest has used it; before that, the route checked is the one to the
+    /// guest's side of the network.
     pub fn nat_path(&self) -> Option<NatPath> {
-        let gateway = self.nat_gateway?;
-        let guest = self.endpoint.addresses.iter().find_map(|a| match a {
-            IpAddr::V4(v4) => Some(*v4),
-            IpAddr::V6(_) => None,
-        });
+        self.nat_path_for(&self.guest(&self.seen()))
+    }
+
+    fn nat_path_for(&self, guest: &EndpointFacts) -> Option<NatPath> {
+        let subnet = self.nat_subnet?;
+        let gateway = subnet.gateway();
         Some(NatPath {
             gateway,
-            host_has_gateway: host_holds(gateway),
-            host_route: guest.and_then(host_route_to),
+            gateway_adapter: host_interface_holding(gateway),
+            host_route: host_route_to(guest_ipv4(guest).unwrap_or(subnet.guest_side())),
         })
+    }
+
+    /// The addresses the host has seen the VM's adapter use.
+    fn seen(&self) -> Vec<IpAddr> {
+        mac_bytes(&self.endpoint.mac_address)
+            .map(|mac| neighbour_addresses(&mac))
+            .unwrap_or_default()
+    }
+
+    /// The endpoint as the guest has it now: behind NAT, with the address it took by DHCP
+    /// once the host has seen it, and the network's gateway as its default route.
+    fn guest(&self, seen: &[IpAddr]) -> EndpointFacts {
+        match self.nat_subnet {
+            Some(subnet) => guest_behind_nat(&self.endpoint, subnet, seen),
+            None => self.endpoint.clone(),
+        }
     }
 
     /// The network as it stands, with the addresses the guest has been seen using. Behind
     /// NAT, a way between the host and the guest that no longer goes through the host's
     /// network for Android (a VPN that took its subnet, the gateway gone) is its problem.
     pub fn status(&self) -> NetworkStatusFacts {
+        let seen = self.seen();
+        let endpoint = self.guest(&seen);
         let path = self
-            .nat_path()
-            .and_then(|path| nat_path_problem(&self.name, &self.endpoint, &path));
+            .nat_path_for(&endpoint)
+            .and_then(|path| nat_path_problem(&endpoint, &path));
         let problem = match (self.problem.clone(), path) {
             (Some(first), Some(second)) => Some(format!("{first}; {second}")),
             (first, second) => first.or(second),
         };
         NetworkStatusFacts {
             mode: self.mode,
-            endpoint: self.endpoint.clone(),
-            seen: mac_bytes(&self.endpoint.mac_address)
-                .map(|mac| neighbour_addresses(&mac))
-                .unwrap_or_default(),
+            endpoint,
+            seen,
             problem,
         }
     }
@@ -769,14 +821,69 @@ pub fn host_holds(address: Ipv4Addr) -> bool {
     std::net::UdpSocket::bind((address, 0)).is_ok()
 }
 
-/// The host adapter, by the name Windows shows, that the host sends to `address` through;
-/// `None` when it has no route there.
-pub fn host_route_to(address: Ipv4Addr) -> Option<String> {
+/// The host adapter that holds `address` as one of its own addresses now, usable (not a
+/// duplicate or still being checked); `None` when no adapter holds it.
+pub fn host_interface_holding(address: Ipv4Addr) -> Option<HostInterface> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
-        ConvertInterfaceIndexToLuid, ConvertInterfaceLuidToAlias, GetBestInterfaceEx,
+        GetUnicastIpAddressTable, MIB_UNICASTIPADDRESS_TABLE,
     };
+    use windows_sys::Win32::Networking::WinSock::IpDadStatePreferred;
+    let mut table: *mut MIB_UNICASTIPADDRESS_TABLE = std::ptr::null_mut();
+    // SAFETY: an out pointer; the table is freed below.
+    if unsafe { GetUnicastIpAddressTable(AF_INET, &mut table) } != 0 || table.is_null() {
+        return None;
+    }
+    let mut found = None;
+    // SAFETY: the table GetUnicastIpAddressTable returned, with NumEntries rows after its
+    // header; a LUID is read as its 64-bit value, which every bit pattern is.
+    unsafe {
+        let rows =
+            std::slice::from_raw_parts((*table).Table.as_ptr(), (*table).NumEntries as usize);
+        for row in rows {
+            let holds = ip_of(&row.Address as *const _ as *const SOCKADDR)
+                == Some(IpAddr::V4(address))
+                && row.DadState == IpDadStatePreferred;
+            if holds {
+                found = Some(row.InterfaceLuid.Value);
+                break;
+            }
+        }
+        FreeMibTable(table as *const c_void);
+    }
+    found.map(interface_of)
+}
+
+/// The host adapter whose LUID is `luid`, with the name Windows shows for it.
+fn interface_of(luid: u64) -> HostInterface {
+    use windows_sys::Win32::NetworkManagement::IpHelper::ConvertInterfaceLuidToAlias;
+    use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
     // NDIS_IF_MAX_STRING_SIZE in ifdef.h: the longest adapter name, without its NUL.
     const IF_MAX_STRING_SIZE: usize = 256;
+    let id = NET_LUID_LH { Value: luid };
+    let mut alias = [0u16; IF_MAX_STRING_SIZE + 1];
+    // SAFETY: a LUID and a buffer of the length given, in characters.
+    let named = unsafe { ConvertInterfaceLuidToAlias(&id, alias.as_mut_ptr(), alias.len()) } == 0;
+    let name = if named {
+        from_wide(alias.as_mut_ptr())
+    } else {
+        String::new()
+    };
+    HostInterface {
+        luid,
+        name: if name.is_empty() {
+            format!("the adapter with LUID {luid:#x}")
+        } else {
+            name
+        },
+    }
+}
+
+/// The host adapter that the host sends to `address` through; `None` when it has no route
+/// there.
+pub fn host_route_to(address: Ipv4Addr) -> Option<HostInterface> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        ConvertInterfaceIndexToLuid, GetBestInterfaceEx,
+    };
     use windows_sys::Win32::NetworkManagement::Ndis::NET_LUID_LH;
     // SAFETY: an all-zero SOCKADDR_IN is valid; its family and address are set below.
     let mut destination: SOCKADDR_IN = unsafe { std::mem::zeroed() };
@@ -799,12 +906,8 @@ pub fn host_route_to(address: Ipv4Addr) -> Option<String> {
     if unsafe { ConvertInterfaceIndexToLuid(index, &mut luid) } != 0 {
         return None;
     }
-    let mut alias = [0u16; IF_MAX_STRING_SIZE + 1];
-    // SAFETY: a LUID and a buffer of the length given, in characters.
-    if unsafe { ConvertInterfaceLuidToAlias(&luid, alias.as_mut_ptr(), alias.len()) } != 0 {
-        return None;
-    }
-    Some(from_wide(alias.as_mut_ptr()))
+    // SAFETY: a LUID is read as its 64-bit value, which every bit pattern is.
+    Some(interface_of(unsafe { luid.Value }))
 }
 
 /// An IP address from a socket address, if it is IPv4 or IPv6.

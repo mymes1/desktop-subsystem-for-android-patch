@@ -1,0 +1,393 @@
+diff --git a/src/gfxstream/guest/android/GrallocMinigbm.cpp b/src/gfxstream/guest/android/GrallocMinigbm.cpp
+index 7a61f72..15ec735 100644
+--- a/src/gfxstream/guest/android/GrallocMinigbm.cpp
++++ b/src/gfxstream/guest/android/GrallocMinigbm.cpp
+@@ -9,16 +9,22 @@
+ #include "GfxStreamRenderControl.h"
+ #include "ExtendedRenderControl.h"
+ #include "dsa_shared_color_buffer.h"
++#include "dsa_cpu_readback.h"
+ #include <gralloc_cb_bp.h>
+ 
+ #include <cros_gralloc/cros_gralloc_handle.h>
++#include <linux/dma-buf.h>
+ #include <stdlib.h>
++#include <sys/ioctl.h>
++#include <sys/mman.h>
+ #include <sys/user.h>
+ #include <unistd.h>
+ #include <vndk/hardware_buffer.h>
+ 
++#include <cerrno>
+ #include <cinttypes>
+ #include <cstring>
++#include <vector>
+ 
+ #include "VirtGpu.h"
+ #include "util/log.h"
+@@ -204,6 +210,73 @@ uint32_t MinigbmGralloc::getHostHandle(const native_handle_t* handle) {
+     return hostHandle;
+ }
+ 
++bool MinigbmGralloc::wantsCpuReadback(const native_handle_t* handle) {
++    // With virtio-gpu the kernel moves the drawing into the buffer's memory when a CPU maps it.
++    if (mDevice || !handle) {
++        return false;
++    }
++    cros_gralloc_handle const* cros_handle = reinterpret_cast<cros_gralloc_handle const*>(handle);
++    dsa::ReadbackFormat format;
++    return dsa::wantsCpuReadback(static_cast<uint64_t>(cros_handle->usage)) &&
++           dsa::readbackFormat(cros_handle->format, &format);
++}
++
++int MinigbmGralloc::readBackForCpu(const native_handle_t* handle) {
++    if (!wantsCpuReadback(handle)) {
++        return -EINVAL;
++    }
++    cros_gralloc_handle const* cros_handle = reinterpret_cast<cros_gralloc_handle const*>(handle);
++    dsa::ReadbackFormat format;
++    dsa::readbackFormat(cros_handle->format, &format);
++    const uint32_t width = cros_handle->width;
++    const uint32_t height = cros_handle->height;
++    if (width == 0 || height == 0) {
++        return 0;
++    }
++
++    const uint32_t hostHandle = getHostHandle(handle);
++    auto* rcEnc = renderControl();
++    if (hostHandle == 0 || !rcEnc) {
++        mesa_loge("%s: buffer %u has no host ColorBuffer to read back", __func__, cros_handle->id);
++        return -ENODEV;
++    }
++    // The whole ColorBuffer: the host reads no part of one.
++    std::vector<uint8_t> pixels(dsa::hostReadbackSize(format, width, height));
++    rcEnc->rcReadColorBuffer(rcEnc, hostHandle, 0, 0, static_cast<GLint>(width),
++                             static_cast<GLint>(height), format.glFormat, format.glType,
++                             pixels.data());
++
++    const int fd = cros_handle->fds[0];
++    const size_t offset = cros_handle->offsets[0];
++    const size_t stride = cros_handle->strides[0];
++    const size_t mapSize = cros_handle->total_size
++                               ? static_cast<size_t>(cros_handle->total_size)
++                               : offset + stride * height;
++    void* mapped = mmap(nullptr, mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++    if (mapped == MAP_FAILED) {
++        const int error = errno;
++        mesa_loge("%s: cannot map buffer %u to write the GPU's drawing into it: %s", __func__,
++                  cros_handle->id, strerror(error));
++        return -error;
++    }
++    // A CPU that maps the buffer next sees these writes, whatever caches lie between.
++    struct dma_buf_sync sync = {DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE};
++    ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
++    const bool copied =
++        offset <= mapSize &&
++        dsa::copyReadbackRows(pixels.data(), pixels.size(), format, width, height,
++                              static_cast<uint8_t*>(mapped) + offset, stride, mapSize - offset);
++    sync.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE;
++    ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
++    munmap(mapped, mapSize);
++    if (!copied) {
++        mesa_loge("%s: buffer %u (%ux%u, stride %zu) is smaller than its drawing", __func__,
++                  cros_handle->id, width, height, stride);
++        return -EINVAL;
++    }
++    return 0;
++}
++
+ uint32_t MinigbmGralloc::getHostHandle(const AHardwareBuffer* ahb) {
+     const native_handle_t* handle = AHardwareBuffer_getNativeHandle(ahb);
+     return getHostHandle(handle);
+diff --git a/src/gfxstream/guest/android/GrallocMinigbm.h b/src/gfxstream/guest/android/GrallocMinigbm.h
+index 985ba4d..fb83e67 100644
+--- a/src/gfxstream/guest/android/GrallocMinigbm.h
++++ b/src/gfxstream/guest/android/GrallocMinigbm.h
+@@ -57,6 +57,9 @@ class MinigbmGralloc : public Gralloc {
+ 
+     int32_t getDataspace(const AHardwareBuffer* ahb) override;
+ 
++    bool wantsCpuReadback(const native_handle_t* handle) override;
++    int readBackForCpu(const native_handle_t* handle) override;
++
+    private:
+     // The renderControl encoder of the calling thread's host connection.
+     ExtendedRCEncoderContext* renderControl();
+diff --git a/src/gfxstream/guest/android/include/gfxstream/guest/GfxStreamGralloc.h b/src/gfxstream/guest/android/include/gfxstream/guest/GfxStreamGralloc.h
+index 26d10fb..e5aa7c5 100644
+--- a/src/gfxstream/guest/android/include/gfxstream/guest/GfxStreamGralloc.h
++++ b/src/gfxstream/guest/android/include/gfxstream/guest/GfxStreamGralloc.h
+@@ -180,6 +180,12 @@ class Gralloc {
+     virtual int32_t getDataspace(const AHardwareBuffer* ahb) {
+         return GFXSTREAM_AHB_DATASPACE_UNKNOWN;
+     }
++
++    // Whether the GPU's drawing in this buffer must be copied back to its memory for a CPU
++    // that reads it: only the host holds the drawing (dsa_cpu_readback.h).
++    virtual bool wantsCpuReadback(const native_handle_t* /*handle*/) { return false; }
++    // Copies the host's drawing over the buffer's memory. 0 when it did.
++    virtual int readBackForCpu(const native_handle_t* /*handle*/) { return -1; }
+ };
+ 
+ Gralloc* createPlatformGralloc(int32_t descriptor = -1);
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+index 98b394f..d0a98bd 100644
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+@@ -1109,6 +1109,7 @@ void ResourceTracker::unregister_VkDeviceMemory(VkDeviceMemory mem) {
+     auto& memInfo = it->second;
+ 
+ #ifdef VK_USE_PLATFORM_ANDROID_KHR
++    mCpuReadback.remove((uint64_t)mem);
+     if (memInfo.ahw) {
+         mGralloc->release(memInfo.ahw);
+     }
+@@ -1363,6 +1364,9 @@ void ResourceTracker::setDeviceMemoryInfo(VkDevice device, VkDeviceMemory memory
+     info.memoryTypeIndex = memoryTypeIndex;
+ #ifdef VK_USE_PLATFORM_ANDROID_KHR
+     info.ahw = (AHardwareBuffer*)ahw;
++    if (info.ahw && mGralloc->wantsCpuReadback(mGralloc->getNativeHandle(info.ahw))) {
++        mCpuReadback.add((uint64_t)memory, (uint64_t)device, info.ahw);
++    }
+ #endif
+     info.imported = imported;
+     info.vmoHandle = vmoHandle;
+@@ -1652,6 +1656,50 @@ void ResourceTracker::invalidateShadowedMemory(VkEncoder* enc, VkDevice device)
+     }
+ }
+ 
++void ResourceTracker::readBackForCpu(VkEncoder* enc, VkDevice device) {
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    std::vector<AHardwareBuffer*> buffers;
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        if (mCpuReadback.empty()) return;
++        // Each buffer stays alive while it is read, even if another thread frees its memory.
++        for (void* buffer : mCpuReadback.takePending((uint64_t)device)) {
++            AHardwareBuffer* ahb = static_cast<AHardwareBuffer*>(buffer);
++            AHardwareBuffer_acquire(ahb);
++            buffers.push_back(ahb);
++        }
++    }
++    if (buffers.empty()) return;
++    // The host answers once the device's work is done, so the ColorBuffers hold the drawing.
++    if (enc->vkDeviceWaitIdle(device, true /* do lock */) == VK_SUCCESS) {
++        for (AHardwareBuffer* ahb : buffers) {
++            mGralloc->readBackForCpu(mGralloc->getNativeHandle(ahb));
++        }
++    }
++    for (AHardwareBuffer* ahb : buffers) {
++        AHardwareBuffer_release(ahb);
++    }
++#else
++    (void)enc;
++    (void)device;
++#endif
++}
++
++void ResourceTracker::readBackImageForCpu(VkImage image) {
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    const native_handle_t* handle = nullptr;
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkImage.find(image);
++        if (it != info_VkImage.end()) handle = it->second.cpuReadbackHandle;
++    }
++    // The window system holds the buffer until the image is released to its consumer.
++    if (handle) mGralloc->readBackForCpu(handle);
++#else
++    (void)image;
++#endif
++}
++
+ uint32_t ResourceTracker::getStreamFeatures() const { return ResourceTracker::streamFeatureBits; }
+ 
+ bool ResourceTracker::supportsDeferredCommands() const {
+@@ -4586,6 +4634,10 @@ VkResult ResourceTracker::on_vkCreateImage(void* context, VkResult, VkDevice dev
+         info.hasExternalFormat = true;
+         info.externalFourccFormat = extFormatAndroidPtr->externalFormat;
+     }
++    if (anbInfoPtr && anbInfoPtr->handle &&
++        mGralloc->wantsCpuReadback((const native_handle_t*)anbInfoPtr->handle)) {
++        info.cpuReadbackHandle = (const native_handle_t*)anbInfoPtr->handle;
++    }
+ #endif  // VK_USE_PLATFORM_ANDROID_KHR
+ 
+     if (supportsCreateResourcesWithRequirements()) {
+@@ -4995,6 +5047,9 @@ VkResult ResourceTracker::on_vkGetFenceFdKHR(void* context, VkResult, VkDevice d
+     }
+ 
+     if (VK_NOT_READY == currentFenceStatus || VK_SUCCESS == currentFenceStatus) {
++        // Without a sync device the fence comes back signalled, so whoever waits on it reads
++        // the buffers at once: they must hold the drawing by then.
++        readBackForCpu(enc, device);
+         // Fence is valid. We also create a new sync fd for a signaled
+         // fence, because ANGLE will use the returned fd directly to
+         // implement eglDupNativeFenceFDANDROID, where -1 is only returned
+@@ -5133,6 +5188,9 @@ VkResult ResourceTracker::on_vkWaitForFences(void* context, VkResult, VkDevice d
+         if (result == VK_SUCCESS && !usingDirectMapping()) {
+             invalidateShadowedMemory(vkEncoder, device);
+         }
++        if (result == VK_SUCCESS) {
++            readBackForCpu(vkEncoder, device);
++        }
+         return result;
+     }
+ 
+@@ -5141,6 +5199,10 @@ VkResult ResourceTracker::on_vkWaitForFences(void* context, VkResult, VkDevice d
+         invalidateShadowedMemory(ResourceTracker::threadingCallbacks.vkEncoderGetFunc(hostConn),
+                                  device);
+     }
++    {
++        auto hostConn = ResourceTracker::threadingCallbacks.hostConnectionGetFunc();
++        readBackForCpu(ResourceTracker::threadingCallbacks.vkEncoderGetFunc(hostConn), device);
++    }
+     return VK_SUCCESS;
+ 
+ #else
+@@ -5567,7 +5629,22 @@ VkResult ResourceTracker::on_vkBindImageMemory2(void* context, VkResult, VkDevic
+         }
+     }
+ 
+-    return enc->vkBindImageMemory2(device, bindingCount, pBindInfos, true /* do lock */);
++    VkResult result = enc->vkBindImageMemory2(device, bindingCount, pBindInfos, true /* do lock */);
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    if (result == VK_SUCCESS) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        for (uint32_t i = 0; i < bindingCount; i++) {
++            const VkNativeBufferANDROID* anb =
++                vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
++            auto imageIt = info_VkImage.find(pBindInfos[i].image);
++            if (anb && anb->handle && imageIt != info_VkImage.end() &&
++                mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
++                imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
++            }
++        }
++    }
++#endif
++    return result;
+ }
+ 
+ VkResult ResourceTracker::on_vkBindImageMemory2KHR(void* context, VkResult result, VkDevice device,
+@@ -5892,6 +5969,8 @@ VkResult ResourceTracker::on_vkGetSemaphoreFdKHR(void* context, VkResult, VkDevi
+     bool getSyncFd = pGetFdInfo->handleType & VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
+ 
+     if (getSyncFd) {
++        // As for a fence: a CPU that waits on the sync fd reads what the GPU drew.
++        readBackForCpu(enc, device);
+         if (mCaps.params[kParamFencePassing] && mCaps.vulkanCapset.externalSync) {
+             uint64_t syncId = ++mAtomicId;
+             int64_t osHandle = -1;
+@@ -6369,6 +6448,16 @@ VkResult ResourceTracker::on_vkQueueSubmitTemplate(void* context, VkResult input
+         if (input_result != VK_SUCCESS) return input_result;
+     }
+     lock.lock();
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    // The submit may draw into any buffer of the device a CPU reads. A process with none
++    // does nothing more here.
++    if (!mCpuReadback.empty()) {
++        auto queueIt = info_VkQueue.find(queue);
++        if (queueIt != info_VkQueue.end()) {
++            mCpuReadback.submitted((uint64_t)queueIt->second.device);
++        }
++    }
++#endif
+     int externalFenceFdToSignal = -1;
+ 
+ #if defined(VK_USE_PLATFORM_ANDROID_KHR) || DETECT_OS_LINUX
+@@ -6422,14 +6511,17 @@ VkResult ResourceTracker::on_vkQueueWaitIdle(void* context, VkResult, VkQueue qu
+ 
+     // now done waiting, get the host's opinion
+     VkResult result = enc->vkQueueWaitIdle(queue, true /* do lock */);
+-    if (result == VK_SUCCESS && !usingDirectMapping()) {
++    if (result == VK_SUCCESS) {
+         VkDevice device = VK_NULL_HANDLE;
+         {
+             std::lock_guard<std::recursive_mutex> lock(mLock);
+             auto queueIt = info_VkQueue.find(queue);
+             if (queueIt != info_VkQueue.end()) device = queueIt->second.device;
+         }
+-        if (device != VK_NULL_HANDLE) invalidateShadowedMemory(enc, device);
++        if (device != VK_NULL_HANDLE && !usingDirectMapping()) {
++            invalidateShadowedMemory(enc, device);
++        }
++        if (device != VK_NULL_HANDLE) readBackForCpu(enc, device);
+     }
+     return result;
+ }
+@@ -7507,8 +7599,12 @@ VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(void* context, VkR
+     VkEncoder* enc = (VkEncoder*)context;
+ 
+     if (!mFeatureInfo.hasVulkanAsyncQsri) {
+-        return enc->vkQueueSignalReleaseImageANDROID(queue, waitSemaphoreCount, pWaitSemaphores,
+-                                                     image, pNativeFenceFd, true /* lock */);
++        VkResult result = enc->vkQueueSignalReleaseImageANDROID(
++            queue, waitSemaphoreCount, pWaitSemaphores, image, pNativeFenceFd, true /* lock */);
++        // The host answers once the image is drawn, before its consumer (an ImageReader that
++        // reads frames on the CPU) gets the buffer.
++        if (result == VK_SUCCESS) readBackImageForCpu(image);
++        return result;
+     }
+ 
+     {
+@@ -7522,6 +7618,18 @@ VkResult ResourceTracker::on_vkQueueSignalReleaseImageANDROID(void* context, VkR
+ 
+     enc->vkQueueSignalReleaseImageANDROIDAsyncGOOGLE(queue, waitSemaphoreCount, pWaitSemaphores,
+                                                      image, true /* lock */);
++    {
++        bool readBack = false;
++        {
++            std::lock_guard<std::recursive_mutex> lock(mLock);
++            auto it = info_VkImage.find(image);
++            readBack = it != info_VkImage.end() && it->second.cpuReadbackHandle;
++        }
++        // This release answers before the image is drawn; a CPU reader needs the drawing.
++        if (readBack && enc->vkQueueWaitIdle(queue, true /* do lock */) == VK_SUCCESS) {
++            readBackImageForCpu(image);
++        }
++    }
+ 
+     std::lock_guard<std::recursive_mutex> lock(mLock);
+     VkResult result;
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+index 64e33d2..9849b97 100644
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+@@ -73,6 +73,7 @@ typedef uint64_t zx_koid_t;
+ #include "AndroidHardwareBuffer.h"
+ #include "gfxstream/guest/GfxStreamGralloc.h"
+ #include <android/hardware_buffer.h>
++#include "dsa_cpu_readback.h"
+ #endif
+ 
+ #if GFXSTREAM_ENABLE_GUEST_GOLDFISH
+@@ -552,6 +553,11 @@ class ResourceTracker {
+     bool usingDirectMapping() const;
+     void flushShadowedMemory(VkEncoder* enc, VkDevice device);
+     void invalidateShadowedMemory(VkEncoder* enc, VkDevice device);
++    // Copies what the GPU drew into the device's buffers a CPU reads back to their memory
++    // (dsa_cpu_readback.h), once the device's work is done.
++    void readBackForCpu(VkEncoder* enc, VkDevice device);
++    // The same for one window image, whose drawing the host has finished.
++    void readBackImageForCpu(VkImage image);
+     uint32_t getStreamFeatures() const;
+     uint32_t getApiVersionFromInstance(VkInstance instance);
+     uint32_t getApiVersionFromDevice(VkDevice device);
+@@ -800,6 +806,8 @@ class ResourceTracker {
+         bool hasExternalFormat = false;
+         unsigned externalFourccFormat = 0;
+         std::vector<int> pendingQsriSyncFds;
++        // The window buffer the image draws into, when a CPU reads what it draws.
++        const native_handle_t* cpuReadbackHandle = nullptr;
+ #endif
+ #ifdef VK_USE_PLATFORM_FUCHSIA
+         bool isSysmemBackedMemory = false;
+@@ -912,6 +920,8 @@ class ResourceTracker {
+ 
+ #if defined(VK_USE_PLATFORM_ANDROID_KHR)
+     std::unique_ptr<gfxstream::Gralloc> mGralloc = nullptr;
++    // The imported buffers a CPU reads what the GPU draws into, held under mLock.
++    dsa::CpuReadbackSet mCpuReadback;
+ #endif
+ 
+     std::unique_ptr<gfxstream::SyncHelper> mSyncHelper = nullptr;

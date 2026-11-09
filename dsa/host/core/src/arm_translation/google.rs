@@ -21,8 +21,9 @@
 //! ```
 //!
 //! Nothing 32-bit is taken: the guest has no 32-bit zygote. Nor is the image's init script for
-//! the translator: the guest's own registers the binfmt_misc rules once the package is laid
-//! over `/system`.
+//! the translator: the guest's own registers the binfmt_misc rules once it has bound the
+//! package's folders onto its own empty ones. It binds `system/bin` onto
+//! `/system/bin/dsa-arm-translation`, so each rule taken names its runner there ([`RUNNERS`]).
 
 mod disk;
 mod ext4;
@@ -399,7 +400,10 @@ fn take_folder<R: Read + Seek>(
                 if taken.bytes > MAX_TAKEN {
                     return Err("the translator's files are larger than any translator".into());
                 }
-                let data = fs.read(&child)?;
+                let mut data = fs.read(&child)?;
+                if child_path.starts_with("etc/binfmt_misc/") {
+                    data = bound_rule(&data)?;
+                }
                 taken.tree.file(&target, child.permissions(), data)?;
             }
             Kind::Link if wanted(&child_path) => {
@@ -422,8 +426,40 @@ fn interpreter(rule: &[u8]) -> Option<String> {
     program.strip_prefix('/').map(str::to_string)
 }
 
-/// Checks that what was taken is a working translator: the bridge, the ARM64 libraries, both
-/// binfmt_misc rules and the program they start.
+/// Where the guest binds the package's `system/bin`: the runners the rules start are there. A
+/// program under `/system/bin/` gets the system section of the linker configuration, which
+/// finds the bridge's libraries, and nothing is laid over `/system/bin` itself.
+pub const RUNNERS: &str = "/system/bin/dsa-arm-translation/";
+
+/// The binfmt_misc rule `rule` (`:name:type:offset:magic:mask:interpreter:flags`) with the
+/// runner it starts where the guest binds it ([`RUNNERS`]) instead of in `/system/bin`.
+pub fn bound_rule(rule: &[u8]) -> Result<Vec<u8>, String> {
+    let text = String::from_utf8_lossy(rule);
+    let ending = if text.ends_with('\n') { "\n" } else { "" };
+    let mut fields: Vec<String> = text
+        .trim_end_matches('\n')
+        .split(':')
+        .map(str::to_string)
+        .collect();
+    if fields.len() < 8 || !fields[0].is_empty() {
+        return Err("the image's binfmt_misc rule is not one the kernel takes".into());
+    }
+    let program = fields[6].clone();
+    let name = program
+        .strip_prefix(RUNNERS)
+        .or_else(|| program.strip_prefix("/system/bin/"))
+        .filter(|name| !name.is_empty() && !name.contains('/'))
+        .ok_or_else(|| {
+            format!("the image's binfmt_misc rule starts {program}, which is not in system/bin")
+        })?;
+    fields[6] = format!("{RUNNERS}{name}");
+    Ok(format!("{}{ending}", fields.join(":")).into_bytes())
+}
+
+/// Checks that what was taken is a working translator: the bridge, the ARM64 libraries,
+/// linker and app_process, the ARM64 linker's configuration, both binfmt_misc rules and the
+/// program they start. The guest binds each of those onto a place of its own, so a package
+/// without one would leave that place empty.
 fn check_taken(taken: &Taken, rules: &[Vec<u8>]) -> Result<(), String> {
     let files = taken.tree.files();
     let has = |path: &str| files.iter().any(|file| file == path);
@@ -432,9 +468,13 @@ fn check_taken(taken: &Taken, rules: &[Vec<u8>]) -> Result<(), String> {
     if !has(&bridge) {
         return Err(missing(&bridge));
     }
-    let in_arm64 = |file: &String| file.starts_with("system/lib64/arm64/");
-    if !files.iter().any(in_arm64) {
-        return Err(missing("system/lib64/arm64"));
+    for folder in ["system/lib64/arm64/", "system/bin/arm64/"] {
+        if !files.iter().any(|file| file.starts_with(folder)) {
+            return Err(missing(folder.trim_end_matches('/')));
+        }
+    }
+    if !has("system/etc/ld.config.arm64.txt") {
+        return Err(missing("system/etc/ld.config.arm64.txt"));
     }
     for rule in ["arm64_exe", "arm64_dyn"] {
         let path = format!("system/etc/binfmt_misc/{rule}");
@@ -1003,7 +1043,40 @@ mod tests {
         assert_eq!(at(BRIDGE_LINK).data, b"libndk_translation.so");
         assert_eq!(at("system/lib64/arm64/libc.so").data, b"arm64 libc");
         assert_eq!(at(RUNNER).mode, 0o100_755);
+        // The rules start the runner where the guest binds the package's system/bin.
+        let runner =
+            "/system/bin/dsa-arm-translation/ndk_translation_program_runner_binfmt_misc_arm64";
+        for rule in [
+            "system/etc/binfmt_misc/arm64_exe",
+            "system/etc/binfmt_misc/arm64_dyn",
+        ] {
+            let text = String::from_utf8_lossy(&at(rule).data).into_owned();
+            assert_eq!(text.split(':').nth(6), Some(runner), "{rule}: {text}");
+            assert!(text.ends_with(":P\n"), "{rule}: {text}");
+        }
         let _ = fs::remove_dir_all(out.parent().unwrap());
+    }
+
+    #[test]
+    fn fr25_a_rule_starts_its_runner_where_the_guest_binds_it() {
+        let bound = bound_rule(RULE_EXE).unwrap();
+        let expected = String::from_utf8_lossy(RULE_EXE)
+            .replace("/system/bin/", "/system/bin/dsa-arm-translation/");
+        assert_eq!(String::from_utf8_lossy(&bound), expected);
+        // Bound once is bound for good, and a rule without its newline keeps none.
+        assert_eq!(bound_rule(&bound).unwrap(), bound);
+        let bare = b":a:M::\\x7f::/system/bin/runner:P";
+        assert_eq!(
+            bound_rule(bare).unwrap(),
+            b":a:M::\\x7f::/system/bin/dsa-arm-translation/runner:P".to_vec()
+        );
+        for bad in [
+            &b":a:M::\\x7f::/vendor/bin/runner:P\n"[..],
+            b":a:M::\\x7f::/system/bin/arm64/runner:P\n",
+            b"a:b",
+        ] {
+            assert!(bound_rule(bad).is_err(), "{}", String::from_utf8_lossy(bad));
+        }
     }
 
     #[test]

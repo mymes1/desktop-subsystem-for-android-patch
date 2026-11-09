@@ -138,7 +138,7 @@ use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
 };
-use crate::ime::{ImeCursor, ImeEvent};
+use crate::ime::{ImeCursor, ImeEditor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};
 use crate::keys::KeyEvent;
 use crate::links::{self, LinkGate};
@@ -149,6 +149,8 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
+use crate::root_approval::RootApproval;
+use crate::root_elevation::{AppLevel, Level};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -701,6 +703,59 @@ struct Shared {
     android_files_token: Mutex<Option<String>>,
     /// Says the device name the guest's agent is given each time it connects.
     device_name: Mutex<Option<DeviceNameSource>>,
+    /// The user's root elevation settings, and whether the running boot started with the
+    /// feature on.
+    root_config: Mutex<RootElevationNow>,
+    /// Who decides the su calls of the guest's apps, once the platform says, with a way to
+    /// send each decision from the thread that waits for the administrator.
+    root_approval: Mutex<Option<(Arc<RootApproval>, Sender<Command>)>>,
+}
+
+/// The root elevation settings as the guest is told them.
+#[derive(Debug, Clone, Default)]
+struct RootElevationNow {
+    /// The computer's switch, as it stands now.
+    on: bool,
+    /// The apps with a level other than off.
+    apps: Vec<AppLevel>,
+    /// The switch as it stood when the running boot started; `None` while no boot runs. The
+    /// kernel's su guard and the relay are set up at boot, so a boot that started with the
+    /// feature off keeps it off until the next start, and is told nothing.
+    boot_on: Option<bool>,
+    /// Whether the switch was turned off while the running boot runs. Off applies at once,
+    /// and the boot stays off until the next start even when the switch is turned on again.
+    off_since_boot: bool,
+    /// What the running boot was last told, so an unchanged config is not sent again.
+    sent: Option<control::RootElevationConfig>,
+}
+
+impl RootElevationNow {
+    /// What the running boot's daemon is told now: `None` when the boot started with the
+    /// feature off, or no boot runs. Turning the switch off applies at once (su is hidden from
+    /// every app); turning it on applies from the next start.
+    fn config(&self) -> Option<control::RootElevationConfig> {
+        if self.boot_on != Some(true) {
+            return None;
+        }
+        Some(control::RootElevationConfig {
+            enabled: self.on && !self.off_since_boot,
+            apps: self
+                .apps
+                .iter()
+                .map(|app| control::RootApp {
+                    package: app.package.clone(),
+                    // The guest knows each package's uid; the host does not.
+                    uid: 0,
+                    level: match app.level {
+                        Level::Off => control::RootLevel::Off,
+                        Level::Ask => control::RootLevel::Ask,
+                        Level::Remember => control::RootLevel::Remember,
+                    }
+                    .into(),
+                })
+                .collect(),
+        })
+    }
 }
 
 /// Opens a stream to the guest's adbd in the VM with the given runtime ID: the platform's
@@ -817,6 +872,30 @@ impl Shared {
                 Vec::new()
             },
         }))
+    }
+
+    /// The root elevation config the running boot's daemon has yet to be told: `None` when
+    /// it has been told this one already, or is told nothing (see [`RootElevationNow`]).
+    /// `again` forgets what was sent, for a daemon or an agent that connected anew.
+    fn root_elevation_body(&self, again: bool) -> Option<Body> {
+        let mut now = self.root_config.lock().unwrap_or_else(|e| e.into_inner());
+        if again {
+            now.sent = None;
+        }
+        let config = now.config()?;
+        if now.sent.as_ref() == Some(&config) {
+            return None;
+        }
+        now.sent = Some(config.clone());
+        Some(Body::RootElevationConfig(config))
+    }
+
+    /// Notes whether a boot runs, and with the switch as it stands as that boot's.
+    fn root_elevation_boot(&self, running: bool) {
+        let mut now = self.root_config.lock().unwrap_or_else(|e| e.into_inner());
+        now.boot_on = running.then_some(now.on);
+        now.off_since_boot = false;
+        now.sent = None;
     }
 
     /// What the guest's daemon is told to serve its shared storage, while the host shows it.
@@ -1214,6 +1293,8 @@ impl Session {
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
             device_name: Mutex::new(None),
+            root_config: Mutex::new(RootElevationNow::default()),
+            root_approval: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -1467,6 +1548,33 @@ impl Session {
             if let Some(body) = self.shared.file_sharing_body() {
                 send_quietly(&self.shared, &self.commands, body);
             }
+        }
+    }
+
+    /// Sets the user's root elevation settings: the computer's switch and the apps with a
+    /// level other than off. The running Android is told at once, so a changed level applies
+    /// without a restart; so does turning the switch off. Turning it on applies from the next
+    /// start of Android, as the kernel's su guard and the relay are set up at boot. Each boot
+    /// is told again once its agent connects.
+    pub fn set_root_elevation_config(&self, on: bool, apps: Vec<AppLevel>) {
+        {
+            let mut now = self
+                .shared
+                .root_config
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            now.on = on;
+            if !on && now.boot_on.is_some() {
+                now.off_since_boot = true;
+            }
+            now.apps = apps
+                .into_iter()
+                .filter(|app| app.level != Level::Off)
+                .collect();
+            now.apps.sort_by(|a, b| a.package.cmp(&b.package));
+        }
+        if let Some(body) = self.shared.root_elevation_body(false) {
+            send_quietly(&self.shared, &self.commands, body);
         }
     }
 
@@ -2391,6 +2499,42 @@ impl Session {
     pub fn set_system_settings(&self, settings: SystemSettings) {
         let input = SystemInput::Settings(settings.checked());
         let _ = self.commands.send(Command::System(input));
+    }
+
+    /// Has `approval` decide the su calls of the guest's apps: the host's administrator prompt
+    /// and the host log. Without it, every su call is refused at once. Its policy starts again
+    /// at each start of Android, which clears every app's grace.
+    pub fn set_root_approval(&self, approval: Arc<RootApproval>) {
+        *self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some((approval, self.commands.clone()));
+    }
+
+    /// Asks the computer's administrator, through the same prompt as su calls, to let
+    /// `package` keep root without asking each time. The prompt shows the app's name and icon
+    /// as the guest last listed them. `Err` says why not, including when this host has no
+    /// prompt to ask through.
+    pub fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        let approval = self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(approval, _)| Arc::clone(approval));
+        let Some(approval) = approval else {
+            return Err("this computer cannot ask its administrator for root approval".into());
+        };
+        let app = self
+            .shared
+            .installed_app(package)
+            .unwrap_or_else(|| AppInfo {
+                package_name: package.to_string(),
+                ..Default::default()
+            });
+        approval.approve_keep_root(app)
     }
 
     /// Gives the guest's agent the device name `source` says each time it connects, which the
@@ -4269,6 +4413,48 @@ impl Worker {
         self.post_notice(native_abi::Notice::of_outcome(&outcome).notification(&app));
     }
 
+    /// Decides an app's su call on a thread of its own, since the host's administrator may
+    /// take up to a minute to answer, and sends the decision back to the guest's su relay. A
+    /// host that cannot ask an administrator refuses at once, so su does not wait for nothing.
+    fn su_request(&mut self, request: control::SuRequest) {
+        let approval = self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some((approval, commands)) = approval else {
+            eprintln!(
+                "root: refused {}'s su call (request {}): this host cannot ask its \
+                 administrator",
+                request.package, request.request_id
+            );
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id: request.request_id,
+                approved: false,
+                reason: "this computer cannot ask its administrator for root approval".to_string(),
+            }));
+            return;
+        };
+        let app = self.shared.installed_app(&request.package);
+        let shared = Arc::clone(&self.shared);
+        let request_id = request.request_id;
+        let spawned = thread::Builder::new()
+            .name("dsa-su-approval".into())
+            .spawn(move || {
+                let decision = approval.decide(&request, app.as_ref());
+                send_quietly(&shared, &commands, Body::SuDecision(decision));
+            });
+        if let Err(error) = spawned {
+            eprintln!("root: refused su request {request_id}: no thread to ask on: {error}");
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id,
+                approved: false,
+                reason: "the computer could not ask its administrator".to_string(),
+            }));
+        }
+    }
+
     /// Takes a notification the guest posted or changed, and hands it to the watchers when its
     /// turn comes. One the same as what the watchers have is not handed again.
     fn guest_notification(&mut self, message: control::GuestNotification) {
@@ -5124,6 +5310,11 @@ impl Worker {
                     on: false,
                 }));
             }
+            // With the agent there, the package manager knows every app's uid, so the daemon
+            // can set up the kernel's su guard for the user's root elevation settings.
+            if let Some(body) = self.shared.root_elevation_body(true) {
+                self.send_body(body);
+            }
         } else {
             self.agent_lost_at = Some(now);
             // The tasks are what the agent reported, and the agent goes when Android's framework
@@ -5334,6 +5525,8 @@ impl Worker {
                 return;
             }
         };
+        // The boot takes the root elevation switch as it stands now.
+        self.shared.root_elevation_boot(true);
         let started = self.launcher.start(&secret);
         *self
             .shared
@@ -5359,6 +5552,15 @@ impl Worker {
         });
         let started = Instant::now();
         self.started_at = started;
+        // A new boot of Android: the root policy is read again and no app keeps a grace.
+        if let Some((approval, _)) = &*self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+        {
+            approval.restart();
+        }
         self.next_prerequisite_check = started + PREREQUISITE_POLL;
         let deadline = started + self.config.connect_timeout;
         loop {
@@ -5661,6 +5863,7 @@ impl Worker {
                         })
                         .collect(),
                     can_go_back: update.can_go_back,
+                    handles_density_change: update.handles_density_change,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {
@@ -5739,6 +5942,16 @@ impl Worker {
                     },
                 });
             }
+            Some(Body::ImeEditor(editor)) => match ImeEditor::from_control(&editor) {
+                Ok((task_id, editor)) => self
+                    .shared
+                    .publish_task(TaskEvent::ImeEditor { task_id, editor }),
+                Err(why) => eprintln!(
+                    "text input: dropped the agent's description of the editor in task {}: \
+                     {why}",
+                    editor.task_id
+                ),
+            },
             Some(Body::GuestMemory(memory)) => {
                 let memory = GuestMemory::from_control(memory);
                 self.shared.set_guest_memory(Some((memory, Instant::now())));
@@ -5898,6 +6111,7 @@ impl Worker {
             Some(Body::LocationRequest(request)) => {
                 self.shared.set_location(Wanted::from_control(&request))
             }
+            Some(Body::SuRequest(request)) => self.su_request(request),
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::DisplayRefresh(_))
@@ -5913,6 +6127,8 @@ impl Worker {
             | Some(Body::ImeComposition(_))
             | Some(Body::ImeCommit(_))
             | Some(Body::ImeDeleteSurrounding(_))
+            | Some(Body::ImeSetSelection(_))
+            | Some(Body::ImeSetComposingRegion(_))
             | Some(Body::LinkHandling(_))
             | Some(Body::OpenFile(_))
             | Some(Body::FileChunk(_))
@@ -5958,6 +6174,8 @@ impl Worker {
             | Some(Body::LogDump(_))
             | Some(Body::CollectDiagnostics(_))
             | Some(Body::ClockProbe(_))
+            | Some(Body::RootElevationConfig(_))
+            | Some(Body::SuDecision(_))
             | Some(Body::AudioOutputOpen(_))
             | Some(Body::AudioOutputReady(_))
             | Some(Body::AudioPcm(_))
@@ -6064,6 +6282,7 @@ impl Worker {
             .boot_secret
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
+        self.shared.root_elevation_boot(false);
         match self.launcher.stop(self.config.stop_timeout) {
             Ok(()) => {
                 let reason = reason(self.launcher.as_mut());

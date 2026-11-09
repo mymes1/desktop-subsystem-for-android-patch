@@ -56,6 +56,7 @@ object Messages {
             }
         }
         update.setCanGoBack(task.canGoBack)
+        update.setHandlesDensityChange(task.handlesDensityChange)
         return Envelope.newBuilder().setTaskUpdated(update).build().toByteArray()
     }
 

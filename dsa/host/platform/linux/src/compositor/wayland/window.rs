@@ -9,6 +9,7 @@ use dsa_host_core::compositor::caption::{
 use dsa_host_core::compositor::task_windows::WindowChange;
 use dsa_host_core::compositor::window_hosts::FromHost;
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, WindowMode};
+use dsa_host_core::compositor::window_sizing::to_window_size;
 use dsa_host_core::ime::ImeCursor;
 use dsa_host_core::input::PointerMapper;
 use dsa_host_core::keys::KeyMapper;
@@ -250,13 +251,28 @@ impl State {
                 height,
                 max,
                 min,
+                scale,
             } => {
+                let mut rescaled = false;
                 if let Some(window) = self.windows.get_mut(task_id) {
                     window.model.task = (*width, *height);
                     window.model.max = *max;
                     window.model.min = *min;
+                    rescaled = window.model.frame_scale != *scale;
+                    window.model.frame_scale = *scale;
                     window.limits();
                 }
+                // The last frame is shown again at the new scale: a task that keeps its
+                // density and size may draw nothing new for a move.
+                if rescaled {
+                    self.redraw(*task_id);
+                }
+            }
+            WindowChange::ImeEditor { task_id, editor } => {
+                if let Some(window) = self.windows.get_mut(task_id) {
+                    window.ime.describe(editor.clone());
+                }
+                self.describe_editor(*task_id);
             }
             WindowChange::ImeCursor { task_id, cursor } => {
                 if let Some(window) = self.windows.get_mut(task_id) {
@@ -612,15 +628,23 @@ impl Window {
             viewport.set_source(-1.0, -1.0, -1.0, -1.0);
             viewport.set_destination(-1, -1);
         }
-        let frame = match self.waiting.take() {
-            Some(frame) => frame,
+        let (frame, blank) = match self.waiting.take() {
+            Some(frame) => (frame, false),
             None if self.last.is_none() => {
                 let (width, height) = self.model.shown;
-                Frame::solid(width, height, BLANK)
+                (Frame::solid(width, height, BLANK), true)
             }
             None => return,
         };
-        let size = (frame.width, frame.height);
+        // A task that keeps its density on a monitor of another scale is drawn at the
+        // window's scale; a blank is the window's size already.
+        let scale = self.model.frame_scale;
+        let mut shown = if blank || scale == (1, 1) {
+            frame.clone()
+        } else {
+            frame.scaled(to_window_size((frame.width, frame.height), scale))
+        };
+        let size = (shown.width, shown.height);
         self.buffers
             .retain(|buffer| buffer.size == size || buffer.is_busy());
         let free = self
@@ -643,11 +667,10 @@ impl Window {
             }
         };
         self.model.frame_shown(size);
-        let mut shown = frame.clone();
         if self.model.has_caption() {
             // The band takes the app's top color when the app leaves it empty.
             let band = self.model.caption_height();
-            let fill = frame_band_fill(&frame.pixels, frame.width, frame.height, band);
+            let fill = frame_band_fill(&shown.pixels, shown.width, shown.height, band);
             let (layout, pixels) = self.band_pixels(text, fill);
             shown.blend(pixels, (layout.width, layout.height), (0, 0));
         }

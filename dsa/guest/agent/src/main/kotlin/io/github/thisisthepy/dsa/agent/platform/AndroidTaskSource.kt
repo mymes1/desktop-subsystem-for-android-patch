@@ -5,6 +5,7 @@ import android.app.ActivityTaskManager
 import android.app.TaskStackListener
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import io.github.thisisthepy.dsa.agent.Log
@@ -13,9 +14,10 @@ import io.github.thisisthepy.dsa.agent.tasks.StatusBarAppearance
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskKind
 import io.github.thisisthepy.dsa.agent.tasks.TaskOrientation
-import io.github.thisisthepy.dsa.agent.tasks.hidesBothSystemBars
+import io.github.thisisthepy.dsa.agent.tasks.asksForFullScreen
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
+import io.github.thisisthepy.dsa.agent.tasks.handlesDensityChange
 
 /**
  * The guest's running tasks, from the activity task manager.
@@ -36,6 +38,7 @@ class AndroidTaskSource(
 ) : TaskSource {
     private val activityManager = context.getSystemService(ActivityManager::class.java)
     private val fields = TaskFields(log)
+    private val themes = FullScreenThemes(context, log)
 
     // Held so it is not collected while the framework calls it.
     private var listener: TaskStackListener? = null
@@ -61,6 +64,7 @@ class AndroidTaskSource(
     private fun read(info: ActivityManager.RunningTaskInfo): TaskSnapshot {
         val root = info.baseActivity ?: info.baseIntent?.component ?: info.topActivity
         val smallest = fields.minSize(info, context.resources.configuration.densityDpi)
+        val top = activityInfo(info.topActivity ?: root)
         return TaskSnapshot(
             taskId = info.taskId,
             kind = if (fields.activityType(info) == ACTIVITY_TYPE_STANDARD) TaskKind.APP else TaskKind.OTHER,
@@ -75,16 +79,37 @@ class AndroidTaskSource(
             statusBar = fields.statusBar(info),
             statusBarColor = fields.statusBarColor(info),
             orientation = fields.orientation(info),
-            // Full screen either way an app asks for it: leaving freeform for the fullscreen
-            // windowing mode, or hiding both its status and navigation bars.
-            fullscreen = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN ||
-                hidesBothSystemBars(fields.requestedVisibleTypes(info)),
+            // Full screen whichever way an app asks for it: leaving freeform for the fullscreen
+            // windowing mode, hiding both its status and navigation bars, or a full screen
+            // theme, which is known before the activity has a window.
+            fullscreen = asksForFullScreen(
+                fullscreenMode = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN,
+                requestedVisibleTypes = fields.requestedVisibleTypes(info),
+                fullscreenTheme = themes.asks(top),
+            ),
             pictureInPicture = fields.windowingMode(info) == WINDOWING_MODE_PINNED,
             transparentCaption = fields.transparentCaption(info),
             // The task's first activity is at the bottom of its stack; past it, Back has
             // somewhere to go.
             canGoBack = info.numActivities > 1,
+            // Whether its manifest says it handles a change of density itself
+            // (ActivityInfo.configChanges includes density): Android relaunches any other
+            // activity whose density changes. False when the package manager does not know it.
+            handlesDensityChange = top?.let { handlesDensityChange(it.configChanges) } ?: false,
         )
+    }
+
+    /**
+     * The manifest entry of [activity], read each time, so an app updated under a running task
+     * is read as it is now. Null when the package manager does not know the activity.
+     */
+    private fun activityInfo(activity: ComponentName?): ActivityInfo? {
+        if (activity == null) return null
+        return try {
+            context.packageManager.getActivityInfo(activity, 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            null
+        }
     }
 
     /** The task's own title, else its root activity's label, else its app's, else the package. */

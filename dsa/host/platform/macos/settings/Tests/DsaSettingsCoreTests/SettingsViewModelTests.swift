@@ -238,4 +238,23 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(Format.size(3 * 1024 * 1024 / 2, locale: Locale(identifier: "de_DE")), "1,50 GB")
         XCTAssertEqual(Format.fill("{0} of {1}", ["3", "7"]), "3 of 7")
     }
+
+    // The card once showed "dsa status | dsa settings | dsa memory" on one line, which reads as
+    // a shell pipeline and could not be copied. Each command is its own row with a copy button.
+    func test_fr17_the_command_line_card_offers_one_copy_button_per_command() throws {
+        XCTAssertEqual(SettingsViewModel.commandLineCommands, ["dsa status", "dsa settings", "dsa memory"])
+        for command in SettingsViewModel.commandLineCommands {
+            XCTAssertFalse(command.contains(" | "), "\(command) reads as a pipeline")
+        }
+        let package = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let page = try String(contentsOf: package.appendingPathComponent("Sources/DsaSettings/AndroidPages.swift"), encoding: .utf8)
+        XCTAssertFalse(page.contains(" | dsa "), "the Advanced page still shows the commands as one line")
+        XCTAssertTrue(page.contains("ForEach(SettingsViewModel.commandLineCommands, id: \\.self) { command in"))
+        XCTAssertTrue(page.contains("CommandRow(command: command)"))
+        XCTAssertTrue(page.contains("CopyButton(text: vm.adbConnect)"))
+        let components = try String(contentsOf: package.appendingPathComponent("Sources/DsaSettings/Components.swift"), encoding: .utf8)
+        XCTAssertTrue(components.contains("CopyButton(text: command)"))
+        XCTAssertTrue(components.contains(".help(T(\"CopyButton.ToolTip\"))"))
+        XCTAssertTrue(components.contains("copied ? \"checkmark\" : \"doc.on.doc\""))
+    }
 }

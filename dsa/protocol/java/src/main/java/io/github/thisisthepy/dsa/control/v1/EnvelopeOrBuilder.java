@@ -217,6 +217,39 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.ImeCursor getImeCursor();
 
   /**
+   * <code>.dsa.control.v1.ImeEditor ime_editor = 408;</code>
+   * @return Whether the imeEditor field is set.
+   */
+  boolean hasImeEditor();
+  /**
+   * <code>.dsa.control.v1.ImeEditor ime_editor = 408;</code>
+   * @return The imeEditor.
+   */
+  io.github.thisisthepy.dsa.control.v1.ImeEditor getImeEditor();
+
+  /**
+   * <code>.dsa.control.v1.ImeSetSelection ime_set_selection = 409;</code>
+   * @return Whether the imeSetSelection field is set.
+   */
+  boolean hasImeSetSelection();
+  /**
+   * <code>.dsa.control.v1.ImeSetSelection ime_set_selection = 409;</code>
+   * @return The imeSetSelection.
+   */
+  io.github.thisisthepy.dsa.control.v1.ImeSetSelection getImeSetSelection();
+
+  /**
+   * <code>.dsa.control.v1.ImeSetComposingRegion ime_set_composing_region = 410;</code>
+   * @return Whether the imeSetComposingRegion field is set.
+   */
+  boolean hasImeSetComposingRegion();
+  /**
+   * <code>.dsa.control.v1.ImeSetComposingRegion ime_set_composing_region = 410;</code>
+   * @return The imeSetComposingRegion.
+   */
+  io.github.thisisthepy.dsa.control.v1.ImeSetComposingRegion getImeSetComposingRegion();
+
+  /**
    * <code>.dsa.control.v1.RequestGuestMemory request_guest_memory = 20;</code>
    * @return Whether the requestGuestMemory field is set.
    */
@@ -512,6 +545,39 @@ public interface EnvelopeOrBuilder extends
    * @return The googleDeviceId.
    */
   io.github.thisisthepy.dsa.control.v1.GoogleDeviceId getGoogleDeviceId();
+
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 411;</code>
+   * @return Whether the rootElevationConfig field is set.
+   */
+  boolean hasRootElevationConfig();
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 411;</code>
+   * @return The rootElevationConfig.
+   */
+  io.github.thisisthepy.dsa.control.v1.RootElevationConfig getRootElevationConfig();
+
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 412;</code>
+   * @return Whether the suRequest field is set.
+   */
+  boolean hasSuRequest();
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 412;</code>
+   * @return The suRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.SuRequest getSuRequest();
+
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 413;</code>
+   * @return Whether the suDecision field is set.
+   */
+  boolean hasSuDecision();
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 413;</code>
+   * @return The suDecision.
+   */
+  io.github.thisisthepy.dsa.control.v1.SuDecision getSuDecision();
 
   /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>

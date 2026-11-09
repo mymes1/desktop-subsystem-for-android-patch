@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
-use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
+use dsa_host_core::guest_display::{display_or_smallest, with_display_density, with_display_size};
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid, UserAndroids};
@@ -58,7 +58,7 @@ use crate::host_config::{local_app_data, HostConfig};
 use crate::host_memory::WindowsHostMemory;
 use crate::https::{UrlFetch, WinHttpFetch};
 use crate::hvsocket::HvSocketListener;
-use crate::monitors::recorded_display;
+use crate::monitors::{recorded_density, recorded_display};
 use crate::pipe::{NamedPipeListener, DEFAULT_PIPE_SDDL};
 use crate::render_gpu::previous_render_gpu;
 use crate::setup::SetupInstaller;
@@ -79,15 +79,20 @@ pub struct Updates {
     pub check_now: Arc<CheckNow>,
 }
 
-/// Sizes the guest's display for the monitors the user's session recorded. This process runs
-/// in session 0 and cannot see them itself. Without a record the display is the smallest
-/// square, so a window can still be taller than the image's default display.
+/// Sizes the guest's display for the monitors the user's session recorded, and gives it the
+/// main monitor's density, which every app starts at. This process runs in session 0 and
+/// cannot see them itself. Without a record the display is the smallest square, so a window
+/// can still be taller than the image's default display, at the density of a 100% monitor.
 fn follow_monitors(vm: &mut AndroidVmConfig, sid: &str) {
-    let display = local_app_data(sid)
-        .ok()
-        .and_then(|dir| recorded_display(&dir));
+    let dir = local_app_data(sid).ok();
+    let display = dir.as_deref().and_then(recorded_display);
     let size = display.unwrap_or_else(|| display_or_smallest(None));
     vm.kernel_cmdline = with_display_size(&vm.kernel_cmdline, size);
+    let density = match dir.as_deref() {
+        Some(dir) => recorded_density(dir),
+        None => dsa_host_core::guest_display::boot_density(None),
+    };
+    vm.kernel_cmdline = with_display_density(&vm.kernel_cmdline, density);
 }
 
 /// The kernel command line setting that turns the guest's input trace on.
@@ -467,6 +472,15 @@ pub fn create_user_android(
         trace_on,
         Arc::new(PerformanceCounterClock),
         Arc::new(move |line: &str| eprintln!("{user_name}: {line}")),
+    )));
+    // An app's su call is decided by the user's settings, and asked of the computer's
+    // administrator through UAC under the app's own name and icon; each decision goes to this
+    // log.
+    session.set_root_approval(Arc::new(dsa_host_core::root_approval::RootApproval::new(
+        sid,
+        settings_store(config),
+        Arc::new(crate::root_approval::UacPrompt::new(sid)),
+        dsa_host_core::root_approval::service_log(),
     )));
     let session = Arc::new(session);
     {
@@ -982,6 +996,8 @@ where
                         eprintln!("{factory_build}: developer mode for {sid}: {why}");
                     }
                 }
+                // Root elevation: the computer's switch, and the level of each of their apps.
+                dsa_host_core::root_elevation::apply(android.as_ref(), factory_store.as_ref(), sid);
             }
             Err(why) => eprintln!("{factory_build}: no Android for {sid}: {why}"),
         }
@@ -1068,11 +1084,15 @@ where
         service = service.with_android_version(source);
     }
     // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
-    // service's own temporary folder.
-    service = service.with_gapps(dsa_host_core::gapps::Source::new(
-        Arc::new(UrlFetch::default()),
-        config.machine_root().tmp().join("gapps"),
-    ));
+    // service's own temporary folder, and the installed package kept in the machine's DSA
+    // folder, which outlasts the service's restarts and updates.
+    service = service.with_gapps(
+        dsa_host_core::gapps::Source::new(
+            Arc::new(UrlFetch::default()),
+            config.machine_root().tmp().join("gapps"),
+        )
+        .with_package_dir(config.machine_root().gapps()),
+    );
     if let Some(versions) = version_store {
         service = service.with_android_versions(Arc::new(versions));
     }
@@ -1082,10 +1102,19 @@ where
             .as_ref()
             .map(|update| update.check_interval_hours.max(1))
             .unwrap_or(24);
+        // Setup replaces this program's file; the service reads its version from there and
+        // restarts into it when it is newer than this process.
+        let installer = match std::env::current_exe() {
+            Ok(program) => SetupInstaller::for_service(program, Arc::clone(&stop)),
+            Err(error) => {
+                eprintln!("{build}: this service cannot find its own program file: {error}");
+                SetupInstaller::default()
+            }
+        };
         let updates = ProgramUpdates::new(
             settings,
             Box::new(UrlFetch::default()),
-            Box::new(SetupInstaller),
+            Box::new(installer),
             androids.clone(),
             program_status,
             build,

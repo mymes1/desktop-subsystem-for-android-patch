@@ -31,7 +31,12 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   its status bar (light or dark icons, and its color), read from the task description, so
   the host draws its caption buttons in a tone that stays readable over it.
 - **Density and size limits in reports.** Each `TaskUpdated` also carries the density the
-  task's app draws at and the display's size, which is the largest a task can be.
+  task's app draws at and the display's size, which is the largest a task can be, and
+  whether the task's top activity says it handles a change of density itself (its
+  manifest's `configChanges` include `density`, read from the package manager's
+  `ActivityInfo.configChanges`). Android relaunches any other activity whose density
+  changes, so the host asks only such a task for another monitor's density and scales the
+  window of any other.
 - **Pointer input.** The host sends the mouse, touch and pen input of each task's window
   (`PointerEvent`, relative to the task). The agent injects it into the task at the
   place it last reported for the task (see below).
@@ -193,7 +198,10 @@ change.
 
 The host shows each task 1:1 in its window, so a window's client size in host pixels is the
 task's size in guest pixels, and the task's density keeps the app the size it should be on
-the window's monitor (160 dpi at 100%, 320 at 200%).
+the window's monitor (160 dpi at 100%, 320 at 200%). Android starts at the density of the
+user's main monitor, so a window that opens there asks for nothing. A task whose top activity
+does not say it handles a change of density is never asked for another one: its window shows
+it scaled instead, and its client size is the task's size at that scale.
 
 `ResizeTask` asks for a size. The task keeps its top left corner and takes the size, cut
 down to the display and moved back inside it if it would cross an edge. If the task then
@@ -530,8 +538,14 @@ Needs a JDK (17 or later) and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in
 `local.properties`). From this folder:
 
 ```
-./gradlew testDebugUnitTest assembleRelease
+./kotlin test
+./kotlin do assembleRelease
 ```
+
+The project uses the Kotlin Toolchain (`project.yaml`, `module.yaml`) for dependency
+resolution, Kotlin/Java compilation and JVM unit testing, and a local build plugin
+(`build-plugin/`) that invokes the Android SDK tools (`aidl`, `aapt2`, `d8`, `zipalign`)
+directly to generate binder stubs and package the APK without Gradle.
 
 The unit tests run on the JVM against fakes of the framework, the channel and the
 scheduler, and check the frames with the generated codec. Everything that touches the

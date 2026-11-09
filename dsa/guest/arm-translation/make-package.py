@@ -2,14 +2,20 @@
 
 A translator's binary bundle (such as the one build-digitalis.sh leaves) has a `system/`
 tree: the native bridge library and its proxies in system/lib64, the ARM64 guest libraries in
-system/lib64/arm64, the program runners in system/bin, and the linker configuration and
-binfmt_misc rules in system/etc. The package is a folder holding
+system/lib64/arm64, the ARM64 linker and app_process in system/bin/arm64, the program runners
+in system/bin, and the linker configuration and binfmt_misc rules in system/etc. The package is
+a folder holding
 
     arm-translation.json   what the package is: name, version, bridge library, ABIs, licence
-    system.img             that tree as an erofs image, which the guest lays over its /system
+    system.img             that tree as an erofs image
 
-The guest's properties name the bridge `libdsa_native_bridge.so`, whatever the translator
-calls it, so the image adds that name as a link to the bridge library.
+The guest mounts the image at /mnt/dsa-arm-translation and binds parts of it onto empty places
+of its own (system/lib64 onto /system_ext/lib64, system/lib64/arm64 and system/bin/arm64 onto
+the same paths under /system, system/bin onto /system/bin/dsa-arm-translation, and
+system/etc/ld.config.arm64.txt onto the same path), so a package needs each of them. The
+guest's properties name the bridge `libdsa_native_bridge.so`, whatever the translator calls it,
+so the image adds that name as a link to the bridge library. Each binfmt_misc rule names its
+runner where the guest binds it, under /system/bin/dsa-arm-translation.
 
     uv run dsa/guest/arm-translation/make-package.py --bundle <bundle dir> \\
         --name Digitalis --version <version> [--library libberberis_arm64.so] \\
@@ -32,8 +38,13 @@ MANIFEST = "arm-translation.json"
 IMAGE = "system.img"
 BRIDGE_LINK = "libdsa_native_bridge.so"
 ABIS = ["arm64-v8a"]
-# The directories the guest lays the image over; anything else in a bundle is left out.
-LAID_OVER = ["lib64", "bin", "etc"]
+# The folders of a bundle the image takes; anything else in a bundle is left out.
+TAKEN = ["lib64", "bin", "etc"]
+# What the guest binds onto its own empty places, so every package has it.
+BOUND = ["lib64/arm64", "bin/arm64", "etc/ld.config.arm64.txt"]
+# The binfmt_misc rules the guest registers, and where it binds the bundle's system/bin.
+RULES = ["arm64_exe", "arm64_dyn"]
+RUNNERS = "/system/bin/dsa-arm-translation/"
 LIBRARY_NAME = re.compile(r"^[A-Za-z0-9._-]+\.so$")
 
 
@@ -58,14 +69,39 @@ def check(name, version, library, license_id):
         raise SystemExit(f"{library!r} is not a library file name")
 
 
+def bound_rule(rule):
+    """The binfmt_misc rule `rule` (`:name:type:offset:magic:mask:interpreter:flags`) with its
+    interpreter where the guest binds the bundle's system/bin. A rule already naming that place
+    is kept; one naming a runner anywhere but system/bin is refused, since the guest never
+    reaches it."""
+    fields = rule.rstrip("\n").split(":")
+    if len(fields) < 8 or fields[0] != "":
+        raise SystemExit(f"{rule!r} is not a binfmt_misc rule")
+    interpreter = fields[6]
+    if interpreter.startswith(RUNNERS):
+        name = interpreter[len(RUNNERS):]
+    elif interpreter.startswith("/system/bin/"):
+        name = interpreter[len("/system/bin/"):]
+    else:
+        raise SystemExit(f"the binfmt_misc rule {fields[1]} starts {interpreter}, outside system/bin")
+    if not name or "/" in name:
+        raise SystemExit(f"the binfmt_misc rule {fields[1]} starts {interpreter}, outside system/bin")
+    fields[6] = RUNNERS + name
+    return ":".join(fields) + ("\n" if rule.endswith("\n") else "")
+
+
 def stage(bundle, staging, library):
-    """Copies the parts of `bundle`'s system tree the guest uses into `staging`/system, and adds
-    the bridge's DSA name."""
+    """Copies the parts of `bundle`'s system tree the guest uses into `staging`/system, adds the
+    bridge's DSA name, and points the binfmt_misc rules at the runners where the guest binds
+    them."""
     system = Path(bundle) / "system"
     if not (system / "lib64" / library).is_file():
         raise SystemExit(f"{system / 'lib64' / library} is missing; is {bundle} a translator's bundle?")
+    for path in BOUND:
+        if not (system / path).exists():
+            raise SystemExit(f"{system / path} is missing; the guest binds it, so a package needs it")
     target = Path(staging) / "system"
-    for directory in LAID_OVER:
+    for directory in TAKEN:
         source = system / directory
         if source.is_dir():
             shutil.copytree(source, target / directory, symlinks=True)
@@ -73,6 +109,16 @@ def stage(bundle, staging, library):
     if link.exists() or link.is_symlink():
         link.unlink()
     os.symlink(library, link)
+    for name in RULES:
+        rule = target / "etc" / "binfmt_misc" / name
+        if not rule.is_file():
+            raise SystemExit(f"{system / 'etc/binfmt_misc' / name} is missing; the guest registers it")
+        text = bound_rule(rule.read_text())
+        runner = text.split(":")[6][len(RUNNERS):]
+        if not (target / "bin" / runner).is_file():
+            raise SystemExit(f"the binfmt_misc rule {name} starts {runner}, which is not in "
+                             f"{system / 'bin'}")
+        rule.write_text(text)
     return target
 
 

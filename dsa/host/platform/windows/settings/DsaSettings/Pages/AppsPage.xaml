@@ -37,6 +37,19 @@
                 </ui:CardAction>
 
                 <TextBlock Text="{l:Text AppsInstalledHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <!-- Each app's root level is chosen below once root access is on for this PC. -->
+                <ui:InfoBar Title="{l:Text AppsRootOffBar.Title}" Message="{l:Text AppsRootOffBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding RootUnavailable, Mode=OneWay}" Margin="0,0,0,8" />
+                <TextBlock Text="{l:Text AppsRootNote.Text}" Style="{StaticResource Note}" Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                            Visibility="{Binding ShowAdbShellRoot, Converter={StaticResource Visible}}">
+                    <TextBlock Text="{l:Text AppsAdbShell.Text}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <ComboBox ItemsSource="{Binding RootChoices}" DisplayMemberPath="Label"
+                              SelectedIndex="{Binding AdbShellRootIndex, Mode=OneWay}"
+                              IsEnabled="{Binding CanChangeAdbShellRoot}" ToolTip="{Binding AdbShellRootTip}"
+                              Tag="com.android.shell" SelectionChanged="OnRoot" />
+                </StackPanel>
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MaxWidth="360" />
@@ -127,6 +140,16 @@
                                                   ToolTip="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.Name="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.HelpText="{Binding Label}" />
+                                        <!-- How the app's windows follow a monitor of another scale: the app
+                                             redraws, or its window is scaled. Auto and System never restart the app. -->
+                                        <ComboBox Tag="{Binding Package}" MinWidth="200" Margin="16,4,0,0" VerticalAlignment="Center"
+                                                  ItemsSource="{Binding DataContext.DpiScalingChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedIndex="{Binding DpiScalingIndex, Mode=OneWay}"
+                                                  SelectionChanged="OnDpiScaling"
+                                                  ToolTip="{Binding DpiScalingTip, TargetNullValue={l:Text AppsDpiScaling.ToolTip}}"
+                                                  AutomationProperties.Name="{l:Text AppsDpiScaling.Name}"
+                                                  AutomationProperties.HelpText="{Binding Label}" />
                                         <!-- Whether the app runs its ARM code through the translator. -->
                                         <ui:ToggleSwitch Content="{l:Text AppsRunAsArm.Content}" Tag="{Binding Package}"
                                                          IsChecked="{Binding RunAsArm, Mode=OneWay}" Click="OnRunAsArm"
@@ -135,6 +158,18 @@
                                                          ToolTipService.ShowOnDisabled="True"
                                                          ToolTip="{Binding RunAsArmTip, TargetNullValue={x:Null}}"
                                                          AutomationProperties.HelpText="{Binding Label}" />
+                                        <!-- How far the app may use root: not at all, asking an
+                                             administrator each time, or without asking. -->
+                                        <ComboBox Tag="{Binding Package}" MinWidth="200" Margin="16,4,0,0" VerticalAlignment="Center"
+                                                  ItemsSource="{Binding DataContext.RootChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  DisplayMemberPath="Label"
+                                                  SelectedIndex="{Binding RootIndex, Mode=OneWay}"
+                                                  IsEnabled="{Binding CanChangeRoot}"
+                                                  SelectionChanged="OnRoot"
+                                                  ToolTipService.ShowOnDisabled="True"
+                                                  ToolTip="{Binding RootTip, TargetNullValue={x:Null}}"
+                                                  AutomationProperties.Name="{l:Text AppsRoot.Name}"
+                                                  AutomationProperties.HelpText="{Binding Label}" />
                                     </WrapPanel>
                                     <!-- Why the app cannot run as ARM, where the switch is. -->
                                     <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RunAsArmTip}"

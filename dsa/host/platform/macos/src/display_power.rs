@@ -17,6 +17,17 @@ pub fn hz_from_mode_rate(rate: f64) -> u32 {
     rate.round().min(f64::from(u32::MAX)) as u32
 }
 
+/// The DPI a window on a display whose current mode is `pixel_width` pixels across `width`
+/// points reports (96 is 100%): its backing scale factor, as a task window gives it to the
+/// window manager. `None` when the mode names no size.
+pub fn dpi_from_mode(pixel_width: usize, width: usize) -> Option<u32> {
+    if pixel_width == 0 || width == 0 {
+        return None;
+    }
+    let scale = pixel_width as f64 / width as f64;
+    Some((scale * 96.0).round().clamp(1.0, f64::from(u32::MAX)) as u32)
+}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use std::ffi::c_void;
@@ -33,6 +44,27 @@ mod mac {
         fn CGDisplayCopyDisplayMode(display: u32) -> *mut c_void;
         fn CGDisplayModeGetRefreshRate(mode: *mut c_void) -> f64;
         fn CGDisplayModeRelease(mode: *mut c_void);
+        fn CGMainDisplayID() -> u32;
+        fn CGDisplayModeGetWidth(mode: *mut c_void) -> usize;
+        fn CGDisplayModeGetPixelWidth(mode: *mut c_void) -> usize;
+    }
+
+    /// The DPI of the Mac's main display (96 is 100%, 192 a Retina display at 2x), or `None`
+    /// when Core Graphics does not say. Android starts at the density of a window there.
+    pub fn main_display_dpi() -> Option<u32> {
+        // SAFETY: plain calls; the copied mode is released.
+        unsafe {
+            let mode = CGDisplayCopyDisplayMode(CGMainDisplayID());
+            if mode.is_null() {
+                return None;
+            }
+            let dpi = super::dpi_from_mode(
+                CGDisplayModeGetPixelWidth(mode),
+                CGDisplayModeGetWidth(mode),
+            );
+            CGDisplayModeRelease(mode);
+            dpi
+        }
     }
 
     /// More displays than any Mac drives.
@@ -75,7 +107,13 @@ mod mac {
 }
 
 #[cfg(target_os = "macos")]
-pub use mac::{fastest_display_hz, follow};
+pub use mac::{fastest_display_hz, follow, main_display_dpi};
+
+/// The DPI of the Mac's main display; not a Mac, a 100% one.
+#[cfg(not(target_os = "macos"))]
+pub fn main_display_dpi() -> Option<u32> {
+    None
+}
 
 #[cfg(test)]
 mod tests {
@@ -88,6 +126,21 @@ mod tests {
         assert_eq!(hz_from_mode_rate(59.94), 60);
         assert_eq!(hz_from_mode_rate(0.0), 0);
         assert_eq!(hz_from_mode_rate(f64::NAN), 0);
+    }
+
+    #[test]
+    fn fr4_android_starts_at_the_main_monitors_density() {
+        use dsa_host_core::guest_display::{boot_density, with_display_density};
+        // A Retina display at 2x, a display at 1x, and one whose mode names no size.
+        assert_eq!(dpi_from_mode(2880, 1440), Some(192));
+        assert_eq!(dpi_from_mode(1920, 1920), Some(96));
+        assert_eq!(dpi_from_mode(0, 0), None);
+        assert_eq!(boot_density(dpi_from_mode(2880, 1440)), 320);
+        assert_eq!(boot_density(dpi_from_mode(0, 0)), 160);
+        assert_eq!(
+            with_display_density("androidboot.dsa.display_dpi=160", 320),
+            "androidboot.dsa.display_dpi=320 androidboot.lcd_density=320"
+        );
     }
 
     #[test]

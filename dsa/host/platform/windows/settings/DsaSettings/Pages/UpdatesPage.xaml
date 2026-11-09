@@ -41,19 +41,19 @@
                         <ui:CardControl.Header>
                             <TextBlock Text="{l:Text AndroidBuildCard.Header}" Style="{StaticResource CardTitle}" />
                         </ui:CardControl.Header>
-                        <TextBlock Text="{Binding BuildId, Mode=OneWay}" />
+                        <TextBlock Text="{Binding BuildId, Mode=OneWay}" Style="{StaticResource CardValue}" />
                     </ui:CardControl>
                     <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Shield24}">
                         <ui:CardControl.Header>
                             <TextBlock Text="{l:Text AndroidPatchCard.Header}" Style="{StaticResource CardTitle}" />
                         </ui:CardControl.Header>
-                        <TextBlock Text="{Binding SecurityPatch, Mode=OneWay}" />
+                        <TextBlock Text="{Binding SecurityPatch, Mode=OneWay}" Style="{StaticResource CardValue}" />
                     </ui:CardControl>
-                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRouting24}">
+                    <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon BranchFork24}">
                         <ui:CardControl.Header>
                             <TextBlock Text="{l:Text AndroidFollowsCard.Header}" Style="{StaticResource CardTitle}" />
                         </ui:CardControl.Header>
-                        <TextBlock Text="{Binding ChannelText, Mode=OneWay}" TextWrapping="Wrap" MaxWidth="320" />
+                        <TextBlock Text="{Binding ChannelText, Mode=OneWay}" Style="{StaticResource CardValue}" />
                     </ui:CardControl>
                     <ui:CardControl x:Name="AndroidUpdateCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowDownload24}">
                         <ui:CardControl.Header>
@@ -81,7 +81,7 @@
                             <TextBlock Text="{l:Text ImageUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding ImageUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnImageAsAdministrator" />
@@ -101,7 +101,7 @@
                                 <TextBlock Text="{Binding SupportedText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Style="{StaticResource CardControls}">
                             <ComboBox x:Name="Choice" MinWidth="200" ItemsSource="{Binding Choices}" DisplayMemberPath="Label"
                                       SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                                       AutomationProperties.Name="{l:Text AndroidChooseCard.Header}" />
@@ -126,7 +126,7 @@
                             <TextBlock Text="{l:Text ProgramUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding ProgramUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnProgramAsAdministrator" />
@@ -144,7 +144,7 @@
                             <TextBlock Text="{l:Text PrereleaseUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
                                    Visibility="{Binding PrereleaseUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
                                    Click="OnPrereleaseAsAdministrator" />
@@ -159,7 +159,7 @@
                             <TextBlock Text="{l:Text UpdateNowCard.Description}" Style="{StaticResource CardDescription}" />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Style="{StaticResource CardControls}">
                         <ui:ProgressRing x:Name="UpdateRing" IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
                                          Visibility="Collapsed" />
                         <ui:Button x:Name="UpdateNowButton" Content="{l:Text UpdateNowButton.Content}" Click="OnUpdateNow"

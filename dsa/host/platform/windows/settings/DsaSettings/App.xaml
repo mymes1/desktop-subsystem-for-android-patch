@@ -82,13 +82,36 @@
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             </Style>
-            <!-- Subtitle: 20 px, 28 px line, for a value that leads a card. -->
-            <Style x:Key="SubtitleText" TargetType="TextBlock">
+            <!-- A value a card shows on its right, as the Windows Settings app shows one: against
+                 the card's right edge, wrapped lines right-aligned too, and never wider than
+                 320 px, on every page. The card keeps at least 120 px for its control, so a value
+                 that only took the box's right side would still start 120 px from the edge and
+                 a short one would hang in the middle; TextAlignment puts every line against the
+                 edge. No colour of its own, so a disabled card greys it. Every text in a card's
+                 content uses this style or one based on it. -->
+            <Style x:Key="CardValue" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="LineHeight" Value="20" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="TextAlignment" Value="Right" />
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="MaxWidth" Value="320" />
+            </Style>
+            <!-- A smaller line under a card's value, in the description's size and colour. -->
+            <Style x:Key="CardValueCaption" TargetType="TextBlock" BasedOn="{StaticResource CardValue}">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="LineHeight" Value="16" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+            <!-- A value that leads a card, in the type ramp's Subtitle: 20 px on a 28 px line. -->
+            <Style x:Key="CardValueSubtitle" TargetType="TextBlock" BasedOn="{StaticResource CardValue}">
                 <Setter Property="FontFamily" Value="{DynamicResource StrongDisplayFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="20" />
                 <Setter Property="LineHeight" Value="28" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="Note" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
@@ -115,7 +138,8 @@
                  {StaticResource {x:Type ...}}. Inside this dictionary a style's own type is its own
                  key, and a style based on that key loses the library's setters: ui:Button fell
                  back to the default Win32 button template. The library names no style for
-                 ui:InfoBar, so each page sets the info bars' 4 px margin itself. -->
+                 ui:InfoBar, so the info bar style below sets every property itself, and each
+                 page sets the info bars' 4 px margin itself. -->
 
             <!-- Pop-ups do not inherit the window's font. -->
             <Style TargetType="ToolTip" BasedOn="{StaticResource DefaultToolTipStyle}">
@@ -322,6 +346,117 @@
                 </Setter>
             </Style>
 
+            <!-- Several controls in one card (a button beside a switch, a progress ring beside a
+                 button), in a row against the card's right edge. A row left at Stretch fills
+                 the card's 120 px control box from the left, so a switch alone in it stopped
+                 short of the edge when the button beside it was hidden. -->
+            <Style x:Key="CardControls" TargetType="StackPanel">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <!-- A notice bar in the cards' columns: its icon centred where a card's 20 px icon
+                 sits (16 px padding, 2 px in, 20 px wide) and its title where a card's title
+                 starts (20 px after the icon), so a notice between two cards lines up with them.
+                 The library's template hard-codes its own padding and puts the title 30 px from
+                 the bar's edge, 12 px left of the card titles around it, and its icon 4 px left
+                 of theirs. The rest is the library's (WPF UI, MIT licence, Leszek Pomianowski
+                 and WPF UI contributors). -->
+            <Style TargetType="ui:InfoBar">
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Foreground" Value="{DynamicResource InfoBarTitleForeground}" />
+                <Setter Property="Padding" Value="16,14,16,14" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="BorderBrush" Value="{DynamicResource InfoBarBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="Border.CornerRadius" Value="{StaticResource CardCornerRadius}" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="KeyboardNavigation.IsTabStop" Value="False" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+                <Setter Property="OverridesDefaultStyle" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:InfoBar">
+                            <Grid x:Name="InfoBarRoot">
+                                <Border x:Name="ContentBorder"
+                                        Padding="{TemplateBinding Padding}"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="{TemplateBinding Border.CornerRadius}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="IconBox" Grid.Column="0" Width="20" Margin="2,2,20,0" VerticalAlignment="Top">
+                                            <ui:SymbolIcon x:Name="SymbolIcon" HorizontalAlignment="Center" VerticalAlignment="Top"
+                                                           Filled="True" FontSize="16" />
+                                        </Border>
+                                        <WrapPanel Grid.Column="1" VerticalAlignment="Top">
+                                            <TextBlock Margin="0,0,14,0" Text="{TemplateBinding Title}" TextWrapping="Wrap"
+                                                       FontFamily="{DynamicResource StrongTextFont}" />
+                                            <TextBlock Text="{TemplateBinding Message}" TextWrapping="Wrap" />
+                                        </WrapPanel>
+                                        <Border Grid.Column="2" Margin="12,-2,0,0" VerticalAlignment="Top">
+                                            <ui:Button x:Name="CloseButton" MinWidth="0" Padding="4" Background="Transparent" BorderThickness="0"
+                                                       Command="{Binding Path=TemplateButtonCommand, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Dismiss24" />
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsClosable" Value="False">
+                                    <Setter TargetName="CloseButton" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                                <Trigger Property="IsOpen" Value="False">
+                                    <Setter TargetName="InfoBarRoot" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                                <Trigger Property="Severity" Value="Informational">
+                                    <Setter TargetName="SymbolIcon" Property="Foreground">
+                                        <Setter.Value>
+                                            <SolidColorBrush Color="{DynamicResource SystemAccentColorSecondary}" />
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter TargetName="SymbolIcon" Property="Symbol" Value="Info24" />
+                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource InfoBarInformationalSeverityBackgroundBrush}" />
+                                </Trigger>
+                                <Trigger Property="Severity" Value="Success">
+                                    <Setter TargetName="SymbolIcon" Property="Foreground" Value="{DynamicResource InfoBarSuccessSeverityIconBackground}" />
+                                    <Setter TargetName="SymbolIcon" Property="Symbol" Value="CheckmarkCircle24" />
+                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource InfoBarSuccessSeverityBackgroundBrush}" />
+                                </Trigger>
+                                <Trigger Property="Severity" Value="Warning">
+                                    <Setter TargetName="SymbolIcon" Property="Foreground" Value="{DynamicResource InfoBarWarningSeverityIconBackground}" />
+                                    <Setter TargetName="SymbolIcon" Property="Symbol" Value="ErrorCircle24" />
+                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource InfoBarWarningSeverityBackgroundBrush}" />
+                                </Trigger>
+                                <Trigger Property="Severity" Value="Error">
+                                    <Setter TargetName="SymbolIcon" Property="Foreground" Value="{DynamicResource InfoBarErrorSeverityIconBackground}" />
+                                    <Setter TargetName="SymbolIcon" Property="Symbol" Value="DismissCircle24" />
+                                    <Setter TargetName="ContentBorder" Property="Background" Value="{DynamicResource InfoBarErrorSeverityBackgroundBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- A toggle switch as the Windows Settings app shows it: "On" or "Off" to the left
                  of the switch, 12 px from it. The library puts the text on the right. The
                  track, its brushes and the animation are the library's (WPF UI, MIT licence,
@@ -331,6 +466,13 @@
                  end at rest, 14 px under the pointer, and 17 by 14 px when pressed, 3 px from
                  the end it rests at. -->
             <Style TargetType="ui:ToggleSwitch" BasedOn="{StaticResource DefaultUiToggleSwitchStyle}">
+                <!-- Against the card's right edge, as every switch in the Windows Settings app:
+                     the card keeps at least 120 px for its control, and a switch left at Stretch
+                     filled that box with its text and switch on the left, so the switch ended
+                     about 50 px before the edge while the buttons and values beside it reached
+                     it. The "On" or "Off" text grows to the left, so the switch never moves. -->
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="OnContent" Value="{DynamicResource ToggleOnText}" />
                 <Setter Property="OffContent" Value="{DynamicResource ToggleOffText}" />
                 <Setter Property="Template">

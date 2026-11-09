@@ -20,9 +20,10 @@
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id> | watch]
 //! dsa apps [list | info <package> | uninstall <package> | settings [<package>] |
-//!     run-as-arm <package> on|off [--erase-data]]
+//!     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember]
 //! dsa background [list | open <package> | stop <package>]
-//! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
+//! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto]
+//!     [--dpi-scaling app|system|system-forced|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default]
@@ -33,9 +34,17 @@
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
 //! app's windows cannot be resized or maximized, and an app with a start size opens its windows
-//! at that size, in density-independent pixels. `reset` puts the app back to the defaults.
-//! With `--json` it prints `apps`, each with `package`, `fixed_size` and `start_size` (null
-//! for none, else `[width, height]`).
+//! at that size, in density-independent pixels. `--dpi-scaling` says how the app follows its
+//! window to a monitor of another scale: `app` gives it the new monitor's density and it
+//! redraws (Android recreates the screen of an app that does not say it handles a change of
+//! density, and restores its state, so it may redraw briefly), `system` keeps its
+//! density and scales the window to the same physical size, and `system-forced` would give a
+//! new density to any app without a restart, which needs a framework change that is not made
+//! yet, so it works as `system` until then. `auto`, the default, is `app` for an app that says
+//! it handles a change of density and `system` for any other; neither restarts the app.
+//! `reset` puts the app back to the defaults. With `--json` it prints `apps`, each with `package`, `fixed_size`, `start_size`
+//! (null for none, else `[width, height]`) and `dpi_scaling`, and `system_forced_available`,
+//! whether `system-forced` does what it says yet.
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
 //! operating system, so there is no option to name another one.
@@ -146,6 +155,14 @@
 //! `system-app`, `no-libraries`, `translation-off` or `other`. With `--json` it prints
 //! `package`, `status`, `on` and `message`.
 //!
+//! `dsa apps root <package> off|ask|remember` sets how far an app may elevate to root: `off`
+//! (su does not exist for it), `ask` (each su call waits for the computer's administrator
+//! approval) or `remember` (approved without asking, within a 15 minute grace). It needs
+//! `dsa settings set root-elevation on` first, and moving an app to `remember` needs an
+//! administrator. With `--json` it prints `package` and `level`. The level applies to su's
+//! visibility from the next start of Android.
+//! Use `adb` in place of the package to set the adb shell level while developer mode is on.
+//!
 //! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
 //! with no window because they run a foreground service (music playback, a download, a VPN),
 //! each with the notification the service keeps shown, and the active media sessions. It does
@@ -198,7 +215,13 @@
 //! is whether stopping an app that runs in the background skips the question that confirms it.
 //! `advanced-networking` (off by default) puts the user's Android on this computer's network as
 //! a device of its own, so other devices there reach it, instead of behind a NAT network of its
-//! own; it applies the next time Android starts.
+//! own; it applies the next time Android starts. `touch-gestures-off` (on by default) turns
+//! Windows 11's three- and four-finger touch gestures off while a DSA app window is in front,
+//! so apps get every finger, and puts the user's own value back when another window comes to
+//! the front; `dsa settings` says whether the window manager can do it on this computer.
+//! `root-elevation` (off by default, the computer's, so an administrator changes it) lets apps
+//! elevate to root through the computer's administrator approval, from the next start of
+//! Android; `dsa apps root <package>` then sets each app's level.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
@@ -246,12 +269,17 @@
 //! `dsa gapps install` has the service download the newest LiteGapps Core build for the Android
 //! version and processor the running Android reports, check it, make a system image of its
 //! apps and permission files, and send it to Android; with `--progress` it prints a `stage`
-//! line as each step starts and as bytes arrive. `dsa gapps remove` removes it. Android is
-//! started first when it is not running, and both apply from its next start, and say so.
-//! Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
-//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, or null),
-//! `installed`, `android` (`installed`, `active`, `sdk`, `abi`, `abilist` and `device_id`, or
-//! null while Android is not running), `restart_needed`, `terms_url` and `registration_url`.
+//! line as each step starts and as bytes arrive; Android is started first when it is not
+//! running. `dsa gapps remove` removes it without starting Android, so it also works while
+//! Google's apps keep Android from starting: the next start goes without them, and the image
+//! leaves Android's disk at once when Android runs, else at its next start. Both apply from
+//! Android's next start, and say so. An image an older DSA made is never laid over: the
+//! service makes it again from the package it kept, or the status says to install Google Play
+//! again. Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
+//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, `image_format`, or
+//! null), `installed`, `reinstall_needed`, `android` (`installed`, `active`, `sdk`, `abi`,
+//! `abilist` and `device_id`, or null while Android is not running), `restart_needed`,
+//! `terms_url` and `registration_url`.
 //!
 //! `dsa settings device` shows the device identity Android reports to its apps: what the user
 //! chose, and each value as Android reports it from its next start.
@@ -295,7 +323,7 @@ use std::time::{Duration, Instant};
 use dsa_host_core::apk::{InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_bundle::{Bundle, Device, InstallFile, Refusal, Selection};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer, Vector};
-use dsa_host_core::app_windows::AppWindowSettings;
+use dsa_host_core::app_windows::{AppWindowSettings, DpiScaling};
 use dsa_host_core::arm_translation::{self, google};
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
@@ -308,6 +336,7 @@ use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::native_abi;
 use dsa_host_core::session::SessionState;
 use dsa_host_core::tasks::{AppInfo, Task};
+use dsa_host_core::touch_gestures::TouchGesturesState;
 use dsa_host_core::update::store::Fetch;
 use dsa_host_core::update::versions::{Channel, VersionReport};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
@@ -321,9 +350,10 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      network | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>] | \
-     run-as-arm <package> on|off [--erase-data]] | \
+     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember] | \
      background [list | open <package> | stop <package>] | \
-     app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
+     app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] \
+     [--dpi-scaling app|system|system-forced|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
@@ -415,12 +445,14 @@ pub enum AppWindowAction {
     List,
     /// Show one app's.
     Show(String),
-    /// Change one app's: whether its windows keep their size, and the size they open at
-    /// (`Some(None)` for the size Android gives the task).
+    /// Change one app's: whether its windows keep their size, the size they open at
+    /// (`Some(None)` for the size Android gives the task), and how it follows its window to a
+    /// monitor of another scale.
     Set {
         package: String,
         fixed_size: Option<bool>,
         start_size: Option<Option<(u32, u32)>>,
+        dpi_scaling: Option<DpiScaling>,
     },
     /// Put one app's back to the defaults.
     Reset(String),
@@ -444,6 +476,14 @@ pub fn parse_start_size(value: &str) -> Result<Option<(u32, u32)>, String> {
     }
 }
 
+/// How an app follows its window to a monitor of another scale, as `dsa app-window
+/// --dpi-scaling` takes it: `app`, `system`, `system-forced` or `auto`.
+pub fn parse_dpi_scaling(value: &str) -> Result<DpiScaling, String> {
+    DpiScaling::from_name(&value.trim().to_ascii_lowercase()).ok_or_else(|| {
+        format!("--dpi-scaling is app, system, system-forced or auto, not {value:?}")
+    })
+}
+
 /// What `dsa apps` does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppsAction {
@@ -457,6 +497,8 @@ pub enum AppsAction {
     Settings(Option<String>),
     /// Install one app again with its ARM code (`true`) or its x86_64 code.
     RunAsArm(String, bool),
+    /// Set how far one app may elevate to root: the package and "off", "ask" or "remember".
+    Root(String, String),
 }
 
 /// What `dsa widgets` does.
@@ -513,6 +555,8 @@ pub enum Change {
     /// The folders to share, in the order the service keeps them.
     SharedFolders(Vec<String>),
     AdvancedNetworking(bool),
+    TouchGesturesOff(bool),
+    RootElevation(bool),
 }
 
 impl Change {
@@ -535,6 +579,7 @@ impl Change {
             "image-updates" => switch().map(Change::ImageUpdates),
             "input-trace" => switch().map(Change::InputTrace),
             "resize-trace" => switch().map(Change::ResizeTrace),
+            "root-elevation" => switch().map(Change::RootElevation),
             "memory-limit" => parse_memory_limit(value).map(Change::MemoryLimit),
             "developer-mode" => switch().map(Change::DeveloperMode),
             "adb-auto-connect" => switch().map(Change::AdbAutoConnect),
@@ -543,6 +588,7 @@ impl Change {
             "file-sharing" => switch().map(Change::FileSharing),
             "shared-folders" => parse_shared_folders(value).map(Change::SharedFolders),
             "advanced-networking" => switch().map(Change::AdvancedNetworking),
+            "touch-gestures-off" => switch().map(Change::TouchGesturesOff),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -552,9 +598,9 @@ impl Change {
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, prerelease-updates, \
-                 image-updates, input-trace, resize-trace, memory-limit, developer-mode, adb-port, adb-auto-connect, \
+                 image-updates, input-trace, resize-trace, root-elevation, memory-limit, developer-mode, adb-port, adb-auto-connect, \
                  arm-translation, stop-without-asking, file-sharing, shared-folders, \
-                 advanced-networking and device.<field>"
+                 advanced-networking, touch-gestures-off and device.<field>"
             )),
         }
     }
@@ -801,30 +847,38 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 }
                 _ => return Err("dsa app-window reset follows the app's package".into()),
             },
-            flag @ ("--fixed-size" | "--start-size") if command == Some(Command::AppWindow) => {
+            flag @ ("--fixed-size" | "--start-size" | "--dpi-scaling")
+                if command == Some(Command::AppWindow) =>
+            {
                 let value = args.next().ok_or_else(|| format!("{flag} needs a value"))?;
-                let (package, mut fixed_size, mut start_size) = match app_window.take() {
-                    Some(AppWindowAction::Show(package)) => (package, None, None),
+                let (package, mut fixed_size, mut start_size, mut dpi_scaling) = match app_window
+                    .take()
+                {
+                    Some(AppWindowAction::Show(package)) => (package, None, None, None),
                     Some(AppWindowAction::Set {
                         package,
                         fixed_size,
                         start_size,
-                    }) => (package, fixed_size, start_size),
+                        dpi_scaling,
+                    }) => (package, fixed_size, start_size, dpi_scaling),
                     _ => return Err(format!("dsa app-window {flag} follows the app's package")),
                 };
-                if flag == "--fixed-size" {
-                    fixed_size = Some(match value.to_ascii_lowercase().as_str() {
-                        "on" | "true" | "yes" | "1" => true,
-                        "off" | "false" | "no" | "0" => false,
-                        _ => return Err(format!("--fixed-size is on or off, not {value:?}")),
-                    });
-                } else {
-                    start_size = Some(parse_start_size(value)?);
+                match flag {
+                    "--fixed-size" => {
+                        fixed_size = Some(match value.to_ascii_lowercase().as_str() {
+                            "on" | "true" | "yes" | "1" => true,
+                            "off" | "false" | "no" | "0" => false,
+                            _ => return Err(format!("--fixed-size is on or off, not {value:?}")),
+                        });
+                    }
+                    "--start-size" => start_size = Some(parse_start_size(value)?),
+                    _ => dpi_scaling = Some(parse_dpi_scaling(value)?),
                 }
                 app_window = Some(AppWindowAction::Set {
                     package,
                     fixed_size,
                     start_size,
+                    dpi_scaling,
                 });
             }
             "apps" if command.is_none() => command = Some(Command::Apps),
@@ -875,6 +929,29 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     _ => return Err(usage.to_string()),
                 };
                 apps = Some(AppsAction::RunAsArm(package.clone(), on));
+            }
+            "root" if command == Some(Command::Apps) && apps.is_none() => {
+                let usage = "dsa apps root needs the app's package and off, ask or remember, \
+                             such as dsa apps root com.example.backup ask";
+                let package = args.next().ok_or_else(|| usage.to_string())?;
+                let package = dsa_host_core::root_elevation::package_for_name(package);
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                let level = match args
+                    .next()
+                    .map(|value| value.to_ascii_lowercase())
+                    .as_deref()
+                {
+                    Some("off") => "off",
+                    Some("ask") => "ask",
+                    Some("remember") => "remember",
+                    _ => return Err(usage.to_string()),
+                };
+                apps = Some(AppsAction::Root(package.to_string(), level.to_string()));
             }
             name if command == Some(Command::Apps)
                 && apps == Some(AppsAction::Settings(None))
@@ -1509,6 +1586,7 @@ pub fn app_json(app: &AppInfo, icon: bool) -> Value {
         "total_bytes": app.total_bytes(),
         "primary_abi": app.primary_abi,
         "native_abis": app.native_libraries.abis().collect::<Vec<_>>(),
+        "root": app.root,
     });
     if icon {
         value["icon_png"] = Value::String(base64(&app.icon_png));
@@ -1604,8 +1682,20 @@ pub fn describe_app(app: &AppInfo) -> String {
                 app.primary_abi.clone()
             }
         ),
+        format!("Root: {}", describe_root_level(&app.root)),
     ]
     .join("\n")
+}
+
+/// An app's root elevation level as `dsa apps info` says it.
+fn describe_root_level(level: &str) -> &'static str {
+    match level {
+        "off" => "off (su does not exist for it; dsa apps root changes it)",
+        "ask" => "ask (each su call waits for an administrator's approval)",
+        "remember" => "remember (approved without asking)",
+        "unavailable" => "unavailable (root elevation is off for this computer)",
+        _ => "unknown (the service did not say)",
+    }
 }
 
 /// Whether the caller's running Android translates ARM code: its ABI list holds arm64-v8a.
@@ -1734,6 +1824,31 @@ fn apps(
                 }
             })
         }
+        AppsAction::Root(package, level) => {
+            let result = client
+                .set_app_root(&package, &level)
+                .map_err(|e| e.to_string())?;
+            let ok = result.status() == dsa_host_core::host_api::AppRootStatus::Success;
+            if !ok {
+                return Err(format!(
+                    "not changed: {package}: {}",
+                    if result.message.is_empty() {
+                        "the service refused the change".to_string()
+                    } else {
+                        result.message.clone()
+                    }
+                ));
+            }
+            Ok(if invocation.json {
+                json!({
+                    "package": result.package_name,
+                    "level": result.level,
+                })
+                .to_string()
+            } else {
+                format!("{package} may use root: {}", result.level)
+            })
+        }
     }
 }
 
@@ -1745,7 +1860,24 @@ fn app_window_json(app: &AppWindowSettings) -> Value {
         "package": app.package_name,
         "fixed_size": app.fixed_size,
         "start_size": app.start_size_dp.map(|(width, height)| json!([width, height])),
+        "dpi_scaling": app.dpi_scaling.name(),
     })
+}
+
+/// How `dsa app-window` says an app follows its window to a monitor of another scale.
+fn describe_dpi_scaling(scaling: DpiScaling) -> String {
+    match scaling {
+        DpiScaling::Auto => "scales its own way on another monitor".to_string(),
+        DpiScaling::App => "redraws at another monitor's scale".to_string(),
+        DpiScaling::System => "is scaled by DSA on another monitor".to_string(),
+        DpiScaling::SystemForced if DpiScaling::FORCED_AVAILABLE => {
+            "is given another monitor's scale without a restart".to_string()
+        }
+        DpiScaling::SystemForced => "is set to system (forced), not available yet: it needs a \
+                                     change to Android's framework, and until then it is \
+                                     scaled by DSA"
+            .to_string(),
+    }
 }
 
 fn describe_app_window(app: &AppWindowSettings) -> String {
@@ -1758,7 +1890,11 @@ fn describe_app_window(app: &AppWindowSettings) -> String {
     } else {
         "resizable"
     };
-    format!("{}: {resizable}, {size}", app.package_name)
+    format!(
+        "{}: {resizable}, {size}, {}",
+        app.package_name,
+        describe_dpi_scaling(app.dpi_scaling)
+    )
 }
 
 fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
@@ -1787,6 +1923,7 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
             package,
             fixed_size,
             start_size,
+            dpi_scaling,
         } => {
             let current = apps
                 .into_iter()
@@ -1795,6 +1932,7 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
             let wanted = AppWindowSettings {
                 fixed_size: fixed_size.unwrap_or(current.fixed_size),
                 start_size_dp: start_size.unwrap_or(current.start_size_dp),
+                dpi_scaling: dpi_scaling.unwrap_or(current.dpi_scaling),
                 ..current
             };
             let now = client
@@ -1807,7 +1945,11 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
         }
     };
     Ok(if invocation.json {
-        json!({ "apps": shown.iter().map(app_window_json).collect::<Vec<_>>() }).to_string()
+        json!({
+            "apps": shown.iter().map(app_window_json).collect::<Vec<_>>(),
+            "system_forced_available": DpiScaling::FORCED_AVAILABLE,
+        })
+        .to_string()
     } else if shown.is_empty() {
         "No app has window settings of its own".to_string()
     } else {
@@ -1945,6 +2087,8 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
+        "root_elevation": report.settings.root_elevation,
+        "adb_shell_root": report.adb_shell_root,
         "memory_limit_mb": report.settings.memory_limit_mb,
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
@@ -1956,6 +2100,9 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "file_sharing": report.settings.file_sharing,
         "shared_folders": report.settings.shared_folders,
         "advanced_networking": report.settings.advanced_networking,
+        "touch_gestures_off": report.settings.touch_gestures_off,
+        "touch_gestures_state": report.touch_gestures.as_str(),
+        "touch_gestures_problem": report.touch_gestures.problem(),
         "network": network_json(report.network.as_ref()),
         "program_updates_available": report.facts.program_updates_available,
         "update_channel_available": report.facts.update_channel_available,
@@ -2036,6 +2183,21 @@ pub fn describe_auto_connect(
         AutoConnectState::Detached => {
             "you ran adb disconnect; DSA is attached again when the adb server restarts"
         }
+    }
+}
+
+/// Whether the window manager can turn the host's touch gestures off, in words.
+pub fn describe_touch_gestures(state: &TouchGesturesState) -> String {
+    match state {
+        TouchGesturesState::Unknown => "the window manager has not said yet".to_string(),
+        TouchGesturesState::Unsupported => "this computer has no such gestures".to_string(),
+        TouchGesturesState::Available => {
+            "the window manager turns them off while a DSA app window is in front".to_string()
+        }
+        TouchGesturesState::Failed(problem) => format!(
+            "cannot be used: Windows refused ({problem}); change them in Windows Settings, \
+             Bluetooth & devices, Touch (ms-settings:devices-touch)"
+        ),
     }
 }
 
@@ -2224,6 +2386,14 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!("Input trace: {}", on_off(settings.input_trace)),
         format!("Resize trace: {}", on_off(settings.resize_trace)),
         format!(
+            "Root elevation: {} (the computer's; it applies from the next start of Android)",
+            on_off(settings.root_elevation)
+        ),
+        format!(
+            "adb shell root: {}",
+            describe_root_level(&report.adb_shell_root)
+        ),
+        format!(
             "Memory limit: {}",
             match settings.memory_limit_mb {
                 0 => "automatic".to_string(),
@@ -2261,8 +2431,22 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             "Advanced networking: {} (dsa network shows the addresses)",
             on_off(settings.advanced_networking)
         ),
-        format!("Service version: {}", facts.version),
     ];
+    // Only Windows 11 has such gestures. Hidden where the window manager found none, as the
+    // settings app hides it.
+    let has_gestures = match report.touch_gestures {
+        TouchGesturesState::Unsupported => false,
+        TouchGesturesState::Unknown => cfg!(windows),
+        TouchGesturesState::Available | TouchGesturesState::Failed(_) => true,
+    };
+    if has_gestures {
+        lines.push(format!(
+            "Touch gestures off in DSA app windows: {} ({})",
+            on_off(settings.touch_gestures_off),
+            describe_touch_gestures(&report.touch_gestures)
+        ));
+    }
+    lines.push(format!("Service version: {}", facts.version));
     if let Some(version) = &facts.android_version {
         lines.push(format!("Android image: {version}"));
     }
@@ -2480,6 +2664,8 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::FileSharing(on) => wanted.file_sharing = *on,
             Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
+            Change::TouchGesturesOff(on) => wanted.touch_gestures_off = *on,
+            Change::RootElevation(on) => wanted.root_elevation = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -2918,7 +3104,7 @@ pub fn google_notice(image: &google::SdkImage) -> String {
     )
 }
 
-/// Starts Android when it is not running, as both `dsa gapps install` and `remove` need it.
+/// Starts Android when it is not running, as `dsa gapps install` needs it.
 fn start_for_gapps(invocation: &Invocation, client: &mut HostApiClient) -> Result<(), String> {
     #[cfg(windows)]
     if invocation.endpoint.is_none() {
@@ -2979,11 +3165,18 @@ fn install_gapps(
     Ok(show_gapps(invocation, &status, Some(&done)))
 }
 
-/// `dsa gapps remove`: starts Android when it is not running, so the image leaves its disk too.
+/// `dsa gapps remove`: never starts Android, since an Android that Google's apps keep from
+/// starting is exactly when the user needs to remove them. The service forgets them at once, so
+/// the next start goes without them; a running Android loses the image now, any other at its
+/// next start.
 fn remove_gapps(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
-    start_for_gapps(invocation, &mut client)?;
     let status = client.remove_gapps().map_err(|e| e.to_string())?;
-    Ok(show_gapps(invocation, &status, Some("Removed Google Play")))
+    let done = if status.guest.is_some() {
+        "Removed Google Play"
+    } else {
+        "Removed Google Play; Android starts without it from its next start"
+    };
+    Ok(show_gapps(invocation, &status, Some(done)))
 }
 
 /// Where Google Play stands as one JSON object.
@@ -2998,8 +3191,10 @@ pub fn gapps_json(status: &GappsStatus) -> Value {
             "file": package.file,
             "source": package.source,
             "md5": package.md5,
+            "image_format": package.image_format,
         })),
         "installed": status.package.is_some(),
+        "reinstall_needed": status.reinstall_needed,
         "android": status.guest.as_ref().map(|guest| json!({
             "installed": guest.installed,
             "active": guest.active,
@@ -3039,6 +3234,13 @@ pub fn describe_gapps(status: &GappsStatus, done: Option<&str>) -> String {
             }
         }
         None => lines.push("Android is not running".to_string()),
+    }
+    if status.reinstall_needed {
+        lines.push(
+            "Install Google Play again (dsa gapps install): its image was made by an older DSA, \
+             so Android starts without Google's apps until then"
+                .to_string(),
+        );
     }
     if status.restart_needed {
         lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());

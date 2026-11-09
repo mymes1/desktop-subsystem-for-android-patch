@@ -217,6 +217,43 @@ impl ApkInfo {
     }
 }
 
+/// The package an APK names and the permissions it asks for, read from its manifest alone: no
+/// resource, icon or signature is read, so a large app's file is read only as far as its
+/// manifest. The permissions are in the manifest's order, each once.
+pub fn requested_permissions<R: Read + Seek>(reader: R) -> Result<(String, Vec<String>), String> {
+    let mut archive = Archive::open(reader)?;
+    let entry = archive
+        .entry("AndroidManifest.xml")
+        .cloned()
+        .ok_or("the file has no AndroidManifest.xml, so it is not an APK")?;
+    let manifest = archive.read(&entry, MAX_MANIFEST)?;
+    let manifest = axml::parse(&manifest).map_err(|why| format!("AndroidManifest.xml: {why}"))?;
+    let root = manifest
+        .elements
+        .first()
+        .filter(|element| element.name == "manifest")
+        .ok_or("AndroidManifest.xml has no manifest element")?;
+    let package = root
+        .string(0, "package", &manifest.pool)
+        .filter(|package| crate::apk::valid_package_name(package))
+        .ok_or("AndroidManifest.xml names no valid package")?;
+    let mut permissions: Vec<String> = Vec::new();
+    for element in manifest.elements.iter().filter(|e| {
+        e.depth == 1
+            && matches!(
+                e.name.as_str(),
+                "uses-permission" | "uses-permission-sdk-23" | "uses-permission-sdk-m"
+            )
+    }) {
+        if let Some(name) = element.string(attr::NAME, "name", &manifest.pool) {
+            if !name.is_empty() && !permissions.contains(&name) {
+                permissions.push(name);
+            }
+        }
+    }
+    Ok((package, permissions))
+}
+
 /// An attribute's text: a literal string, or a string resource in the default language.
 fn text(
     element: &Element,
@@ -586,6 +623,19 @@ mod tests {
             damaged[cut] ^= 0x5a;
             let _ = ApkInfo::read_from(Cursor::new(damaged), data.len() as u64);
         }
+    }
+
+    #[test]
+    fn fr32_the_permissions_an_apk_asks_for_are_read_from_its_manifest_alone() {
+        let (package, permissions) = requested_permissions(Cursor::new(notes_apk())).unwrap();
+        assert_eq!(package, "com.example.notes");
+        // A uses-permission outside the manifest element's children is not one.
+        assert_eq!(
+            permissions,
+            ["android.permission.CAMERA", "android.permission.INTERNET"]
+        );
+        let not_apk = archive(&[("readme.txt", &b"hello"[..])], b"");
+        assert!(requested_permissions(Cursor::new(not_apk)).is_err());
     }
 
     #[test]

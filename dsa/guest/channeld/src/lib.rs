@@ -37,6 +37,15 @@ pub mod pressure;
 pub mod reclaim;
 pub mod router;
 pub mod share_mount;
+pub mod su_args;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub mod su_helper;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub mod su_packet;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub mod su_process;
+pub mod su_relay;
+pub mod su_wire;
 pub mod webdav;
 
 use std::sync::atomic::{AtomicBool, Ordering};

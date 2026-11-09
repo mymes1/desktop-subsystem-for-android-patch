@@ -15,10 +15,10 @@ use std::time::Duration;
 use dsa_host_core::session::GuestLauncher;
 use dsa_host_windows::android_vm::AndroidVmLauncher;
 use dsa_host_windows::hcn::{
-    endpoints_named, host_holds, host_route_to, networks_named, shared_status, SharedNetwork,
-    VmNetwork, VmNetworking,
+    endpoints_named, host_holds, host_interface_holding, host_route_to, networks_named,
+    shared_status, SharedNetwork, VmNetwork, VmNetworking,
 };
-use dsa_host_windows::network::{endpoint_name, host_side_adapter, nat_path_problem, network_name};
+use dsa_host_windows::network::{endpoint_name, nat_path_problem, network_name};
 use dsa_host_windows::vm::AndroidVmConfig;
 use dsa_protocol::auth::BootSecret;
 
@@ -185,25 +185,37 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
             .nat_path()
             .expect("a NAT network has a way through the host");
         eprintln!("the way between the host and the guest: {path:?}");
-        assert_eq!(
-            nat_path_problem(network.name(), &network.status().endpoint, &path),
-            None
+        let endpoint = network.status().endpoint;
+        assert_eq!(nat_path_problem(&endpoint, &path), None);
+        // HCN names no address for the guest: the endpoint asks for DHCP, and the guest takes
+        // its address from the network's DHCP server when it brings eth0 up. No guest boots
+        // here, so there is none yet.
+        assert!(
+            endpoint.dhcp,
+            "the endpoint on a NAT network takes its address by DHCP"
         );
     }
-    let guest: Ipv4Addr = status
-        .addresses
-        .iter()
-        .filter_map(|a| a.parse::<IpAddr>().ok())
-        .find_map(|a| match a {
-            IpAddr::V4(v4) => Some(v4),
-            IpAddr::V6(_) => None,
-        })
-        .expect("HCN gives the guest an IPv4 address");
+    assert!(
+        !status
+            .addresses
+            .iter()
+            .filter_map(|a| a.parse::<IpAddr>().ok())
+            .any(|a| a.is_ipv4()),
+        "no guest has taken an address, yet the status shows {:?}",
+        status.addresses
+    );
     let gateway: Ipv4Addr = status
         .gateway
         .parse()
         .expect("the guest has a default route");
-    let own = host_side_adapter(&network_name(vm));
+    // The address after the gateway, on the network's /24: one the DHCP server can give the
+    // guest, and so routed as the guest's address is.
+    let guest = Ipv4Addr::from(u32::from(gateway) + 1);
+    assert_eq!(
+        status.dns_servers,
+        vec![gateway.to_string()],
+        "the guest resolves through the gateway's DNS proxy"
+    );
 
     // The guest's default route is the host itself, on its adapter for the network: the host
     // forwards what the guest sends, through the routes it has.
@@ -211,17 +223,23 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
         host_holds(gateway),
         "the gateway {gateway} is not this computer's"
     );
-    // The host sends to the guest's address through that adapter, not its default route.
+    let own =
+        host_interface_holding(gateway).expect("an adapter of this computer holds the gateway");
+    // Windows names that adapter after the network, cut short ("vEthernet (DSA dsa-test-fr)"
+    // here), so it is known by its interface, never by that name.
+    eprintln!("this computer's adapter for Android's network: {own:?}");
+    // The host sends to the guest's addresses through that adapter, not its default route.
+    let route = host_route_to(guest);
     assert_eq!(
-        host_route_to(guest).as_deref(),
-        Some(own.as_str()),
-        "this computer would not reach Android at {guest} through {own}"
+        route.as_ref().map(|r| r.luid),
+        Some(own.luid),
+        "this computer would not reach Android at {guest} through {own:?}, but {route:?}"
     );
     // And the host's own way out is not that adapter, so what the guest sends leaves where
     // this computer's traffic leaves: through a VPN when one is connected.
     let out = host_route_to(Ipv4Addr::new(8, 8, 8, 8));
     eprintln!("this computer's traffic leaves through {out:?}");
-    assert_ne!(out.as_deref(), Some(own.as_str()));
+    assert_ne!(out.map(|o| o.luid), Some(own.luid));
     networking.detach();
     assert_gone(vm);
 }
