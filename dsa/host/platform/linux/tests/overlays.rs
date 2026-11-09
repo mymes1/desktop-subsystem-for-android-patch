@@ -49,7 +49,11 @@
 //! its folders, with the translator still in place, the host's privileged permission allowlist
 //! granting the privileged permission the build's Google Play services asks for and the build's
 //! own list leaves out, and `ro.control_privapp_permissions` at `log`, so that a permission no
-//! list names is logged rather than stopping Android at every boot; no boot may log one. The
+//! list names is logged rather than stopping Android at every boot; no boot may log one. In
+//! that boot the framework must name Google Play services its device configurator, the compile
+//! of the Google apps without an app image must run to its end and leave the app image format
+//! at lz4, and no alarm may fire as a storm (60 times or more, more than once per 10 s on average
+//! since boot). The
 //! small build's APKs are not signed, so the package manager does not install them; the
 //! allowlist is read from the system as the package manager would read it. Across both boots,
 //! the guest log and the Android console log must show no init command of either script
@@ -73,7 +77,8 @@
 //! minutes: each run of the reclaim, the kernel time init spends in it, the guest's processor
 //! time, the refaults and reads around each run, and which processes faulted file pages in
 //! between. The report goes to `idle-reclaim.md` and `idle-reclaim.json` in the check's folder,
-//! with the raw samples and the guest log beside them. It fails only when it cannot measure.
+//! with the raw samples and the guest log beside them. It fails when it cannot measure, and
+//! when an alarm fired as a storm in that boot, the one with a Play services that runs.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
@@ -1701,6 +1706,175 @@ fn play_services_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<
     }
 }
 
+/// An alarm that fires at least this many times since boot, and more often on average than
+/// once per [STORM_INTERVAL], is retrying something it never gets. Google Play services'
+/// `platformconfigurator.RETRY_UPDATE` fired 720 times in the first ten minutes of a boot on a
+/// PC while the image named no device configurator; the clock's TIME_TICK fires once a minute.
+const STORM_ALARMS: u64 = 60;
+const STORM_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Each alarm of `dumpsys alarm`'s "Alarm Stats" that fired as a storm in the `uptime` the
+/// guest has been running, as "<owner> <alarm>: <count> alarms in <seconds> s".
+fn alarm_storms(dump: &str, uptime: Duration) -> Vec<String> {
+    let mut storms = Vec::new();
+    let mut in_stats = false;
+    let mut owner = "";
+    let mut count: Option<u64> = None;
+    for line in dump.lines() {
+        let text = line.trim();
+        if text == "Alarm Stats:" {
+            in_stats = true;
+            continue;
+        }
+        if !in_stats || text.is_empty() {
+            continue;
+        }
+        let indent = line.len() - line.trim_start().len();
+        if indent <= 2 {
+            // An owner ("u0a110:com.google.android.gms +3s578ms running, 1 wakeups:"), or
+            // the next section, which ends the stats.
+            if text.ends_with(" wakeups:") && text.contains(" running, ") {
+                owner = text.split_whitespace().next().unwrap_or("");
+                count = None;
+                continue;
+            }
+            break;
+        }
+        // An alarm's line ("+2s704ms 0 wakes 720 alarms, last -53m21s222ms:") and then its
+        // name ("*alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE").
+        if let Some(fired) = count.take() {
+            let seconds = uptime.as_secs_f64();
+            if fired >= STORM_ALARMS && seconds / (fired as f64) < STORM_INTERVAL.as_secs_f64() {
+                storms.push(format!(
+                    "{owner} {text}: {fired} alarms in {} s",
+                    uptime.as_secs()
+                ));
+            }
+            continue;
+        }
+        let words: Vec<&str> = text.split_whitespace().collect();
+        if words.len() >= 5
+            && words[0].starts_with('+')
+            && words[2] == "wakes"
+            && words[4].trim_end_matches(',') == "alarms"
+        {
+            count = words[3].parse().ok();
+        }
+    }
+    storms
+}
+
+#[test]
+fn nfr2_an_alarm_retried_every_second_after_boot_is_a_storm() {
+    // What the PC's guest reported while Google Play services could not write DeviceConfig.
+    let dump = "  Top Alarms:\n\
+                \x20   +2s704ms running, 0 wakeups, 720 alarms: u0a110:com.google.android.gms\n\
+                \x20     *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE\n\
+                \x20 \n\
+                \x20 Alarm Stats:\n\
+                \x20 1000:android +2s822ms running, 13 wakeups:\n\
+                \x20   +1s33ms 0 wakes 32 alarms, last -3m24s655ms:\n\
+                \x20     *alarm*:TIME_TICK\n\
+                \x20 u0a110:com.google.android.gms +3s578ms running, 1 wakeups:\n\
+                \x20   +2s704ms 0 wakes 720 alarms, last -53m21s222ms:\n\
+                \x20     *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE\n\
+                \x20   +864ms 0 wakes 8 alarms, last -45m21s98ms:\n\
+                \x20     *alarm*:com.google.android.gms.gcm.ACTION_CHECK_QUEUE\n\
+                \x20 \n\
+                \x20 Alarm manager stats:\n\
+                \x20   +5s 0 wakes 900 alarms, last -1s:\n\
+                \x20     *alarm*:not an alarm of the stats\n";
+    let storms = alarm_storms(dump, Duration::from_secs(600));
+    assert_eq!(
+        storms,
+        vec!["u0a110:com.google.android.gms *alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE: 720 alarms in 600 s".to_string()]
+    );
+    // The same counts over a long session are alarms at their usual pace.
+    assert_eq!(
+        alarm_storms(dump, Duration::from_secs(3 * 3600)),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        alarm_storms("", Duration::from_secs(60)),
+        Vec::<String>::new()
+    );
+}
+
+/// What `cmd overlay lookup` must answer for the device configurator, without which Google Play
+/// services is never granted WRITE_DEVICE_CONFIG and retries its flag sync every second.
+const CONFIGURATOR_RESOURCE: &str = "android:string/config_deviceConfiguratorPackageName";
+const CONFIGURATOR: &str = "com.google.android.gms";
+
+/// What is wrong with the device configurator, the compile of the Google apps without an app
+/// image, and the alarms of the boot with the Google apps. The compile runs at boot completion
+/// and clears the app image format while it runs; it must end, log that it looked, and leave
+/// the format as the build gave it.
+fn gapps_boot_problems(adb: &Adb, dir: &Path, problems: &mut Vec<String>) {
+    match adb.shell(&format!(
+        "cmd overlay lookup android {CONFIGURATOR_RESOURCE}"
+    )) {
+        Ok(value) if value.trim() == CONFIGURATOR => {}
+        Ok(value) => problems.push(format!(
+            "Google Play: the framework's device configurator is {:?}, not {CONFIGURATOR}, so \
+             Play services may not write the flags it syncs and retries every second",
+            value.trim()
+        )),
+        Err(why) => problems.push(format!("reading the device configurator: {why}")),
+    }
+    let until = Instant::now() + Duration::from_secs(120);
+    loop {
+        let state = adb
+            .shell("getprop init.svc.dsa_gapps_compile")
+            .unwrap_or_default();
+        let logged = adb
+            .shell("logcat -d -s DsaGappsCompile")
+            .unwrap_or_default();
+        if state.trim() == "stopped" && logged.contains("checked ") {
+            let _ = std::fs::write(dir.join("gapps-compile.txt"), &logged);
+            break;
+        }
+        if Instant::now() >= until {
+            problems.push(format!(
+                "Google Play: the compile without an app image did not run to its end after boot \
+                 (dsa_gapps_compile is {:?}; its log: {:?})",
+                state.trim(),
+                logged.trim()
+            ));
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    match adb.shell("getprop dalvik.vm.appimageformat") {
+        Ok(format) if format.trim() == "lz4" => {}
+        Ok(format) => problems.push(format!(
+            "Google Play: dalvik.vm.appimageformat is {:?} after the compile, not lz4, so no app \
+             compiled from now on gets an app image",
+            format.trim()
+        )),
+        Err(why) => problems.push(format!("reading dalvik.vm.appimageformat: {why}")),
+    }
+    alarm_storm_problems(adb, &dir.join("alarms.txt"), problems);
+}
+
+/// The alarms of the running boot that fire as a storm, read through `adb` and kept in `keep`.
+fn alarm_storm_problems(adb: &Adb, keep: &Path, problems: &mut Vec<String>) {
+    let uptime = adb
+        .shell("cat /proc/uptime")
+        .ok()
+        .and_then(|text| text.split_whitespace().next()?.parse::<f64>().ok())
+        .map(Duration::from_secs_f64);
+    match (adb.shell("dumpsys alarm"), uptime) {
+        (Ok(dump), Some(uptime)) => {
+            let _ = std::fs::write(keep, &dump);
+            for storm in alarm_storms(&dump, uptime) {
+                problems.push(format!("an alarm fires as a storm after boot: {storm}"));
+            }
+        }
+        (Err(why), _) => problems.push(format!("reading the alarms: {why}")),
+        (_, None) => problems.push("reading how long the guest has been up".to_string()),
+    }
+}
+
 /// What the guest's own log of the running boot says went wrong with the overlay scripts.
 fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     // Init's messages are in the kernel's buffer, which logd reads, with the audit messages.
@@ -2002,6 +2176,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(format!("reading ro.control_privapp_permissions: {why}")),
     }
     translation_problems(&adb, &dir, &table, &mut problems);
+    gapps_boot_problems(&adb, &dir, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
     play_services_problems(&adb, &gms_probe, &dir, &mut problems);
 
@@ -2378,5 +2553,12 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
             &service,
             &log,
         );
+    }
+    // The one boot with a Play services that runs: none of its alarms, nor any other, may
+    // retry as Play services' flag sync did while it could not write DeviceConfig.
+    let mut storms = Vec::new();
+    alarm_storm_problems(&adb, &dir.join("idle-reclaim-alarms.txt"), &mut storms);
+    if !storms.is_empty() {
+        fail(storms.join("\n"), &service, &log);
     }
 }
