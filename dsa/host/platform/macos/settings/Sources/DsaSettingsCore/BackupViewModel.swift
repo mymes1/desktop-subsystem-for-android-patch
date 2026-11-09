@@ -1,7 +1,27 @@
 import Foundation
 
+/// How the root key of Android's KeyMint is sealed on this Mac, as `dsa backup` reports it under
+/// `keymint_key`.
+public struct KeyProtectionInfo: Equatable, Sendable {
+    /// Whether a key is kept yet; one is made when Android first starts.
+    public var kept: Bool
+    /// `secure-enclave`, `keychain` (and on other hosts `tpm`, `dpapi`, `secret-service`).
+    public var sealedBy: String
+    /// Whether hardware of this Mac holds what seals it.
+    public var hardware: Bool
+    /// What seals it, in the service's words.
+    public var description: String
+    /// Why the Secure Enclave does not seal it, when it does not.
+    public var fallbackReason: String
+    /// Why the latest start of Android could not open it, and what to do.
+    public var problem: String
+}
+
 /// Where the user's app data backup stands, as `dsa backup` reports it.
 public struct BackupInfo: Equatable, Sendable {
+    /// Whether the user turned backup on. Off until they do: it keeps a second copy of the
+    /// apps' user data on this Mac.
+    public var enabled: Bool = false
     /// Whether the service can back up and restore now.
     public var available: Bool
     /// Why it cannot, in the service's words; empty while it can.
@@ -23,12 +43,15 @@ public struct BackupInfo: Equatable, Sendable {
     public var failed: Int
     /// After restoring: how many apps of the backup were installed first.
     public var installed: Int
+    /// How Android's KeyMint root key is sealed; nil from a service that does not say.
+    public var keymintKey: KeyProtectionInfo? = nil
 }
 
 public extension DsaService {
     /// Reads what `dsa backup` printed. A field a service does not report reads as empty.
     static func readBackup(_ json: Json) -> BackupInfo {
         BackupInfo(
+            enabled: json.bool("enabled"),
             available: json.bool("available"),
             problem: json.string("problem"),
             folder: json.string("folder"),
@@ -39,7 +62,22 @@ public extension DsaService {
             lastError: json.string("last_error"),
             succeeded: Int(clamping: json.uint("succeeded")),
             failed: Int(clamping: json.uint("failed")),
-            installed: Int(clamping: json.uint("installed")))
+            installed: Int(clamping: json.uint("installed")),
+            keymintKey: readKeyProtection(json["keymint_key"]))
+    }
+
+    /// Reads `keymint_key`; nil when it is not an object.
+    static func readKeyProtection(_ key: Json) -> KeyProtectionInfo? {
+        guard key.isObject else {
+            return nil
+        }
+        return KeyProtectionInfo(
+            kept: key.bool("kept"),
+            sealedBy: key.string("sealed_by"),
+            hardware: key.bool("hardware"),
+            description: key.string("description"),
+            fallbackReason: key.string("fallback_reason"),
+            problem: key.string("problem"))
     }
 
     /// The words of a recovery key as the user typed or pasted it: dsa takes them as separate
@@ -50,6 +88,13 @@ public extension DsaService {
 
     func backup() async throws -> BackupInfo {
         DsaService.readBackup(try await runJson(["backup", "status"]))
+    }
+
+    /// Turns backup on, or off; off with `deleteBackups`, the backups kept so far and their key
+    /// are removed as well.
+    func setBackup(_ on: Bool, deleteBackups: Bool) async throws -> BackupInfo {
+        let args = on ? ["backup", "on"] : deleteBackups ? ["backup", "off", "--delete-backups"] : ["backup", "off"]
+        return DsaService.readBackup(try await runJson(args))
     }
 
     /// Has Android back up every app now, starting Android first when it is not running. It
@@ -86,6 +131,7 @@ public final class BackupViewModel: ObservableObject {
         case restoring
         case readingKey
         case importingKey
+        case switching
     }
 
     private let service: DsaService
@@ -112,12 +158,65 @@ public final class BackupViewModel: ObservableObject {
     public var isRestoring: Bool { running == .restoring }
     public var isImportingKey: Bool { running == .importingKey }
     public var available: Bool { info?.available ?? false }
+    /// Whether the user turned backup on. Off until they do.
+    public var enabled: Bool { info?.enabled ?? false }
 
+    public var canSwitch: Bool { loaded && !isBusy }
     public var canBackUp: Bool { loaded && available && !isBusy }
     public var canRestore: Bool { loaded && available && !isBusy }
-    public var canShowRecoveryKey: Bool { loaded && !isBusy }
-    /// A key can be given while the backup cannot be read, since that is what it is for.
-    public var canImportRecoveryKey: Bool { loaded && !isBusy }
+    public var canShowRecoveryKey: Bool { loaded && enabled && !isBusy }
+    /// A key can be given while the backup cannot be read, since that is what it is for; only
+    /// while backup is on.
+    public var canImportRecoveryKey: Bool { loaded && enabled && !isBusy }
+
+    /// Whether turning backup off leaves backups behind, which the page offers to delete.
+    public var hasBackupsKept: Bool { (info?.packages ?? 0) > 0 }
+
+    /// What the switch says under its title: what backup keeps, and while it is off, what
+    /// earlier backups are still kept.
+    public var switchDetail: String {
+        guard let info, !info.enabled, info.packages > 0 else {
+            return text.get("Backup_SwitchDetail")
+        }
+        return text.get("Backup_SwitchDetail") + "\n"
+            + text.format("Backup_OffKept", info.packages, AppsViewModel.size(info.size))
+    }
+
+    /// What the page asks when backup is turned off while backups are kept.
+    public var deleteQuestion: String {
+        text.format("Backup_DeleteQuestion", info?.packages ?? 0, AppsViewModel.size(info?.size ?? 0))
+    }
+
+    /// How Android's keys are protected; nil from a service that does not say.
+    public var keyProtection: KeyProtectionInfo? { info?.keymintKey }
+
+    /// What protects Android's keys on this Mac, in the user's language.
+    public var keyProtectionText: String {
+        guard let key = keyProtection else { return "" }
+        if !key.kept { return text.get("KeyProtection_None") }
+        switch key.sealedBy {
+        case "secure-enclave": return text.get("KeyProtection_SecureEnclave")
+        case "keychain": return text.get("KeyProtection_Keychain")
+        default:
+            return key.hardware
+                ? text.format("KeyProtection_Hardware", key.description)
+                : text.format("KeyProtection_Store", key.description)
+        }
+    }
+
+    /// Why the Secure Enclave does not seal Android's keys, when it does not.
+    public var keyProtectionReason: String? {
+        guard let key = keyProtection, key.kept, !key.hardware, !key.fallbackReason.isEmpty else {
+            return nil
+        }
+        return text.format("KeyProtection_Why", key.fallbackReason)
+    }
+
+    /// Why the latest start of Android could not open its keys.
+    public var keyProblem: String? {
+        guard let problem = keyProtection?.problem, !problem.isEmpty else { return nil }
+        return problem
+    }
 
     /// Whether `key` has anything to send.
     public func canImport(_ key: String) -> Bool {
@@ -151,8 +250,12 @@ public final class BackupViewModel: ObservableObject {
     }
 
     /// Why the backup cannot be used now; nil while it can or before the service answered.
+    /// Off is the user's choice, not a problem.
     public var problemText: String? {
         guard let info, !info.available else {
+            return nil
+        }
+        if !info.enabled && info.problem.isEmpty {
             return nil
         }
         return info.problem.isEmpty ? text.get("Backup_UnavailableUnknown") : info.problem
@@ -171,7 +274,7 @@ public final class BackupViewModel: ObservableObject {
         switch running {
         case .backingUp: return text.get("Backup_BackingUp")
         case .restoring: return text.get("Backup_Restoring")
-        case .readingKey, .importingKey, .none: return nil
+        case .readingKey, .importingKey, .switching, .none: return nil
         }
     }
 
@@ -220,6 +323,17 @@ public final class BackupViewModel: ObservableObject {
             self.error = Format.problem(text, error)
         }
         running = nil
+    }
+
+    /// Turns backup on, or off. The page asks first, when backups are kept, whether turning it
+    /// off deletes them (`deleteBackups`); this does not ask again.
+    public func setEnabled(_ on: Bool, deleteBackups: Bool = false) async {
+        if !canSwitch { return }
+        recoveryKey = nil
+        await act(.switching, { try await service.setBackup(on, deleteBackups: !on && deleteBackups) }, done: { _ in
+            on ? self.text.get("Backup_TurnedOn")
+                : deleteBackups ? self.text.get("Backup_TurnedOffDeleted") : self.text.get("Backup_TurnedOff")
+        })
     }
 
     /// Backs up every app now.

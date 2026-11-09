@@ -6,17 +6,17 @@ import XCTest
 @MainActor
 final class BackupTests: XCTestCase {
     private let ready = #"""
-    {"available":true,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":1762729233000,
+    {"enabled":true,"available":true,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":1762729233000,
     "last_restore_unix_ms":0,"packages":12,"size":52428800,"last_error":"","succeeded":0,"failed":0,"installed":0}
     """#
 
     private let never = #"""
-    {"available":true,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":0,
+    {"enabled":true,"available":true,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":0,
     "last_restore_unix_ms":0,"packages":0,"size":0,"last_error":"","succeeded":0,"failed":0,"installed":0}
     """#
 
     private let unavailable = #"""
-    {"available":false,"problem":"the backup folder was made with another key; give its recovery key",
+    {"enabled":true,"available":false,"problem":"the backup folder was made with another key; give its recovery key",
     "folder":"/Users/me/DSA Backup","last_backup_unix_ms":0,"last_restore_unix_ms":0,"packages":3,"size":1024,
     "last_error":"","succeeded":0,"failed":0,"installed":0}
     """#
@@ -29,7 +29,7 @@ final class BackupTests: XCTestCase {
     func test_fr36_backup_status_reads_the_service_report() async {
         let info = DsaService.readBackup(try! Json.parse(ready))
         XCTAssertEqual(info, BackupInfo(
-            available: true, problem: "", folder: "/Users/me/DSA Backup", lastBackupMs: 1_762_729_233_000,
+            enabled: true, available: true, problem: "", folder: "/Users/me/DSA Backup", lastBackupMs: 1_762_729_233_000,
             lastRestoreMs: 0, packages: 12, size: 52_428_800, lastError: "", succeeded: 0, failed: 0, installed: 0))
 
         let (cli, vm) = make()
@@ -200,5 +200,72 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(vm.problemText, "the backup folder was made with another key; give its recovery key")
         vm.clearKeyError()
         XCTAssertNil(vm.keyError)
+    }
+
+    private let off = #"""
+    {"enabled":false,"available":false,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":0,
+    "last_restore_unix_ms":0,"packages":0,"size":0,"last_error":"","succeeded":0,"failed":0,"installed":0,
+    "keymint_key":{"kept":true,"sealed_by":"secure-enclave","hardware":true,"description":"the Mac's Secure Enclave",
+    "fallback_reason":"","problem":""}}
+    """#
+
+    private let offKept = #"""
+    {"enabled":false,"available":false,"problem":"","folder":"/Users/me/DSA Backup","last_backup_unix_ms":1762729233000,
+    "last_restore_unix_ms":0,"packages":12,"size":52428800,"last_error":"","succeeded":0,"failed":0,"installed":0}
+    """#
+
+    func test_fr36_backup_is_off_until_turned_on_and_off_is_no_problem() async {
+        let (cli, vm) = make()
+        cli.answer("backup status --json", off)
+        cli.answer("backup on --json", never)
+        await vm.load()
+        XCTAssertFalse(vm.enabled)
+        XCTAssertNil(vm.problemText, "off is the user's choice, not a problem")
+        XCTAssertTrue(vm.canSwitch)
+        XCTAssertFalse(vm.canBackUp)
+        XCTAssertFalse(vm.canShowRecoveryKey)
+        XCTAssertFalse(vm.canImportRecoveryKey)
+        XCTAssertEqual(vm.switchDetail, "Backup_SwitchDetail")
+        await vm.setEnabled(true)
+        XCTAssertTrue(cli.called("backup on --json"))
+        XCTAssertTrue(vm.enabled)
+        XCTAssertEqual(vm.result, "Backup_TurnedOn")
+        XCTAssertTrue(vm.canBackUp)
+    }
+
+    func test_fr36_turning_backup_off_keeps_or_deletes_the_backups() async {
+        let (cli, vm) = make()
+        cli.answer("backup status --json", ready)
+        cli.answer("backup off --json", offKept)
+        cli.answer("backup off --delete-backups --json", off)
+        await vm.load()
+        XCTAssertTrue(vm.hasBackupsKept)
+        XCTAssertEqual(vm.deleteQuestion, "Backup_DeleteQuestion")
+        await vm.setEnabled(false)
+        XCTAssertTrue(cli.called("backup off --json"))
+        XCTAssertEqual(vm.result, "Backup_TurnedOff")
+        XCTAssertEqual(vm.switchDetail, "Backup_SwitchDetail\nBackup_OffKept")
+        await vm.setEnabled(false, deleteBackups: true)
+        XCTAssertTrue(cli.called("backup off --delete-backups --json"))
+        XCTAssertEqual(vm.result, "Backup_TurnedOffDeleted")
+        XCTAssertFalse(vm.hasBackupsKept)
+    }
+
+    func test_fr36_the_item_says_what_seals_androids_keys() async {
+        let (cli, vm) = make()
+        cli.answer("backup status --json", off)
+        await vm.load()
+        XCTAssertEqual(vm.keyProtectionText, "KeyProtection_SecureEnclave")
+        XCTAssertNil(vm.keyProtectionReason)
+        XCTAssertNil(vm.keyProblem)
+
+        let keychain = DsaService.readKeyProtection(try! Json.parse(#"""
+        {"kept":true,"sealed_by":"keychain","hardware":false,"description":"your login keychain",
+        "fallback_reason":"this Mac has no Secure Enclave DSA can use","problem":"the Mac has not been unlocked"}
+        """#))
+        XCTAssertEqual(keychain?.sealedBy, "keychain")
+        XCTAssertEqual(keychain?.fallbackReason, "this Mac has no Secure Enclave DSA can use")
+        XCTAssertNil(DsaService.readKeyProtection(try! Json.parse(#"{"keymint_key":null}"#)["keymint_key"]))
+        XCTAssertNil(DsaService.readBackup(try! Json.parse(ready)).keymintKey, "an older service says nothing")
     }
 }

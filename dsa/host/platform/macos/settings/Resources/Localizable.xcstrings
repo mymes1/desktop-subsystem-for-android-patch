@@ -9952,6 +9952,312 @@
         }
       }
     },
+    "BackupSwitch.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up apps' data to this Mac"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 Mac에 앱 데이터 백업"
+          }
+        }
+      }
+    },
+    "Backup_SwitchDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keeps a second copy of your Android apps' user data on this Mac, encrypted, so it can be restored after a data reset or on another Mac. It is off until you turn it on."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 앱의 사용자 데이터를 암호화해 이 Mac에 한 벌 더 보관합니다. 데이터를 초기화한 뒤나 다른 Mac에서 복원할 수 있습니다. 켜기 전까지는 꺼져 있습니다."
+          }
+        }
+      }
+    },
+    "Backup_OffKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earlier backups of {0} apps ({1}) are still kept in your DSA Backup folder."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앞서 만든 앱 {0}개의 백업({1})이 DSA Backup 폴더에 아직 남아 있습니다."
+          }
+        }
+      }
+    },
+    "Backup_DeleteQuestion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backups of {0} apps ({1}) are still kept on this Mac. Delete them and their key as well, or keep them for a later restore?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 {0}개의 백업({1})이 이 Mac에 아직 남아 있습니다. 백업과 그 키도 삭제할까요, 나중에 복원하도록 남겨 둘까요?"
+          }
+        }
+      }
+    },
+    "BackupOffConfirm.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off backup?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 끌까요?"
+          }
+        }
+      }
+    },
+    "BackupOffConfirm.Delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Backups"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업 삭제"
+          }
+        }
+      }
+    },
+    "BackupOffConfirm.Keep": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Them"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "남겨 두기"
+          }
+        }
+      }
+    },
+    "Backup_TurnedOn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup is on. Android backs up its apps' data to this Mac from now on."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 켰습니다. 이제부터 Android가 앱 데이터를 이 Mac에 백업합니다."
+          }
+        }
+      }
+    },
+    "Backup_TurnedOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup is off. The backups made so far are kept."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 껐습니다. 지금까지 만든 백업은 남아 있습니다."
+          }
+        }
+      }
+    },
+    "Backup_TurnedOffDeleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup is off, and the backups and their key were deleted."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 끄고, 백업과 그 키를 삭제했습니다."
+          }
+        }
+      }
+    },
+    "KeyProtectionCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection of Android's keys"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 키 보호"
+          }
+        }
+      }
+    },
+    "KeyProtection_None": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android's keys get their protection the first time Android starts."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android를 처음 시작할 때 Android의 키 보호가 정해집니다."
+          }
+        }
+      }
+    },
+    "KeyProtection_SecureEnclave": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sealed by this Mac's Secure Enclave. A copy of Android's disk cannot open the apps' keys or Android's encrypted storage anywhere else."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 Mac의 Secure Enclave로 봉인되어 있습니다. Android 디스크를 복사해도 다른 곳에서는 앱의 키와 Android의 암호화된 저장소를 열 수 없습니다."
+          }
+        }
+      }
+    },
+    "KeyProtection_Keychain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kept by your login keychain only, because the Secure Enclave cannot be used. Once it can, DSA seals the keys with it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure Enclave를 쓸 수 없어 로그인 키체인에만 보관합니다. 쓸 수 있게 되면 DSA가 키를 Secure Enclave로 봉인합니다."
+          }
+        }
+      }
+    },
+    "KeyProtection_Hardware": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sealed by {0}."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}(으)로 봉인되어 있습니다."
+          }
+        }
+      }
+    },
+    "KeyProtection_Store": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kept by {0}."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}에 보관되어 있습니다."
+          }
+        }
+      }
+    },
+    "KeyProtection_Why": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why not the Secure Enclave: {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure Enclave를 쓰지 않는 까닭: {0}"
+          }
+        }
+      }
+    },
+    "KeyProblemBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android's keys could not be opened"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android의 키를 열지 못했습니다"
+          }
+        }
+      }
+    },
     "Backup_Contents": {
       "extractionState": "manual",
       "localizations": {
