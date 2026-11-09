@@ -6170,9 +6170,12 @@ class RootElevationImageTests(unittest.TestCase):
             source = root / "source.zip"
             with zipfile.ZipFile(source, "w") as archive:
                 archive.writestr("SYSTEM/bin/su", b"old su")
+                archive.writestr("SYSTEM/xbin/su", b"aosp setuid su")
                 archive.writestr(
                     "META/filesystem_config.txt",
-                    "system/bin/su 0 0 6755 capabilities=0x0\nsystem/xbin 0 2000 750 capabilities=0x0\n",
+                    "system/bin/su 0 0 6755 capabilities=0x0\n"
+                    "system/xbin 0 2000 750 capabilities=0x0\n"
+                    "system/xbin/su 0 2000 4750 capabilities=0x0\n",
                 )
             daemon = root / "dsa-channeld"
             client = root / "su"
@@ -6183,11 +6186,13 @@ class RootElevationImageTests(unittest.TestCase):
             with zipfile.ZipFile(modified) as archive:
                 self.assertEqual(archive.read("SYSTEM/bin/su"), b"unprivileged client")
                 self.assertEqual(archive.namelist().count("SYSTEM/bin/su"), 1)
+                self.assertNotIn("SYSTEM/xbin/su", archive.namelist())
                 config = archive.read("META/filesystem_config.txt").decode().splitlines()
                 self.assertIn("system/bin/su 0 0 755 capabilities=0x0", config)
                 self.assertNotIn("system/bin/su 0 0 6755 capabilities=0x0", config)
                 self.assertIn("system/xbin 0 2000 755 capabilities=0x0", config)
                 self.assertNotIn("system/xbin 0 2000 750 capabilities=0x0", config)
+                self.assertNotIn("system/xbin/su 0 2000 4750 capabilities=0x0", config)
 
     def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
         # The guard does nothing until something writes it, and the helper runs only while root
@@ -6305,7 +6310,11 @@ class RootElevationImageTests(unittest.TestCase):
         ).encode()
         files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
         del files["SYSTEM/bin/su"]
-        files[make_image.SYSTEM_FS_CONFIG] = b"system/xbin 0 2000 750 capabilities=0x0\n"
+        files["SYSTEM/xbin/su"] = b"aosp su"
+        files[make_image.SYSTEM_FS_CONFIG] = (
+            b"system/xbin 0 2000 750 capabilities=0x0\n"
+            b"system/xbin/su 0 2000 4750 capabilities=0x0\n"
+        )
         rc = files[make_image.CHANNELD_RC].decode()
         files[make_image.CHANNELD_RC] = "\n".join(
             line for line in rc.splitlines() if line != "    seclabel u:r:dsa_su:s0"
@@ -6313,6 +6322,7 @@ class RootElevationImageTests(unittest.TestCase):
         problems = make_image.root_elevation_problems(list(files), files.__getitem__)
         expected = [
             "SYSTEM/bin/su is missing",
+            "SYSTEM/xbin/su is in the image",
             "apps cannot connect to the elevation helper",
             "untrusted_app may enter dsa_su_root",
             "dsa_channeld may write the su guard",
@@ -6320,6 +6330,7 @@ class RootElevationImageTests(unittest.TestCase):
             "META/file_contexts.bin does not label /system/bin/su dsa_su_exec",
             'lacks "seclabel u:r:dsa_su:s0"',
             "does not make system/xbin mode 755",
+            "still lists system/xbin/su",
         ]
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
