@@ -1033,8 +1033,10 @@ jobs:
   # the zygote loads it, and arm64-v8a offered. Then with a small
   # Google apps build, installed through the local API from a mirror in the check's folder:
   # after Android starts again the image must be mounted and laid over each folder of /product
-  # and /system_ext it fills, never a partition's root. In neither boot may init log a failed
-  # command of the scripts, a denial of a mount or of the translator, or overlayfs a failure.
+  # and /system_ext it fills, never a partition's root. Both images must be mounted straight
+  # from their files with directio, with no loop device behind them. In neither boot may init
+  # log a failed command of the scripts, a denial of a mount or of the translator, or overlayfs
+  # a failure.
   #
   # graphics: the host renderer on Mesa's software Vulkan driver. hello-gl2 (OpenGL ES through
   # ANGLE) and hello-vulkan are installed through the local API and opened in task windows,

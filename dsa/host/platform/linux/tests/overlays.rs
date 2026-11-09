@@ -1,10 +1,13 @@
 //! The images init puts in the system on the real image, with SELinux enforcing: the default
 //! ARM translation package and a user's Google apps.
 //!
-//! Each is an erofs image that init mounts through a loop device with `context=` (the
-//! translation labelled as system libraries, the Google apps as system files), before the
-//! zygote starts. A `context=` mount is checked against the type it names as well as the
-//! filesystem's own, and when the policy allowed only the latter every boot refused both mounts
+//! Each is an erofs image that init mounts with `context=` (the translation labelled as system
+//! libraries, the Google apps as system files), before the zygote starts. erofs reads each
+//! image file itself, with `directio`: no loop device may back either mount, and the mount's
+//! source must be the image file, because a loop device kept every page read from the image
+//! twice, once in erofs's cache and once in the image file's. A `context=` mount is checked
+//! against the type it names as well as the filesystem's own, and when the policy allowed only
+//! the latter every boot refused both mounts
 //! ("avc: denied { relabelfrom } ... tclass=filesystem"): Android started with no translator and
 //! no Google Play, and nothing but the log said so.
 //!
@@ -85,6 +88,16 @@ use dsa_host_unix::socket::UnixLocalConnector;
 const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc"];
 /// Where the translation package is mounted.
 const TRANSLATION_POINT: &str = "/mnt/dsa-arm-translation";
+/// The files the translation package is mounted from: a package the user installed, or the
+/// image's default one.
+const TRANSLATION_IMAGES: &[&str] = &[
+    "/data/vendor/dsa/arm-translation/system.img",
+    "/system/etc/dsa/arm-translation/default.img",
+];
+/// The file the Google apps image is mounted from.
+const GAPPS_IMAGE: &str = "/data/vendor/dsa/gapps/system.img";
+/// The major number of loop devices.
+const LOOP_MAJOR: &str = "7";
 /// Where each part of the package is bound, and the part, as a path inside the image.
 const TRANSLATION_BINDS: &[(&str, &str)] = &[
     ("/system_ext/lib64", "/system/lib64"),
@@ -331,12 +344,17 @@ struct Adb {
 impl Adb {
     /// Runs adb with `args` against the guest, for [ADB_LIMIT] at most.
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
+        self.run_for(args, ADB_LIMIT)
+    }
+
+    /// Runs adb with `args` against the guest, for `limit` at most.
+    fn run_for(&self, args: &[&str], limit: Duration) -> Result<Vec<u8>, String> {
         let out = run_bounded(
             Command::new(&self.program)
                 .arg("-s")
                 .arg(&self.serial)
                 .args(args),
-            ADB_LIMIT,
+            limit,
             usize::MAX,
         )?;
         match out.status {
@@ -350,7 +368,7 @@ impl Adb {
             None => Err(format!(
                 "adb {} did not finish within {} s and was stopped",
                 args.join(" "),
-                ADB_LIMIT.as_secs()
+                limit.as_secs()
             )),
         }
     }
@@ -411,13 +429,14 @@ impl Adb {
 
 /// One line of `/proc/self/mountinfo`: the device, the folder of its filesystem that is
 /// mounted (`/` for the whole of it, a folder for a bind), where, the mount's own options, the
-/// filesystem type and the filesystem's options.
+/// filesystem type, what it was mounted from and the filesystem's options.
 struct Mount<'a> {
     device: &'a str,
     root: &'a str,
     point: &'a str,
     options: &'a str,
     kind: &'a str,
+    source: &'a str,
     super_options: &'a str,
 }
 
@@ -435,7 +454,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
             let options = fields.next().unwrap_or("");
             let mut fields = theirs.split_whitespace();
             let kind = fields.next()?;
-            let _source = fields.next();
+            let source = fields.next().unwrap_or("");
             let super_options = fields.next().unwrap_or("");
             Some(Mount {
                 device,
@@ -443,6 +462,7 @@ fn mounts(table: &str) -> Vec<Mount<'_>> {
                 point,
                 options,
                 kind,
+                source,
                 super_options,
             })
         })
@@ -453,8 +473,40 @@ fn has_option(options: &str, wanted: &str) -> bool {
     options.split(',').any(|option| option == wanted)
 }
 
+/// What is wrong with how the erofs image mounted at `image.point` reads its file: no loop
+/// device may back it (its device is not a loop device, and it was not mounted from one), it
+/// must be mounted from one of `files`, and with `directio`. A loop device keeps every page
+/// read from the image a second time, in the image file's own page cache.
+fn file_backed_problems(image: &Mount<'_>, files: &[&str]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let loop_device = image.device.split(':').next() == Some(LOOP_MAJOR)
+        || image.source.starts_with("/dev/block/loop")
+        || image.source.starts_with("/dev/loop");
+    if loop_device {
+        problems.push(format!(
+            "a loop device ({}, device {}) backs {}, so every page read from the image is cached twice",
+            image.source, image.device, image.point
+        ));
+    } else if !files.contains(&image.source) {
+        problems.push(format!(
+            "{} is mounted from {:?}, not from the image file ({})",
+            image.point,
+            image.source,
+            files.join(" or ")
+        ));
+    }
+    if !has_option(image.super_options, "directio") {
+        problems.push(format!(
+            "{} is mounted without directio ({}), so erofs reads its file through the file's page cache",
+            image.point, image.super_options
+        ));
+    }
+    problems
+}
+
 /// What is wrong with the mount table `table` for the translation package: it must be mounted
-/// at [`TRANSLATION_POINT`] and each part bound where [`TRANSLATION_BINDS`] says, from that
+/// at [`TRANSLATION_POINT`] from one of [`TRANSLATION_IMAGES`] itself (see
+/// [`file_backed_problems`]) and each part bound where [`TRANSLATION_BINDS`] says, from that
 /// same image; nothing may be mounted on [`PROGRAM_FOLDERS`] or laid over a partition.
 fn translation_mount_problems(table: &str) -> Vec<String> {
     let table = mounts(table);
@@ -465,6 +517,7 @@ fn translation_mount_problems(table: &str) -> Vec<String> {
     match image {
         None => problems.push(format!("no erofs image is mounted at {TRANSLATION_POINT}")),
         Some(image) => {
+            problems.extend(file_backed_problems(image, TRANSLATION_IMAGES));
             for (point, part) in TRANSLATION_BINDS {
                 let bound = table.iter().find(|m| m.point == *point);
                 match bound {
@@ -505,16 +558,18 @@ fn program_folder_problems(table: &[Mount<'_>]) -> Vec<String> {
 }
 
 /// What is wrong with the mount table `table` for the Google apps image: it must be mounted at
-/// [`GAPPS_POINT`] and laid over each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder
-/// as the upper of the lower layers, and not nosuid, as the partitions are not.
+/// [`GAPPS_POINT`] from [`GAPPS_IMAGE`] itself (see [`file_backed_problems`]) and laid over
+/// each of [`GAPPS_FOLDERS`] with overlayfs, the image's folder as the upper of the lower
+/// layers, and not nosuid, as the partitions are not.
 fn gapps_mount_problems(table: &str) -> Vec<String> {
     let parsed = mounts(table);
     let mut problems = Vec::new();
-    if !parsed
+    match parsed
         .iter()
-        .any(|m| m.point == GAPPS_POINT && m.kind == "erofs")
+        .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
     {
-        problems.push(format!("no erofs image is mounted at {GAPPS_POINT}"));
+        None => problems.push(format!("no erofs image is mounted at {GAPPS_POINT}")),
+        Some(image) => problems.extend(file_backed_problems(image, &[GAPPS_IMAGE])),
     }
     for folder in GAPPS_FOLDERS {
         let layer = format!("{GAPPS_POINT}{folder}");
@@ -847,13 +902,13 @@ const BOUND: &str = "\
 20 1 254:0 / / ro,relatime shared:1 - erofs /dev/block/dm-0 ro,seclabel\n\
 21 1 254:3 / /system_ext ro,relatime shared:2 - erofs /dev/block/dm-3 ro,seclabel\n\
 22 1 254:2 / /product ro,relatime shared:3 - erofs /dev/block/dm-2 ro,seclabel\n\
-90 30 7:8 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-91 21 7:8 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-92 20 7:8 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-93 20 7:8 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-94 20 7:8 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-95 20 7:8 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
-98 20 7:8 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /dev/block/loop8 ro,seclabel\n\
+90 30 0:48 / /mnt/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+91 21 0:48 /system/lib64 /system_ext/lib64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+92 20 0:48 /system/lib64/arm64 /system/lib64/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+93 20 0:48 /system/bin/arm64 /system/bin/arm64 ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+94 20 0:48 /system/bin /system/bin/dsa-arm-translation ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+95 20 0:48 /system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
+98 20 0:48 /system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so ro,nosuid,nodev,relatime shared:40 - erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio\n\
 96 31 0:41 / /proc/sys/fs/binfmt_misc rw,nosuid,nodev,noexec,relatime shared:41 - binfmt_misc binfmt_misc rw\n";
 
 #[test]
@@ -894,13 +949,13 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
 
     // A part bound onto the wrong place, or from another image, does not count.
     let crossed = BOUND.replace(
-        "7:8 /system/bin /system/bin/dsa-arm-translation",
-        "7:8 /system/etc /system/bin/dsa-arm-translation",
+        "0:48 /system/bin /system/bin/dsa-arm-translation",
+        "0:48 /system/etc /system/bin/dsa-arm-translation",
     );
     assert_eq!(translation_mount_problems(&crossed).len(), 1);
     let other = BOUND.replace(
-        "7:8 /system/lib64 /system_ext/lib64",
-        "7:9 /system/lib64 /system_ext/lib64",
+        "0:48 /system/lib64 /system_ext/lib64",
+        "0:49 /system/lib64 /system_ext/lib64",
     );
     assert_eq!(translation_mount_problems(&other).len(), 1);
     // A partition laid over is found too.
@@ -908,6 +963,59 @@ fn fr25_a_translation_package_out_of_its_places_is_found_in_the_mount_table() {
         "{BOUND}97 20 0:43 / /system_ext ro,relatime - overlay overlay ro,lowerdir=/a:/system_ext\n"
     );
     assert_eq!(translation_mount_problems(&partition).len(), 1);
+}
+
+#[test]
+fn nfr2_fr25_fr32_an_image_mounted_through_a_loop_device_is_found_in_the_mount_table() {
+    // What v0.2.1 mounted: both images through loop devices, every page read from them kept
+    // twice. The translation's binds share its device, so they still match.
+    let looped = BOUND.replace("0:48 ", "7:8 ").replace(
+        "erofs /system/etc/dsa/arm-translation/default.img ro,seclabel,directio",
+        "erofs /dev/block/loop8 ro,seclabel",
+    );
+    let problems = translation_mount_problems(&looped);
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0]
+        .contains("a loop device (/dev/block/loop8, device 7:8) backs /mnt/dsa-arm-translation"));
+    assert!(problems[1].contains("without directio"));
+    // A loop device is found by its device number too, whatever the source says.
+    let numbered = BOUND.replace(
+        "0:48 / /mnt/dsa-arm-translation",
+        "7:8 / /mnt/dsa-arm-translation",
+    );
+    assert!(translation_mount_problems(&numbered)
+        .iter()
+        .any(|p| p.contains("a loop device")));
+    // A package the user installed is mounted from its own file.
+    let installed = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/vendor/dsa/arm-translation/system.img",
+    );
+    assert_eq!(translation_mount_problems(&installed), Vec::<String>::new());
+    // A file that is not the package's is not it.
+    let elsewhere = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/data/local/tmp/other.img",
+    );
+    let problems = translation_mount_problems(&elsewhere);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("not from the image file"));
+
+    let gapps = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n";
+    let problems = gapps_mount_problems(gapps);
+    assert!(
+        problems.iter().any(
+            |p| p.contains("a loop device (/dev/block/loop9, device 7:9) backs /mnt/dsa-gapps")
+        ),
+        "{problems:?}"
+    );
+    assert!(problems
+        .iter()
+        .any(|p| p.contains("/mnt/dsa-gapps is mounted without directio")));
+    let gapps = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n";
+    assert!(!gapps_mount_problems(gapps)
+        .iter()
+        .any(|p| p.contains("loop device") || p.contains("directio") || p.contains("image file")));
 }
 
 #[test]
@@ -1131,7 +1239,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(mount_denials(log).len(), 1);
 
     let mut good =
-        String::from("80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n");
+        String::from("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n");
     for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
         good.push_str(&format!(
             "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
@@ -1147,7 +1255,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     );
     assert_eq!(gapps_mount_problems(&nosuid).len(), GAPPS_FOLDERS.len());
     // What develop 3b9b304c laid over: the partitions' roots, whose services then fail.
-    let roots = "80 30 7:9 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /dev/block/loop9 ro,seclabel\n\
+    let roots = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n\
                  81 1 0:50 / /product ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/product:/product\n\
                  82 1 0:51 / /system_ext ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n";
     let problems = gapps_mount_problems(roots);
