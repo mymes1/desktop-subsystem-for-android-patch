@@ -103,7 +103,12 @@
 //! `xapk`, `apks` or `apkm`), `apks` (the names of the APKs that would be installed, the base
 //! first), `split_count` (how many of them are splits), `obbs` (the expansion files),
 //! `total_size` (all of them, in bytes) and `install_abi` (the ABI chosen from the splits, or
-//! null). A file it cannot read fails as `dsa install` does.
+//! null), and `runs_arm64`: whether this computer's Android runs `arm64-v8a` code, natively or
+//! through its ARM translator (what the running Android's ABI list says, or while it is not
+//! running, whether it starts with a translator), or null when the service cannot say. An app
+//! whose native code is all for other processors may not run; one with `arm64-v8a` code runs
+//! where `runs_arm64` is true, and one with only 32-bit ARM code does not, since no
+//! translator runs it. A file it cannot read fails as `dsa install` does.
 //!
 //! `dsa open` sends a file from this computer to Android, which asks which app opens it; that
 //! app shows in a window of its own. `dsa share` does the same for sharing the file with an
@@ -3761,6 +3766,16 @@ pub fn describe_apk(
     out
 }
 
+/// Whether this computer's Android runs `arm64-v8a` code, natively or through its ARM
+/// translator: what the running Android's ABI list says, or, while it is not running, whether
+/// it starts with a translator.
+pub fn runs_arm64(status: &ArmTranslationStatus) -> bool {
+    match &status.guest {
+        Some(guest) => native_abi::translates_arm64(&guest.abilist),
+        None => status.translator.is_some(),
+    }
+}
+
 /// `dsa apk-info`: reads the APK, and when Android runs, asks what it has of the package.
 /// Never starts Android or the service.
 fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<String, String> {
@@ -3773,10 +3788,15 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
     let mut installed = None;
     let mut kind = None;
     let mut device = None;
+    let mut arm64 = None;
     if let Ok(mut client) = connect(connector, None, false, Duration::from_secs(5)) {
         if bundle.is_some() {
             device = Some(bundle_device(Some(&mut client)));
         }
+        arm64 = client
+            .arm_translation()
+            .ok()
+            .map(|status| runs_arm64(&status));
         android = "stopped";
         if client
             .status()
@@ -3803,6 +3823,9 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
     Ok(if invocation.json {
         let mut json = apk_info_json(&info, android, installed.as_ref(), kind);
         add_install_files(&mut json, &info, chosen);
+        if let Value::Object(fields) = &mut json {
+            fields.insert("runs_arm64".into(), json!(arm64));
+        }
         json.to_string()
     } else {
         let mut text = describe_apk(&info, installed.as_ref(), kind);
