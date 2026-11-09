@@ -64,6 +64,9 @@ so expect rough edges. Linux and macOS are in progress (see
 - Text clipboard shared both ways, links opened in the host browser, host files opened and
   shared into Android apps, shared folders.
 - APK install by double-click, from the context menu, or with `dsa install`.
+- "Share on PC" in Android's share sheet: text, links and files go to the Windows share
+  window, Nearby sharing included (the share menu on macOS, the desktop's app chooser on
+  Linux).
 
 **System**
 
@@ -71,6 +74,9 @@ so expect rough edges. Linux and macOS are in progress (see
   idle memory returned to the host. Freezing Android is an option, off by default.
 - Host devices lent to Android: GPU (Vulkan remoting through gfxstream, OpenGL ES through
   ANGLE), audio, video codecs, microphone, camera, location, sensors and power.
+- Android's network location and address lookups (`Geocoder`) answered by the host, with or
+  without Google Play. On Windows and Linux the addresses come from OpenStreetMap's
+  Nominatim, with no key: data © OpenStreetMap contributors, under the ODbL.
 - An ARM translation layer for ARM-only apps on x64: the open source translator Digitalis
   comes with the x64 image, and Google's translator or another package can replace it.
 - Signed automatic updates of both the Android image and DSA itself, with a failed image
