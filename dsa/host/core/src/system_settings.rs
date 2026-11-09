@@ -1,5 +1,6 @@
 //! The host's system settings, which each user's Android follows: the time zone, the display
-//! languages, the regional format, the app theme (light or dark) and the accent color.
+//! languages, the regional format, the app theme (light or dark), the accent color and the
+//! text size.
 //!
 //! The platform reads them in the user's own session, where they belong to the user (on
 //! Windows, the window manager reads them and watches for `WM_SETTINGCHANGE`), and hands them
@@ -19,6 +20,7 @@ use dsa_protocol::control;
 use dsa_protocol::host_api::types;
 use dsa_transport::Connector;
 
+use crate::guest_display;
 use crate::host_api::HostApiClient;
 
 /// How long [`follow`] waits for the service to answer.
@@ -48,6 +50,10 @@ pub struct SystemSettings {
     pub dark_mode: bool,
     /// The accent color as 0xAARRGGBB; 0 when there is none.
     pub accent_color: u32,
+    /// The size of text the user asked for, in percent of the default (Windows' text size,
+    /// a desktop's text scaling factor); 0 when unknown, which counts as 100. The guest's
+    /// font scale follows it ([`guest_display::font_scale`]).
+    pub text_scale_percent: u32,
 }
 
 /// Whether `tag` reads as a BCP 47 language tag: ASCII letters and digits in parts of one to
@@ -111,10 +117,19 @@ impl SystemSettings {
             },
             dark_mode: self.dark_mode,
             accent_color: self.accent_color,
+            text_scale_percent: match self.text_scale_percent {
+                0 => 0,
+                percent => percent.clamp(
+                    guest_display::MIN_TEXT_SCALE_PERCENT,
+                    guest_display::MAX_TEXT_SCALE_PERCENT,
+                ),
+            },
         }
     }
 
-    /// The control message that carries these settings to the guest.
+    /// The control message that carries these settings to the guest. The font scale is
+    /// always set, even when the text size is unknown: Android draws at 96 dpi at a scale of
+    /// 100%, and at a font scale of 1 its text would be 0.6 of the host's size.
     pub fn to_control(&self) -> control::SystemSettings {
         control::SystemSettings {
             time_zone: self.time_zone.clone(),
@@ -124,6 +139,7 @@ impl SystemSettings {
             first_day_of_week: self.first_day_of_week,
             dark_mode: self.dark_mode,
             accent_color: self.accent_color,
+            font_scale: guest_display::font_scale(self.text_scale_percent),
         }
     }
 
@@ -137,6 +153,7 @@ impl SystemSettings {
             first_day_of_week: settings.first_day_of_week,
             dark_mode: settings.dark_mode,
             accent_color: settings.accent_color,
+            text_scale_percent: settings.text_scale_percent,
         }
         .checked()
     }
@@ -151,6 +168,7 @@ impl SystemSettings {
             first_day_of_week: self.first_day_of_week,
             dark_mode: self.dark_mode,
             accent_color: self.accent_color,
+            text_scale_percent: self.text_scale_percent,
         }
     }
 }
@@ -219,10 +237,15 @@ pub fn follow(
                     }
                     log(&format!(
                         "system settings: Android follows time zone {:?}, languages {:?}, \
-                         {} theme",
+                         {} theme, text size {}%",
                         settings.time_zone,
                         settings.locales,
-                        if settings.dark_mode { "dark" } else { "light" }
+                        if settings.dark_mode { "dark" } else { "light" },
+                        if settings.text_scale_percent == 0 {
+                            100
+                        } else {
+                            settings.text_scale_percent
+                        }
                     ));
                     told = Some(settings);
                 }
@@ -253,6 +276,7 @@ mod tests {
             first_day_of_week: 7,
             dark_mode: true,
             accent_color: 0xFF00_78D4,
+            text_scale_percent: 100,
         }
     }
 

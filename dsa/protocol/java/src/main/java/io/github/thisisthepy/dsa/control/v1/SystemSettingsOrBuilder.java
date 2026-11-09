@@ -137,4 +137,18 @@ public interface SystemSettingsOrBuilder extends
    * @return The accentColor.
    */
   int getAccentColor();
+
+  /**
+   * <pre>
+   * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+   * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+   * a host pixel, and scales text separately from everything else, so this is 160/96 times
+   * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+   * the guest's as it is.
+   * </pre>
+   *
+   * <code>float font_scale = 8;</code>
+   * @return The fontScale.
+   */
+  float getFontScale();
 }

@@ -135,11 +135,11 @@ mod tests {
         assert_eq!(dpi_from_mode(2880, 1440), Some(192));
         assert_eq!(dpi_from_mode(1920, 1920), Some(96));
         assert_eq!(dpi_from_mode(0, 0), None);
-        assert_eq!(boot_density(dpi_from_mode(2880, 1440)), 320);
-        assert_eq!(boot_density(dpi_from_mode(0, 0)), 160);
+        assert_eq!(boot_density(dpi_from_mode(2880, 1440)), 192);
+        assert_eq!(boot_density(dpi_from_mode(0, 0)), 96);
         assert_eq!(
-            with_display_density("androidboot.dsa.display_dpi=160", 320),
-            "androidboot.dsa.display_dpi=320 androidboot.lcd_density=320"
+            with_display_density("androidboot.dsa.display_dpi=96", 192),
+            "androidboot.dsa.display_dpi=192 androidboot.lcd_density=192"
         );
     }
 

@@ -93,17 +93,28 @@ pub fn dip_of_px(px: i32, dpi: u32) -> u32 {
     ((px * u64::from(HOST_BASE_DPI) + u64::from(dpi) / 2) / u64::from(dpi)) as u32
 }
 
-/// Android's density for a monitor of `dpi`: 160 at a scale of 100%.
+/// Android's density for a monitor of `dpi`: 96 at a scale of 100%, as a dp is 1/160 inch and
+/// a device-independent pixel 1/96 inch.
 pub fn android_density(dpi: u32) -> u32 {
-    let dpi = if dpi == 0 { HOST_BASE_DPI } else { dpi };
-    (dpi * widgets::BASE_DPI + HOST_BASE_DPI / 2) / HOST_BASE_DPI
+    dsa_host_core::compositor::window_sizing::density_for_dpi(dpi)
+}
+
+/// `dp` of Android's at a monitor of `dpi`, in pixels, rounded to the nearest: 0.6 of a
+/// device-independent pixel each.
+pub fn px_of_dp(dp: u32, dpi: u32) -> i32 {
+    widgets::px_of(dp, android_density(dpi)).min(i32::MAX as u32) as i32
+}
+
+/// `px` pixels at a monitor of `dpi`, in Android's dp, rounded to the nearest.
+pub fn dp_of_px(px: i32, dpi: u32) -> u32 {
+    widgets::dp_of(px.max(0) as u32, android_density(dpi))
 }
 
 /// The size of a widget's window on a monitor of `dpi`, in pixels.
 pub fn window_size(placement: &Placement, dpi: u32) -> (i32, i32) {
     (
-        px_of_dip(placement.width_dp, dpi).max(1),
-        px_of_dip(placement.height_dp, dpi).max(1),
+        px_of_dp(placement.width_dp, dpi).max(1),
+        px_of_dp(placement.height_dp, dpi).max(1),
     )
 }
 
@@ -112,15 +123,15 @@ pub fn placement_of(x: i32, y: i32, width: i32, height: i32, dpi: u32) -> Placem
     Placement {
         x,
         y,
-        width_dp: dip_of_px(width, dpi).max(1),
-        height_dp: dip_of_px(height, dpi).max(1),
+        width_dp: dp_of_px(width, dpi).max(1),
+        height_dp: dp_of_px(height, dpi).max(1),
     }
 }
 
 /// The smallest a widget's window may be made on a monitor of `dpi`, in pixels.
 pub fn min_window_size(provider: &widgets::WidgetProvider, dpi: u32) -> (i32, i32) {
     let (width, height) = widgets::clamp_size(provider, 0, 0);
-    (px_of_dip(width, dpi), px_of_dip(height, dpi))
+    (px_of_dp(width, dpi), px_of_dp(height, dpi))
 }
 
 /// The window style and extended style of a widget window: a popup with no frame, layered
@@ -2645,14 +2656,15 @@ mod tests {
             width_dp: 180,
             height_dp: 110,
         };
-        assert_eq!(window_size(&placement, 96), (180, 110));
-        assert_eq!(window_size(&placement, 144), (270, 165));
-        assert_eq!(placement_of(10, 20, 270, 165, 144), placement);
-        assert_eq!(android_density(96), 160);
-        assert_eq!(android_density(144), 240);
-        assert_eq!(android_density(120), 200);
+        // A dp is 0.6 of a device-independent pixel.
+        assert_eq!(window_size(&placement, 96), (108, 66));
+        assert_eq!(window_size(&placement, 144), (162, 99));
+        assert_eq!(placement_of(10, 20, 162, 99, 144), placement);
+        assert_eq!(android_density(96), 96);
+        assert_eq!(android_density(144), 144);
+        assert_eq!(android_density(120), 120);
         assert_eq!(dip_of_px(361, 240), 144);
-        assert_eq!(min_window_size(&clock(), 192), (220, 80));
+        assert_eq!(min_window_size(&clock(), 192), (132, 80));
     }
 
     #[test]
@@ -2745,7 +2757,8 @@ mod tests {
             );
             let circle = more_button(width, height, dpi);
             for radius_dp in 0..=40 {
-                let radius = px_of_dip(radius_dp, dpi) as f32;
+                // Android's dp, at the density it draws the widget at there.
+                let radius = px_of_dp(radius_dp, dpi) as f32;
                 assert!(
                     inside_rounded_window(&circle, width, height, radius),
                     "at {dpi} dpi the button leaves corners of {radius_dp} dp"

@@ -5138,6 +5138,7 @@ fn seoul_settings(dark_mode: bool) -> dsa_host_core::system_settings::SystemSett
         first_day_of_week: 7,
         dark_mode,
         accent_color: 0xFF00_78D4,
+        text_scale_percent: 100,
     }
 }
 
@@ -5170,6 +5171,50 @@ fn fr30_the_hosts_system_settings_reach_the_agent_when_it_connects_and_on_each_c
         panic!("expected the system settings");
     };
     assert_eq!(berlin.time_zone, "Europe/Berlin");
+}
+
+#[test]
+fn fr4_text_follows_the_windows_text_size() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.windows_shown(true).unwrap();
+    session.set_system_settings(seoul_settings(true));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    // At a text size of 100% the guest's font scale is 160/96: a dp is 0.6 DIP, and text
+    // keeps the host's size.
+    let Body::SystemSettings(at_100) = next_body(&mut agent) else {
+        panic!("expected the system settings");
+    };
+    assert!((at_100.font_scale - 160.0 / 96.0).abs() < 1e-5);
+    // The user makes Windows' text 150%: the guest hears of it at once, as a setting and
+    // nothing else, so no task is asked to change and none is relaunched for it.
+    session.set_system_settings(dsa_host_core::system_settings::SystemSettings {
+        text_scale_percent: 150,
+        ..seoul_settings(true)
+    });
+    let Body::SystemSettings(at_150) = next_body(&mut agent) else {
+        panic!("expected the system settings");
+    };
+    assert!((at_150.font_scale - 2.5).abs() < 1e-5);
+    assert_eq!(
+        at_150,
+        dsa_protocol::control::SystemSettings {
+            font_scale: at_150.font_scale,
+            ..at_100.clone()
+        },
+        "only the font scale changed"
+    );
+    // A text size Windows does not offer is kept within what a desktop may ask for.
+    session.set_system_settings(dsa_host_core::system_settings::SystemSettings {
+        text_scale_percent: 1000,
+        ..seoul_settings(true)
+    });
+    let Body::SystemSettings(capped) = next_body(&mut agent) else {
+        panic!("expected the system settings");
+    };
+    assert!((capped.font_scale - 5.0).abs() < 1e-5);
 }
 
 #[test]

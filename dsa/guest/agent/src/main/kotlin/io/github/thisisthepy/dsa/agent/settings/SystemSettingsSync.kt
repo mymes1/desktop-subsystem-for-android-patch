@@ -25,6 +25,12 @@ interface SystemSettingsPort {
     /** Makes [argb] the seed of the guest's dynamic colors, as [palette] says them. */
     fun setAccentColor(argb: Int, palette: Map<String, Int>)
 
+    /** The guest's font scale now (Settings.System.FONT_SCALE); 0 when it cannot be read. */
+    fun fontScale(): Float
+
+    /** Makes [scale] the guest's font scale, which every app's text is drawn at. */
+    fun setFontScale(scale: Float)
+
     companion object {
         val NONE = object : SystemSettingsPort {
             override fun setTimeZone(id: String) {}
@@ -32,24 +38,57 @@ interface SystemSettingsPort {
             override fun setTime24Hour(on: Boolean) {}
             override fun setDarkMode(on: Boolean) {}
             override fun setAccentColor(argb: Int, palette: Map<String, Int>) {}
+            override fun fontScale(): Float = 0f
+            override fun setFontScale(scale: Float) {}
         }
     }
 }
 
 /**
  * Makes the host's system settings the guest's: the time zone, the display languages with the
- * regional format's preferences, the 24-hour clock, the dark theme and the accent color.
+ * regional format's preferences, the 24-hour clock, the dark theme, the accent color and the
+ * font scale.
  *
  * The host sends every setting each time ([SystemSettings]); only what changed since the last
  * time is applied, so a change of theme does not reconfigure every app for its languages too.
  * Each setting is applied on its own: one the guest refuses is logged, and the others still
  * apply. An empty time zone or language list leaves the guest's as they are.
+ *
+ * The font scale keeps text the size of the host's text ([SystemSettings.getFontScale]). A
+ * change of font scale is a change of configuration, and Android restarts every activity that
+ * does not say in its manifest that it handles one (configChanges `fontScale`), as it does for
+ * a change of density. No app is restarted for it: while an app is open that would be
+ * ([tasksRunning]), the new scale is held, and it applies as soon as none is. The first scale
+ * after the agent starts applies before any app opens, so apps start at it.
  */
 class SystemSettingsSync(
     private val port: SystemSettingsPort,
     private val log: Log,
 ) {
     private var last: SystemSettings? = null
+
+    /** The font scale the host asked for that is not applied yet. */
+    private var heldFontScale: Float? = null
+
+    /** The open apps a change of font scale would restart; null until the tasks are read. */
+    private var restarted: List<String>? = null
+
+    /** The apps the held font scale was last logged as waiting for. */
+    private var loggedWaiting: List<String>? = null
+
+    /**
+     * The open apps whose activity does not handle a change of font scale itself, so Android
+     * would restart them for one, as the agent last read the tasks. A held font scale applies
+     * once there are none.
+     */
+    fun tasksRunning(wouldRestart: List<String>) {
+        restarted = wouldRestart
+        applyFontScale()
+    }
+
+    /** Whether a font scale the host asked for is waiting for an app to close. */
+    val holdsFontScale: Boolean
+        get() = heldFontScale != null
 
     /** Acts on [frame] when it carries the host's system settings, and says whether it did. */
     fun handle(frame: ByteArray): Boolean {
@@ -93,7 +132,43 @@ class SystemSettingsSync(
                 port.setAccentColor(accent, TonalPalette.of(accent))
             }
         }
+        val scale = settings.fontScale
+        if (scale.isFinite() && scale > 0f && (before == null || scale != before.fontScale)) {
+            heldFontScale = scale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE)
+            loggedWaiting = null
+            applyFontScale()
+        }
         last = settings
+    }
+
+    /** Applies the held font scale, unless an open app would be restarted for it. */
+    private fun applyFontScale() {
+        val wanted = heldFontScale ?: return
+        val now = try {
+            port.fontScale()
+        } catch (e: Exception) {
+            0f
+        }
+        if (kotlin.math.abs(now - wanted) < SAME_FONT_SCALE) {
+            heldFontScale = null
+            return
+        }
+        // Until the tasks are read, an app that is open is not known to be safe.
+        val waiting = restarted ?: return
+        if (waiting.isNotEmpty()) {
+            if (waiting != loggedWaiting) {
+                log.info(
+                    "holds the host's text size (font scale ${scaleText(wanted)}) while " +
+                        "${waiting.joinToString()} ${if (waiting.size == 1) "is" else "are"} open: " +
+                        "Android would restart ${if (waiting.size == 1) "it" else "them"} for it",
+                )
+                loggedWaiting = waiting
+            }
+            return
+        }
+        heldFontScale = null
+        loggedWaiting = null
+        attempt("text size (font scale ${scaleText(wanted)})") { port.setFontScale(wanted) }
     }
 
     private fun attempt(what: String, change: () -> Unit) {
@@ -107,6 +182,16 @@ class SystemSettingsSync(
 
     companion object {
         private val WEEKDAYS = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+        /** The font scales Android's settings provider takes for Settings.System.FONT_SCALE. */
+        const val MIN_FONT_SCALE = 0.25f
+        const val MAX_FONT_SCALE = 5.0f
+
+        /** Two font scales closer than this draw text at the same size. */
+        private const val SAME_FONT_SCALE = 0.0005f
+
+        /** A font scale for the log, the same in every locale. */
+        private fun scaleText(scale: Float): String = String.format(java.util.Locale.ROOT, "%.3f", scale)
 
         /**
          * The guest's system languages for [settings]: the host's languages, each carrying the
