@@ -106,6 +106,25 @@ public class RootElevationViewModelTests
         (new AppsViewModel(new AppsService(cli), new AppsText()), cli);
 
     [Fact]
+    public async Task Fr35_adb_shell_asks_for_root_like_an_app()
+    {
+        var cli = new FakeCli().Answer("apps list --json", Apps)
+            .Answer("settings --json", "{\"adb_shell_root\":\"ask\"}")
+            .Answer("apps root com.android.shell off --json", "{\"level\":\"off\"}");
+        var (vm, _) = MakeApps(cli);
+        await vm.RefreshAsync();
+        Assert.True(vm.ShowAdbShellRoot);
+        Assert.Equal((int)RootLevel.Ask, vm.AdbShellRootIndex);
+        cli.Answer("settings --json", "{\"adb_shell_root\":\"off\"}");
+        await vm.SetRootAsync("com.android.shell", (int)RootLevel.Off);
+        Assert.Contains("apps root com.android.shell off --json", cli.Calls);
+        Assert.Equal((int)RootLevel.Off, vm.AdbShellRootIndex);
+        cli.Answer("settings --json", "{\"adb_shell_root\":\"\"}");
+        await vm.RefreshAsync();
+        Assert.False(vm.ShowAdbShellRoot);
+    }
+
+    [Fact]
     public async Task Fr35_each_app_shows_its_root_level_off_ask_or_remember()
     {
         var (vm, _) = MakeApps(new FakeCli().Answer("apps list --json", Apps));

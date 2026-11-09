@@ -1548,6 +1548,11 @@ message Settings {
   // it off, su exists for no app and the per-app levels do nothing. A client sends back the
   // value it read.
   bool root_elevation = 37;
+  // How far `adb shell` may elevate to root while developer mode is on, like an app's level:
+  // "off", "ask" (the default) or "remember". Empty while developer mode is off, because adb
+  // is closed and the level does nothing; "unavailable" while root_elevation is off. A client
+  // cannot change it here: SetAppRoot with the package "com.android.shell" sets it.
+  string adb_shell_root = 38;
   // A run mode setting (run_mode, a RunMode enum, stop_after_secs and keep_for_notifications)
   // was here and is gone: an idle Android stays in Doze. Its numbers and names are never
   // used again, so an older peer that still sends them is read without them. The enum name

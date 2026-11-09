@@ -161,6 +161,7 @@
 //! `dsa settings set root-elevation on` first, and moving an app to `remember` needs an
 //! administrator. With `--json` it prints `package` and `level`. The level applies to su's
 //! visibility from the next start of Android.
+//! Use `adb` in place of the package to set the adb shell level while developer mode is on.
 //!
 //! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
 //! with no window because they run a foreground service (music playback, a download, a VPN),
@@ -933,6 +934,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 let usage = "dsa apps root needs the app's package and off, ask or remember, \
                              such as dsa apps root com.example.backup ask";
                 let package = args.next().ok_or_else(|| usage.to_string())?;
+                let package = dsa_host_core::root_elevation::package_for_name(package);
                 if !is_package_name(package) {
                     return Err(format!(
                         "{package:?} is not a package name; dsa apps list shows them, such as \
@@ -949,7 +951,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     Some("remember") => "remember",
                     _ => return Err(usage.to_string()),
                 };
-                apps = Some(AppsAction::Root(package.clone(), level.to_string()));
+                apps = Some(AppsAction::Root(package.to_string(), level.to_string()));
             }
             name if command == Some(Command::Apps)
                 && apps == Some(AppsAction::Settings(None))
@@ -2086,6 +2088,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
         "root_elevation": report.settings.root_elevation,
+        "adb_shell_root": report.adb_shell_root,
         "memory_limit_mb": report.settings.memory_limit_mb,
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
@@ -2385,6 +2388,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!(
             "Root elevation: {} (the computer's; it applies from the next start of Android)",
             on_off(settings.root_elevation)
+        ),
+        format!(
+            "adb shell root: {}",
+            describe_root_level(&report.adb_shell_root)
         ),
         format!(
             "Memory limit: {}",

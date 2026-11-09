@@ -274,6 +274,13 @@ public sealed class AppsService
         return new RootReport(true, String(json, "level"), "");
     }
 
+    /// <summary>The adb shell level, or empty when developer mode is off.</summary>
+    public async Task<string> AdbShellRootAsync()
+    {
+        var json = await RunJsonAsync("settings").ConfigureAwait(true);
+        return String(json, "adb_shell_root");
+    }
+
     /// <summary>Every app installed in Android, with its size read again; Android is started
     /// first when it is not running.</summary>
     public async Task<IReadOnlyList<InstalledAppInfo>> ListAsync()
@@ -460,6 +467,7 @@ public sealed class AppsViewModel : ObservableObject
     private string? _error;
     private string? _message;
     private bool _busy;
+    private string _adbShellRoot = "";
 
     public AppsViewModel(AppsService service, ITextSource text)
     {
@@ -475,6 +483,10 @@ public sealed class AppsViewModel : ObservableObject
     public bool HasMessage => _message is not null;
     public bool HasNoApps => _apps is { Count: 0 };
     public bool HasNoMatches => _apps is { Count: > 0 } && Rows.Count == 0;
+    public bool ShowAdbShellRoot => _adbShellRoot.Length > 0;
+    public int AdbShellRootIndex => RootLevels.Parse(_adbShellRoot) is { } level ? (int)level : -1;
+    public bool CanChangeAdbShellRoot => !_busy && RootLevels.Parse(_adbShellRoot) is not null;
+    public string? AdbShellRootTip => RootTipOf(_adbShellRoot);
 
     /// <summary>How many apps are installed, and how many the search shows.</summary>
     public string Count => _apps is null
@@ -672,7 +684,7 @@ public sealed class AppsViewModel : ObservableObject
             return Task.CompletedTask;
         }
         var level = RootLevels.All[index];
-        var current = _apps?.FirstOrDefault(a => a.Package == package)?.Root;
+        var current = package == "com.android.shell" ? _adbShellRoot : _apps?.FirstOrDefault(a => a.Package == package)?.Root;
         if (current is not null && RootLevels.Parse(current) == level)
         {
             return Task.CompletedTask;
@@ -798,6 +810,7 @@ public sealed class AppsViewModel : ObservableObject
 
     /// <summary>The name an app goes by on the page.</summary>
     public string LabelOf(string package) =>
+        package == "com.android.shell" ? _text.Get("AppsAdbShell.Text") :
         _apps?.FirstOrDefault(a => a.Package == package) is { Label.Length: > 0 } app ? app.Label : package;
 
     private async Task Run(Func<Task<string?>> work, bool reload)
@@ -815,6 +828,14 @@ public sealed class AppsViewModel : ObservableObject
             if (reload)
             {
                 _apps = await _service.ListAsync().ConfigureAwait(true);
+                try
+                {
+                    _adbShellRoot = await _service.AdbShellRootAsync().ConfigureAwait(true);
+                }
+                catch (DsaException)
+                {
+                    _adbShellRoot = "";
+                }
             }
             _error = null;
         }
