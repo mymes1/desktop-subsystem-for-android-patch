@@ -1235,7 +1235,15 @@ fn fr36_passkeys_only_for_verified_relying_parties() {
     let client: Value = serde_json::from_slice(&ceremony.client_data_json).unwrap();
     assert_eq!(client["type"], "webauthn.create");
     assert_eq!(client["origin"], origin.as_str());
-    assert_eq!(client["androidPackageName"], NOTES);
+    // WebAuthn's own serialization, which every host authenticator signs the same.
+    assert_eq!(
+        String::from_utf8(ceremony.client_data_json.clone()).unwrap(),
+        format!(
+            "{{\"type\":\"webauthn.create\",\"challenge\":\"{}\",\"origin\":\"{origin}\",\
+             \"crossOrigin\":false}}",
+            base64url(b"a challenge of the relying party")
+        )
+    );
     assert_eq!(
         from_base64url(client["challenge"].as_str().unwrap()).unwrap(),
         b"a challenge of the relying party"

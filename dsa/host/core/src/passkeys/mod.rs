@@ -206,6 +206,21 @@ pub fn origin_may_use(host: &str, rp_id: &str) -> bool {
     host == rp_id || host.ends_with(&format!(".{rp_id}"))
 }
 
+/// The client data of a ceremony, in WebAuthn's own serialization: `type`, `challenge`,
+/// `origin` and `crossOrigin`, in that order, with nothing else. It is the form a browser
+/// engine writes and the one macOS writes for the client data it signs, so every host
+/// authenticator signs the same bytes. Nothing names the app beyond its origin, which already
+/// carries its certificate.
+pub fn client_data_json(kind: &str, challenge: &[u8], origin: &str) -> String {
+    let text = |value: &str| Value::String(value.to_string()).to_string();
+    format!(
+        "{{\"type\":{},\"challenge\":{},\"origin\":{},\"crossOrigin\":false}}",
+        text(kind),
+        text(&base64url(challenge)),
+        text(origin)
+    )
+}
+
 /// The origin an app's client data names: its signing certificate's hash.
 pub fn app_origin(signer_sha256: &[u8]) -> String {
     format!("android:apk-key-hash:{}", base64url(signer_sha256))
@@ -343,16 +358,12 @@ impl PasskeyGate {
                 }
                 (Vec::new(), request.client_data_hash.clone())
             } else {
-                let mut data = json!({
-                    "type": if create { "webauthn.create" } else { "webauthn.get" },
-                    "challenge": base64url(&challenge),
-                    "origin": origin,
-                    "crossOrigin": false,
-                });
-                if !browser {
-                    data["androidPackageName"] = Value::String(request.package.clone());
-                }
-                let bytes = serde_json::to_vec(&data).expect("JSON of strings");
+                let kind = if create {
+                    "webauthn.create"
+                } else {
+                    "webauthn.get"
+                };
+                let bytes = client_data_json(kind, &challenge, &origin).into_bytes();
                 let hash = Sha256::digest(&bytes).to_vec();
                 (bytes, hash)
             };

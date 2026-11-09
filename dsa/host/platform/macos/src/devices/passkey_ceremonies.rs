@@ -24,7 +24,7 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::host_api::HostApiClient;
-use dsa_host_core::passkeys::encoding::{base64url, from_base64url};
+use dsa_host_core::passkeys::encoding::from_base64url;
 use dsa_host_core::passkeys::{Ceremony, CeremonyResult, PasskeyEvent};
 use dsa_transport::Connector;
 use serde_json::Value;
@@ -50,9 +50,9 @@ pub const AUTHORIZATION_ERROR_DOMAIN: &str = "com.apple.AuthenticationServices.A
 pub const ES256: i32 = -7;
 
 /// Why a ceremony whose client data macOS cannot write is not performed.
-pub const OWN_CLIENT_DATA: &str = "macOS signs only client data it writes itself, and the \
-     client data Android gets back would differ from it, so the relying party would refuse \
-     the passkey; this Mac cannot make or use passkeys for Android apps yet";
+pub const OWN_CLIENT_DATA: &str = "macOS signs only client data it writes itself, and this \
+     ceremony's client data is not written the way macOS writes it, so the relying party would \
+     refuse the passkey";
 
 /// Performs one ceremony (number `id`) and says what became of it. It may block until the
 /// person answers; it ends early, canceled, once `withdrawn` is set.
@@ -90,14 +90,9 @@ pub struct MacClientData {
 
 /// The client data WebAuthn's serialization makes of these, as a browser engine writes it:
 /// `type`, `challenge`, `origin`, `crossOrigin`, in that order, with nothing between.
+/// The service writes the ceremony's client data the same way, so the two agree.
 pub fn webauthn_client_data(kind: &str, challenge: &[u8], origin: &str) -> String {
-    let text = |value: &str| Value::String(value.to_string()).to_string();
-    format!(
-        "{{\"type\":{},\"challenge\":{},\"origin\":{},\"crossOrigin\":false}}",
-        text(kind),
-        text(&base64url(challenge)),
-        text(origin)
-    )
+    dsa_host_core::passkeys::client_data_json(kind, challenge, origin)
 }
 
 /// What macOS is to be given for `ceremony`, or why the Mac cannot perform it: a browser's own
