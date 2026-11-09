@@ -6147,7 +6147,10 @@ class RootElevationImageTests(unittest.TestCase):
             source = root / "source.zip"
             with zipfile.ZipFile(source, "w") as archive:
                 archive.writestr("SYSTEM/bin/su", b"old su")
-                archive.writestr("META/filesystem_config.txt", "system/bin/su 0 0 6755 capabilities=0x0\n")
+                archive.writestr(
+                    "META/filesystem_config.txt",
+                    "system/bin/su 0 0 6755 capabilities=0x0\nsystem/xbin 0 2000 750 capabilities=0x0\n",
+                )
             daemon = root / "dsa-channeld"
             client = root / "su"
             daemon.write_bytes(b"daemon")
@@ -6160,6 +6163,8 @@ class RootElevationImageTests(unittest.TestCase):
                 config = archive.read("META/filesystem_config.txt").decode().splitlines()
                 self.assertIn("system/bin/su 0 0 755 capabilities=0x0", config)
                 self.assertNotIn("system/bin/su 0 0 6755 capabilities=0x0", config)
+                self.assertIn("system/xbin 0 2000 755 capabilities=0x0", config)
+                self.assertNotIn("system/xbin 0 2000 750 capabilities=0x0", config)
 
     def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
         # The guard does nothing until something writes it, and the helper runs only while root
@@ -6277,6 +6282,7 @@ class RootElevationImageTests(unittest.TestCase):
         ).encode()
         files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
         del files["SYSTEM/bin/su"]
+        files[make_image.SYSTEM_FS_CONFIG] = b"system/xbin 0 2000 750 capabilities=0x0\n"
         rc = files[make_image.CHANNELD_RC].decode()
         files[make_image.CHANNELD_RC] = "\n".join(
             line for line in rc.splitlines() if line != "    seclabel u:r:dsa_su:s0"
@@ -6290,6 +6296,7 @@ class RootElevationImageTests(unittest.TestCase):
             "system_server may start the elevation helper",
             "META/file_contexts.bin does not label /system/bin/su dsa_su_exec",
             'lacks "seclabel u:r:dsa_su:s0"',
+            "does not make system/xbin mode 755",
         ]
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
