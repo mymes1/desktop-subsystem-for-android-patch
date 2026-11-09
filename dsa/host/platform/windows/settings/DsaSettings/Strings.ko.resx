@@ -406,6 +406,42 @@
   <data name="UpdateNowFailed" xml:space="preserve">
     <value>DSA를 업데이트하지 못했습니다</value>
   </data>
+  <data name="ProgramUpdateCard.Header" xml:space="preserve">
+    <value>DSA 업데이트 중</value>
+  </data>
+  <data name="ProgramUpdateDone.Title" xml:space="preserve">
+    <value>DSA 업데이트 완료</value>
+  </data>
+  <data name="ProgramUpdate_Starting" xml:space="preserve">
+    <value>업데이트를 준비하고 있습니다</value>
+  </data>
+  <data name="ProgramUpdate_Downloading" xml:space="preserve">
+    <value>DSA {0} 버전을 내려받고 있습니다</value>
+  </data>
+  <data name="ProgramUpdate_StoppingAndroid" xml:space="preserve">
+    <value>DSA {0} 버전을 설치하기 위해 Android를 종료하고 있습니다</value>
+  </data>
+  <data name="ProgramUpdate_Installing" xml:space="preserve">
+    <value>DSA {0} 버전을 설치하고 있습니다</value>
+  </data>
+  <data name="ProgramUpdate_Restarting" xml:space="preserve">
+    <value>업데이트를 마치기 위해 DSA가 다시 시작하고 있습니다</value>
+  </data>
+  <data name="ProgramUpdate_Version" xml:space="preserve">
+    <value>버전 {0}</value>
+  </data>
+  <data name="ProgramUpdate_KeepOpen" xml:space="preserve">
+    <value>업데이트가 끝날 때까지 DSA를 닫거나 Android 앱을 시작하지 마십시오.</value>
+  </data>
+  <data name="ProgramUpdate_Applied" xml:space="preserve">
+    <value>{0} 버전으로 업데이트했습니다</value>
+  </data>
+  <data name="ProgramUpdate_Failed" xml:space="preserve">
+    <value>{0} 버전으로 업데이트하지 못했습니다. 이전 버전이 그대로 설치되어 있습니다.</value>
+  </data>
+  <data name="ProgramUpdate_NotBack" xml:space="preserve">
+    <value>{0} 버전으로 업데이트한 뒤 DSA가 다시 시작하지 않았습니다. 곧 시작하지 않으면 컴퓨터를 다시 시작하십시오.</value>
+  </data>
   <data name="AdvancedTitle.Text" xml:space="preserve">
     <value>고급</value>
   </data>

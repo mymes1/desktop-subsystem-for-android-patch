@@ -110,6 +110,11 @@ public sealed partial class GeneralViewModel : ObservableObject
 
     public Task RefreshAsync() => RunAsync(_service.StatusAsync);
 
+    /// <summary>Whether an update of DSA is under way. Meanwhile a poll asks a running service
+    /// only: setup stops the service, and starting it again would run the old version under
+    /// setup.</summary>
+    public Func<bool>? Updating { get; set; }
+
     /// <summary>Reads the state again without marking the page busy, as a timer does while
     /// the page is shown. Does nothing while a start or a stop is under way.</summary>
     public async Task PollAsync()
@@ -120,7 +125,9 @@ public sealed partial class GeneralViewModel : ObservableObject
         }
         try
         {
-            var status = await _service.StatusAsync().ConfigureAwait(true);
+            var status = Updating?.Invoke() == true
+                ? await _service.RunningStatusAsync().ConfigureAwait(true)
+                : await _service.StatusAsync().ConfigureAwait(true);
             if (_busy)
             {
                 return;

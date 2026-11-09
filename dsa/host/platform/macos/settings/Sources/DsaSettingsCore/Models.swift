@@ -24,13 +24,63 @@ public struct StatusInfo: Equatable, Sendable {
     public var lastReason: String?
     public var updateNotice: String?
     public var problem: String?
+    /// Where an update of DSA itself stands, when one is under way or has just ended.
+    public var programUpdate: ProgramUpdateProgress?
 
-    public init(state: SessionState, lastReason: String? = nil, updateNotice: String? = nil, problem: String? = nil) {
+    public init(state: SessionState, lastReason: String? = nil, updateNotice: String? = nil, problem: String? = nil,
+                programUpdate: ProgramUpdateProgress? = nil) {
         self.state = state
         self.lastReason = lastReason
         self.updateNotice = updateNotice
         self.problem = problem
+        self.programUpdate = programUpdate
     }
+}
+
+/// How far an update of DSA itself has got, as the service and the settings app see it. The
+/// raw values are the names `dsa status --json` writes.
+public enum ProgramUpdatePhase: String, Equatable, Sendable {
+    /// No update of DSA is under way.
+    case none = ""
+    /// The app asked the service to install now and waits for its first word.
+    case starting = "starting"
+    case downloading = "downloading"
+    /// Every user's Android is being stopped so setup can run.
+    case stoppingAndroid = "stopping_android"
+    case installing = "installing"
+    /// The service is restarting into the new version, or is away while setup replaces it.
+    case restarting = "restarting"
+    /// The new version runs.
+    case applied = "applied"
+    /// The update failed and the version before it is still installed.
+    case failed = "failed"
+
+    /// The phase a name of `dsa status --json` stands for. An unknown name, as a newer
+    /// service may give, is none.
+    public static func parse(_ name: String?) -> ProgramUpdatePhase {
+        guard let name, let phase = ProgramUpdatePhase(rawValue: name), phase != .starting else {
+            return .none
+        }
+        return phase
+    }
+}
+
+/// Where an update of DSA stands: its phase and the version it installs.
+public struct ProgramUpdateProgress: Equatable, Sendable {
+    public var phase: ProgramUpdatePhase
+    public var version: String
+
+    public init(phase: ProgramUpdatePhase, version: String) {
+        self.phase = phase
+        self.version = version
+    }
+}
+
+/// What the service answered when asked to install the newest version now: the version setup
+/// installs, or nil when there is nothing newer, and its own words.
+public struct ProgramUpdateAnswer: Equatable, Sendable {
+    public var installing: String?
+    public var detail: String
 }
 
 /// Which GPU the window manager renders on.

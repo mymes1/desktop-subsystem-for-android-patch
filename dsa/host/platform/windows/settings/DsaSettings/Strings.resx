@@ -406,6 +406,42 @@
   <data name="UpdateNowFailed" xml:space="preserve">
     <value>DSA was not updated</value>
   </data>
+  <data name="ProgramUpdateCard.Header" xml:space="preserve">
+    <value>Updating DSA</value>
+  </data>
+  <data name="ProgramUpdateDone.Title" xml:space="preserve">
+    <value>DSA updated</value>
+  </data>
+  <data name="ProgramUpdate_Starting" xml:space="preserve">
+    <value>Getting the update ready</value>
+  </data>
+  <data name="ProgramUpdate_Downloading" xml:space="preserve">
+    <value>Downloading DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_StoppingAndroid" xml:space="preserve">
+    <value>Stopping Android to install DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_Installing" xml:space="preserve">
+    <value>Installing DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_Restarting" xml:space="preserve">
+    <value>DSA is restarting to finish the update</value>
+  </data>
+  <data name="ProgramUpdate_Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="ProgramUpdate_KeepOpen" xml:space="preserve">
+    <value>Do not close DSA or start Android apps until the update is done.</value>
+  </data>
+  <data name="ProgramUpdate_Applied" xml:space="preserve">
+    <value>Updated to {0}</value>
+  </data>
+  <data name="ProgramUpdate_Failed" xml:space="preserve">
+    <value>Updating to {0} failed. The version before it is still installed.</value>
+  </data>
+  <data name="ProgramUpdate_NotBack" xml:space="preserve">
+    <value>DSA has not come back after the update to {0}. If it does not start soon, restart the computer.</value>
+  </data>
   <data name="AdvancedTitle.Text" xml:space="preserve">
     <value>Advanced</value>
   </data>

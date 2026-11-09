@@ -1,6 +1,210 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "ProgramUpdateCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating DSA"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 업데이트 중"
+          }
+        }
+      }
+    },
+    "ProgramUpdateDone.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA updated"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 업데이트 완료"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Getting the update ready"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트를 준비하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 내려받고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_StoppingAndroid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping Android to install DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 설치하기 위해 Android를 종료하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Installing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 설치하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA is restarting to finish the update"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트를 마치기 위해 DSA가 다시 시작하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Version": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전 {0}"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_KeepOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not close DSA or start Android apps until the update is done."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트가 끝날 때까지 DSA를 닫거나 Android 앱을 시작하지 마십시오."
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Applied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated to {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트했습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating to {0} failed. The version before it is still installed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트하지 못했습니다. 이전 버전이 그대로 설치되어 있습니다."
+          }
+        }
+      }
+    },
+    "ProgramUpdate_NotBack": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA has not come back after the update to {0}. If it does not start soon, restart the computer."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트한 뒤 DSA가 다시 시작하지 않았습니다. 곧 시작하지 않으면 컴퓨터를 다시 시작하십시오."
+          }
+        }
+      }
+    },
     "AboutAndroidVersionCard.Description": {
       "extractionState": "manual",
       "localizations": {

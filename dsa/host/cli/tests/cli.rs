@@ -267,6 +267,7 @@ fn fr14_dsa_shows_news_about_an_update_on_its_own_line() {
         last_reason: None,
         update_notice: Some("Android was updated to 16.0.3".into()),
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -284,6 +285,7 @@ fn fr2_dsa_shows_the_guest_console_of_a_failed_start_below_the_status_line() {
         ),
         update_notice: None,
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -302,6 +304,7 @@ fn fr17_dsa_status_says_an_error_code_in_a_sentence_and_keeps_the_raw_line() {
         last_reason: Some(raw.into()),
         update_notice: None,
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -327,6 +330,7 @@ fn fr17_dsa_status_gives_each_mapped_code_its_sentence() {
             last_reason: Some(format!("HcsStartComputeSystem failed (HRESULT {code})")),
             update_notice: None,
             problem: None,
+            program_update: None,
         });
         let first = line.lines().next().unwrap();
         assert!(first.contains(sentence), "{code}: {line}");
@@ -342,6 +346,7 @@ fn fr2_dsa_says_what_keeps_a_stalled_android_from_being_ready() {
         last_reason: None,
         update_notice: None,
         problem: Some("Android has not finished booting after 300 s\nthe log is there".into()),
+        program_update: None,
     };
     assert_eq!(
         dsa_cli::describe(&status),
@@ -394,6 +399,32 @@ fn fr15_dsa_update_asks_the_service_to_install_now_and_prints_its_answer() {
         "installing DSA 0.1.1; the service restarts when setup is done"
     );
     assert_eq!(*program.requests.lock().unwrap(), 1);
+}
+
+#[test]
+fn fr15_dsa_update_json_says_which_version_setup_installs() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: Some("0.1.1".into()),
+        detail: "installing DSA 0.1.1".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert_eq!(answer["installing"], "0.1.1");
+    assert_eq!(answer["detail"], "installing DSA 0.1.1");
+    assert!(answer["status"].is_null());
+
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: None,
+        detail: "DSA 0.1.1 is up to date".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert!(answer["installing"].is_null(), "nothing newer: {answer}");
+    assert_eq!(answer["detail"], "DSA 0.1.1 is up to date");
 }
 
 #[test]
@@ -516,6 +547,7 @@ fn fr15_dsa_shows_news_about_the_image_and_the_program_on_their_own_lines() {
                 .into(),
         ),
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -1365,6 +1397,79 @@ fn fr17_dsa_status_json_reports_the_state_and_the_last_reason() {
     assert!(status["update_notice"].is_null());
     let started = json_of(&dsa(&endpoint, "start --wait --timeout 10 --json"));
     assert_eq!(started["state"], "Active");
+    assert!(
+        status["program_update"].is_null(),
+        "no update of DSA is reported by a service that does not update DSA"
+    );
+}
+
+#[test]
+fn fr15_dsa_status_says_how_far_an_update_of_dsa_has_got() {
+    use dsa_host_core::host_api::{ProgramPhase, ProgramProgress, Status};
+    let status = |phase| Status {
+        state: SessionState::Stopped,
+        last_reason: None,
+        update_notice: None,
+        problem: None,
+        program_update: Some(ProgramProgress::new(phase, "0.1.11")),
+    };
+    for (phase, name, said) in [
+        (
+            ProgramPhase::Downloading,
+            "downloading",
+            "downloading DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::StoppingAndroid,
+            "stopping_android",
+            "stopping Android to install DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::Installing,
+            "installing",
+            "installing DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::Restarting,
+            "restarting",
+            "DSA is restarting to finish the update to 0.1.11",
+        ),
+    ] {
+        let line = dsa_cli::describe(&status(phase));
+        assert!(line.contains(&format!("\nUpdating DSA: {said}")), "{line}");
+        if phase != ProgramPhase::Downloading {
+            assert!(
+                line.contains("do not close DSA or start Android apps"),
+                "{line}"
+            );
+        }
+        let json = dsa_cli::status_json(&status(phase));
+        assert_eq!(json["program_update"]["phase"], name);
+        assert_eq!(json["program_update"]["version"], "0.1.11");
+        assert_eq!(json["program_update"]["in_progress"], true);
+    }
+    // An update that has ended is told by the news; the status line adds nothing.
+    for (phase, name) in [
+        (ProgramPhase::Applied, "applied"),
+        (ProgramPhase::Failed, "failed"),
+    ] {
+        assert_eq!(dsa_cli::describe(&status(phase)), "Android: Stopped");
+        let json = dsa_cli::status_json(&status(phase));
+        assert_eq!(json["program_update"]["phase"], name);
+        assert_eq!(json["program_update"]["in_progress"], false);
+    }
+}
+
+#[test]
+fn fr15_dsa_status_no_start_asks_a_running_service_only() {
+    let invocation = parse(&args("status --no-start --json")).unwrap();
+    assert_eq!(invocation.command, Cmd::Status);
+    assert!(invocation.no_start);
+    assert!(!parse(&args("status")).unwrap().no_start);
+    assert!(
+        parse(&args("start --no-start")).is_err(),
+        "only a status can be asked for without starting the service"
+    );
 }
 
 #[test]

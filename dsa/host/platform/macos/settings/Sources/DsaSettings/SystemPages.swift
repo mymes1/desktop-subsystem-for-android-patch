@@ -234,8 +234,7 @@ struct UpdatesPage: View {
     @ObservedObject var vm: SettingsViewModel
     @ObservedObject var android: AndroidVersionViewModel
     @ObservedObject var general: GeneralViewModel
-    let service: DsaService
-    @State private var updating = false
+    @ObservedObject var update: ProgramUpdateViewModel
 
     var body: some View {
         Form {
@@ -305,19 +304,38 @@ struct UpdatesPage: View {
                     needsAdministrator: vm.prereleaseUpdatesNeedAdministrator, set: { await vm.setPrereleaseUpdates($0) }) {
                     Task { await changeAsAdministrator(vm, ["settings", "set", "prerelease-updates", vm.prereleaseUpdates ? "off" : "on"]) }
                 }
+                // An update of DSA while it runs, across the service's restart, and how it ended.
+                if update.inProgress {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(update.phaseText).font(.headline)
+                        if update.hasVersion {
+                            Text(update.versionText).foregroundStyle(.secondary)
+                        }
+                        Text(update.keepOpenText).foregroundStyle(.secondary)
+                        ProgressView().progressViewStyle(.linear)
+                            .accessibilityLabel(T("ProgramUpdateCard.Header"))
+                    }
+                }
+                if update.isApplied {
+                    Banner(kind: .success, title: T("ProgramUpdateDone.Title"), message: update.appliedText)
+                }
+                if update.isFailed {
+                    Banner(kind: .error, title: T("UpdateNowFailed"), message: update.failedText)
+                }
                 ButtonRow(title: T("UpdateNowCard.Header"), detail: T("UpdateNowCard.Description"),
-                          action: T("UpdateNowButton.Content"), enabled: vm.canUpdateNow && !updating, busy: updating) {
+                          action: T("UpdateNowButton.Content"), enabled: vm.canUpdateNow && update.canStartUpdate,
+                          busy: update.inProgress) {
                     guard Shell.confirm(T("UpdateNowTitle"), T("UpdateNowBody"), T("UpdateNowAction")) else {
                         return
                     }
-                    updating = true
                     Task {
-                        do {
-                            Shell.tell(T("UpdateNowTitle"), try await service.updateNow())
-                        } catch {
-                            Shell.tell(T("UpdateNowFailed"), Format.problem(appText, error))
+                        let answer = await update.updateNow()
+                        if let error = update.error {
+                            Shell.tell(T("UpdateNowFailed"), error)
+                        } else if let answer, answer.installing == nil {
+                            // Nothing newer: the service says why.
+                            Shell.tell(T("UpdateNowTitle"), answer.detail)
                         }
-                        updating = false
                     }
                 }
                 Text(T("UpdatesMachineNote.Text")).font(.callout).foregroundStyle(.secondary)
@@ -325,6 +343,7 @@ struct UpdatesPage: View {
         }
         .settingsPage()
         .task {
+            await update.poll()
             await vm.load()
             await android.load()
             await general.poll()
@@ -333,6 +352,21 @@ struct UpdatesPage: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await android.refresh()
+            }
+        }
+        .task {
+            // An update of DSA is followed more closely, across the service's restart; once the
+            // new service answers, the page reads what it says now, its version among it.
+            update.cameBack = {
+                Task {
+                    await vm.load()
+                    await android.load()
+                    await general.poll()
+                }
+            }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                await update.poll()
             }
         }
     }
