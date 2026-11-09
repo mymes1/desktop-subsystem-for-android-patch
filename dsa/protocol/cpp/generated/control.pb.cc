@@ -790,36 +790,6 @@ struct DeveloperModeDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DeveloperModeDefaultTypeInternal _DeveloperMode_default_instance_;
-PROTOBUF_CONSTEXPR ArmTranslationInstall::ArmTranslationInstall(
-    ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.sha256_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.size_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
-  , /*decltype(_impl_._cached_size_)*/{}} {}
-struct ArmTranslationInstallDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR ArmTranslationInstallDefaultTypeInternal()
-      : _instance(::_pbi::ConstantInitialized{}) {}
-  ~ArmTranslationInstallDefaultTypeInternal() {}
-  union {
-    ArmTranslationInstall _instance;
-  };
-};
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ArmTranslationInstallDefaultTypeInternal _ArmTranslationInstall_default_instance_;
-PROTOBUF_CONSTEXPR ArmTranslationChunk::ArmTranslationChunk(
-    ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.data_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.offset_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
-  , /*decltype(_impl_._cached_size_)*/{}} {}
-struct ArmTranslationChunkDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR ArmTranslationChunkDefaultTypeInternal()
-      : _instance(::_pbi::ConstantInitialized{}) {}
-  ~ArmTranslationChunkDefaultTypeInternal() {}
-  union {
-    ArmTranslationChunk _instance;
-  };
-};
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ArmTranslationChunkDefaultTypeInternal _ArmTranslationChunk_default_instance_;
 PROTOBUF_CONSTEXPR ArmTranslationRemove::ArmTranslationRemove(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_._cached_size_)*/{}} {}
@@ -848,8 +818,6 @@ PROTOBUF_CONSTEXPR ArmTranslationState::ArmTranslationState(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.abilist_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.received_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
   , /*decltype(_impl_.done_)*/false
   , /*decltype(_impl_.installed_)*/false
   , /*decltype(_impl_.active_)*/false
@@ -863,36 +831,6 @@ struct ArmTranslationStateDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ArmTranslationStateDefaultTypeInternal _ArmTranslationState_default_instance_;
-PROTOBUF_CONSTEXPR GappsInstall::GappsInstall(
-    ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.sha256_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.size_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
-  , /*decltype(_impl_._cached_size_)*/{}} {}
-struct GappsInstallDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR GappsInstallDefaultTypeInternal()
-      : _instance(::_pbi::ConstantInitialized{}) {}
-  ~GappsInstallDefaultTypeInternal() {}
-  union {
-    GappsInstall _instance;
-  };
-};
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GappsInstallDefaultTypeInternal _GappsInstall_default_instance_;
-PROTOBUF_CONSTEXPR GappsChunk::GappsChunk(
-    ::_pbi::ConstantInitialized): _impl_{
-    /*decltype(_impl_.data_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.offset_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
-  , /*decltype(_impl_._cached_size_)*/{}} {}
-struct GappsChunkDefaultTypeInternal {
-  PROTOBUF_CONSTEXPR GappsChunkDefaultTypeInternal()
-      : _instance(::_pbi::ConstantInitialized{}) {}
-  ~GappsChunkDefaultTypeInternal() {}
-  union {
-    GappsChunk _instance;
-  };
-};
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GappsChunkDefaultTypeInternal _GappsChunk_default_instance_;
 PROTOBUF_CONSTEXPR GappsRemove::GappsRemove(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_._cached_size_)*/{}} {}
@@ -922,8 +860,6 @@ PROTOBUF_CONSTEXPR GappsState::GappsState(
     /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.abi_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.abilist_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
-  , /*decltype(_impl_.received_)*/uint64_t{0u}
-  , /*decltype(_impl_.transfer_id_)*/0u
   , /*decltype(_impl_.done_)*/false
   , /*decltype(_impl_.installed_)*/false
   , /*decltype(_impl_.active_)*/false
@@ -938,6 +874,38 @@ struct GappsStateDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GappsStateDefaultTypeInternal _GappsState_default_instance_;
+PROTOBUF_CONSTEXPR AddonImageRead::AddonImageRead(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.offset_)*/uint64_t{0u}
+  , /*decltype(_impl_.image_)*/0
+  , /*decltype(_impl_.length_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AddonImageReadDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AddonImageReadDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AddonImageReadDefaultTypeInternal() {}
+  union {
+    AddonImageRead _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AddonImageReadDefaultTypeInternal _AddonImageRead_default_instance_;
+PROTOBUF_CONSTEXPR AddonImagePart::AddonImagePart(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.data_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.offset_)*/uint64_t{0u}
+  , /*decltype(_impl_.size_)*/uint64_t{0u}
+  , /*decltype(_impl_.image_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AddonImagePartDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AddonImagePartDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AddonImagePartDefaultTypeInternal() {}
+  union {
+    AddonImagePart _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AddonImagePartDefaultTypeInternal _AddonImagePart_default_instance_;
 PROTOBUF_CONSTEXPR GoogleDeviceIdQuery::GoogleDeviceIdQuery(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_._cached_size_)*/{}} {}
@@ -3553,6 +3521,61 @@ bool LocationAccess_Parse(
       LocationAccess_entries, 4, name, &int_value);
   if (success) {
     *value = static_cast<LocationAccess>(int_value);
+  }
+  return success;
+}
+bool AddonImage_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> AddonImage_strings[3] = {};
+
+static const char AddonImage_names[] =
+  "ADDON_IMAGE_ARM_TRANSLATION"
+  "ADDON_IMAGE_GAPPS"
+  "ADDON_IMAGE_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry AddonImage_entries[] = {
+  { {AddonImage_names + 0, 27}, 2 },
+  { {AddonImage_names + 27, 17}, 1 },
+  { {AddonImage_names + 44, 23}, 0 },
+};
+
+static const int AddonImage_entries_by_number[] = {
+  2, // 0 -> ADDON_IMAGE_UNSPECIFIED
+  1, // 1 -> ADDON_IMAGE_GAPPS
+  0, // 2 -> ADDON_IMAGE_ARM_TRANSLATION
+};
+
+const std::string& AddonImage_Name(
+    AddonImage value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          AddonImage_entries,
+          AddonImage_entries_by_number,
+          3, AddonImage_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      AddonImage_entries,
+      AddonImage_entries_by_number,
+      3, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     AddonImage_strings[idx].get();
+}
+bool AddonImage_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AddonImage* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      AddonImage_entries, 3, name, &int_value);
+  if (success) {
+    *value = static_cast<AddonImage>(int_value);
   }
   return success;
 }
@@ -17873,526 +17896,6 @@ std::string DeveloperMode::GetTypeName() const {
 
 // ===================================================================
 
-class ArmTranslationInstall::_Internal {
- public:
-};
-
-ArmTranslationInstall::ArmTranslationInstall(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                         bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
-  SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.ArmTranslationInstall)
-}
-ArmTranslationInstall::ArmTranslationInstall(const ArmTranslationInstall& from)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
-  ArmTranslationInstall* const _this = this; (void)_this;
-  new (&_impl_) Impl_{
-      decltype(_impl_.sha256_){}
-    , decltype(_impl_.size_){}
-    , decltype(_impl_.transfer_id_){}
-    , /*decltype(_impl_._cached_size_)*/{}};
-
-  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-  _impl_.sha256_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (!from._internal_sha256().empty()) {
-    _this->_impl_.sha256_.Set(from._internal_sha256(), 
-      _this->GetArenaForAllocation());
-  }
-  ::memcpy(&_impl_.size_, &from._impl_.size_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.transfer_id_) -
-    reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.transfer_id_));
-  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ArmTranslationInstall)
-}
-
-inline void ArmTranslationInstall::SharedCtor(
-    ::_pb::Arena* arena, bool is_message_owned) {
-  (void)arena;
-  (void)is_message_owned;
-  new (&_impl_) Impl_{
-      decltype(_impl_.sha256_){}
-    , decltype(_impl_.size_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
-    , /*decltype(_impl_._cached_size_)*/{}
-  };
-  _impl_.sha256_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-}
-
-ArmTranslationInstall::~ArmTranslationInstall() {
-  // @@protoc_insertion_point(destructor:dsa.control.v1.ArmTranslationInstall)
-  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
-  (void)arena;
-    return;
-  }
-  SharedDtor();
-}
-
-inline void ArmTranslationInstall::SharedDtor() {
-  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  _impl_.sha256_.Destroy();
-}
-
-void ArmTranslationInstall::SetCachedSize(int size) const {
-  _impl_._cached_size_.Set(size);
-}
-
-void ArmTranslationInstall::Clear() {
-// @@protoc_insertion_point(message_clear_start:dsa.control.v1.ArmTranslationInstall)
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.sha256_.ClearToEmpty();
-  ::memset(&_impl_.size_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.transfer_id_) -
-      reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.transfer_id_));
-  _internal_metadata_.Clear<std::string>();
-}
-
-const char* ArmTranslationInstall::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
-#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  while (!ctx->Done(&ptr)) {
-    uint32_t tag;
-    ptr = ::_pbi::ReadTag(ptr, &tag);
-    switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 size = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // bytes sha256 = 3;
-      case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
-          auto str = _internal_mutable_sha256();
-          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      default:
-        goto handle_unusual;
-    }  // switch
-  handle_unusual:
-    if ((tag == 0) || ((tag & 7) == 4)) {
-      CHK_(ptr);
-      ctx->SetLastTag(tag);
-      goto message_done;
-    }
-    ptr = UnknownFieldParse(
-        tag,
-        _internal_metadata_.mutable_unknown_fields<std::string>(),
-        ptr, ctx);
-    CHK_(ptr != nullptr);
-  }  // while
-message_done:
-  return ptr;
-failure:
-  ptr = nullptr;
-  goto message_done;
-#undef CHK_
-}
-
-uint8_t* ArmTranslationInstall::_InternalSerialize(
-    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.ArmTranslationInstall)
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 size = 2;
-  if (this->_internal_size() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_size(), target);
-  }
-
-  // bytes sha256 = 3;
-  if (!this->_internal_sha256().empty()) {
-    target = stream->WriteBytesMaybeAliased(
-        3, this->_internal_sha256(), target);
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
-        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.ArmTranslationInstall)
-  return target;
-}
-
-size_t ArmTranslationInstall::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.ArmTranslationInstall)
-  size_t total_size = 0;
-
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  // bytes sha256 = 3;
-  if (!this->_internal_sha256().empty()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
-        this->_internal_sha256());
-  }
-
-  // uint64 size = 2;
-  if (this->_internal_size() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_size());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
-  }
-  int cached_size = ::_pbi::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
-}
-
-void ArmTranslationInstall::CheckTypeAndMergeFrom(
-    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
-  MergeFrom(*::_pbi::DownCast<const ArmTranslationInstall*>(
-      &from));
-}
-
-void ArmTranslationInstall::MergeFrom(const ArmTranslationInstall& from) {
-  ArmTranslationInstall* const _this = this;
-  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.ArmTranslationInstall)
-  GOOGLE_DCHECK_NE(&from, _this);
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  if (!from._internal_sha256().empty()) {
-    _this->_internal_set_sha256(from._internal_sha256());
-  }
-  if (from._internal_size() != 0) {
-    _this->_internal_set_size(from._internal_size());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
-  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-}
-
-void ArmTranslationInstall::CopyFrom(const ArmTranslationInstall& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.ArmTranslationInstall)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-bool ArmTranslationInstall::IsInitialized() const {
-  return true;
-}
-
-void ArmTranslationInstall::InternalSwap(ArmTranslationInstall* other) {
-  using std::swap;
-  auto* lhs_arena = GetArenaForAllocation();
-  auto* rhs_arena = other->GetArenaForAllocation();
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
-      &_impl_.sha256_, lhs_arena,
-      &other->_impl_.sha256_, rhs_arena
-  );
-  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ArmTranslationInstall, _impl_.transfer_id_)
-      + sizeof(ArmTranslationInstall::_impl_.transfer_id_)
-      - PROTOBUF_FIELD_OFFSET(ArmTranslationInstall, _impl_.size_)>(
-          reinterpret_cast<char*>(&_impl_.size_),
-          reinterpret_cast<char*>(&other->_impl_.size_));
-}
-
-std::string ArmTranslationInstall::GetTypeName() const {
-  return "dsa.control.v1.ArmTranslationInstall";
-}
-
-
-// ===================================================================
-
-class ArmTranslationChunk::_Internal {
- public:
-};
-
-ArmTranslationChunk::ArmTranslationChunk(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                         bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
-  SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.ArmTranslationChunk)
-}
-ArmTranslationChunk::ArmTranslationChunk(const ArmTranslationChunk& from)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
-  ArmTranslationChunk* const _this = this; (void)_this;
-  new (&_impl_) Impl_{
-      decltype(_impl_.data_){}
-    , decltype(_impl_.offset_){}
-    , decltype(_impl_.transfer_id_){}
-    , /*decltype(_impl_._cached_size_)*/{}};
-
-  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-  _impl_.data_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.data_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (!from._internal_data().empty()) {
-    _this->_impl_.data_.Set(from._internal_data(), 
-      _this->GetArenaForAllocation());
-  }
-  ::memcpy(&_impl_.offset_, &from._impl_.offset_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.transfer_id_) -
-    reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.transfer_id_));
-  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ArmTranslationChunk)
-}
-
-inline void ArmTranslationChunk::SharedCtor(
-    ::_pb::Arena* arena, bool is_message_owned) {
-  (void)arena;
-  (void)is_message_owned;
-  new (&_impl_) Impl_{
-      decltype(_impl_.data_){}
-    , decltype(_impl_.offset_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
-    , /*decltype(_impl_._cached_size_)*/{}
-  };
-  _impl_.data_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.data_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-}
-
-ArmTranslationChunk::~ArmTranslationChunk() {
-  // @@protoc_insertion_point(destructor:dsa.control.v1.ArmTranslationChunk)
-  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
-  (void)arena;
-    return;
-  }
-  SharedDtor();
-}
-
-inline void ArmTranslationChunk::SharedDtor() {
-  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  _impl_.data_.Destroy();
-}
-
-void ArmTranslationChunk::SetCachedSize(int size) const {
-  _impl_._cached_size_.Set(size);
-}
-
-void ArmTranslationChunk::Clear() {
-// @@protoc_insertion_point(message_clear_start:dsa.control.v1.ArmTranslationChunk)
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.data_.ClearToEmpty();
-  ::memset(&_impl_.offset_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.transfer_id_) -
-      reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.transfer_id_));
-  _internal_metadata_.Clear<std::string>();
-}
-
-const char* ArmTranslationChunk::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
-#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  while (!ctx->Done(&ptr)) {
-    uint32_t tag;
-    ptr = ::_pbi::ReadTag(ptr, &tag);
-    switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 offset = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // bytes data = 3;
-      case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
-          auto str = _internal_mutable_data();
-          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      default:
-        goto handle_unusual;
-    }  // switch
-  handle_unusual:
-    if ((tag == 0) || ((tag & 7) == 4)) {
-      CHK_(ptr);
-      ctx->SetLastTag(tag);
-      goto message_done;
-    }
-    ptr = UnknownFieldParse(
-        tag,
-        _internal_metadata_.mutable_unknown_fields<std::string>(),
-        ptr, ctx);
-    CHK_(ptr != nullptr);
-  }  // while
-message_done:
-  return ptr;
-failure:
-  ptr = nullptr;
-  goto message_done;
-#undef CHK_
-}
-
-uint8_t* ArmTranslationChunk::_InternalSerialize(
-    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.ArmTranslationChunk)
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 offset = 2;
-  if (this->_internal_offset() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_offset(), target);
-  }
-
-  // bytes data = 3;
-  if (!this->_internal_data().empty()) {
-    target = stream->WriteBytesMaybeAliased(
-        3, this->_internal_data(), target);
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
-        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.ArmTranslationChunk)
-  return target;
-}
-
-size_t ArmTranslationChunk::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.ArmTranslationChunk)
-  size_t total_size = 0;
-
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  // bytes data = 3;
-  if (!this->_internal_data().empty()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
-        this->_internal_data());
-  }
-
-  // uint64 offset = 2;
-  if (this->_internal_offset() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_offset());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
-  }
-  int cached_size = ::_pbi::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
-}
-
-void ArmTranslationChunk::CheckTypeAndMergeFrom(
-    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
-  MergeFrom(*::_pbi::DownCast<const ArmTranslationChunk*>(
-      &from));
-}
-
-void ArmTranslationChunk::MergeFrom(const ArmTranslationChunk& from) {
-  ArmTranslationChunk* const _this = this;
-  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.ArmTranslationChunk)
-  GOOGLE_DCHECK_NE(&from, _this);
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  if (!from._internal_data().empty()) {
-    _this->_internal_set_data(from._internal_data());
-  }
-  if (from._internal_offset() != 0) {
-    _this->_internal_set_offset(from._internal_offset());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
-  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-}
-
-void ArmTranslationChunk::CopyFrom(const ArmTranslationChunk& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.ArmTranslationChunk)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-bool ArmTranslationChunk::IsInitialized() const {
-  return true;
-}
-
-void ArmTranslationChunk::InternalSwap(ArmTranslationChunk* other) {
-  using std::swap;
-  auto* lhs_arena = GetArenaForAllocation();
-  auto* rhs_arena = other->GetArenaForAllocation();
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
-      &_impl_.data_, lhs_arena,
-      &other->_impl_.data_, rhs_arena
-  );
-  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ArmTranslationChunk, _impl_.transfer_id_)
-      + sizeof(ArmTranslationChunk::_impl_.transfer_id_)
-      - PROTOBUF_FIELD_OFFSET(ArmTranslationChunk, _impl_.offset_)>(
-          reinterpret_cast<char*>(&_impl_.offset_),
-          reinterpret_cast<char*>(&other->_impl_.offset_));
-}
-
-std::string ArmTranslationChunk::GetTypeName() const {
-  return "dsa.control.v1.ArmTranslationChunk";
-}
-
-
-// ===================================================================
-
 class ArmTranslationRemove::_Internal {
  public:
 };
@@ -18705,8 +18208,6 @@ ArmTranslationState::ArmTranslationState(const ArmTranslationState& from)
   new (&_impl_) Impl_{
       decltype(_impl_.error_){}
     , decltype(_impl_.abilist_){}
-    , decltype(_impl_.received_){}
-    , decltype(_impl_.transfer_id_){}
     , decltype(_impl_.done_){}
     , decltype(_impl_.installed_){}
     , decltype(_impl_.active_){}
@@ -18729,9 +18230,9 @@ ArmTranslationState::ArmTranslationState(const ArmTranslationState& from)
     _this->_impl_.abilist_.Set(from._internal_abilist(), 
       _this->GetArenaForAllocation());
   }
-  ::memcpy(&_impl_.received_, &from._impl_.received_,
+  ::memcpy(&_impl_.done_, &from._impl_.done_,
     static_cast<size_t>(reinterpret_cast<char*>(&_impl_.active_) -
-    reinterpret_cast<char*>(&_impl_.received_)) + sizeof(_impl_.active_));
+    reinterpret_cast<char*>(&_impl_.done_)) + sizeof(_impl_.active_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ArmTranslationState)
 }
 
@@ -18742,8 +18243,6 @@ inline void ArmTranslationState::SharedCtor(
   new (&_impl_) Impl_{
       decltype(_impl_.error_){}
     , decltype(_impl_.abilist_){}
-    , decltype(_impl_.received_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
     , decltype(_impl_.done_){false}
     , decltype(_impl_.installed_){false}
     , decltype(_impl_.active_){false}
@@ -18786,9 +18285,9 @@ void ArmTranslationState::Clear() {
 
   _impl_.error_.ClearToEmpty();
   _impl_.abilist_.ClearToEmpty();
-  ::memset(&_impl_.received_, 0, static_cast<size_t>(
+  ::memset(&_impl_.done_, 0, static_cast<size_t>(
       reinterpret_cast<char*>(&_impl_.active_) -
-      reinterpret_cast<char*>(&_impl_.received_)) + sizeof(_impl_.active_));
+      reinterpret_cast<char*>(&_impl_.done_)) + sizeof(_impl_.active_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -18798,22 +18297,6 @@ const char* ArmTranslationState::_InternalParse(const char* ptr, ::_pbi::ParseCo
     uint32_t tag;
     ptr = ::_pbi::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 received = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.received_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
       // bool done = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
@@ -18887,18 +18370,6 @@ uint8_t* ArmTranslationState::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 received = 2;
-  if (this->_internal_received() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_received(), target);
-  }
-
   // bool done = 3;
   if (this->_internal_done() != 0) {
     target = stream->EnsureSpace(target);
@@ -18967,16 +18438,6 @@ size_t ArmTranslationState::ByteSizeLong() const {
         this->_internal_abilist());
   }
 
-  // uint64 received = 2;
-  if (this->_internal_received() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_received());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
   // bool done = 3;
   if (this->_internal_done() != 0) {
     total_size += 1 + 1;
@@ -19019,12 +18480,6 @@ void ArmTranslationState::MergeFrom(const ArmTranslationState& from) {
   if (!from._internal_abilist().empty()) {
     _this->_internal_set_abilist(from._internal_abilist());
   }
-  if (from._internal_received() != 0) {
-    _this->_internal_set_received(from._internal_received());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
   if (from._internal_done() != 0) {
     _this->_internal_set_done(from._internal_done());
   }
@@ -19064,533 +18519,13 @@ void ArmTranslationState::InternalSwap(ArmTranslationState* other) {
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ArmTranslationState, _impl_.active_)
       + sizeof(ArmTranslationState::_impl_.active_)
-      - PROTOBUF_FIELD_OFFSET(ArmTranslationState, _impl_.received_)>(
-          reinterpret_cast<char*>(&_impl_.received_),
-          reinterpret_cast<char*>(&other->_impl_.received_));
+      - PROTOBUF_FIELD_OFFSET(ArmTranslationState, _impl_.done_)>(
+          reinterpret_cast<char*>(&_impl_.done_),
+          reinterpret_cast<char*>(&other->_impl_.done_));
 }
 
 std::string ArmTranslationState::GetTypeName() const {
   return "dsa.control.v1.ArmTranslationState";
-}
-
-
-// ===================================================================
-
-class GappsInstall::_Internal {
- public:
-};
-
-GappsInstall::GappsInstall(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                         bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
-  SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GappsInstall)
-}
-GappsInstall::GappsInstall(const GappsInstall& from)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
-  GappsInstall* const _this = this; (void)_this;
-  new (&_impl_) Impl_{
-      decltype(_impl_.sha256_){}
-    , decltype(_impl_.size_){}
-    , decltype(_impl_.transfer_id_){}
-    , /*decltype(_impl_._cached_size_)*/{}};
-
-  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-  _impl_.sha256_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (!from._internal_sha256().empty()) {
-    _this->_impl_.sha256_.Set(from._internal_sha256(), 
-      _this->GetArenaForAllocation());
-  }
-  ::memcpy(&_impl_.size_, &from._impl_.size_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.transfer_id_) -
-    reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.transfer_id_));
-  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GappsInstall)
-}
-
-inline void GappsInstall::SharedCtor(
-    ::_pb::Arena* arena, bool is_message_owned) {
-  (void)arena;
-  (void)is_message_owned;
-  new (&_impl_) Impl_{
-      decltype(_impl_.sha256_){}
-    , decltype(_impl_.size_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
-    , /*decltype(_impl_._cached_size_)*/{}
-  };
-  _impl_.sha256_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.sha256_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-}
-
-GappsInstall::~GappsInstall() {
-  // @@protoc_insertion_point(destructor:dsa.control.v1.GappsInstall)
-  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
-  (void)arena;
-    return;
-  }
-  SharedDtor();
-}
-
-inline void GappsInstall::SharedDtor() {
-  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  _impl_.sha256_.Destroy();
-}
-
-void GappsInstall::SetCachedSize(int size) const {
-  _impl_._cached_size_.Set(size);
-}
-
-void GappsInstall::Clear() {
-// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GappsInstall)
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.sha256_.ClearToEmpty();
-  ::memset(&_impl_.size_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.transfer_id_) -
-      reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.transfer_id_));
-  _internal_metadata_.Clear<std::string>();
-}
-
-const char* GappsInstall::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
-#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  while (!ctx->Done(&ptr)) {
-    uint32_t tag;
-    ptr = ::_pbi::ReadTag(ptr, &tag);
-    switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 size = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // bytes sha256 = 3;
-      case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
-          auto str = _internal_mutable_sha256();
-          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      default:
-        goto handle_unusual;
-    }  // switch
-  handle_unusual:
-    if ((tag == 0) || ((tag & 7) == 4)) {
-      CHK_(ptr);
-      ctx->SetLastTag(tag);
-      goto message_done;
-    }
-    ptr = UnknownFieldParse(
-        tag,
-        _internal_metadata_.mutable_unknown_fields<std::string>(),
-        ptr, ctx);
-    CHK_(ptr != nullptr);
-  }  // while
-message_done:
-  return ptr;
-failure:
-  ptr = nullptr;
-  goto message_done;
-#undef CHK_
-}
-
-uint8_t* GappsInstall::_InternalSerialize(
-    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GappsInstall)
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 size = 2;
-  if (this->_internal_size() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_size(), target);
-  }
-
-  // bytes sha256 = 3;
-  if (!this->_internal_sha256().empty()) {
-    target = stream->WriteBytesMaybeAliased(
-        3, this->_internal_sha256(), target);
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
-        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GappsInstall)
-  return target;
-}
-
-size_t GappsInstall::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GappsInstall)
-  size_t total_size = 0;
-
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  // bytes sha256 = 3;
-  if (!this->_internal_sha256().empty()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
-        this->_internal_sha256());
-  }
-
-  // uint64 size = 2;
-  if (this->_internal_size() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_size());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
-  }
-  int cached_size = ::_pbi::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
-}
-
-void GappsInstall::CheckTypeAndMergeFrom(
-    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
-  MergeFrom(*::_pbi::DownCast<const GappsInstall*>(
-      &from));
-}
-
-void GappsInstall::MergeFrom(const GappsInstall& from) {
-  GappsInstall* const _this = this;
-  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GappsInstall)
-  GOOGLE_DCHECK_NE(&from, _this);
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  if (!from._internal_sha256().empty()) {
-    _this->_internal_set_sha256(from._internal_sha256());
-  }
-  if (from._internal_size() != 0) {
-    _this->_internal_set_size(from._internal_size());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
-  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-}
-
-void GappsInstall::CopyFrom(const GappsInstall& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GappsInstall)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-bool GappsInstall::IsInitialized() const {
-  return true;
-}
-
-void GappsInstall::InternalSwap(GappsInstall* other) {
-  using std::swap;
-  auto* lhs_arena = GetArenaForAllocation();
-  auto* rhs_arena = other->GetArenaForAllocation();
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
-      &_impl_.sha256_, lhs_arena,
-      &other->_impl_.sha256_, rhs_arena
-  );
-  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GappsInstall, _impl_.transfer_id_)
-      + sizeof(GappsInstall::_impl_.transfer_id_)
-      - PROTOBUF_FIELD_OFFSET(GappsInstall, _impl_.size_)>(
-          reinterpret_cast<char*>(&_impl_.size_),
-          reinterpret_cast<char*>(&other->_impl_.size_));
-}
-
-std::string GappsInstall::GetTypeName() const {
-  return "dsa.control.v1.GappsInstall";
-}
-
-
-// ===================================================================
-
-class GappsChunk::_Internal {
- public:
-};
-
-GappsChunk::GappsChunk(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                         bool is_message_owned)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
-  SharedCtor(arena, is_message_owned);
-  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GappsChunk)
-}
-GappsChunk::GappsChunk(const GappsChunk& from)
-  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
-  GappsChunk* const _this = this; (void)_this;
-  new (&_impl_) Impl_{
-      decltype(_impl_.data_){}
-    , decltype(_impl_.offset_){}
-    , decltype(_impl_.transfer_id_){}
-    , /*decltype(_impl_._cached_size_)*/{}};
-
-  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-  _impl_.data_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.data_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (!from._internal_data().empty()) {
-    _this->_impl_.data_.Set(from._internal_data(), 
-      _this->GetArenaForAllocation());
-  }
-  ::memcpy(&_impl_.offset_, &from._impl_.offset_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.transfer_id_) -
-    reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.transfer_id_));
-  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GappsChunk)
-}
-
-inline void GappsChunk::SharedCtor(
-    ::_pb::Arena* arena, bool is_message_owned) {
-  (void)arena;
-  (void)is_message_owned;
-  new (&_impl_) Impl_{
-      decltype(_impl_.data_){}
-    , decltype(_impl_.offset_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
-    , /*decltype(_impl_._cached_size_)*/{}
-  };
-  _impl_.data_.InitDefault();
-  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-    _impl_.data_.Set("", GetArenaForAllocation());
-  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-}
-
-GappsChunk::~GappsChunk() {
-  // @@protoc_insertion_point(destructor:dsa.control.v1.GappsChunk)
-  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
-  (void)arena;
-    return;
-  }
-  SharedDtor();
-}
-
-inline void GappsChunk::SharedDtor() {
-  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
-  _impl_.data_.Destroy();
-}
-
-void GappsChunk::SetCachedSize(int size) const {
-  _impl_._cached_size_.Set(size);
-}
-
-void GappsChunk::Clear() {
-// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GappsChunk)
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  _impl_.data_.ClearToEmpty();
-  ::memset(&_impl_.offset_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.transfer_id_) -
-      reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.transfer_id_));
-  _internal_metadata_.Clear<std::string>();
-}
-
-const char* GappsChunk::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
-#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  while (!ctx->Done(&ptr)) {
-    uint32_t tag;
-    ptr = ::_pbi::ReadTag(ptr, &tag);
-    switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 offset = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // bytes data = 3;
-      case 3:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
-          auto str = _internal_mutable_data();
-          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      default:
-        goto handle_unusual;
-    }  // switch
-  handle_unusual:
-    if ((tag == 0) || ((tag & 7) == 4)) {
-      CHK_(ptr);
-      ctx->SetLastTag(tag);
-      goto message_done;
-    }
-    ptr = UnknownFieldParse(
-        tag,
-        _internal_metadata_.mutable_unknown_fields<std::string>(),
-        ptr, ctx);
-    CHK_(ptr != nullptr);
-  }  // while
-message_done:
-  return ptr;
-failure:
-  ptr = nullptr;
-  goto message_done;
-#undef CHK_
-}
-
-uint8_t* GappsChunk::_InternalSerialize(
-    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
-  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GappsChunk)
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 offset = 2;
-  if (this->_internal_offset() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_offset(), target);
-  }
-
-  // bytes data = 3;
-  if (!this->_internal_data().empty()) {
-    target = stream->WriteBytesMaybeAliased(
-        3, this->_internal_data(), target);
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
-        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GappsChunk)
-  return target;
-}
-
-size_t GappsChunk::ByteSizeLong() const {
-// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GappsChunk)
-  size_t total_size = 0;
-
-  uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  // bytes data = 3;
-  if (!this->_internal_data().empty()) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
-        this->_internal_data());
-  }
-
-  // uint64 offset = 2;
-  if (this->_internal_offset() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_offset());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
-  }
-  int cached_size = ::_pbi::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
-}
-
-void GappsChunk::CheckTypeAndMergeFrom(
-    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
-  MergeFrom(*::_pbi::DownCast<const GappsChunk*>(
-      &from));
-}
-
-void GappsChunk::MergeFrom(const GappsChunk& from) {
-  GappsChunk* const _this = this;
-  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GappsChunk)
-  GOOGLE_DCHECK_NE(&from, _this);
-  uint32_t cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  if (!from._internal_data().empty()) {
-    _this->_internal_set_data(from._internal_data());
-  }
-  if (from._internal_offset() != 0) {
-    _this->_internal_set_offset(from._internal_offset());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
-  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
-}
-
-void GappsChunk::CopyFrom(const GappsChunk& from) {
-// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GappsChunk)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-bool GappsChunk::IsInitialized() const {
-  return true;
-}
-
-void GappsChunk::InternalSwap(GappsChunk* other) {
-  using std::swap;
-  auto* lhs_arena = GetArenaForAllocation();
-  auto* rhs_arena = other->GetArenaForAllocation();
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
-      &_impl_.data_, lhs_arena,
-      &other->_impl_.data_, rhs_arena
-  );
-  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GappsChunk, _impl_.transfer_id_)
-      + sizeof(GappsChunk::_impl_.transfer_id_)
-      - PROTOBUF_FIELD_OFFSET(GappsChunk, _impl_.offset_)>(
-          reinterpret_cast<char*>(&_impl_.offset_),
-          reinterpret_cast<char*>(&other->_impl_.offset_));
-}
-
-std::string GappsChunk::GetTypeName() const {
-  return "dsa.control.v1.GappsChunk";
 }
 
 
@@ -19909,8 +18844,6 @@ GappsState::GappsState(const GappsState& from)
       decltype(_impl_.error_){}
     , decltype(_impl_.abi_){}
     , decltype(_impl_.abilist_){}
-    , decltype(_impl_.received_){}
-    , decltype(_impl_.transfer_id_){}
     , decltype(_impl_.done_){}
     , decltype(_impl_.installed_){}
     , decltype(_impl_.active_){}
@@ -19942,9 +18875,9 @@ GappsState::GappsState(const GappsState& from)
     _this->_impl_.abilist_.Set(from._internal_abilist(), 
       _this->GetArenaForAllocation());
   }
-  ::memcpy(&_impl_.received_, &from._impl_.received_,
+  ::memcpy(&_impl_.done_, &from._impl_.done_,
     static_cast<size_t>(reinterpret_cast<char*>(&_impl_.sdk_) -
-    reinterpret_cast<char*>(&_impl_.received_)) + sizeof(_impl_.sdk_));
+    reinterpret_cast<char*>(&_impl_.done_)) + sizeof(_impl_.sdk_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GappsState)
 }
 
@@ -19956,8 +18889,6 @@ inline void GappsState::SharedCtor(
       decltype(_impl_.error_){}
     , decltype(_impl_.abi_){}
     , decltype(_impl_.abilist_){}
-    , decltype(_impl_.received_){uint64_t{0u}}
-    , decltype(_impl_.transfer_id_){0u}
     , decltype(_impl_.done_){false}
     , decltype(_impl_.installed_){false}
     , decltype(_impl_.active_){false}
@@ -20007,9 +18938,9 @@ void GappsState::Clear() {
   _impl_.error_.ClearToEmpty();
   _impl_.abi_.ClearToEmpty();
   _impl_.abilist_.ClearToEmpty();
-  ::memset(&_impl_.received_, 0, static_cast<size_t>(
+  ::memset(&_impl_.done_, 0, static_cast<size_t>(
       reinterpret_cast<char*>(&_impl_.sdk_) -
-      reinterpret_cast<char*>(&_impl_.received_)) + sizeof(_impl_.sdk_));
+      reinterpret_cast<char*>(&_impl_.done_)) + sizeof(_impl_.sdk_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -20019,22 +18950,6 @@ const char* GappsState::_InternalParse(const char* ptr, ::_pbi::ParseContext* ct
     uint32_t tag;
     ptr = ::_pbi::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 transfer_id = 1;
-      case 1:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _impl_.transfer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // uint64 received = 2;
-      case 2:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _impl_.received_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
       // bool done = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
@@ -20125,18 +19040,6 @@ uint8_t* GappsState::_InternalSerialize(
   // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GappsState)
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_transfer_id(), target);
-  }
-
-  // uint64 received = 2;
-  if (this->_internal_received() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_received(), target);
-  }
 
   // bool done = 3;
   if (this->_internal_done() != 0) {
@@ -20229,16 +19132,6 @@ size_t GappsState::ByteSizeLong() const {
         this->_internal_abilist());
   }
 
-  // uint64 received = 2;
-  if (this->_internal_received() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_received());
-  }
-
-  // uint32 transfer_id = 1;
-  if (this->_internal_transfer_id() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_transfer_id());
-  }
-
   // bool done = 3;
   if (this->_internal_done() != 0) {
     total_size += 1 + 1;
@@ -20289,12 +19182,6 @@ void GappsState::MergeFrom(const GappsState& from) {
   if (!from._internal_abilist().empty()) {
     _this->_internal_set_abilist(from._internal_abilist());
   }
-  if (from._internal_received() != 0) {
-    _this->_internal_set_received(from._internal_received());
-  }
-  if (from._internal_transfer_id() != 0) {
-    _this->_internal_set_transfer_id(from._internal_transfer_id());
-  }
   if (from._internal_done() != 0) {
     _this->_internal_set_done(from._internal_done());
   }
@@ -20341,13 +19228,590 @@ void GappsState::InternalSwap(GappsState* other) {
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(GappsState, _impl_.sdk_)
       + sizeof(GappsState::_impl_.sdk_)
-      - PROTOBUF_FIELD_OFFSET(GappsState, _impl_.received_)>(
-          reinterpret_cast<char*>(&_impl_.received_),
-          reinterpret_cast<char*>(&other->_impl_.received_));
+      - PROTOBUF_FIELD_OFFSET(GappsState, _impl_.done_)>(
+          reinterpret_cast<char*>(&_impl_.done_),
+          reinterpret_cast<char*>(&other->_impl_.done_));
 }
 
 std::string GappsState::GetTypeName() const {
   return "dsa.control.v1.GappsState";
+}
+
+
+// ===================================================================
+
+class AddonImageRead::_Internal {
+ public:
+};
+
+AddonImageRead::AddonImageRead(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.AddonImageRead)
+}
+AddonImageRead::AddonImageRead(const AddonImageRead& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  AddonImageRead* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.offset_){}
+    , decltype(_impl_.image_){}
+    , decltype(_impl_.length_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.offset_, &from._impl_.offset_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.length_) -
+    reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.length_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.AddonImageRead)
+}
+
+inline void AddonImageRead::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.offset_){uint64_t{0u}}
+    , decltype(_impl_.image_){0}
+    , decltype(_impl_.length_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+AddonImageRead::~AddonImageRead() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.AddonImageRead)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void AddonImageRead::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void AddonImageRead::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void AddonImageRead::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.AddonImageRead)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.offset_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.length_) -
+      reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.length_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* AddonImageRead::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .dsa.control.v1.AddonImage image = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_image(static_cast<::dsa::control::v1::AddonImage>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 offset = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 length = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* AddonImageRead::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.AddonImageRead)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .dsa.control.v1.AddonImage image = 1;
+  if (this->_internal_image() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      1, this->_internal_image(), target);
+  }
+
+  // uint64 offset = 2;
+  if (this->_internal_offset() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_offset(), target);
+  }
+
+  // uint32 length = 3;
+  if (this->_internal_length() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_length(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.AddonImageRead)
+  return target;
+}
+
+size_t AddonImageRead::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.AddonImageRead)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint64 offset = 2;
+  if (this->_internal_offset() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_offset());
+  }
+
+  // .dsa.control.v1.AddonImage image = 1;
+  if (this->_internal_image() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_image());
+  }
+
+  // uint32 length = 3;
+  if (this->_internal_length() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_length());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void AddonImageRead::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const AddonImageRead*>(
+      &from));
+}
+
+void AddonImageRead::MergeFrom(const AddonImageRead& from) {
+  AddonImageRead* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.AddonImageRead)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_offset() != 0) {
+    _this->_internal_set_offset(from._internal_offset());
+  }
+  if (from._internal_image() != 0) {
+    _this->_internal_set_image(from._internal_image());
+  }
+  if (from._internal_length() != 0) {
+    _this->_internal_set_length(from._internal_length());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void AddonImageRead::CopyFrom(const AddonImageRead& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.AddonImageRead)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool AddonImageRead::IsInitialized() const {
+  return true;
+}
+
+void AddonImageRead::InternalSwap(AddonImageRead* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AddonImageRead, _impl_.length_)
+      + sizeof(AddonImageRead::_impl_.length_)
+      - PROTOBUF_FIELD_OFFSET(AddonImageRead, _impl_.offset_)>(
+          reinterpret_cast<char*>(&_impl_.offset_),
+          reinterpret_cast<char*>(&other->_impl_.offset_));
+}
+
+std::string AddonImageRead::GetTypeName() const {
+  return "dsa.control.v1.AddonImageRead";
+}
+
+
+// ===================================================================
+
+class AddonImagePart::_Internal {
+ public:
+};
+
+AddonImagePart::AddonImagePart(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.AddonImagePart)
+}
+AddonImagePart::AddonImagePart(const AddonImagePart& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  AddonImagePart* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.data_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.offset_){}
+    , decltype(_impl_.size_){}
+    , decltype(_impl_.image_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.data_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.data_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_data().empty()) {
+    _this->_impl_.data_.Set(from._internal_data(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.offset_, &from._impl_.offset_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.image_) -
+    reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.image_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.AddonImagePart)
+}
+
+inline void AddonImagePart::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.data_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.offset_){uint64_t{0u}}
+    , decltype(_impl_.size_){uint64_t{0u}}
+    , decltype(_impl_.image_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.data_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.data_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+AddonImagePart::~AddonImagePart() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.AddonImagePart)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void AddonImagePart::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.data_.Destroy();
+  _impl_.error_.Destroy();
+}
+
+void AddonImagePart::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void AddonImagePart::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.AddonImagePart)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.data_.ClearToEmpty();
+  _impl_.error_.ClearToEmpty();
+  ::memset(&_impl_.offset_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.image_) -
+      reinterpret_cast<char*>(&_impl_.offset_)) + sizeof(_impl_.image_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* AddonImagePart::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .dsa.control.v1.AddonImage image = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_image(static_cast<::dsa::control::v1::AddonImage>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 offset = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bytes data = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_data();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 size = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string error = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* AddonImagePart::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.AddonImagePart)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .dsa.control.v1.AddonImage image = 1;
+  if (this->_internal_image() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      1, this->_internal_image(), target);
+  }
+
+  // uint64 offset = 2;
+  if (this->_internal_offset() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_offset(), target);
+  }
+
+  // bytes data = 3;
+  if (!this->_internal_data().empty()) {
+    target = stream->WriteBytesMaybeAliased(
+        3, this->_internal_data(), target);
+  }
+
+  // uint64 size = 4;
+  if (this->_internal_size() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(4, this->_internal_size(), target);
+  }
+
+  // string error = 5;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.AddonImagePart.error");
+    target = stream->WriteStringMaybeAliased(
+        5, this->_internal_error(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.AddonImagePart)
+  return target;
+}
+
+size_t AddonImagePart::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.AddonImagePart)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bytes data = 3;
+  if (!this->_internal_data().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+        this->_internal_data());
+  }
+
+  // string error = 5;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // uint64 offset = 2;
+  if (this->_internal_offset() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_offset());
+  }
+
+  // uint64 size = 4;
+  if (this->_internal_size() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_size());
+  }
+
+  // .dsa.control.v1.AddonImage image = 1;
+  if (this->_internal_image() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_image());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void AddonImagePart::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const AddonImagePart*>(
+      &from));
+}
+
+void AddonImagePart::MergeFrom(const AddonImagePart& from) {
+  AddonImagePart* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.AddonImagePart)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_data().empty()) {
+    _this->_internal_set_data(from._internal_data());
+  }
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_offset() != 0) {
+    _this->_internal_set_offset(from._internal_offset());
+  }
+  if (from._internal_size() != 0) {
+    _this->_internal_set_size(from._internal_size());
+  }
+  if (from._internal_image() != 0) {
+    _this->_internal_set_image(from._internal_image());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void AddonImagePart::CopyFrom(const AddonImagePart& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.AddonImagePart)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool AddonImagePart::IsInitialized() const {
+  return true;
+}
+
+void AddonImagePart::InternalSwap(AddonImagePart* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.data_, lhs_arena,
+      &other->_impl_.data_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AddonImagePart, _impl_.image_)
+      + sizeof(AddonImagePart::_impl_.image_)
+      - PROTOBUF_FIELD_OFFSET(AddonImagePart, _impl_.offset_)>(
+          reinterpret_cast<char*>(&_impl_.offset_),
+          reinterpret_cast<char*>(&other->_impl_.offset_));
+}
+
+std::string AddonImagePart::GetTypeName() const {
+  return "dsa.control.v1.AddonImagePart";
 }
 
 
@@ -50584,13 +50048,9 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::DisplayRefresh& display_refresh(const Envelope* msg);
   static const ::dsa::control::v1::PowerHint& power_hint(const Envelope* msg);
   static const ::dsa::control::v1::DeveloperMode& developer_mode(const Envelope* msg);
-  static const ::dsa::control::v1::ArmTranslationInstall& arm_translation_install(const Envelope* msg);
-  static const ::dsa::control::v1::ArmTranslationChunk& arm_translation_chunk(const Envelope* msg);
   static const ::dsa::control::v1::ArmTranslationRemove& arm_translation_remove(const Envelope* msg);
   static const ::dsa::control::v1::ArmTranslationQuery& arm_translation_query(const Envelope* msg);
   static const ::dsa::control::v1::ArmTranslationState& arm_translation_state(const Envelope* msg);
-  static const ::dsa::control::v1::GappsInstall& gapps_install(const Envelope* msg);
-  static const ::dsa::control::v1::GappsChunk& gapps_chunk(const Envelope* msg);
   static const ::dsa::control::v1::GappsRemove& gapps_remove(const Envelope* msg);
   static const ::dsa::control::v1::GappsQuery& gapps_query(const Envelope* msg);
   static const ::dsa::control::v1::GappsState& gapps_state(const Envelope* msg);
@@ -50599,6 +50059,8 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::RootElevationConfig& root_elevation_config(const Envelope* msg);
   static const ::dsa::control::v1::SuRequest& su_request(const Envelope* msg);
   static const ::dsa::control::v1::SuDecision& su_decision(const Envelope* msg);
+  static const ::dsa::control::v1::AddonImageRead& addon_image_read(const Envelope* msg);
+  static const ::dsa::control::v1::AddonImagePart& addon_image_part(const Envelope* msg);
   static const ::dsa::control::v1::DeviceIdle& device_idle(const Envelope* msg);
   static const ::dsa::control::v1::HostMemory& host_memory(const Envelope* msg);
   static const ::dsa::control::v1::HostSleep& host_sleep(const Envelope* msg);
@@ -50850,14 +50312,6 @@ const ::dsa::control::v1::DeveloperMode&
 Envelope::_Internal::developer_mode(const Envelope* msg) {
   return *msg->_impl_.body_.developer_mode_;
 }
-const ::dsa::control::v1::ArmTranslationInstall&
-Envelope::_Internal::arm_translation_install(const Envelope* msg) {
-  return *msg->_impl_.body_.arm_translation_install_;
-}
-const ::dsa::control::v1::ArmTranslationChunk&
-Envelope::_Internal::arm_translation_chunk(const Envelope* msg) {
-  return *msg->_impl_.body_.arm_translation_chunk_;
-}
 const ::dsa::control::v1::ArmTranslationRemove&
 Envelope::_Internal::arm_translation_remove(const Envelope* msg) {
   return *msg->_impl_.body_.arm_translation_remove_;
@@ -50869,14 +50323,6 @@ Envelope::_Internal::arm_translation_query(const Envelope* msg) {
 const ::dsa::control::v1::ArmTranslationState&
 Envelope::_Internal::arm_translation_state(const Envelope* msg) {
   return *msg->_impl_.body_.arm_translation_state_;
-}
-const ::dsa::control::v1::GappsInstall&
-Envelope::_Internal::gapps_install(const Envelope* msg) {
-  return *msg->_impl_.body_.gapps_install_;
-}
-const ::dsa::control::v1::GappsChunk&
-Envelope::_Internal::gapps_chunk(const Envelope* msg) {
-  return *msg->_impl_.body_.gapps_chunk_;
 }
 const ::dsa::control::v1::GappsRemove&
 Envelope::_Internal::gapps_remove(const Envelope* msg) {
@@ -50909,6 +50355,14 @@ Envelope::_Internal::su_request(const Envelope* msg) {
 const ::dsa::control::v1::SuDecision&
 Envelope::_Internal::su_decision(const Envelope* msg) {
   return *msg->_impl_.body_.su_decision_;
+}
+const ::dsa::control::v1::AddonImageRead&
+Envelope::_Internal::addon_image_read(const Envelope* msg) {
+  return *msg->_impl_.body_.addon_image_read_;
+}
+const ::dsa::control::v1::AddonImagePart&
+Envelope::_Internal::addon_image_part(const Envelope* msg) {
+  return *msg->_impl_.body_.addon_image_part_;
 }
 const ::dsa::control::v1::DeviceIdle&
 Envelope::_Internal::device_idle(const Envelope* msg) {
@@ -51869,36 +51323,6 @@ void Envelope::set_allocated_developer_mode(::dsa::control::v1::DeveloperMode* d
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.developer_mode)
 }
-void Envelope::set_allocated_arm_translation_install(::dsa::control::v1::ArmTranslationInstall* arm_translation_install) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  clear_body();
-  if (arm_translation_install) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(arm_translation_install);
-    if (message_arena != submessage_arena) {
-      arm_translation_install = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, arm_translation_install, submessage_arena);
-    }
-    set_has_arm_translation_install();
-    _impl_.body_.arm_translation_install_ = arm_translation_install;
-  }
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.arm_translation_install)
-}
-void Envelope::set_allocated_arm_translation_chunk(::dsa::control::v1::ArmTranslationChunk* arm_translation_chunk) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  clear_body();
-  if (arm_translation_chunk) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(arm_translation_chunk);
-    if (message_arena != submessage_arena) {
-      arm_translation_chunk = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, arm_translation_chunk, submessage_arena);
-    }
-    set_has_arm_translation_chunk();
-    _impl_.body_.arm_translation_chunk_ = arm_translation_chunk;
-  }
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.arm_translation_chunk)
-}
 void Envelope::set_allocated_arm_translation_remove(::dsa::control::v1::ArmTranslationRemove* arm_translation_remove) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_body();
@@ -51943,36 +51367,6 @@ void Envelope::set_allocated_arm_translation_state(::dsa::control::v1::ArmTransl
     _impl_.body_.arm_translation_state_ = arm_translation_state;
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.arm_translation_state)
-}
-void Envelope::set_allocated_gapps_install(::dsa::control::v1::GappsInstall* gapps_install) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  clear_body();
-  if (gapps_install) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gapps_install);
-    if (message_arena != submessage_arena) {
-      gapps_install = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, gapps_install, submessage_arena);
-    }
-    set_has_gapps_install();
-    _impl_.body_.gapps_install_ = gapps_install;
-  }
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gapps_install)
-}
-void Envelope::set_allocated_gapps_chunk(::dsa::control::v1::GappsChunk* gapps_chunk) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  clear_body();
-  if (gapps_chunk) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gapps_chunk);
-    if (message_arena != submessage_arena) {
-      gapps_chunk = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, gapps_chunk, submessage_arena);
-    }
-    set_has_gapps_chunk();
-    _impl_.body_.gapps_chunk_ = gapps_chunk;
-  }
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gapps_chunk)
 }
 void Envelope::set_allocated_gapps_remove(::dsa::control::v1::GappsRemove* gapps_remove) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -52093,6 +51487,36 @@ void Envelope::set_allocated_su_decision(::dsa::control::v1::SuDecision* su_deci
     _impl_.body_.su_decision_ = su_decision;
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.su_decision)
+}
+void Envelope::set_allocated_addon_image_read(::dsa::control::v1::AddonImageRead* addon_image_read) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (addon_image_read) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(addon_image_read);
+    if (message_arena != submessage_arena) {
+      addon_image_read = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, addon_image_read, submessage_arena);
+    }
+    set_has_addon_image_read();
+    _impl_.body_.addon_image_read_ = addon_image_read;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.addon_image_read)
+}
+void Envelope::set_allocated_addon_image_part(::dsa::control::v1::AddonImagePart* addon_image_part) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (addon_image_part) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(addon_image_part);
+    if (message_arena != submessage_arena) {
+      addon_image_part = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, addon_image_part, submessage_arena);
+    }
+    set_has_addon_image_part();
+    _impl_.body_.addon_image_part_ = addon_image_part;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.addon_image_part)
 }
 void Envelope::set_allocated_device_idle(::dsa::control::v1::DeviceIdle* device_idle) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -53811,16 +53235,6 @@ Envelope::Envelope(const Envelope& from)
           from._internal_developer_mode());
       break;
     }
-    case kArmTranslationInstall: {
-      _this->_internal_mutable_arm_translation_install()->::dsa::control::v1::ArmTranslationInstall::MergeFrom(
-          from._internal_arm_translation_install());
-      break;
-    }
-    case kArmTranslationChunk: {
-      _this->_internal_mutable_arm_translation_chunk()->::dsa::control::v1::ArmTranslationChunk::MergeFrom(
-          from._internal_arm_translation_chunk());
-      break;
-    }
     case kArmTranslationRemove: {
       _this->_internal_mutable_arm_translation_remove()->::dsa::control::v1::ArmTranslationRemove::MergeFrom(
           from._internal_arm_translation_remove());
@@ -53834,16 +53248,6 @@ Envelope::Envelope(const Envelope& from)
     case kArmTranslationState: {
       _this->_internal_mutable_arm_translation_state()->::dsa::control::v1::ArmTranslationState::MergeFrom(
           from._internal_arm_translation_state());
-      break;
-    }
-    case kGappsInstall: {
-      _this->_internal_mutable_gapps_install()->::dsa::control::v1::GappsInstall::MergeFrom(
-          from._internal_gapps_install());
-      break;
-    }
-    case kGappsChunk: {
-      _this->_internal_mutable_gapps_chunk()->::dsa::control::v1::GappsChunk::MergeFrom(
-          from._internal_gapps_chunk());
       break;
     }
     case kGappsRemove: {
@@ -53884,6 +53288,16 @@ Envelope::Envelope(const Envelope& from)
     case kSuDecision: {
       _this->_internal_mutable_su_decision()->::dsa::control::v1::SuDecision::MergeFrom(
           from._internal_su_decision());
+      break;
+    }
+    case kAddonImageRead: {
+      _this->_internal_mutable_addon_image_read()->::dsa::control::v1::AddonImageRead::MergeFrom(
+          from._internal_addon_image_read());
+      break;
+    }
+    case kAddonImagePart: {
+      _this->_internal_mutable_addon_image_part()->::dsa::control::v1::AddonImagePart::MergeFrom(
+          from._internal_addon_image_part());
       break;
     }
     case kDeviceIdle: {
@@ -54655,18 +54069,6 @@ void Envelope::clear_body() {
       }
       break;
     }
-    case kArmTranslationInstall: {
-      if (GetArenaForAllocation() == nullptr) {
-        delete _impl_.body_.arm_translation_install_;
-      }
-      break;
-    }
-    case kArmTranslationChunk: {
-      if (GetArenaForAllocation() == nullptr) {
-        delete _impl_.body_.arm_translation_chunk_;
-      }
-      break;
-    }
     case kArmTranslationRemove: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.arm_translation_remove_;
@@ -54682,18 +54084,6 @@ void Envelope::clear_body() {
     case kArmTranslationState: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.arm_translation_state_;
-      }
-      break;
-    }
-    case kGappsInstall: {
-      if (GetArenaForAllocation() == nullptr) {
-        delete _impl_.body_.gapps_install_;
-      }
-      break;
-    }
-    case kGappsChunk: {
-      if (GetArenaForAllocation() == nullptr) {
-        delete _impl_.body_.gapps_chunk_;
       }
       break;
     }
@@ -54742,6 +54132,18 @@ void Envelope::clear_body() {
     case kSuDecision: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.su_decision_;
+      }
+      break;
+    }
+    case kAddonImageRead: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.addon_image_read_;
+      }
+      break;
+    }
+    case kAddonImagePart: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.addon_image_part_;
       }
       break;
     }
@@ -56159,22 +55561,6 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
-      // .dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;
-      case 150:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
-          ptr = ctx->ParseMessage(_internal_mutable_arm_translation_install(), ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // .dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;
-      case 151:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
-          ptr = ctx->ParseMessage(_internal_mutable_arm_translation_chunk(), ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
       // .dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;
       case 152:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
@@ -56487,22 +55873,6 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
-      // .dsa.control.v1.GappsInstall gapps_install = 400;
-      case 400:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 130)) {
-          ptr = ctx->ParseMessage(_internal_mutable_gapps_install(), ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
-      // .dsa.control.v1.GappsChunk gapps_chunk = 401;
-      case 401:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 138)) {
-          ptr = ctx->ParseMessage(_internal_mutable_gapps_chunk(), ptr);
-          CHK_(ptr);
-        } else
-          goto handle_unusual;
-        continue;
       // .dsa.control.v1.GappsRemove gapps_remove = 402;
       case 402:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 146)) {
@@ -56595,6 +55965,22 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
       case 413:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 234)) {
           ptr = ctx->ParseMessage(_internal_mutable_su_decision(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.AddonImageRead addon_image_read = 414;
+      case 414:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
+          ptr = ctx->ParseMessage(_internal_mutable_addon_image_read(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.AddonImagePart addon_image_part = 415;
+      case 415:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 250)) {
+          ptr = ctx->ParseMessage(_internal_mutable_addon_image_part(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -57314,20 +56700,6 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::guest_memory_pressure(this).GetCachedSize(), target, stream);
   }
 
-  // .dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;
-  if (_internal_has_arm_translation_install()) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(150, _Internal::arm_translation_install(this),
-        _Internal::arm_translation_install(this).GetCachedSize(), target, stream);
-  }
-
-  // .dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;
-  if (_internal_has_arm_translation_chunk()) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(151, _Internal::arm_translation_chunk(this),
-        _Internal::arm_translation_chunk(this).GetCachedSize(), target, stream);
-  }
-
   // .dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;
   if (_internal_has_arm_translation_remove()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -57601,20 +56973,6 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::device_name(this).GetCachedSize(), target, stream);
   }
 
-  // .dsa.control.v1.GappsInstall gapps_install = 400;
-  if (_internal_has_gapps_install()) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(400, _Internal::gapps_install(this),
-        _Internal::gapps_install(this).GetCachedSize(), target, stream);
-  }
-
-  // .dsa.control.v1.GappsChunk gapps_chunk = 401;
-  if (_internal_has_gapps_chunk()) {
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
-      InternalWriteMessage(401, _Internal::gapps_chunk(this),
-        _Internal::gapps_chunk(this).GetCachedSize(), target, stream);
-  }
-
   // .dsa.control.v1.GappsRemove gapps_remove = 402;
   if (_internal_has_gapps_remove()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -57697,6 +57055,20 @@ uint8_t* Envelope::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(413, _Internal::su_decision(this),
         _Internal::su_decision(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.AddonImageRead addon_image_read = 414;
+  if (_internal_has_addon_image_read()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(414, _Internal::addon_image_read(this),
+        _Internal::addon_image_read(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.AddonImagePart addon_image_part = 415;
+  if (_internal_has_addon_image_part()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(415, _Internal::addon_image_part(this),
+        _Internal::addon_image_part(this).GetCachedSize(), target, stream);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -57975,20 +57347,6 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.developer_mode_);
       break;
     }
-    // .dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;
-    case kArmTranslationInstall: {
-      total_size += 2 +
-        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-          *_impl_.body_.arm_translation_install_);
-      break;
-    }
-    // .dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;
-    case kArmTranslationChunk: {
-      total_size += 2 +
-        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-          *_impl_.body_.arm_translation_chunk_);
-      break;
-    }
     // .dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;
     case kArmTranslationRemove: {
       total_size += 2 +
@@ -58008,20 +57366,6 @@ size_t Envelope::ByteSizeLong() const {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *_impl_.body_.arm_translation_state_);
-      break;
-    }
-    // .dsa.control.v1.GappsInstall gapps_install = 400;
-    case kGappsInstall: {
-      total_size += 2 +
-        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-          *_impl_.body_.gapps_install_);
-      break;
-    }
-    // .dsa.control.v1.GappsChunk gapps_chunk = 401;
-    case kGappsChunk: {
-      total_size += 2 +
-        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-          *_impl_.body_.gapps_chunk_);
       break;
     }
     // .dsa.control.v1.GappsRemove gapps_remove = 402;
@@ -58078,6 +57422,20 @@ size_t Envelope::ByteSizeLong() const {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *_impl_.body_.su_decision_);
+      break;
+    }
+    // .dsa.control.v1.AddonImageRead addon_image_read = 414;
+    case kAddonImageRead: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.addon_image_read_);
+      break;
+    }
+    // .dsa.control.v1.AddonImagePart addon_image_part = 415;
+    case kAddonImagePart: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.addon_image_part_);
       break;
     }
     // .dsa.control.v1.DeviceIdle device_idle = 42;
@@ -58998,16 +58356,6 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_developer_mode());
       break;
     }
-    case kArmTranslationInstall: {
-      _this->_internal_mutable_arm_translation_install()->::dsa::control::v1::ArmTranslationInstall::MergeFrom(
-          from._internal_arm_translation_install());
-      break;
-    }
-    case kArmTranslationChunk: {
-      _this->_internal_mutable_arm_translation_chunk()->::dsa::control::v1::ArmTranslationChunk::MergeFrom(
-          from._internal_arm_translation_chunk());
-      break;
-    }
     case kArmTranslationRemove: {
       _this->_internal_mutable_arm_translation_remove()->::dsa::control::v1::ArmTranslationRemove::MergeFrom(
           from._internal_arm_translation_remove());
@@ -59021,16 +58369,6 @@ void Envelope::MergeFrom(const Envelope& from) {
     case kArmTranslationState: {
       _this->_internal_mutable_arm_translation_state()->::dsa::control::v1::ArmTranslationState::MergeFrom(
           from._internal_arm_translation_state());
-      break;
-    }
-    case kGappsInstall: {
-      _this->_internal_mutable_gapps_install()->::dsa::control::v1::GappsInstall::MergeFrom(
-          from._internal_gapps_install());
-      break;
-    }
-    case kGappsChunk: {
-      _this->_internal_mutable_gapps_chunk()->::dsa::control::v1::GappsChunk::MergeFrom(
-          from._internal_gapps_chunk());
       break;
     }
     case kGappsRemove: {
@@ -59071,6 +58409,16 @@ void Envelope::MergeFrom(const Envelope& from) {
     case kSuDecision: {
       _this->_internal_mutable_su_decision()->::dsa::control::v1::SuDecision::MergeFrom(
           from._internal_su_decision());
+      break;
+    }
+    case kAddonImageRead: {
+      _this->_internal_mutable_addon_image_read()->::dsa::control::v1::AddonImageRead::MergeFrom(
+          from._internal_addon_image_read());
+      break;
+    }
+    case kAddonImagePart: {
+      _this->_internal_mutable_addon_image_part()->::dsa::control::v1::AddonImagePart::MergeFrom(
+          from._internal_addon_image_part());
       break;
     }
     case kDeviceIdle: {
@@ -59813,14 +59161,6 @@ template<> PROTOBUF_NOINLINE ::dsa::control::v1::DeveloperMode*
 Arena::CreateMaybeMessage< ::dsa::control::v1::DeveloperMode >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::DeveloperMode >(arena);
 }
-template<> PROTOBUF_NOINLINE ::dsa::control::v1::ArmTranslationInstall*
-Arena::CreateMaybeMessage< ::dsa::control::v1::ArmTranslationInstall >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::dsa::control::v1::ArmTranslationInstall >(arena);
-}
-template<> PROTOBUF_NOINLINE ::dsa::control::v1::ArmTranslationChunk*
-Arena::CreateMaybeMessage< ::dsa::control::v1::ArmTranslationChunk >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::dsa::control::v1::ArmTranslationChunk >(arena);
-}
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::ArmTranslationRemove*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ArmTranslationRemove >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::ArmTranslationRemove >(arena);
@@ -59833,14 +59173,6 @@ template<> PROTOBUF_NOINLINE ::dsa::control::v1::ArmTranslationState*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ArmTranslationState >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::ArmTranslationState >(arena);
 }
-template<> PROTOBUF_NOINLINE ::dsa::control::v1::GappsInstall*
-Arena::CreateMaybeMessage< ::dsa::control::v1::GappsInstall >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::dsa::control::v1::GappsInstall >(arena);
-}
-template<> PROTOBUF_NOINLINE ::dsa::control::v1::GappsChunk*
-Arena::CreateMaybeMessage< ::dsa::control::v1::GappsChunk >(Arena* arena) {
-  return Arena::CreateMessageInternal< ::dsa::control::v1::GappsChunk >(arena);
-}
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::GappsRemove*
 Arena::CreateMaybeMessage< ::dsa::control::v1::GappsRemove >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::GappsRemove >(arena);
@@ -59852,6 +59184,14 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::GappsQuery >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::GappsState*
 Arena::CreateMaybeMessage< ::dsa::control::v1::GappsState >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::GappsState >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::AddonImageRead*
+Arena::CreateMaybeMessage< ::dsa::control::v1::AddonImageRead >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::AddonImageRead >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::AddonImagePart*
+Arena::CreateMaybeMessage< ::dsa::control::v1::AddonImagePart >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::AddonImagePart >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::GoogleDeviceIdQuery*
 Arena::CreateMaybeMessage< ::dsa::control::v1::GoogleDeviceIdQuery >(Arena* arena) {

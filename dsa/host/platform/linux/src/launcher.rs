@@ -152,6 +152,8 @@ pub struct LinuxVmLauncher {
     page_reporting_order: u8,
     data_disk: PathBuf,
     pstore_disk: Option<PathBuf>,
+    /// The user's add-on disk, which each start readies and attaches while it holds add-ons.
+    addon_disk: Option<PathBuf>,
     /// The user's folder for this VM's sockets and each boot's initrd.
     run_dir: PathBuf,
     console_log: PathBuf,
@@ -185,6 +187,8 @@ pub struct LauncherSetup {
     pub page_reporting_order: u8,
     pub data_disk: PathBuf,
     pub pstore_disk: Option<PathBuf>,
+    /// The user's add-on disk (raw), attached read only while it holds add-ons.
+    pub addon_disk: Option<PathBuf>,
     pub run_dir: PathBuf,
     pub console_log: PathBuf,
     pub grow_memory: bool,
@@ -203,6 +207,7 @@ impl LinuxVmLauncher {
             page_reporting_order: setup.page_reporting_order,
             data_disk: setup.data_disk,
             pstore_disk: setup.pstore_disk,
+            addon_disk: setup.addon_disk,
             run_dir: setup.run_dir,
             console_log: setup.console_log,
             plan,
@@ -334,6 +339,24 @@ impl LinuxVmLauncher {
             crate::pstore::ensure(pstore)?;
             self.account.own(pstore)?;
         }
+        // The add-on disk this start attaches: a change the user made while Android ran takes
+        // the place of the disk before now, and a disk without add-ons is not attached. crosvm
+        // opens it as the user.
+        let addon_disk = match &self.addon_disk {
+            Some(path) => {
+                let disk = dsa_host_core::addon_disk::AddonDisk::new(
+                    path,
+                    dsa_host_core::addon_disk::Format::Raw,
+                );
+                if disk.prepare_for_boot().is_empty() {
+                    None
+                } else {
+                    self.account.own(path)?;
+                    Some(path.clone())
+                }
+            }
+            None => None,
+        };
         let initrd = self.boot_initrd(&plan.files, secret)?;
         let (backend, mac, tap) = match &mut self.networking {
             Some(networking) => {
@@ -370,6 +393,7 @@ impl LinuxVmLauncher {
             system_image: plan.files.system_image.clone(),
             data_disk: self.data_disk.clone(),
             pstore_disk: self.pstore_disk.clone(),
+            addon_disk,
             guest_cid: self.guest_cid,
             page_reporting_order: self.page_reporting_order,
             control_socket: control_socket.clone(),

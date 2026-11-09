@@ -804,36 +804,11 @@ pub struct DeveloperMode {
     #[prost(bool, tag = "1")]
     pub on: bool,
 }
-/// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
-/// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
-/// writes it to the user's disk beside any package already there, checks its length and
-/// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
-/// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
-/// when the host says one is installed. One transfer at a time; a new one drops an unfinished
-/// one.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ArmTranslationInstall {
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    #[prost(uint64, tag = "2")]
-    pub size: u64,
-    /// The SHA-256 digest of the whole image.
-    #[prost(bytes = "vec", tag = "3")]
-    pub sha256: ::prost::alloc::vec::Vec<u8>,
-}
-/// Host to guest: part of the image an ArmTranslationInstall announced.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ArmTranslationChunk {
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    /// Where `data` starts in the image.
-    #[prost(uint64, tag = "2")]
-    pub offset: u64,
-    #[prost(bytes = "vec", tag = "3")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// Host to guest, to the control daemon: remove the installed ARM translation package. The
-/// guest goes on using a package it has mounted until it restarts. Answered with
+/// Host to guest, to the control daemon: remove the ARM translation package's image that a DSA
+/// from before the add-on disk left on the user's disk (/data/vendor/dsa/arm-translation). The
+/// host keeps an installed package on the add-on disk, which only the host writes; this removes
+/// the old copy once the host has moved it there, or once the user removed the package. The
+/// guest goes on using an image it has mounted until it restarts. Answered with
 /// ArmTranslationState.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationRemove {}
@@ -841,23 +816,17 @@ pub struct ArmTranslationRemove {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationQuery {}
 /// Guest to host, from the control daemon: where ARM translation stands in the guest. It
-/// answers each of the messages above.
+/// answers ArmTranslationRemove and ArmTranslationQuery.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationState {
-    /// The transfer this answers, or 0.
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    /// How many bytes of that transfer the daemon has written.
-    #[prost(uint64, tag = "2")]
-    pub received: u64,
-    /// The transfer is complete and its image checked and in place.
+    /// The removal this answers is done.
     #[prost(bool, tag = "3")]
     pub done: bool,
-    /// Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-    /// failed transfer leaves the package that was there before.
+    /// Non-empty when the removal failed: why, in words a person can act on.
     #[prost(string, tag = "4")]
     pub error: ::prost::alloc::string::String,
-    /// A package image is on the user's disk.
+    /// A package image a DSA from before the add-on disk sent is still on the user's disk
+    /// (/data), for the host to move onto the add-on disk and then remove.
     #[prost(bool, tag = "5")]
     pub installed: bool,
     /// This boot runs with a package laid over the system: the bridge library is in place.
@@ -867,59 +836,28 @@ pub struct ArmTranslationState {
     #[prost(string, tag = "7")]
     pub abilist: ::prost::alloc::string::String,
 }
-/// Host to guest, to the control daemon: the system image (erofs) of the Google apps the user
-/// chose to install follows in GappsChunk messages of the same `transfer_id`, in order. The
-/// daemon keeps it on the user's disk as it keeps an ARM translation package's image: beside
-/// any image already there, checked for its length and SHA-256 once all `size` bytes have
-/// arrived, and only then in the old one's place. It answers each chunk with GappsState. The
-/// guest lays the image over its product and system_ext partitions from its next boot, when
-/// the host says one is installed. One transfer at a time; a new one drops an unfinished one.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GappsInstall {
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    #[prost(uint64, tag = "2")]
-    pub size: u64,
-    /// The SHA-256 digest of the whole image.
-    #[prost(bytes = "vec", tag = "3")]
-    pub sha256: ::prost::alloc::vec::Vec<u8>,
-}
-/// Host to guest: part of the image a GappsInstall announced.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GappsChunk {
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    /// Where `data` starts in the image.
-    #[prost(uint64, tag = "2")]
-    pub offset: u64,
-    #[prost(bytes = "vec", tag = "3")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
-/// an image it has mounted until it restarts. Answered with GappsState.
+/// Host to guest, to the control daemon: remove the Google apps image that a DSA from before
+/// the add-on disk left on the user's disk (/data/vendor/dsa/gapps). The host keeps installed
+/// Google apps on the add-on disk, which only the host writes; this removes the old copy once
+/// the host has moved it there, or once the user removed Google Play. The guest goes on using an
+/// image it has mounted until it restarts. Answered with GappsState.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GappsRemove {}
 /// Host to guest, to the control daemon: asks for GappsState.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GappsQuery {}
 /// Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
-/// each of the messages above.
+/// GappsRemove and GappsQuery.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GappsState {
-    /// The transfer this answers, or 0.
-    #[prost(uint32, tag = "1")]
-    pub transfer_id: u32,
-    /// How many bytes of that transfer the daemon has written.
-    #[prost(uint64, tag = "2")]
-    pub received: u64,
-    /// The transfer is complete and its image checked and in place.
+    /// The removal this answers is done.
     #[prost(bool, tag = "3")]
     pub done: bool,
-    /// Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-    /// failed transfer leaves the image that was there before.
+    /// Non-empty when the removal failed: why, in words a person can act on.
     #[prost(string, tag = "4")]
     pub error: ::prost::alloc::string::String,
-    /// A Google apps image is on the user's disk.
+    /// A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+    /// (/data), for the host to move onto the add-on disk and then remove.
     #[prost(bool, tag = "5")]
     pub installed: bool,
     /// This boot runs with the image laid over the system.
@@ -935,6 +873,39 @@ pub struct GappsState {
     /// (ro.product.cpu.abilist).
     #[prost(string, tag = "9")]
     pub abilist: ::prost::alloc::string::String,
+}
+/// Host to guest, to the control daemon: asks for part of an add-on image that a DSA from before
+/// the add-on disk left on the user's disk, so the host can move it onto the add-on disk, which
+/// the guest mounts it from at its next boot. The host reads the image from its start to its
+/// end, then removes it (GappsRemove, ArmTranslationRemove). Answered with AddonImagePart.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AddonImageRead {
+    #[prost(enumeration = "AddonImage", tag = "1")]
+    pub image: i32,
+    /// Where the part starts in the image.
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    /// How many bytes the host asks for. The daemon sends at most this many and at most 1 MiB,
+    /// fewer at the end of the image.
+    #[prost(uint32, tag = "3")]
+    pub length: u32,
+}
+/// Guest to host, from the control daemon: part of an add-on image, answering AddonImageRead.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AddonImagePart {
+    #[prost(enumeration = "AddonImage", tag = "1")]
+    pub image: i32,
+    /// Where `data` starts in the image.
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+    /// The size of the whole image; 0 when there is none.
+    #[prost(uint64, tag = "4")]
+    pub size: u64,
+    /// Non-empty when the image cannot be read: why, in words a person can act on.
+    #[prost(string, tag = "5")]
+    pub error: ::prost::alloc::string::String,
 }
 /// Host to guest, to the agent: asks for GoogleDeviceId.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2544,7 +2515,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 411, 412, 413, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2626,20 +2597,12 @@ pub mod envelope {
         PowerHint(super::PowerHint),
         #[prost(message, tag = "140")]
         DeveloperMode(super::DeveloperMode),
-        #[prost(message, tag = "150")]
-        ArmTranslationInstall(super::ArmTranslationInstall),
-        #[prost(message, tag = "151")]
-        ArmTranslationChunk(super::ArmTranslationChunk),
         #[prost(message, tag = "152")]
         ArmTranslationRemove(super::ArmTranslationRemove),
         #[prost(message, tag = "153")]
         ArmTranslationQuery(super::ArmTranslationQuery),
         #[prost(message, tag = "154")]
         ArmTranslationState(super::ArmTranslationState),
-        #[prost(message, tag = "400")]
-        GappsInstall(super::GappsInstall),
-        #[prost(message, tag = "401")]
-        GappsChunk(super::GappsChunk),
         #[prost(message, tag = "402")]
         GappsRemove(super::GappsRemove),
         #[prost(message, tag = "403")]
@@ -2656,6 +2619,10 @@ pub mod envelope {
         SuRequest(super::SuRequest),
         #[prost(message, tag = "413")]
         SuDecision(super::SuDecision),
+        #[prost(message, tag = "414")]
+        AddonImageRead(super::AddonImageRead),
+        #[prost(message, tag = "415")]
+        AddonImagePart(super::AddonImagePart),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
         #[prost(message, tag = "43")]
@@ -3433,6 +3400,38 @@ impl LocationAccess {
             "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
             "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
             "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+/// The add-on images a DSA from before the add-on disk kept on the user's disk (/data).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AddonImage {
+    Unspecified = 0,
+    /// The Google apps' system image, /data/vendor/dsa/gapps/system.img.
+    Gapps = 1,
+    /// The ARM translation package's system image, /data/vendor/dsa/arm-translation/system.img.
+    ArmTranslation = 2,
+}
+impl AddonImage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "ADDON_IMAGE_UNSPECIFIED",
+            Self::Gapps => "ADDON_IMAGE_GAPPS",
+            Self::ArmTranslation => "ADDON_IMAGE_ARM_TRANSLATION",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ADDON_IMAGE_UNSPECIFIED" => Some(Self::Unspecified),
+            "ADDON_IMAGE_GAPPS" => Some(Self::Gapps),
+            "ADDON_IMAGE_ARM_TRANSLATION" => Some(Self::ArmTranslation),
             _ => None,
         }
     }

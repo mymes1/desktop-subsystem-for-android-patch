@@ -367,13 +367,21 @@ pub fn create_user_android(
     .with_bootconfig({
         // An ARM translator (the package the user installed, else the image's default one) is
         // used only while the user's setting is on, and only from a boot that is told so; so
-        // are the Google apps the user installed.
+        // are the Google apps the user installed. Their images are on the add-on disk this
+        // boot attaches.
         let store = settings_store(config);
         let user = sid.to_string();
         Box::new(move |vm: &AndroidVmConfig| {
+            use dsa_host_core::addon_disk::{self, AddonDisk, Format};
             let image = vm.initrd.as_deref().and_then(std::path::Path::parent);
-            dsa_host_core::arm_translation::bootconfig_for(&*store, &user, image)
-                + &dsa_host_core::gapps::bootconfig_for(&*store, &user)
+            let attached = vm
+                .addon_disk
+                .as_ref()
+                .map(|path| AddonDisk::new(path, Format::Vhd).attached())
+                .unwrap_or_default();
+            addon_disk::bootconfig(&attached).to_string()
+                + &dsa_host_core::arm_translation::bootconfig_for(&*store, &user, image, &attached)
+                + &dsa_host_core::gapps::bootconfig_for(&*store, &user, &attached)
         })
     })
     .with_boot_properties({
@@ -1102,6 +1110,22 @@ where
         )
         .with_package_dir(config.machine_root().gapps()),
     );
+    // Each user's add-ons, on the add-on disk beside their Android disk, which their VM
+    // attaches read only.
+    service = service.with_addon_disks({
+        let config = config.clone();
+        Arc::new(move |sid: &str| {
+            let vm = config.user_vm(sid).map_err(|e| e.to_string())?;
+            let path = vm
+                .config
+                .addon_disk
+                .ok_or_else(|| format!("{sid}'s VM has no add-on disk"))?;
+            Ok(dsa_host_core::addon_disk::AddonDisk::new(
+                path,
+                dsa_host_core::addon_disk::Format::Vhd,
+            ))
+        })
+    });
     if let Some(versions) = version_store {
         service = service.with_android_versions(Arc::new(versions));
     }

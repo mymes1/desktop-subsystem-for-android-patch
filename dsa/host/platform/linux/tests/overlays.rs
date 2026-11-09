@@ -5,7 +5,11 @@
 //! libraries, the Google apps as system files), before the zygote starts. erofs reads each
 //! image file itself, with `directio`: no loop device may back either mount, and the mount's
 //! source must be the image file, because a loop device kept every page read from the image
-//! twice, once in erofs's cache and once in the image file's. A `context=` mount is checked
+//! twice, once in erofs's cache and once in the image file's. A user's add-on images (the
+//! Google apps, a translation package they installed) are files on their add-on disk, which
+//! the host attaches read only and init mounts at `/mnt/dsa-addons` from its partition: never
+//! from `/data`, which is encrypted and so gives the image file no direct I/O, and with nothing
+//! of them left there (the guest says whether an image an older DSA sent is still in `/data`). A `context=` mount is checked
 //! against the type it names as well as the filesystem's own, and when the policy allowed only
 //! the latter every boot refused both mounts
 //! ("avc: denied { relabelfrom } ... tclass=filesystem"): Android started with no translator and
@@ -111,18 +115,21 @@ use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_unix::socket::UnixLocalConnector;
 
-/// The init scripts that put the images in the system.
-const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc"];
+/// The init scripts that put the images in the system, and the add-on disk they come from.
+const SCRIPTS: &[&str] = &["dsa-arm-translation.rc", "dsa-gapps.rc", "dsa-addons.rc"];
+/// Where init mounts the user's add-on disk, and the partition it mounts there.
+const ADDON_POINT: &str = "/mnt/dsa-addons";
+const ADDON_PARTITION: &str = "/dev/block/by-name/dsa_addons";
 /// Where the translation package is mounted.
 const TRANSLATION_POINT: &str = "/mnt/dsa-arm-translation";
-/// The files the translation package is mounted from: a package the user installed, or the
-/// image's default one.
+/// The files the translation package is mounted from: a package the user installed, on their
+/// add-on disk, or the image's default one.
 const TRANSLATION_IMAGES: &[&str] = &[
-    "/data/vendor/dsa/arm-translation/system.img",
+    "/mnt/dsa-addons/arm-translation.img",
     "/system/etc/dsa/arm-translation/default.img",
 ];
-/// The file the Google apps image is mounted from.
-const GAPPS_IMAGE: &str = "/data/vendor/dsa/gapps/system.img";
+/// The file the Google apps image is mounted from, on the user's add-on disk.
+const GAPPS_IMAGE: &str = "/mnt/dsa-addons/gapps.img";
 /// The major number of loop devices.
 const LOOP_MAJOR: &str = "7";
 /// Where each part of the package is bound, and the part, as a path inside the image.
@@ -223,6 +230,7 @@ const OVERLAY_TYPES: &[&str] = &[
     "labeledfs",
     "dsa_arm_translation_fs",
     "dsa_gapps_fs",
+    "dsa_addons_fs",
     "system_lib_file",
     "system_file",
 ];
@@ -630,6 +638,43 @@ fn gapps_mount_problems(table: &str) -> Vec<String> {
     problems
 }
 
+/// What is wrong with the mount table `table` for the user's add-on disk: its partition must be
+/// mounted at [`ADDON_POINT`] as erofs, read only, from the partition itself and no loop device,
+/// so the add-on images on it are files of an unencrypted file system that erofs reads directly.
+fn addon_disk_problems(table: &str) -> Vec<String> {
+    let parsed = mounts(table);
+    let Some(disk) = parsed.iter().find(|m| m.point == ADDON_POINT) else {
+        return vec![format!(
+            "the add-on disk is not mounted at {ADDON_POINT}, so the add-on images are not on it"
+        )];
+    };
+    let mut problems = Vec::new();
+    if disk.kind != "erofs" {
+        problems.push(format!(
+            "{ADDON_POINT} is {}, not the add-on disk's erofs partition",
+            disk.kind
+        ));
+    }
+    if disk.device.split(':').next() == Some(LOOP_MAJOR) || disk.source.contains("/loop") {
+        problems.push(format!(
+            "a loop device ({}, device {}) backs the add-on disk",
+            disk.source, disk.device
+        ));
+    } else if disk.source != ADDON_PARTITION {
+        problems.push(format!(
+            "{ADDON_POINT} is mounted from {:?}, not the add-on disk's partition {ADDON_PARTITION}",
+            disk.source
+        ));
+    }
+    if !has_option(disk.options, "ro") {
+        problems.push(format!(
+            "{ADDON_POINT} is mounted writable ({}), though only the host writes the add-on disk",
+            disk.options
+        ));
+    }
+    problems
+}
+
 /// Whether binfmt_misc is mounted where the translation script registers the package's rules.
 fn binfmt_mounted(table: &str) -> bool {
     mounts(table)
@@ -1022,12 +1067,18 @@ fn nfr2_fr25_fr32_an_image_mounted_through_a_loop_device_is_found_in_the_mount_t
     assert!(translation_mount_problems(&numbered)
         .iter()
         .any(|p| p.contains("a loop device")));
-    // A package the user installed is mounted from its own file.
+    // A package the user installed is mounted from its own file, on the add-on disk.
     let installed = BOUND.replace(
+        "/system/etc/dsa/arm-translation/default.img",
+        "/mnt/dsa-addons/arm-translation.img",
+    );
+    assert_eq!(translation_mount_problems(&installed), Vec::<String>::new());
+    // One left where an older DSA kept it, in the encrypted /data, is not.
+    let on_data = BOUND.replace(
         "/system/etc/dsa/arm-translation/default.img",
         "/data/vendor/dsa/arm-translation/system.img",
     );
-    assert_eq!(translation_mount_problems(&installed), Vec::<String>::new());
+    assert_eq!(translation_mount_problems(&on_data).len(), 1);
     // A file that is not the package's is not it.
     let elsewhere = BOUND.replace(
         "/system/etc/dsa/arm-translation/default.img",
@@ -1048,10 +1099,50 @@ fn nfr2_fr25_fr32_an_image_mounted_through_a_loop_device_is_found_in_the_mount_t
     assert!(problems
         .iter()
         .any(|p| p.contains("/mnt/dsa-gapps is mounted without directio")));
-    let gapps = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n";
+    let gapps = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /mnt/dsa-addons/gapps.img ro,seclabel,directio\n";
     assert!(!gapps_mount_problems(gapps)
         .iter()
         .any(|p| p.contains("loop device") || p.contains("directio") || p.contains("image file")));
+}
+
+#[test]
+fn fr32_addons_mount_from_the_read_only_addon_disk() {
+    // The add-on disk's partition, read only, and the Google apps image mounted from a file on
+    // it, with directio and no loop device: what the boot with the Google apps must show.
+    let disk = "70 30 254:48 / /mnt/dsa-addons ro,nosuid,nodev,noexec,relatime - erofs /dev/block/by-name/dsa_addons ro,seclabel\n";
+    let mut table = String::from(disk);
+    table.push_str("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /mnt/dsa-addons/gapps.img ro,seclabel,directio\n");
+    for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
+        table.push_str(&format!(
+            "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
+            81 + at,
+            50 + at
+        ));
+    }
+    assert_eq!(addon_disk_problems(&table), Vec::<String>::new());
+    assert_eq!(gapps_mount_problems(&table), Vec::<String>::new());
+    // No disk at all, a loop device, a writable disk, or another source.
+    assert_eq!(addon_disk_problems("").len(), 1);
+    let looped = disk
+        .replace("254:48", "7:3")
+        .replace("/dev/block/by-name/dsa_addons", "/dev/block/loop3");
+    assert!(addon_disk_problems(&looped)
+        .iter()
+        .any(|p| p.contains("a loop device")));
+    let writable = disk.replace("ro,nosuid,nodev,noexec", "rw,nosuid,nodev,noexec");
+    assert!(addon_disk_problems(&writable)
+        .iter()
+        .any(|p| p.contains("writable")));
+    let elsewhere = disk.replace("/dev/block/by-name/dsa_addons", "/dev/block/vdb");
+    assert_eq!(addon_disk_problems(&elsewhere).len(), 1);
+    // The Google apps image mounted from /data, as before the add-on disk, is refused.
+    let from_data = table.replace(
+        "erofs /mnt/dsa-addons/gapps.img",
+        "erofs /data/vendor/dsa/gapps/system.img",
+    );
+    assert!(gapps_mount_problems(&from_data)
+        .iter()
+        .any(|p| p.contains("not from the image file")));
 }
 
 #[test]
@@ -1275,7 +1366,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     assert_eq!(mount_denials(log).len(), 1);
 
     let mut good =
-        String::from("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n");
+        String::from("80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /mnt/dsa-addons/gapps.img ro,seclabel,directio\n");
     for (at, folder) in GAPPS_FOLDERS.iter().enumerate() {
         good.push_str(&format!(
             "{} 22 0:{} / {folder} ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps{folder}:{folder}\n",
@@ -1291,7 +1382,7 @@ fn fr32_a_refused_google_apps_mount_is_found_in_the_log_and_the_mount_table() {
     );
     assert_eq!(gapps_mount_problems(&nosuid).len(), GAPPS_FOLDERS.len());
     // What develop 3b9b304c laid over: the partitions' roots, whose services then fail.
-    let roots = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /data/vendor/dsa/gapps/system.img ro,seclabel,directio\n\
+    let roots = "80 30 0:49 / /mnt/dsa-gapps ro,nosuid,nodev,relatime - erofs /mnt/dsa-addons/gapps.img ro,seclabel,directio\n\
                  81 1 0:50 / /product ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/product:/product\n\
                  82 1 0:51 / /system_ext ro,nodev,relatime - overlay overlay ro,seclabel,lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n";
     let problems = gapps_mount_problems(roots);
@@ -2080,6 +2171,12 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
     let _ = std::fs::write(dir.join("mounts-first.txt"), &table);
     translation_problems(&adb, &dir, &table, &mut problems);
+    // Nothing is installed yet, so the host attaches no add-on disk.
+    if mounts(&table).iter().any(|m| m.point == ADDON_POINT) {
+        problems.push(format!(
+            "first boot: {ADDON_POINT} is mounted though no add-on is installed"
+        ));
+    }
     match api.arm_translation() {
         Ok(status) if status.guest.as_ref().is_some_and(|guest| guest.active) => {}
         Ok(status) => problems.push(format!(
@@ -2192,6 +2289,9 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
 
     let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
     let _ = std::fs::write(dir.join("mounts-second.txt"), &table);
+    for problem in addon_disk_problems(&table) {
+        problems.push(format!("add-on disk: {problem}"));
+    }
     for problem in gapps_mount_problems(&table) {
         problems.push(format!("Google Play: {problem}"));
     }
@@ -2204,12 +2304,29 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(why),
     }
     match api.gapps() {
-        Ok(status) if status.guest.as_ref().is_some_and(|guest| guest.active) => {}
+        Ok(status)
+            if status
+                .guest
+                .as_ref()
+                .is_some_and(|guest| guest.active && guest.installed && !guest.left_on_data) => {}
         Ok(status) => problems.push(format!(
-            "Google Play: the guest says the Google apps are not laid over its system ({:?})",
+            "Google Play: the guest says the Google apps are not laid over its system from the \
+             add-on disk, or an image of them is left in /data ({:?})",
             status.guest
         )),
         Err(why) => problems.push(format!("reading where Google Play stands: {why}")),
+    }
+    match api.arm_translation() {
+        Ok(status)
+            if status
+                .guest
+                .as_ref()
+                .is_some_and(|guest| !guest.left_on_data) => {}
+        Ok(status) => problems.push(format!(
+            "ARM translation: a package image is left in /data ({:?})",
+            status.guest
+        )),
+        Err(why) => problems.push(format!("reading where ARM translation stands: {why}")),
     }
     // The host's allowlist grants what the build's own list leaves out, and a boot with the
     // Google apps logs a miss instead of stopping at it.

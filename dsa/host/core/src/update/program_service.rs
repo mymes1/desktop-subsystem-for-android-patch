@@ -1272,13 +1272,13 @@ impl UserAndroid for WithProgramStatus {
     fn links_in_android(&self, on: bool) {
         self.android.links_in_android(on)
     }
-    fn install_arm_translation(
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
-        self.android.install_arm_translation(size, sha256, content)
+        addon: crate::addon_disk::Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<crate::host_api::AddonImagePart, crate::host_api::InstallError> {
+        self.android.read_addon_image(addon, offset, length)
     }
     fn remove_arm_translation(
         &self,
@@ -1287,14 +1287,6 @@ impl UserAndroid for WithProgramStatus {
     }
     fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
         self.android.arm_translation()
-    }
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
-        self.android.install_gapps(size, sha256, content)
     }
     fn remove_gapps(&self) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
         self.android.remove_gapps()

@@ -70,6 +70,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::adb_discovery::AutoConnectState;
+use crate::addon_disk::{Addon, AddonDisk};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
@@ -459,21 +460,21 @@ pub trait UserAndroid: Send + Sync {
             "this Android cannot install its apps again".into(),
         ))
     }
-    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
-    /// SHA-256 is `sha256`, to this Android's disk, and returns where translation stands once
-    /// the image is in place. The package is used from Android's next start.
-    fn install_arm_translation(
+    /// Reads up to `length` bytes from `offset` of `addon`'s image that a DSA from before the
+    /// add-on disk left on this Android's disk, which the service moves onto the add-on disk.
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestArmTranslation, InstallError> {
-        let _ = (size, sha256, content);
+        addon: Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<AddonImagePart, InstallError> {
+        let _ = (addon, offset, length);
         Err(InstallError::Refused(
-            "this Android cannot take an ARM translation package".into(),
+            "this Android keeps no add-on image on its disk".into(),
         ))
     }
-    /// Removes the ARM translation package's image from this Android's disk.
+    /// Removes the ARM translation package's image a DSA from before the add-on disk left on
+    /// this Android's disk.
     fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
         Err(InstallError::Refused(
             "this Android cannot take an ARM translation package".into(),
@@ -484,21 +485,8 @@ pub trait UserAndroid: Send + Sync {
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         None
     }
-    /// Sends the Google apps' system image, `size` bytes read from `content` whose SHA-256 is
-    /// `sha256`, to this Android's disk, and returns where the Google apps stand once the image
-    /// is in place. The image is used from Android's next start.
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestGapps, InstallError> {
-        let _ = (size, sha256, content);
-        Err(InstallError::Refused(
-            "this Android cannot take Google's apps".into(),
-        ))
-    }
-    /// Removes the Google apps' image from this Android's disk.
+    /// Removes the Google apps' image a DSA from before the add-on disk left on this Android's
+    /// disk.
     fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
         Err(InstallError::Refused(
             "this Android cannot take Google's apps".into(),
@@ -635,6 +623,71 @@ fn arm_install_error(error: SessionError) -> InstallError {
         }
         SessionError::InstallRefused(why) => InstallError::Refused(why),
         other => InstallError::Refused(format!("Android could not be reached: {other}")),
+    }
+}
+
+/// A part of an add-on image a DSA from before the add-on disk left on an Android's disk.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddonImagePart {
+    pub data: Vec<u8>,
+    /// The size of the whole image.
+    pub size: u64,
+}
+
+/// How much of an image left on an Android's disk is asked for at a time.
+const LEFT_IMAGE_PART: u32 = 1 << 20;
+
+/// An add-on image left on an Android's disk, read part by part as the add-on disk takes it.
+struct LeftImage<'a> {
+    android: &'a dyn UserAndroid,
+    addon: Addon,
+    /// Where the next part starts.
+    at: u64,
+    piece: Vec<u8>,
+    /// How much of `piece` has been read.
+    used: usize,
+}
+
+impl<'a> LeftImage<'a> {
+    /// Asks for the first part, which says how large the image is.
+    fn open(android: &'a dyn UserAndroid, addon: Addon) -> Result<(LeftImage<'a>, u64), String> {
+        let first = android
+            .read_addon_image(addon, 0, LEFT_IMAGE_PART)
+            .map_err(|(InstallError::NotRunning(why) | InstallError::Refused(why))| why)?;
+        let size = first.size;
+        let at = first.data.len() as u64;
+        Ok((
+            LeftImage {
+                android,
+                addon,
+                at,
+                piece: first.data,
+                used: 0,
+            },
+            size,
+        ))
+    }
+}
+
+impl Read for LeftImage<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.used == self.piece.len() {
+            let part = self
+                .android
+                .read_addon_image(self.addon, self.at, LEFT_IMAGE_PART)
+                .map_err(
+                    |(InstallError::NotRunning(why) | InstallError::Refused(why))| {
+                        io::Error::other(why)
+                    },
+                )?;
+            self.at += part.data.len() as u64;
+            self.piece = part.data;
+            self.used = 0;
+        }
+        let length = buf.len().min(self.piece.len() - self.used);
+        buf[..length].copy_from_slice(&self.piece[self.used..self.used + length]);
+        self.used += length;
+        Ok(length)
     }
 }
 
@@ -849,27 +902,28 @@ impl UserAndroid for Session {
     fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
         Session::end_drag(self, drag_id, dropped).map_err(request_error)
     }
-    fn install_arm_translation(
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestArmTranslation, InstallError> {
-        Session::install_arm_translation(self, size, sha256, content).map_err(arm_install_error)
+        addon: Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<AddonImagePart, InstallError> {
+        let image = match addon {
+            Addon::Gapps => control::AddonImage::Gapps,
+            Addon::ArmTranslation => control::AddonImage::ArmTranslation,
+        };
+        Session::read_addon_image(self, image, offset, length)
+            .map(|part| AddonImagePart {
+                data: part.data,
+                size: part.size,
+            })
+            .map_err(arm_install_error)
     }
     fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
         Session::remove_arm_translation(self).map_err(arm_install_error)
     }
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         Session::arm_translation(self).ok()
-    }
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestGapps, InstallError> {
-        Session::install_gapps(self, size, sha256, content).map_err(arm_install_error)
     }
     fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
         Session::remove_gapps(self).map_err(arm_install_error)
@@ -1672,6 +1726,7 @@ impl ArmTranslationStatus {
             enabled: self.enabled,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
+            guest_left_on_data: guest.left_on_data,
             guest_active: guest.active,
             abilist: guest.abilist,
             restart_needed: self.restart_needed,
@@ -1702,6 +1757,7 @@ impl ArmTranslationStatus {
             enabled: status.enabled,
             guest: status.guest_known.then_some(GuestArmTranslation {
                 installed: status.guest_installed,
+                left_on_data: status.guest_left_on_data,
                 active: status.guest_active,
                 abilist: status.abilist,
             }),
@@ -1742,6 +1798,7 @@ impl GappsStatus {
             reinstall_needed: self.reinstall_needed,
             guest_known: self.guest.is_some(),
             guest_installed: guest.installed,
+            guest_left_on_data: guest.left_on_data,
             guest_active: guest.active,
             sdk: guest.sdk,
             abi: guest.abi,
@@ -1766,6 +1823,7 @@ impl GappsStatus {
             }),
             guest: status.guest_known.then_some(GuestGapps {
                 installed: status.guest_installed,
+                left_on_data: status.guest_left_on_data,
                 active: status.guest_active,
                 sdk: status.sdk,
                 abi: status.abi,
@@ -1779,16 +1837,16 @@ impl GappsStatus {
 }
 
 /// How often the service looks for a user's Android that has just reached its desktop, for the
-/// Google apps' upkeep of that boot.
-const GAPPS_UPKEEP_POLL: Duration = Duration::from_secs(2);
-/// How many times one boot's upkeep is tried while the guest has not said where its Google apps
+/// add-ons' upkeep of that boot.
+const ADDON_UPKEEP_POLL: Duration = Duration::from_secs(2);
+/// How many times one boot's upkeep is tried while the guest has not said where its add-ons
 /// stand, before that boot goes without it.
-const GAPPS_UPKEEP_TRIES: u32 = 30;
+const ADDON_UPKEEP_TRIES: u32 = 30;
 
-/// Runs each boot's upkeep of the Google apps ([`HostApiService::gapps_upkeep`]) once that boot
+/// Runs each boot's upkeep of the add-ons ([`HostApiService::addon_upkeep`]) once that boot
 /// reaches its desktop, until `stop` is set or the service is gone. A user's boot counts as new
 /// again once their Android leaves the running states.
-fn gapps_upkeep_loop(service: std::sync::Weak<HostApiService>, stop: Arc<AtomicBool>) {
+fn addon_upkeep_loop(service: std::sync::Weak<HostApiService>, stop: Arc<AtomicBool>) {
     let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut tries: HashMap<String, u32> = HashMap::new();
     while !stop.load(Ordering::Relaxed) {
@@ -1812,16 +1870,16 @@ fn gapps_upkeep_loop(service: std::sync::Weak<HostApiService>, stop: Arc<AtomicB
                 continue;
             }
             let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                running.gapps_upkeep(user)
+                running.addon_upkeep(user)
             }));
             let tried = tries.entry(user.clone()).or_insert(0);
             *tried += 1;
-            if caught.unwrap_or(true) || *tried >= GAPPS_UPKEEP_TRIES {
+            if caught.unwrap_or(true) || *tried >= ADDON_UPKEEP_TRIES {
                 done.insert(user.clone());
             }
         }
         drop(running);
-        thread::sleep(GAPPS_UPKEEP_POLL);
+        thread::sleep(ADDON_UPKEEP_POLL);
     }
 }
 
@@ -1909,10 +1967,12 @@ pub struct HostApiService {
     versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
     /// Where Google Play is downloaded from, and where it is made ready.
     gapps: Option<Arc<gapps::Source>>,
-    /// Held while one change to a user's Google apps is made (an install, a removal, or what a
-    /// boot needs done for them), so a boot's upkeep never takes an image another change just
-    /// sent for one it must remove.
-    gapps_change: Mutex<()>,
+    /// Where each user's add-on disk is.
+    addon_disks: Option<AddonDiskSource>,
+    /// Held while one change to a user's add-ons is made (an install, a removal, or what a boot
+    /// needs done for them), so a boot's upkeep never takes an image another change just put on
+    /// the add-on disk for one it must remove.
+    addon_change: Mutex<()>,
     /// The default ARM translation package of the image each user's Android starts from.
     default_arm_translation: Option<DefaultArmTranslationSource>,
     /// What each user's window manager last said about the host's touch gestures, by user.
@@ -1921,6 +1981,9 @@ pub struct HostApiService {
 
 /// Says what the build of the image a user's Android starts from is, by user.
 pub type ImageBuildSource = Arc<dyn Fn(&str) -> Option<ImageBuild> + Send + Sync>;
+
+/// Says where a user's add-on disk is, by user, or why they have none.
+pub type AddonDiskSource = Arc<dyn Fn(&str) -> Result<AddonDisk, String> + Send + Sync>;
 
 /// Says which default ARM translation package the image a user's Android starts from carries,
 /// by user: `None` for an image that has none, as every arm64 image.
@@ -1954,7 +2017,8 @@ impl HostApiService {
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
             gapps: None,
-            gapps_change: Mutex::new(()),
+            addon_disks: None,
+            addon_change: Mutex::new(()),
             default_arm_translation: None,
             touch_gestures: Mutex::new(HashMap::new()),
         }
@@ -1973,6 +2037,13 @@ impl HostApiService {
     /// Installs Google Play for users who ask, downloading it through `source`.
     pub fn with_gapps(mut self, source: gapps::Source) -> HostApiService {
         self.gapps = Some(Arc::new(source));
+        self
+    }
+
+    /// Keeps each user's add-ons (the Google apps, an ARM translation package) on the add-on
+    /// disk `source` names, which the platform attaches to their VM read only.
+    pub fn with_addon_disks(mut self, source: AddonDiskSource) -> HostApiService {
+        self.addon_disks = Some(source);
         self
     }
 
@@ -2098,13 +2169,13 @@ impl HostApiService {
     /// Accepts connections until `stop` is set, serving each on its own thread. A failed
     /// accept is logged and the loop goes on; only `stop` ends it.
     pub fn serve(self: Arc<Self>, mut listener: Box<dyn LocalListener>, stop: Arc<AtomicBool>) {
-        if self.gapps.is_some() && self.settings.is_some() {
+        if (self.gapps.is_some() || self.addon_disks.is_some()) && self.settings.is_some() {
             let (service, stop) = (Arc::downgrade(&self), Arc::clone(&stop));
             if let Err(error) = thread::Builder::new()
-                .name("dsa-gapps-upkeep".into())
-                .spawn(move || gapps_upkeep_loop(service, stop))
+                .name("dsa-addon-upkeep".into())
+                .spawn(move || addon_upkeep_loop(service, stop))
             {
-                eprintln!("gapps: cannot look after the Google apps of each boot: {error}");
+                eprintln!("add-ons: cannot look after the add-ons of each boot: {error}");
             }
         }
         while !stop.load(Ordering::Relaxed) {
@@ -4496,9 +4567,22 @@ impl HostApiService {
 }
 
 impl HostApiService {
+    /// The caller's add-on disk, or why there is none.
+    fn addon_disk(&self, user: &str) -> Result<AddonDisk, String> {
+        match &self.addon_disks {
+            Some(source) => source(user),
+            None => Err("this service keeps no add-on disk; update DSA".into()),
+        }
+    }
+
+    /// Whether `user`'s add-on disk holds `addon`'s image for Android's next start.
+    fn on_addon_disk(&self, user: &str, addon: Addon) -> bool {
+        self.addon_disk(user).is_ok_and(|disk| disk.holds(addon))
+    }
+
     /// Where ARM translation stands for `peer`: the package they installed, the image's
     /// default one, their setting, the translator those choose, and what their running Android
-    /// says.
+    /// says, with whether their add-on disk holds the package.
     fn arm_translation_status(
         &self,
         peer: &Peer,
@@ -4512,12 +4596,17 @@ impl HostApiService {
             .as_ref()
             .and_then(|source| source(&peer.user));
         let translator = arm_translation::choose(package.as_ref(), default.as_ref(), enabled);
-        let guest = guest.or_else(|| {
-            self.androids
-                .android(&peer.user)
-                .ok()
-                .and_then(|android| android.arm_translation())
-        });
+        let guest = guest
+            .or_else(|| {
+                self.androids
+                    .android(&peer.user)
+                    .ok()
+                    .and_then(|android| android.arm_translation())
+            })
+            .map(|guest| GuestArmTranslation {
+                installed: self.on_addon_disk(&peer.user, Addon::ArmTranslation),
+                ..guest
+            });
         // A record that cannot be read only takes away telling one translator from another.
         let booted = store
             .arm_translation_boot(&peer.user)
@@ -4549,39 +4638,69 @@ impl HostApiService {
         }
     }
 
-    /// Removes the caller's ARM translation package: from their Android's disk when it runs,
-    /// and from their settings, so no later boot uses it.
+    /// Removes the caller's ARM translation package: from their add-on disk and their settings,
+    /// so no later boot uses it, and from their Android's disk when a DSA from before the
+    /// add-on disk left it there and Android runs.
     fn remove_arm_translation(&self, peer: &Peer) -> response::Body {
         let Some((store, _)) = &self.settings else {
             return Self::no_settings();
         };
-        let mut guest = None;
-        if let Ok(android) = self.androids.android(&peer.user) {
-            if matches!(
-                android.state(),
-                SessionState::Active | SessionState::Dozing | SessionState::Frozen
-            ) {
-                match android.remove_arm_translation() {
-                    Ok(state) => guest = Some(state),
-                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
-                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
-                }
+        let _change = self.addon_change.lock().unwrap_or_else(|e| e.into_inner());
+        if let Ok(disk) = self.addon_disk(&peer.user) {
+            if let Err(why) = disk.remove(Addon::ArmTranslation) {
+                return error(ErrorCode::Unavailable, why);
             }
         }
         if let Err(why) = store.set_arm_translation(&peer.user, None) {
             return error(ErrorCode::Unavailable, why);
         }
         eprintln!("arm translation: {} removed their package", peer.user);
+        let guest = self.remove_left_image(&peer.user, Addon::ArmTranslation);
+        let guest = guest.and_then(|()| {
+            self.androids
+                .android(&peer.user)
+                .ok()
+                .and_then(|android| android.arm_translation())
+        });
         match self.arm_translation_status(peer, &**store, guest) {
             Ok(status) => response::Body::ArmTranslation(status.to_wire()),
             Err(why) => error(ErrorCode::Unavailable, why),
         }
     }
 
+    /// Has `user`'s running Android delete the image of `addon` that a DSA from before the
+    /// add-on disk left on its disk, if it has one. `None` when Android is not running or did
+    /// not answer; the image then goes at a later boot that reaches the desktop.
+    fn remove_left_image(&self, user: &str, addon: Addon) -> Option<()> {
+        let android = self.androids.android(user).ok()?;
+        if !matches!(
+            android.state(),
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            return None;
+        }
+        let removed = match addon {
+            Addon::Gapps => android.remove_gapps().map(|_| ()),
+            Addon::ArmTranslation => android.remove_arm_translation().map(|_| ()),
+        };
+        match removed {
+            Ok(()) => Some(()),
+            Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => {
+                eprintln!(
+                    "add-ons: {user}'s Android did not delete {} from its disk now ({why}); it \
+                     goes at a later start",
+                    addon.what()
+                );
+                None
+            }
+        }
+    }
+
     /// Answers an InstallArmTranslation request: refuses a package whose description is not
-    /// usable, else streams the image the client sends after Done to the caller's Android, and
+    /// usable, else puts the image the client sends after Done on the caller's add-on disk, and
     /// once it is there records the package with the caller's settings and answers again with
-    /// where translation stands. The connection ends with the install.
+    /// where translation stands. The connection ends with the install. Android need not run:
+    /// the package is used from its next start.
     fn install_arm_translation(
         &self,
         mut connection: Box<dyn Connection>,
@@ -4633,18 +4752,10 @@ impl HostApiService {
                 return refuse(connection, error(ErrorCode::InstallRefused, why));
             }
         };
-        let android = match self.androids.android(&peer.user) {
-            Ok(android) => android,
+        let disk = match self.addon_disk(&peer.user) {
+            Ok(disk) => disk,
             Err(why) => return refuse(connection, error(ErrorCode::Unavailable, why)),
         };
-        let state = android.state();
-        if !matches!(
-            state,
-            SessionState::Active | SessionState::Dozing | SessionState::Frozen
-        ) {
-            let why = format!("Android is {state}; start it and install the package again");
-            return refuse(connection, error(ErrorCode::NotRunning, why));
-        }
         answer(&mut *connection, response::Body::Done(types::Done {}));
         eprintln!(
             "arm translation: {} is installing {} {} ({} bytes)",
@@ -4657,25 +4768,33 @@ impl HostApiService {
             piece: Vec::new(),
             at: 0,
         };
-        let installed =
-            android.install_arm_translation(install.size, &install.sha256, &mut content);
+        let _change = self.addon_change.lock().unwrap_or_else(|e| e.into_inner());
+        let installed = disk.install(
+            Addon::ArmTranslation,
+            install.size,
+            Some(install.sha256.as_slice()),
+            &mut content,
+        );
         let body = match installed {
-            Ok(guest) => match store.set_arm_translation(&peer.user, Some(&package)) {
-                Ok(()) => match self.arm_translation_status(peer, &**store, Some(guest)) {
-                    Ok(status) => response::Body::ArmTranslation(status.to_wire()),
-                    Err(why) => error(ErrorCode::Unavailable, why),
-                },
+            Ok(()) => match store.set_arm_translation(&peer.user, Some(&package)) {
+                Ok(()) => {
+                    // A copy an older DSA left on the Android disk is of no more use.
+                    let _ = self.remove_left_image(&peer.user, Addon::ArmTranslation);
+                    match self.arm_translation_status(peer, &**store, None) {
+                        Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+                        Err(why) => error(ErrorCode::Unavailable, why),
+                    }
+                }
                 Err(why) => error(ErrorCode::Unavailable, why),
             },
-            Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
-            Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
+            Err(why) => error(ErrorCode::InstallRefused, why),
         };
         answer(&mut *connection, body);
         connection.close();
     }
 
     /// Where Google Play stands for `peer`: the build they installed, and what their running
-    /// Android says.
+    /// Android says, with whether their add-on disk holds the image.
     fn gapps_status(
         &self,
         peer: &Peer,
@@ -4683,34 +4802,56 @@ impl HostApiService {
         guest: Option<GuestGapps>,
     ) -> Result<GappsStatus, String> {
         let package = store.gapps(&peer.user)?;
-        let guest = guest.or_else(|| {
-            self.androids
-                .android(&peer.user)
-                .ok()
-                .and_then(|android| android.gapps())
-        });
+        let on_disk = self.on_addon_disk(&peer.user, Addon::Gapps);
+        let guest = guest
+            .or_else(|| {
+                self.androids
+                    .android(&peer.user)
+                    .ok()
+                    .and_then(|android| android.gapps())
+            })
+            .map(|guest| GuestGapps {
+                installed: on_disk,
+                ..guest
+            });
         let kept = self
             .gapps
             .as_ref()
             .is_some_and(|source| source.is_kept(&peer.user));
         Ok(GappsStatus {
             restart_needed: gapps::restart_needed(package.as_ref(), guest.as_ref()),
-            reinstall_needed: gapps::reinstall_needed(package.as_ref(), kept),
+            reinstall_needed: gapps::reinstall_needed(
+                package.as_ref(),
+                on_disk,
+                guest.as_ref(),
+                kept,
+            ),
             package,
             guest,
         })
     }
 
+    /// Does what `user`'s Android, which has just reached its desktop, needs done for its
+    /// add-ons: [`gapps_upkeep`](Self::gapps_upkeep) and
+    /// [`arm_translation_upkeep`](Self::arm_translation_upkeep). `false` when it is to be tried
+    /// again.
+    fn addon_upkeep(&self, user: &str) -> bool {
+        let gapps = self.gapps_upkeep(user);
+        let translation = self.arm_translation_upkeep(user);
+        gapps && translation
+    }
+
     /// Does what `user`'s Android, which has just reached its desktop, needs done for the Google
-    /// apps ([`gapps::upkeep`]): removes the image of Google apps they removed while it could not
-    /// hear of it, and makes an image an older DSA made again from the kept package. `false`
-    /// when it is to be tried again: another change is being made, or the guest has not said
-    /// yet where its Google apps stand.
+    /// apps ([`gapps::upkeep`]): moves an image a DSA from before the add-on disk left on the
+    /// Android disk onto the add-on disk, removes an image of no more use from the Android disk,
+    /// and makes an image that is of an older format or lost again from the kept package.
+    /// `false` when it is to be tried again: another change is being made, or the guest has not
+    /// said yet where its Google apps stand.
     fn gapps_upkeep(&self, user: &str) -> bool {
-        let (Some((store, _)), Some(source)) = (&self.settings, &self.gapps) else {
+        let Some((store, _)) = &self.settings else {
             return true;
         };
-        let _change = match self.gapps_change.try_lock() {
+        let _change = match self.addon_change.try_lock() {
             Ok(held) => held,
             Err(std::sync::TryLockError::Poisoned(held)) => held.into_inner(),
             Err(std::sync::TryLockError::WouldBlock) => return false,
@@ -4731,47 +4872,167 @@ impl HostApiService {
                 return true;
             }
         };
-        match gapps::upkeep(installed.as_ref(), &guest, source.is_kept(user)) {
-            gapps::Upkeep::Nothing => {}
-            gapps::Upkeep::RemoveImage => match android.remove_gapps() {
-                Ok(_) => eprintln!(
-                    "gapps: removed the Google apps image from {user}'s Android, as they removed \
-                     Google Play while it could not hear of it"
-                ),
-                Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
-                    "gapps: {user}'s Android did not remove the Google apps image ({why}); it \
-                     starts without them all the same"
-                ),
-            },
-            gapps::Upkeep::Rebuild => {
-                if let Some(package) = &installed {
-                    self.rebuild_gapps(user, package, &**store, source, &*android);
+        let disk = self.addon_disk(user);
+        let on_disk = disk.as_ref().is_ok_and(|disk| disk.holds(Addon::Gapps));
+        let kept = self
+            .gapps
+            .as_ref()
+            .is_some_and(|source| source.is_kept(user));
+        let remove_left = || {
+            if guest.left_on_data {
+                match android.remove_gapps() {
+                    Ok(_) => eprintln!(
+                        "gapps: deleted the Google apps image an older DSA left on {user}'s \
+                         Android disk"
+                    ),
+                    Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                        "gapps: {user}'s Android did not delete the Google apps image an older \
+                         DSA left on its disk ({why}); it goes at a later start"
+                    ),
                 }
             }
-            gapps::Upkeep::Reinstall => eprintln!(
-                "gapps: {user}'s Google apps image was made by an older DSA and its package is \
-                 not kept; Android runs without Google's apps until they install Google Play \
-                 again"
-            ),
+        };
+        match gapps::upkeep(installed.as_ref(), &guest, on_disk, kept) {
+            gapps::Upkeep::Nothing => {}
+            gapps::Upkeep::RemoveImage => remove_left(),
+            gapps::Upkeep::MoveImage => match &disk {
+                Ok(disk) => {
+                    if self.move_left_image(user, Addon::Gapps, disk, &*android) {
+                        remove_left();
+                    }
+                }
+                Err(why) => eprintln!("gapps: {user}'s Google apps image stays in /data: {why}"),
+            },
+            gapps::Upkeep::Rebuild => {
+                if let (Some(package), Some(source), Ok(disk)) = (&installed, &self.gapps, &disk) {
+                    if self.rebuild_gapps(user, package, &**store, source, disk) {
+                        remove_left();
+                    }
+                }
+            }
+            gapps::Upkeep::Reinstall => {
+                eprintln!(
+                    "gapps: {user}'s Google apps image is of an older format or lost and its \
+                     package is not kept; Android runs without Google's apps until they install \
+                     Google Play again"
+                );
+                remove_left();
+            }
         }
         true
     }
 
-    /// Makes `user`'s Google apps image again from their kept `package` and sends it to their
-    /// running Android, which lays it over its system from its next start. A kept package that
-    /// cannot be made into an image is removed, so the user is told to install Google Play
-    /// again.
+    /// Does what `user`'s Android, which has just reached its desktop, needs done for their
+    /// ARM translation package ([`arm_translation::upkeep`]): moves an image a DSA from before
+    /// the add-on disk left on the Android disk onto the add-on disk, removes an image of no
+    /// more use from the Android disk, and forgets a package whose image is gone, so Android
+    /// uses the default translator again. `false` when it is to be tried again.
+    fn arm_translation_upkeep(&self, user: &str) -> bool {
+        let Some((store, _)) = &self.settings else {
+            return true;
+        };
+        let Ok(disk) = self.addon_disk(user) else {
+            return true;
+        };
+        let _change = match self.addon_change.try_lock() {
+            Ok(held) => held,
+            Err(std::sync::TryLockError::Poisoned(held)) => held.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        let Ok(android) = self.androids.android(user) else {
+            return true;
+        };
+        if android.state() != SessionState::Active {
+            return false;
+        }
+        let Some(guest) = android.arm_translation() else {
+            return false;
+        };
+        let installed = match store.arm_translation(user) {
+            Ok(installed) => installed,
+            Err(why) => {
+                eprintln!("arm translation: {user}'s package is not known ({why})");
+                return true;
+            }
+        };
+        let remove_left = || match android.remove_arm_translation() {
+            Ok(_) => eprintln!(
+                "arm translation: deleted the package image an older DSA left on {user}'s \
+                 Android disk"
+            ),
+            Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
+                "arm translation: {user}'s Android did not delete the package image an older DSA \
+                 left on its disk ({why}); it goes at a later start"
+            ),
+        };
+        let on_disk = disk.holds(Addon::ArmTranslation);
+        match arm_translation::upkeep(installed.as_ref(), &guest, on_disk) {
+            arm_translation::Upkeep::Nothing => {}
+            arm_translation::Upkeep::RemoveImage => remove_left(),
+            arm_translation::Upkeep::MoveImage => {
+                if self.move_left_image(user, Addon::ArmTranslation, &disk, &*android) {
+                    remove_left();
+                }
+            }
+            arm_translation::Upkeep::Forget => {
+                eprintln!(
+                    "arm translation: {user}'s package is neither on their add-on disk nor on \
+                     their Android disk; Android uses the default translator from its next start \
+                     until they install the package again"
+                );
+                if let Err(why) = store.set_arm_translation(user, None) {
+                    eprintln!("arm translation: {user}'s package is still recorded: {why}");
+                }
+            }
+        }
+        true
+    }
+
+    /// Moves `addon`'s image that a DSA from before the add-on disk left on `user`'s Android
+    /// disk onto their add-on disk `disk`, for Android's next start. Says whether it is there.
+    fn move_left_image(
+        &self,
+        user: &str,
+        addon: Addon,
+        disk: &AddonDisk,
+        android: &dyn UserAndroid,
+    ) -> bool {
+        let moved = LeftImage::open(android, addon)
+            .and_then(|(mut image, size)| disk.install(addon, size, None, &mut image));
+        match moved {
+            Ok(()) => {
+                eprintln!(
+                    "add-ons: moved {} from {user}'s Android disk onto their add-on disk",
+                    addon.what()
+                );
+                true
+            }
+            Err(why) => {
+                eprintln!(
+                    "add-ons: {} stays on {user}'s Android disk, which starts with it from there \
+                     again: {why}",
+                    addon.what()
+                );
+                false
+            }
+        }
+    }
+
+    /// Makes `user`'s Google apps image again from their kept `package` and puts it on their
+    /// add-on disk, from which Android lays it over its system from its next start. A kept
+    /// package that cannot be made into an image is removed, so the user is told to install
+    /// Google Play again. Says whether the image is on the disk.
     fn rebuild_gapps(
         &self,
         user: &str,
         package: &GappsPackage,
         store: &dyn SettingsStore,
         source: &gapps::Source,
-        android: &dyn UserAndroid,
-    ) {
+        disk: &AddonDisk,
+    ) -> bool {
         eprintln!(
-            "gapps: {user}'s Google apps image (LiteGapps {} {}) was made by an older DSA; making \
-             it again from the kept package",
+            "gapps: {user}'s Google apps image (LiteGapps {} {}) is of an older format or lost; \
+             making it again from the kept package",
             package.variant, package.version
         );
         let prepared = match source.rebuild(user, package) {
@@ -4779,26 +5040,35 @@ impl HostApiService {
             Err(why) => {
                 eprintln!("gapps: {user}'s Google apps image cannot be made again: {why}");
                 source.forget(user);
-                return;
+                return false;
             }
         };
-        let sent = std::fs::File::open(&prepared.image)
+        let put = std::fs::File::open(&prepared.image)
             .map_err(|e| format!("the Google apps image cannot be read: {e}"))
             .and_then(|mut image| {
-                android
-                    .install_gapps(prepared.size, &prepared.sha256, &mut image)
-                    .map_err(|(InstallError::NotRunning(why) | InstallError::Refused(why))| why)
+                disk.install(
+                    Addon::Gapps,
+                    prepared.size,
+                    Some(prepared.sha256.as_slice()),
+                    &mut image,
+                )
             });
-        match sent.and_then(|_| store.set_gapps(user, Some(&prepared.package))) {
-            Ok(()) => eprintln!(
-                "gapps: {user}'s Google apps image is made again ({} privileged permissions \
-                 allowlisted); Android lays it over from its next start",
-                prepared.built.allowlisted
-            ),
-            Err(why) => eprintln!(
-                "gapps: {user}'s Google apps image did not reach Android ({why}); it is made \
-                 again at the next start"
-            ),
+        match put.and_then(|()| store.set_gapps(user, Some(&prepared.package))) {
+            Ok(()) => {
+                eprintln!(
+                    "gapps: {user}'s Google apps image is made again ({} privileged \
+                     permissions allowlisted); Android lays it over from its next start",
+                    prepared.built.allowlisted
+                );
+                true
+            }
+            Err(why) => {
+                eprintln!(
+                    "gapps: {user}'s Google apps image is not on their add-on disk ({why}); it is \
+                     made again at the next start"
+                );
+                false
+            }
         }
     }
 
@@ -4812,46 +5082,52 @@ impl HostApiService {
         }
     }
 
-    /// Removes the caller's Google apps: from their settings first, so no later boot lays them
-    /// over the system, then from their Android's disk when it runs and answers. An Android that
-    /// is stopped, still starting, or cannot finish starting (as one whose Google apps stop it
-    /// at every boot) loses the image at its next boot that reaches the desktop
+    /// Removes the caller's Google apps: from their settings and their add-on disk, so no later
+    /// boot lays them over the system, then, when a DSA from before the add-on disk left the
+    /// image on their Android's disk, from there too while Android runs and answers. An Android
+    /// that is stopped, still starting, or cannot finish starting (as one whose Google apps stop
+    /// it at every boot) loses that copy at its next boot that reaches the desktop
     /// ([`gapps::Upkeep::RemoveImage`]).
     fn remove_gapps(&self, peer: &Peer) -> response::Body {
         let Some((store, _)) = &self.settings else {
             return Self::no_settings();
         };
-        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
+        let _change = self.addon_change.lock().unwrap_or_else(|e| e.into_inner());
         if let Err(why) = store.set_gapps(&peer.user, None) {
             return error(ErrorCode::Unavailable, why);
         }
         if let Some(source) = &self.gapps {
             source.forget(&peer.user);
         }
+        if let Ok(disk) = self.addon_disk(&peer.user) {
+            if let Err(why) = disk.remove(Addon::Gapps) {
+                return error(ErrorCode::Unavailable, why);
+            }
+        }
         eprintln!("gapps: {} removed Google Play", peer.user);
-        let mut guest = None;
         if let Ok(android) = self.androids.android(&peer.user) {
             let state = android.state();
-            if matches!(
+            if !matches!(
                 state,
-                SessionState::Active | SessionState::Dozing | SessionState::Frozen
+                SessionState::Active
+                    | SessionState::Dozing
+                    | SessionState::Frozen
+                    | SessionState::Stopped
             ) {
-                match android.remove_gapps() {
-                    Ok(state) => guest = Some(state),
-                    Err(InstallError::NotRunning(why) | InstallError::Refused(why)) => eprintln!(
-                        "gapps: {}'s Android did not remove the image now ({why}); it goes at \
-                         the next start",
-                        peer.user
-                    ),
-                }
-            } else if state != SessionState::Stopped {
                 eprintln!(
-                    "gapps: {}'s Android is {state}; the image goes at its next start, which \
-                     starts without Google's apps",
+                    "gapps: {}'s Android is {state}; its next start goes without Google's apps",
                     peer.user
                 );
             }
         }
+        let guest = self
+            .remove_left_image(&peer.user, Addon::Gapps)
+            .and_then(|()| {
+                self.androids
+                    .android(&peer.user)
+                    .ok()
+                    .and_then(|android| android.gapps())
+            });
         match self.gapps_status(peer, &**store, guest) {
             Ok(status) => response::Body::Gapps(status.to_wire()),
             Err(why) => error(ErrorCode::Unavailable, why),
@@ -4859,8 +5135,8 @@ impl HostApiService {
     }
 
     /// Answers an InstallGapps request: finds the build for the Android the caller runs,
-    /// downloads and checks it, makes its image and sends that to the caller's Android,
-    /// answering with GappsProgress on the way. Once Android has the image the build is
+    /// downloads and checks it, makes its image and puts that on the caller's add-on disk,
+    /// answering with GappsProgress on the way. Once the disk has the image the build is
     /// recorded with the caller's settings, and the last answer says where Google Play stands.
     /// A build that is refused leaves the settings as they were. The connection ends with the
     /// install.
@@ -4884,6 +5160,10 @@ impl HostApiService {
         let Some(source) = &self.gapps else {
             let why = "this service cannot download Google Play; update DSA".to_string();
             return refuse(connection, error(ErrorCode::Unavailable, why));
+        };
+        let disk = match self.addon_disk(&peer.user) {
+            Ok(disk) => disk,
+            Err(why) => return refuse(connection, error(ErrorCode::Unavailable, why)),
         };
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -4911,7 +5191,7 @@ impl HostApiService {
             "gapps: {} is installing Google Play for {} Android at API level {}",
             peer.user, target.arch, target.sdk
         );
-        let _change = self.gapps_change.lock().unwrap_or_else(|e| e.into_inner());
+        let _change = self.addon_change.lock().unwrap_or_else(|e| e.into_inner());
         let prepared = source.prepare(&peer.user, &target, &mut |progress| {
             answer(
                 &mut *connection,
@@ -4944,13 +5224,14 @@ impl HostApiService {
                 response::Body::GappsProgress(gapps_progress_to_wire(news)),
             )
         };
-        let installed = android.install_gapps(
+        let installed = disk.install(
+            Addon::Gapps,
             size,
-            &prepared.sha256,
+            Some(prepared.sha256.as_slice()),
             &mut gapps::Reporting::new(&mut image, &mut report),
         );
         let body = match installed {
-            Ok(guest) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
+            Ok(()) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
                 Ok(()) => {
                     // Kept so that a later DSA can make the image again in a new format.
                     if let Err(why) = source.keep(&peer.user, &mut prepared) {
@@ -4963,15 +5244,18 @@ impl HostApiService {
                          privileged permissions allowlisted beside LiteGapps' own lists)",
                         peer.user, package.variant, package.version
                     );
-                    match self.gapps_status(peer, &**store, Some(guest)) {
+                    // A copy an older DSA left on the Android disk is of no more use.
+                    if guest.left_on_data {
+                        let _ = self.remove_left_image(&peer.user, Addon::Gapps);
+                    }
+                    match self.gapps_status(peer, &**store, None) {
                         Ok(status) => response::Body::Gapps(status.to_wire()),
                         Err(why) => error(ErrorCode::Unavailable, why),
                     }
                 }
                 Err(why) => error(ErrorCode::Unavailable, why),
             },
-            Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
-            Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
+            Err(why) => error(ErrorCode::InstallRefused, why),
         };
         drop(prepared);
         answer(&mut *connection, body);
@@ -5950,8 +6234,8 @@ impl HostApiClient {
     }
 
     /// Installs the ARM translation package `package` for the caller: its system image,
-    /// `size` bytes read from `content` whose SHA-256 is `sha256`, goes to the caller's
-    /// Android, which uses it from its next start. The connection ends with the install, so
+    /// `size` bytes read from `content` whose SHA-256 is `sha256`, goes on the caller's add-on
+    /// disk, from which Android uses it from its next start. The connection ends with the install, so
     /// the client is used up.
     pub fn install_arm_translation(
         mut self,
@@ -6026,7 +6310,8 @@ impl HostApiClient {
     }
 
     /// Installs Google Play for the caller: the service downloads the build for the caller's
-    /// Android and sends its image there, which Android uses from its next start. `progress`
+    /// Android and puts its image on the caller's add-on disk, which Android uses from its next
+    /// start. `progress`
     /// hears what the service is doing on the way. The connection ends with the install, so
     /// the client is used up.
     pub fn install_gapps(

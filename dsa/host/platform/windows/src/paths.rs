@@ -15,6 +15,9 @@
 //!   android.vhdx                     the user's Android disk, which uninstalling keeps
 //!   android.image-version            the image version that disk holds, kept with it
 //!   pstore.vhd                       the guest kernel's last log, a fixed 4 MiB disk
+//!   addons.vhd                       the user's add-ons (Google Play, an ARM translator), a
+//!                                    fixed disk the VM attaches read only; addons.vhd.next is
+//!                                    the one the next start puts in its place
 //!   apps\<package>\                  each app's own window program
 //!   notifications\                   the icons notifications show
 //!   logs\                            dsa-wm.log, dsa-app-window.log
@@ -174,6 +177,10 @@ impl UserRoot {
     pub fn pstore_disk(&self) -> PathBuf {
         pstore_disk_beside(&self.android_disk())
     }
+    /// The disk of the add-ons the user installed, which the VM attaches read only.
+    pub fn addon_disk(&self) -> PathBuf {
+        addon_disk_beside(&self.android_disk())
+    }
     /// The image version the Android disk holds, kept beside it and with it.
     pub fn android_disk_version(&self) -> PathBuf {
         join(&self.0, &["android.image-version"])
@@ -240,6 +247,16 @@ pub fn pstore_disk_beside(android_disk: &Path) -> PathBuf {
     match text.rfind(['\\', '/']) {
         Some(end) => join(Path::new(&text[..end]), &["pstore.vhd"]),
         None => PathBuf::from("pstore.vhd"),
+    }
+}
+
+/// The add-on disk of the VM whose Android disk is `android_disk`: `addons.vhd` in the same
+/// folder, as [`pstore_disk_beside`] places the pstore disk.
+pub fn addon_disk_beside(android_disk: &Path) -> PathBuf {
+    let text = android_disk.to_string_lossy();
+    match text.rfind(['\\', '/']) {
+        Some(end) => join(Path::new(&text[..end]), &["addons.vhd"]),
+        None => PathBuf::from("addons.vhd"),
     }
 }
 

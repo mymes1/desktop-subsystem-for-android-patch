@@ -62,6 +62,7 @@ fn config() -> AndroidVmConfig {
         system_image: Some(PathBuf::from(r"C:\Program Files\DSA\vm\system.vhdx")),
         data_disk: PathBuf::from(r"C:\Users\me\AppData\Local\DSA\data.vhdx"),
         pstore_disk: Some(PathBuf::from(r"C:\Users\me\AppData\Local\DSA\pstore.vhd")),
+        addon_disk: None,
         socket_sids: vec![USER_SID.into()],
         page_reporting_order: 5,
         console_pipe: Some(r"\\.\pipe\dsa-console-dsa-android-S-1-5-21-1".into()),
@@ -312,6 +313,29 @@ fn fr21_the_pstore_disk_is_attached_writable_after_the_other_disks() {
     assert_eq!(
         disks["1"]["Path"],
         r"C:\Users\me\AppData\Local\DSA\pstore.vhd"
+    );
+}
+
+#[test]
+fn fr32_the_addon_disk_is_attached_read_only_after_the_pstore_disk() {
+    let mut with_addons = config();
+    with_addons.addon_disk = Some(PathBuf::from(r"C:\Users\me\AppData\Local\DSA\addons.vhd"));
+    let doc = document(&with_addons);
+    let disks = &doc["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    assert_eq!(
+        disks["3"]["Path"],
+        r"C:\Users\me\AppData\Local\DSA\addons.vhd"
+    );
+    assert_eq!(disks["3"]["ReadOnly"], true);
+    assert_eq!(disks["3"]["Type"], "VirtualDisk");
+    // Without add-ons there is no fourth disk.
+    let doc = document(&config());
+    assert!(doc["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"]["3"].is_null());
+    assert_eq!(
+        dsa_host_windows::paths::addon_disk_beside(std::path::Path::new(
+            r"C:\Users\me\AppData\Local\DSA\android.vhdx"
+        )),
+        PathBuf::from(r"C:\Users\me\AppData\Local\DSA\addons.vhd")
     );
 }
 

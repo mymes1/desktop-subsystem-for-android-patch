@@ -1,9 +1,11 @@
 ; Desktop Subsystem for Android (DSA)
 ; Google Play, when the user installed it (dsa-gapps.rc). When the host says a Google apps image
-; is installed, init mounts the image straight from its file in /data/vendor/dsa/gapps, its
-; files labelled as system files, as the folders it lays it over are, and lays each of its
-; folders (apps, framework files, permission lists and configuration) over the same folder of
-; /product and /system_ext with overlayfs. No partition's root is laid over.
+; is installed, init mounts the image straight from its file, its files labelled as system
+; files, as the folders it lays it over are, and lays each of its folders (apps, framework
+; files, permission lists and configuration) over the same folder of /product and /system_ext
+; with overlayfs. No partition's root is laid over. The file is gapps.img on the user's add-on
+; disk (a system file, addons.cil), or, for one boot after an update from a DSA that kept it on
+; the user's disk, /data/vendor/dsa/gapps/system.img (a vendor data file).
 ; erofs opens the image file with init's credentials as init mounts it, and reads it with them
 ; afterwards, so reading the file is all init needs; there is no loop device to open.
 (allow init vendor_data_file (file (read open getattr)))

@@ -7,14 +7,19 @@
 //! host publishes, then makes an erofs image of the build's apps, permission lists, system
 //! configuration and framework files ([`package`]). Every path in the build is checked first:
 //! one that leaves the build (`..`, an absolute path) refuses the whole build, and so does a
-//! build for another architecture or Android version. The image goes to the user's Android,
-//! which keeps it on the user's disk (`/data/vendor/dsa/gapps/system.img`), and the build's
-//! description goes with the user's settings. While one is recorded, each boot's bootconfig
-//! carries [`BOOTCONFIG_ON`], and the guest then lays each folder of the image over the same
-//! folder of its `/product` and `/system_ext` before its package manager starts, never a
-//! partition's root, whose services would then fail to start. Every change applies from the
-//! next start of Android, because the package manager reads the system apps and their
-//! permissions once.
+//! build for another architecture or Android version. The image goes on the user's add-on disk
+//! ([`crate::addon_disk`], `gapps.img`), which the host attaches to their VM read only, and the
+//! build's description goes with the user's settings. While one is recorded, each boot's
+//! bootconfig carries [`BOOTCONFIG_ON`] and says where the image is, and the guest then lays
+//! each folder of the image over the same folder of its `/product` and `/system_ext` before its
+//! package manager starts, never a partition's root, whose services would then fail to start.
+//! Every change applies from the next start of Android, because the package manager reads the
+//! system apps and their permissions once.
+//!
+//! A DSA from before the add-on disk sent the image to the user's Android disk
+//! (`/data/vendor/dsa/gapps/system.img`). The first start after the update mounts it from there
+//! once more, and the host moves it onto the add-on disk and has the guest delete it
+//! ([`Upkeep::MoveImage`]), so nothing of it stays in `/data`.
 //!
 //! ```text
 //! image root
@@ -41,6 +46,9 @@ use crate::update::store::Fetch;
 
 /// The bootconfig line that lays the Google apps over the system for one boot.
 pub const BOOTCONFIG_ON: &str = "androidboot.dsa.gapps = \"on\"\n";
+/// The bootconfig key that says where the image is for one boot
+/// ([`crate::addon_disk::image_bootconfig`]).
+pub const IMAGE_KEY: &str = "gapps_image";
 /// The format of the Google apps image this host makes, recorded with the package
 /// ([`GappsPackage::image_format`]). A record without one (0) is of an image an older host
 /// made: 0.1.9's, which its guest never laid over, and 0.2.0's, which lacks the folders the
@@ -131,19 +139,29 @@ impl Target {
 }
 
 /// What a boot's bootconfig carries for the Google apps: [`BOOTCONFIG_ON`] while a build is
-/// installed whose image is of the format this host makes, nothing otherwise.
-pub fn bootconfig(installed: Option<&GappsPackage>) -> &'static str {
+/// installed whose image is of the format this host makes, with where the image is: on the
+/// add-on disk the boot attaches when `on_disk`, else where an older DSA kept it in `/data`.
+/// Nothing otherwise.
+pub fn bootconfig(installed: Option<&GappsPackage>, on_disk: bool) -> String {
     if installed.is_some_and(|package| !package.outdated()) {
-        BOOTCONFIG_ON
+        format!(
+            "{BOOTCONFIG_ON}{}",
+            crate::addon_disk::image_bootconfig(IMAGE_KEY, on_disk)
+        )
     } else {
-        ""
+        String::new()
     }
 }
 
-/// The bootconfig for `user`'s next boot, from what their settings record. A record that cannot
-/// be read is logged and counts as none, so Android still starts; so does the record of an image
-/// an older host made, which is made again once Android runs, or installed again by the user.
-pub fn bootconfig_for(store: &dyn SettingsStore, user: &str) -> String {
+/// The bootconfig for `user`'s next boot, from what their settings record and whether the
+/// add-on disk the boot attaches holds the image (`attached`). A record that cannot be read is
+/// logged and counts as none, so Android still starts; so does the record of an image an older
+/// host made, which is made again once Android runs, or installed again by the user.
+pub fn bootconfig_for(
+    store: &dyn SettingsStore,
+    user: &str,
+    attached: &[crate::addon_disk::Addon],
+) -> String {
     let package = store.gapps(user).unwrap_or_else(|why| {
         eprintln!("gapps: {why}; starting {user}'s Android without Google's apps");
         None
@@ -156,14 +174,24 @@ pub fn bootconfig_for(store: &dyn SettingsStore, user: &str) -> String {
             package.variant, package.version, package.image_format
         );
     }
-    bootconfig(package.as_ref()).to_string()
+    let on_disk = attached.contains(&crate::addon_disk::Addon::Gapps);
+    if package.as_ref().is_some_and(|package| !package.outdated()) && !on_disk {
+        eprintln!(
+            "gapps: {user}'s Google apps image is not on their add-on disk; Android mounts the \
+             copy an older DSA kept in /data once more, and the service moves it to the disk"
+        );
+    }
+    bootconfig(package.as_ref(), on_disk)
 }
 
 /// Where the Google apps stand in the running guest, as it says.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GuestGapps {
-    /// The image is on the user's disk.
+    /// The image is on the user's add-on disk, for the next start of Android. The host fills
+    /// this in from the disk; the guest does not know it.
     pub installed: bool,
+    /// An image a DSA from before the add-on disk sent is still on the user's Android disk.
+    pub left_on_data: bool,
     /// This boot runs with the image laid over the system.
     pub active: bool,
     /// The guest's API level.
@@ -184,10 +212,20 @@ pub fn restart_needed(installed: Option<&GappsPackage>, guest: Option<&GuestGapp
     guest.is_some_and(|guest| guest.active != usable)
 }
 
-/// Whether the user must install Google Play again: their package's image is of an older format
-/// and its download was not kept (`kept`), so it cannot be made again.
-pub fn reinstall_needed(installed: Option<&GappsPackage>, kept: bool) -> bool {
-    installed.is_some_and(GappsPackage::outdated) && !kept
+/// Whether the user must install Google Play again: their package's image is of an older format,
+/// or is neither on the add-on disk (`on_disk`) nor, as far as the running guest says, left in
+/// its `/data`, and its download was not kept (`kept`), so it cannot be made again.
+pub fn reinstall_needed(
+    installed: Option<&GappsPackage>,
+    on_disk: bool,
+    guest: Option<&GuestGapps>,
+    kept: bool,
+) -> bool {
+    let Some(package) = installed else {
+        return false;
+    };
+    let lost = !on_disk && guest.is_some_and(|guest| !guest.left_on_data);
+    (package.outdated() || lost) && !kept
 }
 
 /// What a boot of a user's Android that reached its desktop needs done for the Google apps,
@@ -196,24 +234,51 @@ pub fn reinstall_needed(installed: Option<&GappsPackage>, kept: bool) -> bool {
 pub enum Upkeep {
     /// Nothing.
     Nothing,
-    /// The user removed Google Play while Android could not hear of it: the image is still
-    /// on its disk, and goes now.
+    /// An image an older DSA sent is still on the Android disk, and is of no more use: the user
+    /// removed Google Play, or the image is on the add-on disk already. It goes now.
     RemoveImage,
-    /// The image is of an older format and the package is kept: it is made again and sent.
+    /// An image an older DSA sent is on the Android disk and not yet on the add-on disk: it is
+    /// moved there and then removed from the Android disk.
+    MoveImage,
+    /// The image is of an older format, or is lost, and the package is kept: it is made again
+    /// and put on the add-on disk, and any copy on the Android disk goes.
     Rebuild,
-    /// The image is of an older format and the package is not kept: the user installs Google
-    /// Play again, as their status says.
+    /// The image is of an older format, or is lost, and the package is not kept: the user
+    /// installs Google Play again, as their status says. Any copy on the Android disk, of no
+    /// use, goes.
     Reinstall,
 }
 
-/// What `user`'s running Android needs: see [`Upkeep`].
-pub fn upkeep(installed: Option<&GappsPackage>, guest: &GuestGapps, kept: bool) -> Upkeep {
-    match installed {
-        None if guest.installed => Upkeep::RemoveImage,
-        None => Upkeep::Nothing,
-        Some(package) if package.outdated() && kept => Upkeep::Rebuild,
-        Some(package) if package.outdated() => Upkeep::Reinstall,
-        Some(_) => Upkeep::Nothing,
+/// What `user`'s running Android needs, from what their settings record (`installed`), what
+/// the guest says, whether the add-on disk holds the image (`on_disk`) and whether the package
+/// is kept: see [`Upkeep`].
+pub fn upkeep(
+    installed: Option<&GappsPackage>,
+    guest: &GuestGapps,
+    on_disk: bool,
+    kept: bool,
+) -> Upkeep {
+    let Some(package) = installed else {
+        return if guest.left_on_data {
+            Upkeep::RemoveImage
+        } else {
+            Upkeep::Nothing
+        };
+    };
+    if !package.outdated() && on_disk {
+        return if guest.left_on_data {
+            Upkeep::RemoveImage
+        } else {
+            Upkeep::Nothing
+        };
+    }
+    if !package.outdated() && guest.left_on_data {
+        return Upkeep::MoveImage;
+    }
+    if kept {
+        Upkeep::Rebuild
+    } else {
+        Upkeep::Reinstall
     }
 }
 
@@ -226,7 +291,7 @@ pub enum Stage {
     Downloading,
     /// Checking the build and making its image.
     Building,
-    /// Sending the image to Android.
+    /// Putting the image on the add-on disk.
     Sending,
 }
 
@@ -564,10 +629,15 @@ mod tests {
 
     #[test]
     fn fr32_the_bootconfig_lays_the_google_apps_over_only_while_they_are_installed() {
-        assert_eq!(bootconfig(None), "");
+        assert_eq!(bootconfig(None, true), "");
         assert_eq!(
-            bootconfig(Some(&package())),
-            "androidboot.dsa.gapps = \"on\"\n"
+            bootconfig(Some(&package()), true),
+            "androidboot.dsa.gapps = \"on\"\nandroidboot.dsa.gapps_image = \"disk\"\n"
+        );
+        // Until the host has moved it, the image is where an older DSA kept it.
+        assert_eq!(
+            bootconfig(Some(&package()), false),
+            "androidboot.dsa.gapps = \"on\"\nandroidboot.dsa.gapps_image = \"data\"\n"
         );
     }
 
@@ -626,18 +696,19 @@ mod tests {
         let old: GappsPackage = serde_json::from_str(recorded).unwrap();
         assert_eq!(old.image_format, 0);
         assert!(old.outdated());
-        assert_eq!(bootconfig(Some(&old)), "");
+        assert_eq!(bootconfig(Some(&old), true), "");
         assert!(!package().outdated());
         let store = crate::settings::MemorySettings::default();
+        let disk = [crate::addon_disk::Addon::Gapps];
         store.set_gapps("uid:1000", Some(&old)).unwrap();
-        assert_eq!(bootconfig_for(&store, "uid:1000"), "");
+        assert_eq!(bootconfig_for(&store, "uid:1000", &disk), "");
         store.set_gapps("uid:1000", Some(&package())).unwrap();
-        assert_eq!(bootconfig_for(&store, "uid:1000"), BOOTCONFIG_ON);
+        assert!(bootconfig_for(&store, "uid:1000", &disk).starts_with(BOOTCONFIG_ON));
         // The user is told to install it again only when it cannot be made again.
-        assert!(reinstall_needed(Some(&old), false));
-        assert!(!reinstall_needed(Some(&old), true));
-        assert!(!reinstall_needed(Some(&package()), false));
-        assert!(!reinstall_needed(None, false));
+        assert!(reinstall_needed(Some(&old), true, None, false));
+        assert!(!reinstall_needed(Some(&old), true, None, true));
+        assert!(!reinstall_needed(Some(&package()), true, None, false));
+        assert!(!reinstall_needed(None, false, None, false));
     }
 
     #[test]
@@ -646,16 +717,67 @@ mod tests {
             image_format: 0,
             ..package()
         };
-        let on_disk = GuestGapps {
-            installed: true,
+        let left = GuestGapps {
+            left_on_data: true,
             ..GuestGapps::default()
         };
         let none = GuestGapps::default();
-        assert_eq!(upkeep(None, &on_disk, false), Upkeep::RemoveImage);
-        assert_eq!(upkeep(None, &none, true), Upkeep::Nothing);
-        assert_eq!(upkeep(Some(&old), &on_disk, true), Upkeep::Rebuild);
-        assert_eq!(upkeep(Some(&old), &on_disk, false), Upkeep::Reinstall);
-        assert_eq!(upkeep(Some(&package()), &on_disk, false), Upkeep::Nothing);
+        assert_eq!(upkeep(None, &left, false, false), Upkeep::RemoveImage);
+        assert_eq!(upkeep(None, &none, false, true), Upkeep::Nothing);
+        assert_eq!(upkeep(Some(&old), &left, false, true), Upkeep::Rebuild);
+        assert_eq!(upkeep(Some(&old), &left, false, false), Upkeep::Reinstall);
+        // The add-on disk has the image: nothing stays in /data.
+        assert_eq!(
+            upkeep(Some(&package()), &left, true, false),
+            Upkeep::RemoveImage
+        );
+        assert_eq!(
+            upkeep(Some(&package()), &none, true, false),
+            Upkeep::Nothing
+        );
+    }
+
+    #[test]
+    fn fr32_an_image_an_older_dsa_kept_in_data_moves_to_the_addon_disk() {
+        let left = GuestGapps {
+            left_on_data: true,
+            ..GuestGapps::default()
+        };
+        let none = GuestGapps::default();
+        assert_eq!(
+            upkeep(Some(&package()), &left, false, false),
+            Upkeep::MoveImage
+        );
+        assert_eq!(
+            upkeep(Some(&package()), &left, false, true),
+            Upkeep::MoveImage
+        );
+        // Neither on the disk nor in /data: made again from the kept package, or installed
+        // again by the user.
+        assert_eq!(
+            upkeep(Some(&package()), &none, false, true),
+            Upkeep::Rebuild
+        );
+        assert_eq!(
+            upkeep(Some(&package()), &none, false, false),
+            Upkeep::Reinstall
+        );
+        assert!(reinstall_needed(
+            Some(&package()),
+            false,
+            Some(&none),
+            false
+        ));
+        assert!(!reinstall_needed(
+            Some(&package()),
+            false,
+            Some(&left),
+            false
+        ));
+        assert!(
+            !reinstall_needed(Some(&package()), false, None, false),
+            "Android not asked"
+        );
     }
 
     fn scratch(name: &str) -> PathBuf {
