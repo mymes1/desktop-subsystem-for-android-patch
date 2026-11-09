@@ -821,7 +821,8 @@ jobs:
           } | tee "$RUNNER_TEMP/image-inputs.txt"
           inputs="$(sha256sum < "$RUNNER_TEMP/image-inputs.txt" | cut -c1-16)"
           prefix="guest-image-android-${{ matrix.android }}-${{ matrix.arch }}-"
-          key="$prefix${{ hashFiles('dsa/android-versions.json', 'dsa/guest/image/**', 'dsa/guest/framework/**', 'dsa/guest/*/*.rc', 'dsa/guest/*/*.xml', '!dsa/guest/**/__pycache__/**') }}-$inputs"
+          # Braces: the hash is hex, so "$prefix<hash>" would name one unset variable.
+          key="${prefix}${{ hashFiles('dsa/android-versions.json', 'dsa/guest/image/**', 'dsa/guest/framework/**', 'dsa/guest/*/*.rc', 'dsa/guest/*/*.xml', '!dsa/guest/**/__pycache__/**') }}-$inputs"
           echo "the image's key: $key"
           echo "key=$key" >> "$GITHUB_OUTPUT"
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
