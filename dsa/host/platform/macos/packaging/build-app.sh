@@ -11,6 +11,11 @@
 # the Developer ID to sign with; without it the bundle is signed ad hoc, which runs on the machine that
 # built it and is ready to be signed for distribution. DSA_INSTALLER_IDENTITY signs the
 # package the same way.
+#
+# The address data (the administrative boundaries the device lender turns Android's positions
+# into addresses with) goes into Contents/Resources/geodata: from DSA_GEODATA_DIR, a folder
+# dsa/host/core/geodata/build-geodata.py filled, or made here by that script, which downloads
+# its pinned sources once into .scratch/geodata in the repository.
 set -euo pipefail
 
 version="${1:?the version, such as 0.1.0}"
@@ -103,6 +108,24 @@ JSON
     fi
 fi
 cp "$root/LICENSE" "$app/Contents/Resources/licenses/DSA.txt"
+
+geodata="${DSA_GEODATA_DIR:-}"
+if [[ -z "$geodata" ]]; then
+    geodata="$out/geodata"
+    if command -v uv >/dev/null; then
+        uv run "$root/dsa/host/core/geodata/build-geodata.py" --out "$geodata/address-boundaries.bin"
+    else
+        python3 "$root/dsa/host/core/geodata/build-geodata.py" --out "$geodata/address-boundaries.bin"
+    fi
+fi
+mkdir -p "$app/Contents/Resources/geodata"
+for file in address-boundaries.bin NOTICE.txt; do
+    if [[ ! -f "$geodata/$file" ]]; then
+        echo "$geodata has no $file (build-geodata.py makes it)" >&2
+        exit 1
+    fi
+    cp "$geodata/$file" "$app/Contents/Resources/geodata/"
+done
 
 # The app icon, one for every macOS version, at every size from 16 to 1024 px in one .icns,
 # and the menu bar's template image at 1x and 2x.
