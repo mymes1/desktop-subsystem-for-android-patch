@@ -479,7 +479,7 @@ jobs:
 
       - name: Build the agent
         working-directory: dsa/guest/agent
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./kotlin do assembleRelease
 
       # Unsigned: make-image.py signs it with the platform key.
       - name: Keep the agent
