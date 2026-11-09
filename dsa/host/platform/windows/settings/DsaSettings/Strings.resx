@@ -265,6 +265,9 @@
   <data name="DisplayGpuCard.Description" xml:space="preserve">
     <value>What the default choice renders on now.</value>
   </data>
+  <data name="RenderGpuAppliesBar.Title" xml:space="preserve">
+    <value>Applies after a restart</value>
+  </data>
   <data name="RenderGpuAppliesBar.Message" xml:space="preserve">
     <value>A new render GPU takes effect when the window manager starts again: at the next sign-in, or when you restart it below.</value>
   </data>
