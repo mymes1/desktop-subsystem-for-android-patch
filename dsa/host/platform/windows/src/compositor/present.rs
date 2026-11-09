@@ -58,6 +58,7 @@ use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
 use dsa_host_core::compositor::resize_latency::ResizeLatency;
 use dsa_host_core::compositor::splash;
 use dsa_host_core::compositor::visible_change::{self, area_around, Area, PressWatch, Verdict};
+use dsa_host_core::compositor::window_sizing::{to_task_length, to_window_size, Scale};
 use windows::core::{Interface, BOOL, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
 use windows::Win32::Graphics::Direct3D::{
@@ -364,6 +365,9 @@ impl Drop for SharedTexture {
 /// A texture a frame came in, the texture's size, and the region the frame fills.
 type Newest = (ID3D11Texture2D, (u32, u32), (u32, u32));
 
+/// What a visual is committed for: the buffers' size, the frame's and the scale.
+type Committed = ((u32, u32), (u32, u32), Scale);
+
 struct State {
     target: IDCompositionTarget,
     /// The frame's visual, under the caption's.
@@ -390,8 +394,15 @@ struct State {
     frame: (u32, u32),
     /// The client size last proposed for the window, which the guest is asked for.
     asked: (u32, u32),
-    /// What the visual was last committed for: the buffers' size and the frame's.
-    committed: Option<((u32, u32), (u32, u32))>,
+    /// What the visual was last committed for: the buffers' size, the frame's and the scale.
+    committed: Option<Committed>,
+    /// How large the window shows each of the task's pixels (window pixels per task pixels):
+    /// 1:1 unless the task keeps its density on a monitor of another scale. `follow` measures
+    /// frames at this scale, so a frame matches the window when it fills it once scaled.
+    scale: Scale,
+    /// The size, in the task's pixels, of the frame kept in the back buffer for the window
+    /// to take.
+    kept_region: Option<(u32, u32)>,
     /// Which frame the window shows, which it keeps for the window to take, and its size.
     follow: FrameFollow,
     query: Option<ID3D11Query>,
@@ -662,6 +673,8 @@ impl WindowPresenter {
                 frame: (0, 0),
                 asked: view,
                 committed: None,
+                scale: (1, 1),
+                kept_region: None,
                 follow: FrameFollow::new(view),
                 query: None,
                 samples: None,
@@ -715,7 +728,8 @@ impl WindowPresenter {
         texture: &ID3D11Texture2D,
         region: (u32, u32),
     ) -> Option<Option<u32>> {
-        let band = state.band;
+        // The band is the window's; the frame is sampled in its own pixels.
+        let band = to_task_length(state.band, state.scale);
         if band == 0 || region.1 <= band + 2 || region.0 < BAND_SAMPLES {
             return None;
         }
@@ -864,6 +878,52 @@ impl WindowPresenter {
         self.claim_released.notify_all();
     }
 
+    /// The window shows each of its task's pixels at `scale` (window pixels per task pixels)
+    /// from now on: the task keeps its density on a monitor of another scale, and is shown the
+    /// same size to the eye. The newest frame is shown again at once at the new scale, since a
+    /// task that keeps its density and size may draw nothing new for the move.
+    pub fn set_scale(&self, scale: Scale) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || state.scale == scale {
+            return;
+        }
+        state.scale = scale;
+        let Some((texture, size, region)) = state.newest.clone() else {
+            return;
+        };
+        if state.hidden.frame() == HiddenFrame::Hold {
+            return;
+        }
+        let keep = match state.follow.frame_arrived(to_window_size(region, scale)) {
+            Arrival::Show => false,
+            Arrival::Keep => true,
+            // The next frame is followed as any other.
+            Arrival::Wait | Arrival::Stale => {
+                self.commit_visual(&mut state);
+                return;
+            }
+        };
+        if keep {
+            state.kept_region = Some(region);
+        }
+        // Presented with the visual's new scale, unless it is kept for the window to take.
+        if let Err(why) = self.present_locked(&mut state, &texture, size, region, keep) {
+            note(self.logger.as_deref(), &why);
+            return;
+        }
+        drop(state);
+        if keep {
+            if let Some(ready) = self
+                .frame_ready
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+            {
+                ready();
+            }
+        }
+    }
+
     /// The client area is now `view` pixels. The frame kept for that size is presented now,
     /// together with the visual's new scale. Returns once the compositor has taken it, so a
     /// live resize shows it with the new window size.
@@ -880,9 +940,12 @@ impl WindowPresenter {
         let took_frame = state.follow.view_taken(view);
         if took_frame {
             let started = Instant::now();
+            // The kept frame fills the window at its scale; the back buffer holds it at its own
+            // size.
+            let region = state.kept_region.take().unwrap_or(view);
             // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
             // under its lock.
-            match unsafe { self.present_back_buffer(&mut state, view) } {
+            match unsafe { self.present_back_buffer(&mut state, region) } {
                 Ok(new_size) => self.frame_shown(&mut state, view, new_size, None, started),
                 Err(why) => note(self.logger.as_deref(), &why),
             }
@@ -1189,7 +1252,7 @@ impl WindowPresenter {
         let Some((texture, _, region)) = state.newest.clone() else {
             return Ok(None);
         };
-        let band = state.band;
+        let band = to_task_length(state.band, state.scale);
         // SAFETY: the texture is one of this presenter's device, read under the state lock.
         let rgba = unsafe { read_frame(&self.gpu, &texture, region)? };
         Ok(Some(CapturedFrame {
@@ -1227,7 +1290,9 @@ impl WindowPresenter {
         // waits, so that frame is not lost from the back buffer.
         let deadline = started + CLAIM_WAIT;
         let arrival = loop {
-            match state.follow.frame_arrived(region) {
+            // The size the frame fills in the window, at the window's scale.
+            let shown = to_window_size(region, state.scale);
+            match state.follow.frame_arrived(shown) {
                 Arrival::Wait => {
                     let left = deadline.saturating_duration_since(Instant::now());
                     if left.is_zero() {
@@ -1260,6 +1325,9 @@ impl WindowPresenter {
             return Ok(());
         }
         let keep = arrival == Arrival::Keep;
+        if keep {
+            state.kept_region = Some(region);
+        }
         let shown =
             self.present_locked(&mut state, &texture.texture, texture.size, region, keep)?;
         self.trace_frame_colour(&mut state, &texture.texture, region);
@@ -1269,7 +1337,8 @@ impl WindowPresenter {
         // A screenshot waiting for this frame reads it while it is whole in its texture.
         if state.capture_wanted {
             state.capture_wanted = false;
-            let band = state.band;
+            // The band over the frame in the frame's own pixels.
+            let band = to_task_length(state.band, state.scale);
             // SAFETY: as above.
             let read = unsafe { read_frame(&self.gpu, &texture.texture, region) };
             state.captured = Some(read.map(|rgba| CapturedFrame {
@@ -1290,9 +1359,10 @@ impl WindowPresenter {
             );
         } else {
             self.watch_press(&mut state, &texture.texture, region);
+            let in_window = to_window_size(region, state.scale);
             self.frame_shown(
                 &mut state,
-                region,
+                in_window,
                 shown.new_size,
                 shown.resize_buffers,
                 started,
@@ -1691,11 +1761,16 @@ impl WindowPresenter {
             // Nothing to show yet: the first frame commits it.
             return false;
         };
-        let wanted = (buffers, state.frame);
+        let wanted = (buffers, state.frame, state.scale);
         if state.committed == Some(wanted) {
             return false;
         }
         let (x, y) = frame_scale(buffers, state.frame);
+        // A task that keeps its density on a monitor of another scale is shown at the window's
+        // scale, the same size to the eye.
+        let (numerator, denominator) = state.scale;
+        let ratio = numerator as f32 / denominator.max(1) as f32;
+        let (x, y) = (x * ratio, y * ratio);
         let matrix = Matrix3x2 {
             M11: x,
             M12: 0.0,

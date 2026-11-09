@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use dsa_host_core::compositor::caption::CaptionBand;
+use dsa_host_core::compositor::window_sizing::to_task_size;
 use dsa_host_core::tasks::Bounds;
 use objc2::msg_send;
 use objc2::rc::{Allocated, Retained};
@@ -403,6 +404,8 @@ pub struct TaskWindow {
     back: Option<(Retained<AnyObject>, Retained<AnyObject>)>,
     /// The frame the window shows now: its texture and the task's part of it.
     shown: Option<(u64, (u32, u32))>,
+    /// How large the window shows each of the task's pixels (window pixels per task pixels).
+    frame_scale: (u32, u32),
 }
 
 impl TaskWindow {
@@ -490,6 +493,7 @@ impl TaskWindow {
                 task: pixels,
                 back,
                 shown: None,
+                frame_scale: (1, 1),
             })
         }
     }
@@ -600,14 +604,26 @@ impl TaskWindow {
     }
 
     /// The display's backing scale changed.
-    pub fn set_scale(&self, scale: f64) {
+    pub fn set_scale(&mut self, scale: f64) {
         self.presenter.set_scale(scale);
     }
 
-    /// Gives the window's content the size that shows a task of `pixels` one to one, as when
-    /// the guest itself resizes its task.
+    /// The window shows each of its task's pixels at `scale` (window pixels per task pixels)
+    /// from now on, and measures pointer input at it: the task keeps its density on a
+    /// display of another scale.
+    pub fn set_frame_scale(&mut self, scale: (u32, u32)) {
+        if self.frame_scale == scale {
+            return;
+        }
+        self.frame_scale = scale;
+        self.presenter.set_frame_scale(scale);
+        view::set_frame_scale(&self.view, scale);
+    }
+
+    /// Gives the window's content `pixels`, the size that shows its task at the window's
+    /// scale, as when the guest itself resizes its task.
     pub fn resize_to(&mut self, pixels: (u32, u32)) {
-        self.task = pixels;
+        self.task = to_task_size(pixels, self.frame_scale);
         unsafe {
             let scale: f64 = msg_send![&*self.window, backingScaleFactor];
             let points = window_points(pixels, scale);
@@ -696,7 +712,7 @@ impl TaskWindow {
         }
     }
 
-    /// The smallest and largest the window's content may be, in task pixels.
+    /// The smallest and largest the window's content may be, in client pixels.
     pub fn set_limits(&self, min: Option<(u32, u32)>, max: Option<(u32, u32)>) {
         unsafe {
             let scale: f64 = msg_send![&*self.window, backingScaleFactor];

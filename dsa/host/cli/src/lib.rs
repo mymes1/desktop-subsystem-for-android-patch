@@ -22,7 +22,8 @@
 //! dsa apps [list | info <package> | uninstall <package> | settings [<package>] |
 //!     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember]
 //! dsa background [list | open <package> | stop <package>]
-//! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
+//! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto]
+//!     [--dpi-scaling app|system|system-forced|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default]
@@ -33,9 +34,17 @@
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
 //! app's windows cannot be resized or maximized, and an app with a start size opens its windows
-//! at that size, in density-independent pixels. `reset` puts the app back to the defaults.
-//! With `--json` it prints `apps`, each with `package`, `fixed_size` and `start_size` (null
-//! for none, else `[width, height]`).
+//! at that size, in density-independent pixels. `--dpi-scaling` says how the app follows its
+//! window to a monitor of another scale, without ever being restarted: `app` gives it the new
+//! monitor's density and it redraws (for an app that says it handles a change of density;
+//! any other would be restarted by Android, so it is scaled as `system`), `system` keeps its
+//! density and scales the window to the same physical size, and `system-forced` would give a
+//! new density to any app without a restart, which needs a framework change that is not made
+//! yet, so it works as `system` until then. `auto`, the default, is `app` for an app that says
+//! it handles a change of density and `system` for any other. `reset` puts the app back to the
+//! defaults. With `--json` it prints `apps`, each with `package`, `fixed_size`, `start_size`
+//! (null for none, else `[width, height]`) and `dpi_scaling`, and `system_forced_available`,
+//! whether `system-forced` does what it says yet.
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
 //! operating system, so there is no option to name another one.
@@ -308,7 +317,7 @@ use std::time::{Duration, Instant};
 use dsa_host_core::apk::{InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_bundle::{Bundle, Device, InstallFile, Refusal, Selection};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer, Vector};
-use dsa_host_core::app_windows::AppWindowSettings;
+use dsa_host_core::app_windows::{AppWindowSettings, DpiScaling};
 use dsa_host_core::arm_translation::{self, google};
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
@@ -337,7 +346,8 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      apps [list | info <package> | uninstall <package> | settings [<package>] | \
      run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember] | \
      background [list | open <package> | stop <package>] | \
-     app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
+     app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] \
+     [--dpi-scaling app|system|system-forced|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
@@ -429,12 +439,14 @@ pub enum AppWindowAction {
     List,
     /// Show one app's.
     Show(String),
-    /// Change one app's: whether its windows keep their size, and the size they open at
-    /// (`Some(None)` for the size Android gives the task).
+    /// Change one app's: whether its windows keep their size, the size they open at
+    /// (`Some(None)` for the size Android gives the task), and how it follows its window to a
+    /// monitor of another scale.
     Set {
         package: String,
         fixed_size: Option<bool>,
         start_size: Option<Option<(u32, u32)>>,
+        dpi_scaling: Option<DpiScaling>,
     },
     /// Put one app's back to the defaults.
     Reset(String),
@@ -456,6 +468,14 @@ pub fn parse_start_size(value: &str) -> Result<Option<(u32, u32)>, String> {
             "--start-size is auto or a size such as 400x700, not {value:?}"
         )),
     }
+}
+
+/// How an app follows its window to a monitor of another scale, as `dsa app-window
+/// --dpi-scaling` takes it: `app`, `system`, `system-forced` or `auto`.
+pub fn parse_dpi_scaling(value: &str) -> Result<DpiScaling, String> {
+    DpiScaling::from_name(&value.trim().to_ascii_lowercase()).ok_or_else(|| {
+        format!("--dpi-scaling is app, system, system-forced or auto, not {value:?}")
+    })
 }
 
 /// What `dsa apps` does.
@@ -821,30 +841,38 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 }
                 _ => return Err("dsa app-window reset follows the app's package".into()),
             },
-            flag @ ("--fixed-size" | "--start-size") if command == Some(Command::AppWindow) => {
+            flag @ ("--fixed-size" | "--start-size" | "--dpi-scaling")
+                if command == Some(Command::AppWindow) =>
+            {
                 let value = args.next().ok_or_else(|| format!("{flag} needs a value"))?;
-                let (package, mut fixed_size, mut start_size) = match app_window.take() {
-                    Some(AppWindowAction::Show(package)) => (package, None, None),
+                let (package, mut fixed_size, mut start_size, mut dpi_scaling) = match app_window
+                    .take()
+                {
+                    Some(AppWindowAction::Show(package)) => (package, None, None, None),
                     Some(AppWindowAction::Set {
                         package,
                         fixed_size,
                         start_size,
-                    }) => (package, fixed_size, start_size),
+                        dpi_scaling,
+                    }) => (package, fixed_size, start_size, dpi_scaling),
                     _ => return Err(format!("dsa app-window {flag} follows the app's package")),
                 };
-                if flag == "--fixed-size" {
-                    fixed_size = Some(match value.to_ascii_lowercase().as_str() {
-                        "on" | "true" | "yes" | "1" => true,
-                        "off" | "false" | "no" | "0" => false,
-                        _ => return Err(format!("--fixed-size is on or off, not {value:?}")),
-                    });
-                } else {
-                    start_size = Some(parse_start_size(value)?);
+                match flag {
+                    "--fixed-size" => {
+                        fixed_size = Some(match value.to_ascii_lowercase().as_str() {
+                            "on" | "true" | "yes" | "1" => true,
+                            "off" | "false" | "no" | "0" => false,
+                            _ => return Err(format!("--fixed-size is on or off, not {value:?}")),
+                        });
+                    }
+                    "--start-size" => start_size = Some(parse_start_size(value)?),
+                    _ => dpi_scaling = Some(parse_dpi_scaling(value)?),
                 }
                 app_window = Some(AppWindowAction::Set {
                     package,
                     fixed_size,
                     start_size,
+                    dpi_scaling,
                 });
             }
             "apps" if command.is_none() => command = Some(Command::Apps),
@@ -1825,7 +1853,24 @@ fn app_window_json(app: &AppWindowSettings) -> Value {
         "package": app.package_name,
         "fixed_size": app.fixed_size,
         "start_size": app.start_size_dp.map(|(width, height)| json!([width, height])),
+        "dpi_scaling": app.dpi_scaling.name(),
     })
+}
+
+/// How `dsa app-window` says an app follows its window to a monitor of another scale.
+fn describe_dpi_scaling(scaling: DpiScaling) -> String {
+    match scaling {
+        DpiScaling::Auto => "scales its own way on another monitor".to_string(),
+        DpiScaling::App => "redraws at another monitor's scale".to_string(),
+        DpiScaling::System => "is scaled by DSA on another monitor".to_string(),
+        DpiScaling::SystemForced if DpiScaling::FORCED_AVAILABLE => {
+            "is given another monitor's scale without a restart".to_string()
+        }
+        DpiScaling::SystemForced => "is set to system (forced), not available yet: it needs a \
+                                     change to Android's framework, and until then it is \
+                                     scaled by DSA"
+            .to_string(),
+    }
 }
 
 fn describe_app_window(app: &AppWindowSettings) -> String {
@@ -1838,7 +1883,11 @@ fn describe_app_window(app: &AppWindowSettings) -> String {
     } else {
         "resizable"
     };
-    format!("{}: {resizable}, {size}", app.package_name)
+    format!(
+        "{}: {resizable}, {size}, {}",
+        app.package_name,
+        describe_dpi_scaling(app.dpi_scaling)
+    )
 }
 
 fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
@@ -1867,6 +1916,7 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
             package,
             fixed_size,
             start_size,
+            dpi_scaling,
         } => {
             let current = apps
                 .into_iter()
@@ -1875,6 +1925,7 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
             let wanted = AppWindowSettings {
                 fixed_size: fixed_size.unwrap_or(current.fixed_size),
                 start_size_dp: start_size.unwrap_or(current.start_size_dp),
+                dpi_scaling: dpi_scaling.unwrap_or(current.dpi_scaling),
                 ..current
             };
             let now = client
@@ -1887,7 +1938,11 @@ fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<Stri
         }
     };
     Ok(if invocation.json {
-        json!({ "apps": shown.iter().map(app_window_json).collect::<Vec<_>>() }).to_string()
+        json!({
+            "apps": shown.iter().map(app_window_json).collect::<Vec<_>>(),
+            "system_forced_available": DpiScaling::FORCED_AVAILABLE,
+        })
+        .to_string()
     } else if shown.is_empty() {
         "No app has window settings of its own".to_string()
     } else {

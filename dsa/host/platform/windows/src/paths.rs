@@ -21,7 +21,8 @@
 //!   compositor.json                  the render GPU chosen before the settings app existed
 //!   monitors.txt                     the user's monitors, for sizing the guest display
 //!   monitor-refresh.txt              their fastest monitor's refresh rate, for the guest's
-//!   start-menu.json                  the Start menu shortcuts the window manager made
+//!   monitor-density.txt              their main monitor's DPI, for the density Android starts at
+//!   start-menu.json                 the Start menu shortcuts the window manager made
 //!   tmp\                             files that cannot be avoided, in user processes
 //! ```
 //!
@@ -195,6 +196,9 @@ impl UserRoot {
     }
     pub fn monitor_refresh(&self) -> PathBuf {
         join(&self.0, &["monitor-refresh.txt"])
+    }
+    pub fn monitor_density(&self) -> PathBuf {
+        join(&self.0, &["monitor-density.txt"])
     }
     pub fn start_menu_note(&self) -> PathBuf {
         join(&self.0, &["start-menu.json"])

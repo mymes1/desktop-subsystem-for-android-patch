@@ -16,6 +16,7 @@ import io.github.thisisthepy.dsa.agent.tasks.TaskOrientation
 import io.github.thisisthepy.dsa.agent.tasks.hidesBothSystemBars
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
+import io.github.thisisthepy.dsa.agent.tasks.handlesDensityChange
 
 /**
  * The guest's running tasks, from the activity task manager.
@@ -84,7 +85,24 @@ class AndroidTaskSource(
             // The task's first activity is at the bottom of its stack; past it, Back has
             // somewhere to go.
             canGoBack = info.numActivities > 1,
+            handlesDensityChange = handlesDensity(info.topActivity ?: root),
         )
+    }
+
+    /**
+     * Whether [activity] says in its manifest that it handles a change of density itself
+     * (ActivityInfo.configChanges includes density). The host gives only such a task the
+     * density of another monitor: Android relaunches any other activity whose density changes.
+     * Read each time, so an app updated under a running task is read as it is now. False when
+     * the package manager does not know the activity.
+     */
+    private fun handlesDensity(activity: ComponentName?): Boolean {
+        if (activity == null) return false
+        return try {
+            handlesDensityChange(context.packageManager.getActivityInfo(activity, 0).configChanges)
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
     }
 
     /** The task's own title, else its root activity's label, else its app's, else the package. */

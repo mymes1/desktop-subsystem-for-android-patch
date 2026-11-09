@@ -113,7 +113,9 @@ holds when the process dies.
 
 The display's size and density come from the kernel command line. `make-image.py` writes
 these defaults into `image.json`, and the host replaces the width and height with a square as
-long as the user's longest monitor when it starts the VM:
+long as the user's longest monitor when it starts the VM, and the density with the density of
+a window on the user's main monitor (240 at a scale of 150%). SurfaceFlinger, and so every
+app, starts at that same density (`androidboot.lcd_density`, which the host sets beside it):
 
 | Property | Default |
 |---|---|

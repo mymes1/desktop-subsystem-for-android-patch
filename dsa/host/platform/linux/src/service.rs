@@ -284,14 +284,19 @@ pub fn create_user_android(
             account.clone(),
             Arc::clone(&store),
         );
-        let (disk, traced, user) = (
+        let (disk, run_dir, traced, user) = (
             files.data_disk.clone(),
+            files.run_dir.clone(),
             Arc::clone(&trace_on),
             user.to_string(),
         );
         Box::new(move || -> Result<BootPlan, String> {
             let (dir, version) = current_image(&config, updates.as_ref())?;
             let mut image = image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
+            // Every app starts at the density of the user's main monitor, which their window
+            // manager records, so the windows that open there ask for no other.
+            image.kernel_cmdline =
+                crate::monitor_density::with_boot_density(&image.kernel_cmdline, &run_dir);
             // crosvm attaches raw disks, so a VHDX system disk is read into one once.
             image.system_image = image
                 .system_image

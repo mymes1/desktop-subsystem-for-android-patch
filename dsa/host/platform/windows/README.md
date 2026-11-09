@@ -94,6 +94,7 @@ that builds their paths. The settings app and the installer follow the same layo
 | `logs\` | `dsa-wm.log`, `dsa-app-window.log` |
 | `compositor.json` | the render GPU chosen before DSA Settings kept it |
 | `monitors.txt` | the user's monitors, for sizing the guest display |
+| `monitor-density.txt` | the main monitor's DPI, for the density Android starts at |
 | `start-menu.json` | the Start menu shortcuts the window manager made |
 | `tmp\` | temporary files of the user's processes, when one cannot be avoided |
 
@@ -289,7 +290,10 @@ after two minutes. `"keep_window_manager": false` turns this off.
   That display is chosen when Android starts: a square as long as the longest monitor,
   from 1920 to 3840 pixels on a side, so a window fills any monitor in either orientation. The service cannot
   see the user's monitors from session 0, so the window manager and the app windows record
-  them in `%LOCALAPPDATA%\DSA\monitors.txt`. A monitor longer than the display, or one
+  them in `%LOCALAPPDATA%\DSA\monitors.txt`, and the main monitor's DPI beside it in
+  `monitor-density.txt`: Android starts at the density a window on the main monitor gives its
+  task (160 dpi at 100%, 240 at 150%), so an app that opens there is not relaunched for a
+  change of density right after it starts. A monitor longer than the display, or one
   attached after Android started, caps its windows at the display's size, and a maximised
   window is centred on the screen, until the next start of Android. If Android gives the
   task another size than the window asked for, the window takes the task's size within 2

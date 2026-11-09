@@ -55,6 +55,9 @@ pub struct Toplevel {
     pub shown: (u32, u32),
     /// The task's size in the guest, which pointer input is measured in.
     pub task: (u32, u32),
+    /// How large the window shows each of the task's pixels (window pixels per task pixels):
+    /// 1:1 unless the task keeps its density on a monitor of another scale.
+    pub frame_scale: (u32, u32),
     pub max: Option<(u32, u32)>,
     pub min: Option<(u32, u32)>,
     pub mode: ModeState,
@@ -75,6 +78,7 @@ impl Toplevel {
             scale: 1,
             shown: size,
             task: size,
+            frame_scale: (1, 1),
             max: None,
             min: None,
             mode: ModeState::new(),
@@ -206,7 +210,8 @@ impl Toplevel {
         Some(self.dpi())
     }
 
-    /// The window shows a frame of `size` pixels: that is its size now.
+    /// The window shows a frame filling `size` of its pixels: that is its size now. A frame
+    /// shown at a scale fills its own size at that scale.
     pub fn frame_shown(&mut self, size: (u32, u32)) {
         self.shown = size;
     }

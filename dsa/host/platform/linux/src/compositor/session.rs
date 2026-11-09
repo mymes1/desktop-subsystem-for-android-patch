@@ -582,12 +582,16 @@ impl Main {
                     .get(&task_id)
                     .map(|window| window.model.dpi())
                     .unwrap_or(96);
-                if let Some((size, requests)) = self.windows.window_opened(task_id, dpi) {
+                if let Some((size, requests, more)) = self.windows.window_opened(task_id, dpi) {
                     self.desktop.state.change(&WindowChange::Resize {
                         task_id,
                         width: size.0,
                         height: size.1,
                     });
+                    // The scale the window shows a task at that keeps its density.
+                    for change in &more {
+                        self.desktop.state.change(change);
+                    }
                     self.requests(requests);
                 }
             }
@@ -716,7 +720,8 @@ impl Main {
                     self.requests(requests);
                 }
                 FromHost::Dpi { task_id, dpi } => {
-                    let requests = self.windows.window_dpi_changed(task_id, dpi);
+                    let (changes, requests) = self.windows.window_dpi_changed(task_id, dpi);
+                    self.changes(changes);
                     self.requests(requests);
                 }
                 FromHost::Focus { task_id, focused } => {

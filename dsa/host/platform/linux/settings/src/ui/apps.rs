@@ -1,6 +1,6 @@
 //! The pages about the apps in Android: Apps, Running in the background, and Widgets.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -8,7 +8,7 @@ use adw::prelude::*;
 
 use super::common::*;
 use crate::i18n::{tr, trf};
-use crate::model::{App, AppWindow};
+use crate::model::{App, AppWindow, DpiScaling};
 use crate::view;
 
 /// A callback set once its page is built, called to draw or reload that page again.
@@ -62,6 +62,8 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
 
     let apps: Rc<RefCell<Option<Vec<App>>>> = Rc::default();
     let windows: Rc<RefCell<HashMap<String, AppWindow>>> = Rc::default();
+    // Whether Android scales an app the System (forced) way yet.
+    let forced: Rc<Cell<bool>> = Rc::default();
 
     // Builds the list again from what is known, as the search says.
     let render: Hook = Rc::default();
@@ -76,6 +78,7 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
         );
         let search = search.clone();
         let reload = reload.clone();
+        let forced = forced.clone();
         *render.borrow_mut() = Some(Rc::new(move || {
             rows.clear();
             let all = apps.borrow();
@@ -99,7 +102,7 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
             }
             for app in shown {
                 let window = windows.borrow().get(&app.package).cloned();
-                let row = app_row(&ctx, &page, app, window, reload.clone());
+                let row = app_row(&ctx, &page, app, window, forced.get(), reload.clone());
                 // The app App info was opened for: its row opens and comes into view, once.
                 let focused = ctx.focus_app.borrow().as_deref() == Some(app.package.as_str());
                 if focused {
@@ -117,12 +120,13 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
     {
         let (ctx, page, apps, windows) = (ctx.clone(), page.clone(), apps.clone(), windows.clone());
         let render = render.clone();
+        let forced = forced.clone();
         *reload.borrow_mut() = Some(Rc::new(move || {
             let (page, apps, render) = (page.clone(), apps.clone(), render.clone());
-            let windows = windows.clone();
+            let (windows, forced) = (windows.clone(), forced.clone());
             request(
                 &ctx,
-                |c| Ok((c.apps()?, c.app_windows().unwrap_or_default())),
+                |c| Ok((c.apps()?, c.app_window_list().unwrap_or_default())),
                 move |r| {
                     page.show_failure(
                         &tr("The apps could not be read or changed"),
@@ -130,7 +134,9 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
                     );
                     if let Ok((list, settings)) = r {
                         *apps.borrow_mut() = Some(list);
+                        forced.set(settings.system_forced_available);
                         *windows.borrow_mut() = settings
+                            .apps
                             .into_iter()
                             .map(|w| (w.package.clone(), w))
                             .collect();
@@ -164,6 +170,7 @@ fn app_row(
     page: &Rc<Page>,
     app: &App,
     window: Option<AppWindow>,
+    system_forced_available: bool,
     reload: Hook,
 ) -> adw::ExpanderRow {
     let row = adw::ExpanderRow::builder()
@@ -228,10 +235,12 @@ fn app_row(
         });
     }
 
-    // The window settings: whether the windows can be resized, and their start size.
+    // The window settings: whether the windows can be resized, their start size, and how they
+    // follow a monitor of another scale.
     let fixed = window.as_ref().is_some_and(|w| w.fixed_size);
     let start = window.as_ref().and_then(|w| w.start_size);
-    let state = Rc::new(RefCell::new((fixed, start)));
+    let scaling = window.as_ref().map(|w| w.dpi_scaling).unwrap_or_default();
+    let state = Rc::new(RefCell::new((fixed, start, scaling)));
     let save = {
         let (ctx, page, package, state) = (
             ctx.clone(),
@@ -241,12 +250,12 @@ fn app_row(
         );
         let label = app.label.clone();
         Rc::new(move || {
-            let (fixed, start) = *state.borrow();
+            let (fixed, start, scaling) = *state.borrow();
             let (page, package, ctx2) = (page.clone(), package.clone(), ctx.clone());
             let label = label.clone();
             request(
                 &ctx,
-                move |c| c.set_app_window(&package, fixed, start),
+                move |c| c.set_app_window(&package, fixed, start, scaling),
                 move |r| {
                     page.show_failure(
                         &tr("The apps could not be read or changed"),
@@ -277,7 +286,7 @@ fn app_row(
     row.add_row(&resizable.row);
     let choices = view::start_size_choices();
     let size = {
-        let state = state.clone();
+        let (state, save) = (state.clone(), save.clone());
         Combo::new(
             &tr("Window size when it opens"),
             &tr("The size this app's windows open at"),
@@ -300,6 +309,26 @@ fn app_row(
     };
     size.set(&labels, index as u32);
     row.add_row(&size.row);
+    // No choice restarts the app; System (forced) is marked while Android cannot do it.
+    let dpi_choices = view::dpi_scaling_choices(system_forced_available);
+    let dpi = {
+        let state = state.clone();
+        Combo::new(
+            &tr("Scaling on another monitor"),
+            &view::dpi_scaling_subtitle(window.as_ref(), system_forced_available),
+            move |index| {
+                if let Some(scaling) = DpiScaling::ALL.get(index as usize) {
+                    if state.borrow().2 != *scaling {
+                        state.borrow_mut().2 = *scaling;
+                        save();
+                    }
+                }
+            },
+        )
+    };
+    let dpi_labels: Vec<String> = dpi_choices.into_iter().map(|(label, _)| label).collect();
+    dpi.set(&dpi_labels, view::dpi_scaling_index(window.as_ref()) as u32);
+    row.add_row(&dpi.row);
 
     // Whether the app runs its ARM code through the translator.
     let arm = view::run_as_arm_view(app);

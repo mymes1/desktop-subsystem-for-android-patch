@@ -41,8 +41,27 @@ The change applies to the next window the app opens. From the command line:
 ```
 dsa app-window <package> --fixed-size on        # cannot be resized or maximized
 dsa app-window <package> --start-size 1280x800  # opens at this size; auto lets Android choose
+dsa app-window <package> --dpi-scaling system   # how it scales on another monitor; see below
 dsa app-window <package> reset                  # back to the defaults
 ```
+
+## Move an app to a monitor of another scale
+
+Android starts at the scale of your main monitor, so apps open at the right size there. When
+you move a window to a monitor of another scale, the app keeps its size on the screen and is
+never restarted. Each app does this one of these ways, which you pick under **Scaling on
+another monitor** on the **Apps** page, or with `dsa app-window <package> --dpi-scaling`:
+
+- **Automatic** (`auto`, the default): **App** for an app that says it handles a change of
+  scale itself, **System** for any other.
+- **App** (`app`): the app redraws at the new monitor's scale, and its text stays sharp. An app
+  that does not say it handles a change of scale would be restarted by Android, so it is
+  scaled as **System** instead.
+- **System** (`system`): the app keeps its scale, and DSA scales its window to the new monitor.
+  Scaled up, text can look a little soft.
+- **System (forced)** (`system-forced`): the app is given the new scale without a restart,
+  even if it does not say it handles one. Not available yet: it needs a change to Android
+  that this version does not have, so until then it works like **System**.
 
 ## Notifications
 

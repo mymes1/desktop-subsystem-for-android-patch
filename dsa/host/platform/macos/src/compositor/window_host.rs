@@ -185,8 +185,8 @@ impl WindowEvents for Events {
         // Reported from inside a window call the state is busy with: the window then takes
         // the scale with its next frame instead.
         STATE.with(|state| {
-            if let Ok(state) = state.try_borrow() {
-                if let Some(window) = state.windows.get(&self.task_id) {
+            if let Ok(mut state) = state.try_borrow_mut() {
+                if let Some(window) = state.windows.get_mut(&self.task_id) {
                     window.set_scale(scale);
                 }
             }
@@ -411,10 +411,20 @@ fn handle(message: ToHost) {
             }
         }),
         ToHost::TaskSize {
-            task_id, min, max, ..
+            task_id,
+            min,
+            max,
+            scale,
+            ..
         } => STATE.with(|state| {
             if let Some(window) = state.borrow().windows.get(&task_id) {
                 window.set_limits(min, max);
+            }
+            // The layer and the pointer take the scale; AppKit calls nothing back for it.
+            if let Ok(mut state) = state.try_borrow_mut() {
+                if let Some(window) = state.windows.get_mut(&task_id) {
+                    window.set_frame_scale(scale);
+                }
             }
         }),
         ToHost::ImeCursor { task_id, cursor } => STATE.with(|state| {

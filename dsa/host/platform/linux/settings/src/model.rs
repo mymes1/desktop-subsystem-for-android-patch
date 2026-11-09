@@ -489,12 +489,68 @@ impl App {
     }
 }
 
+/// How an app's window follows a move to a monitor of another scale. No choice restarts the
+/// app.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DpiScaling {
+    /// App for apps that say they handle a change of density themselves, System for the
+    /// others.
+    #[default]
+    Auto,
+    /// The app redraws at the new monitor's scale.
+    App,
+    /// The app keeps its scale and its window is scaled to the new monitor, at the same
+    /// physical size.
+    System,
+    /// The app gets the new scale without a restart even when it does not say it handles one.
+    /// It needs a change to Android's framework; until a build has it, it works like
+    /// [`DpiScaling::System`].
+    SystemForced,
+}
+
+impl DpiScaling {
+    /// Every choice, in the order the settings app offers them.
+    pub const ALL: [DpiScaling; 4] = [
+        DpiScaling::Auto,
+        DpiScaling::App,
+        DpiScaling::System,
+        DpiScaling::SystemForced,
+    ];
+
+    /// The word `dsa app-window --dpi-scaling` takes.
+    pub fn code(self) -> &'static str {
+        match self {
+            DpiScaling::Auto => "auto",
+            DpiScaling::App => "app",
+            DpiScaling::System => "system",
+            DpiScaling::SystemForced => "system-forced",
+        }
+    }
+
+    /// The choice `dsa` names; anything else, or nothing, is [`DpiScaling::Auto`].
+    pub fn read(code: &str) -> DpiScaling {
+        DpiScaling::ALL
+            .into_iter()
+            .find(|scaling| scaling.code() == code)
+            .unwrap_or_default()
+    }
+}
+
 /// The user's window settings for one app.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppWindow {
     pub package: String,
     pub fixed_size: bool,
     pub start_size: Option<(u32, u32)>,
+    pub dpi_scaling: DpiScaling,
+}
+
+/// Every app's window settings, and whether this build of Android scales an app the System
+/// (forced) way yet.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppWindows {
+    pub apps: Vec<AppWindow>,
+    pub system_forced_available: bool,
 }
 
 impl AppWindow {
@@ -509,6 +565,7 @@ impl AppWindow {
             package: text(json, "package"),
             fixed_size: flag(json, "fixed_size", false),
             start_size: size,
+            dpi_scaling: DpiScaling::read(json["dpi_scaling"].as_str().unwrap_or_default()),
         }
     }
 }
@@ -1383,17 +1440,27 @@ impl Client {
     }
 
     pub fn app_windows(&self) -> Result<Vec<AppWindow>, Failure> {
-        let json = self.json(&["app-window"])?;
-        Ok(items(&json, "apps").iter().map(AppWindow::read).collect())
+        Ok(self.app_window_list()?.apps)
     }
 
-    /// Changes an app's window settings: whether it may be resized, and the size it opens
-    /// at (`None` is the size Android chooses).
+    /// Every app's window settings, and whether Android scales the System (forced) way yet.
+    /// A `dsa` that does not say counts as one whose Android cannot.
+    pub fn app_window_list(&self) -> Result<AppWindows, Failure> {
+        let json = self.json(&["app-window"])?;
+        Ok(AppWindows {
+            apps: items(&json, "apps").iter().map(AppWindow::read).collect(),
+            system_forced_available: flag(&json, "system_forced_available", false),
+        })
+    }
+
+    /// Changes an app's window settings: whether it may be resized, the size it opens at
+    /// (`None` is the size Android chooses), and how it follows a monitor of another scale.
     pub fn set_app_window(
         &self,
         package: &str,
         fixed_size: bool,
         start_size: Option<(u32, u32)>,
+        dpi_scaling: DpiScaling,
     ) -> Result<(), Failure> {
         let size = match start_size {
             Some((w, h)) => format!("{w}x{h}"),
@@ -1406,6 +1473,8 @@ impl Client {
             on_off(fixed_size),
             "--start-size",
             &size,
+            "--dpi-scaling",
+            dpi_scaling.code(),
         ])
         .map(|_| ())
     }

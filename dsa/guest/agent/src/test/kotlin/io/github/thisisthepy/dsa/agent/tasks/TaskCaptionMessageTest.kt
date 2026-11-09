@@ -29,6 +29,17 @@ class TaskCaptionMessageTest {
     }
 
     @Test
+    fun fr4_a_task_says_whether_its_top_activity_handles_a_change_of_density() {
+        // configChanges="density|orientation|screenSize" and "orientation|screenSize|keyboardHidden".
+        assertTrue(handlesDensityChange(0x1000 or 0x80 or 0x400))
+        assertFalse(handlesDensityChange(0x80 or 0x400 or 0x20))
+        assertTrue(
+            decode(Messages.taskUpdated(appTask(1).copy(handlesDensityChange = true))).taskUpdated.handlesDensityChange,
+        )
+        assertFalse(decode(Messages.taskUpdated(appTask(1))).taskUpdated.handlesDensityChange)
+    }
+
+    @Test
     fun fr22_the_icon_becomes_a_back_button_when_the_task_can_go_back() {
         assertTrue(decode(Messages.taskUpdated(appTask(1).copy(canGoBack = true))).taskUpdated.canGoBack)
         assertFalse(decode(Messages.taskUpdated(appTask(1))).taskUpdated.canGoBack)

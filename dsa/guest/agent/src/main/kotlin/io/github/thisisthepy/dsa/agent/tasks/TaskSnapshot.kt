@@ -63,6 +63,13 @@ data class TaskSnapshot(
     /** Whether the task is past its first activity, so Back has somewhere to go. */
     val canGoBack: Boolean = false,
     /**
+     * Whether the task's top activity says it handles a change of density itself (its
+     * manifest's configChanges include density), so Android redraws it at a new density
+     * instead of relaunching it. The host gives only such a task another monitor's density,
+     * and scales the window of any other.
+     */
+    val handlesDensityChange: Boolean = false,
+    /**
      * Where in the title bar band the app has controls, relative to the task's top left
      * corner: filled in by the agent from what the app keeps clear of system gestures, while
      * [transparentCaption] is set.
@@ -137,3 +144,13 @@ interface TaskSource {
     /** Calls [onChange], on any thread, whenever a task may have appeared, changed or ended. */
     fun listen(onChange: () -> Unit)
 }
+
+/** ActivityInfo.CONFIG_DENSITY: the bit of an activity's configChanges for a change of density. */
+const val CONFIG_DENSITY = 0x1000
+
+/**
+ * Whether an activity whose manifest declares [configChanges] (ActivityInfo.configChanges)
+ * handles a change of density itself. Android relaunches any other activity when its density
+ * changes.
+ */
+fun handlesDensityChange(configChanges: Int): Boolean = (configChanges and CONFIG_DENSITY) != 0

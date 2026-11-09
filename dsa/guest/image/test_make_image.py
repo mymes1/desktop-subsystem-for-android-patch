@@ -976,17 +976,21 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("ro.hardware.gralloc=minigbm\n", props)
         self.assertIn("ro.cpuvulkan.version=0\n", props)
 
-    def test_pr3_the_display_density_is_the_one_the_hwcomposer_reports(self):
+    def test_fr4_android_starts_at_the_main_monitors_density(self):
         # Image test run 42562909966: without ro.sf.lcd_density SurfaceFlinger fell back to
         # 213 dpi, the host then asked each task for 160, and that density change relaunched
-        # every app right after it opened; hello-vulkan crashed in the relaunch.
-        for vendor in (False, True):
-            props = make_image.edit_props("ro.debuggable=1\n", vendor=vendor)
-            self.assertIn("ro.sf.lcd_density=160\n", props)
+        # every app right after it opened; hello-vulkan crashed in the relaunch. The density
+        # is now the boot's: the image names 160 for both the hwcomposer and SurfaceFlinger,
+        # and the host replaces both with its main monitor's.
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
-        # vendor_init may set it (a system_vendor_config_prop), so the vendor file keeps it.
-        self.assertNotIn("ro.sf.lcd_density", make_image.VENDOR_FORBIDDEN_PROPS)
+        self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
+        self.assertIn("androidboot.lcd_density=160", make_image.kernel_cmdline("", hwcomposer=False))
+        # No build.prop sets it, the input's included: init reads them before any script, and
+        # the first value would hold every boot at the image's density.
+        for vendor in (False, True):
+            props = make_image.edit_props("ro.debuggable=1\nro.sf.lcd_density=320\n", vendor=vendor)
+            self.assertNotIn("ro.sf.lcd_density", props)
 
     def test_pr3_vulkan_loader_uses_the_vendor_driver_not_the_cuttlefish_apex(self):
         # With ro.vulkan.apex set, the loader takes Cuttlefish's driver from its APEX,
@@ -2275,6 +2279,16 @@ class GuestMemoryTests(unittest.TestCase):
                       "labelled system_server_tmpfs, so the binder calls that carry them fail", refused)
         policy = self.PLATFORM_MEMFD_RULES + make_image.SENSORS_POLICY.read_text()
         self.assertEqual(make_image.memfd_sharing_problems(policy, sharing=sensors, to_apps=[]), [])
+
+    def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
+        rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-160}\n", rc)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
+            self.assertIn(
+                "vendor/etc/init/dsa-display.rc 0 0 644 capabilities=0x0",
+                archive.read("META/vendor_filesystem_config.txt").decode(),
+            )
 
     def test_nfr1_the_guest_swaps_to_zram_of_half_its_memory(self):
         fstab = (Path(make_image.__file__).with_name("fstab.dsa")).read_text()
