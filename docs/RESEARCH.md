@@ -2061,6 +2061,48 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 파일 기반 erofs로 바꾼 뒤 실제로 줄어든 캐시. CI는 SELinux 강제 모드에서 마운트가 되는지와 마운트의 모양만 본다. 소유자 PC에서 Google Play를 둔 채 부팅 직후의 `dsa memory` 캐시 값을 v0.2.1과 견줘야 한다. 기본 번역기가 `/system` 안에 압축되어 있는지도 확인하지 못했다.
 - VM을 줄이는 HCS 요청이 시간 초과로 실패한 원인.
 
+### Google Play의 부팅 뒤 되풀이와 앱 이미지 (2026-11-10)
+
+**기준.** 소유자 PC에서 실행 중인 게스트(Android 17 CP2A.260605.016, Play 서비스 26.43.30, Play 스토어 54.0.09)를 adb로 읽기만 했다(`logcat -d`, `dumpsys`, `/proc`, `getprop`). 부팅 65-76분 뒤에 읽었다. Google Play는 그 부팅 18분 전에 설치됐고, 부팅 4분 전에 Play 스토어가 Play 서비스와 자신을 업데이트했다. main 로그 버퍼(256 KiB)에는 부팅 20분 뒤부터만 남아 있어서, 첫 10분은 events와 system 버퍼, 호스트의 사용자별 안드로이드 로그(커널과 init)로 읽었다. ART Service와 프레임워크의 동작은 AOSP main 소스(art `libartservice`, `artd`, frameworks/base `PackageManagerService`, `DexOptHelper`)로 확인했다.
+
+**찾은 것.**
+
+1. RETRY_UPDATE 폭주의 원인은 장치 구성자(device configurator)가 없는 것이다. `dumpsys package`가 "Configurator: none"을 보인다. WRITE_DEVICE_CONFIG, WRITE_ALLOWLISTED_DEVICE_CONFIG, READ_WRITE_SYNC_DISABLED_MODE_CONFIG의 보호 수준은 `signature|verifier|configurator`이고, 구성자는 `config_deviceConfiguratorPackageName`이 정한다. AOSP 기본값은 빈 문자열이고 Google 기기는 `com.google.android.gms`로 둔다. 그래서 Play 서비스의 설치 권한에 WRITE_DEVICE_CONFIG가 없다(Play 스토어는 검증자라서 있다). Phenotype이 받은 플래그를 DeviceConfig에 쓰는 platformconfigurator는 쓰기를 거절당하고 다시 시도한다. `dumpsys alarm`: `*alarm*:com.google.android.gms.platformconfigurator.RETRY_UPDATE` 720번, 실행 시간 합 2.7초. POST_BOOT(부팅 약 2분 뒤)부터 약 10분 동안(마지막은 부팅 약 12분 뒤) 1초에 한 번 남짓이다. Play 서비스의 다른 알람은 8번 이하다. DeviceConfig 자체는 돈다(`cmd device_config list` 3119개, 동기화 끔 없음). 휴대전화에는 없는, DSA 이미지 쪽의 차이다.
+2. 함께 본 다른 되풀이.
+   - system_server의 `AiSealSystemService`가 `aiseal_internal` 서비스를 1초마다 찾는다(약 1시간에 3599번). 그 서비스를 내는 `aisealhostservice`는 `service.aiseal.enable=1`일 때에만 시작하고, 이미지는 이 속성을 두지 않는다. 되풀이는 부팅 8분 뒤 shell(uid 2000)의 요청과 같은 때 시작했으므로, 조사 중의 `dumpsys`가 첫 연결을 부른 것으로 보인다. Google Play와는 관계가 없다. 고치지 않았다.
+   - Play 서비스의 Cast 탐색(`AOSP-MdnsDiscoveryManag`)이 멀티캐스트 `sendto`에서 EPERM을 받는다(76번).
+   - 업데이트된 Play 서비스와 Play 스토어(`/data/app`)의 런타임 권한이 `dumpsys package`의 활성 패키지 항목에서 모두 granted=false이고, 숨은 시스템 패키지 항목에만 GRANTED_BY_DEFAULT가 있다. 출력 방식의 차이인지 실제로 기본 권한을 잃은 것인지는 가르지 못했다.
+3. 유휴 중 캐시 재충전. 창이 없는 Idle에서 60초 동안 `workingset_refault_file` +37.5k 페이지(146 MiB), `pgpgin` +133 MiB, `pgsteal_file` +116k 페이지(455 MiB)이고, Cached는 625에서 342 MiB로 줄었다. 부팅부터 76분 동안 refault 2.27M 페이지(8.7 GiB), `pgpgin` 37 GiB다. `pgsteal_kswapd`와 `pgsteal_direct`가 0이므로 페이지 캐시를 거두는 것은 모두 dsa-channeld의 회수(10-15초마다 "reclaiming the guest's memory (Idle, 0 tasks in use)")다. 같은 동안(약 2.5분) 프로세스별 major fault(`/proc/<pid>/stat`): YouTube(캐시 프로세스) 7794, Play 서비스 7372, Play 스토어 4399, system_server 1075, ext.services 954. 다시 찬 캐시는 대부분 이 프로세스들이 다시 읽은 코드와 데이터다. RETRY_UPDATE가 멈춘 뒤에도 이어지므로 폭주만의 문제가 아니라 회수 정책 쪽(위 선택지 3)의 문제다. 그 정책은 다른 작업이 맡고 있어 여기서 바꾸지 않았다.
+4. 앱 이미지. Play 서비스 base.apk는 `[status=speed-profile] [reason=install-dm]`(Play 스토어 업데이트의 클라우드 프로필)이다. `dumpsys meminfo -d`의 `.App art`: com.google.android.gms Pss 2.9 MiB와 SwapPss 27.8 MiB. com.google.android.gms.unstable은 `.art mmap`(앱 이미지와 부트 이미지의 합) SwapPss 29.5 MiB다. 앱 이미지는 프로세스마다 풀어서 자기 메모리에 올리므로 프로세스 사이에 공유되지 않는다.
+
+**Android 16/17에서 패키지 하나의 앱 이미지를 없애는 방법.**
+
+- ART Service(`Dexopter.getDexoptOptions`): `generateAppImage = isProfileGuidedFilter && !dalvik.vm.appimageformat.isEmpty()`. 이 속성은 컴파일할 때마다 읽는다. artd는 앱 이미지를 만들지 않는 컴파일에서 있던 `.art`를 지운다(`files_to_delete`). `getDexoptNeeded`는 앱 이미지를 보지 않으므로, 앱 이미지 없이 같은 필터로 컴파일된 패키지를 백그라운드 작업이 이 까닭으로 다시 컴파일하지는 않는다(프로필이 충분히 늘면 다시 컴파일하고, 그때 앱 이미지가 다시 생긴다).
+- 패키지별 필터 속성은 SystemUI용(`dalvik.vm.systemuicompilerfilter`)뿐이고, 런처는 speed-profile로 고정된다. 그 밖의 패키지별 조정(`ArtManagerLocal.setAdjustCompilerFilterCallback`, `setBatchDexoptStartCallback`)은 system_server 안에서만 쓸 수 있어 services.jar를 고쳐야 한다.
+- `pm compile`과 `pm art`는 root와 shell만 부를 수 있고(`ArtShellCommand.enforceRootOrShell`), `IPackageManager.performDexOptMode`는 system, root, shell과 그 패키지의 설치자만 부를 수 있다. 에이전트(uid 10068)는 어느 것도 아니다.
+- 플랫폼 정책에 이미 `domain_trans(init, shell_exec, shell)`이 있어서(console 서비스용) init은 정책을 더하지 않고 `seclabel u:r:shell:s0` 서비스를 띄울 수 있다.
+- verify로 컴파일하면 앱 이미지는 없지만 AOT 코드도 없다. 코드가 JIT로만 돌면 JIT 코드 캐시가 프로세스마다 생기고(공유되지 않는다) CPU가 더 들며, 백그라운드 작업이 다시 speed-profile로 올린다. 그래서 같은 프로필의 speed-profile을 앱 이미지 없이 다시 만드는 쪽을 골랐다.
+
+**고친 것.**
+
+1. 프레임워크 오버레이(`DsaFrameworkOverlay`)에 `config_deviceConfiguratorPackageName=com.google.android.gms`. Google Play가 없으면 그 패키지가 없으므로 구성자는 전처럼 없다. Google Play가 있으면 다음 부팅의 권한 갱신에서 Play 서비스가 WRITE_DEVICE_CONFIG를 받는다. 시험: `test_nfr2_google_play_services_is_the_device_configurator`, overlays 부팅 확인의 `cmd overlay lookup`.
+2. `gapps-compile.sh`와 `dsa-gapps.rc`. Google Play가 켜진 부팅에서 sys.boot_completed 때와, 에이전트가 `vendor.dsa.gapps.compile`을 바꿀 때마다(Play 서비스나 Play 스토어가 설치되거나 업데이트될 때, 화면이 꺼질 때) init이 `dalvik.vm.appimageformat`을 비우고 스크립트를 shell로 돌린다. 스크립트는 base.apk가 profile-guided이고 reason이 cmdline이 아닌 패키지만 `cmd package compile -m speed-profile -p PRIORITY_BACKGROUND -f`로 다시 컴파일한다. 스크립트가 끝나면 init이 형식을 빌드 값으로 되돌린다(post-fs-data에 `vendor.dsa.gapps.appimageformat`에 둔 값, 없으면 lz4). 시험: `GoogleAppsCompileTests`(rc, 속성, 정책, 가짜 `cmd`로 돌린 스크립트), 에이전트의 `GoogleAppsCompileTest`.
+3. 부팅 확인. overlays 확인의 Google 앱 부팅에서 구성자 값, 컴파일 서비스가 끝까지 돌고 형식을 lz4로 되돌렸는지, 알람 폭주(부팅부터 60번 이상이고 평균 10초에 한 번보다 잦음, `nfr2_an_alarm_retried_every_second_after_boot_is_a_storm`)를 본다. CI의 Google 앱은 서명 없는 작은 빌드라 실제 Play 서비스가 설치되지 않는다. 그래서 CI는 오버레이 값, 스크립트, 모든 알람의 폭주만 보고, Play 서비스의 RETRY_UPDATE와 다시 컴파일은 실기에서 본다.
+
+**기대하는 절감과 비용 (재지 않은 추정).**
+
+- 앱 이미지: 늘 떠 있는 Play 서비스 두 프로세스에서 `.App art` 약 25-30 MiB씩이 빠진다. 앱 이미지가 없으면 각 프로세스가 쓰는 클래스를 실행하면서 Dalvik 힙에 올리므로 순 절감은 그보다 작다. 클래스를 조금 쓰는 gms.unstable(DroidGuard)은 대부분, 메인 프로세스는 일부로 보아 합쳐 약 25-45 MiB(PSS, zram에 있는 몫 포함)를 기대한다. Play 스토어의 프로세스들(`:background`, `:quick_launch` 등)에서도 각자의 몫이 빠진다(크기는 재지 않았다).
+- 비용: Play 서비스나 Play 스토어가 업데이트되면 한 번 다시 dex2oat한다(백그라운드 우선순위, 수십 초에서 몇 분의 CPU). 화면이 꺼질 때마다 `cmd package art dump` 두 번. Play 서비스 프로세스의 시작은 클래스를 적재하는 만큼 느려진다(프로세스마다 수십에서 수백 ms로 추정). 스크립트가 도는 동안 컴파일되는 다른 앱도 앱 이미지 없이 컴파일된다. 이미 떠 있는 프로세스는 다시 시작할 때까지 예전 앱 이미지를 쥐므로 절감은 그 뒤(대개 다음 부팅)부터다.
+- 폭주: 부팅 뒤 약 10분 동안의 RETRY_UPDATE 약 720번이 없어지고, 그만큼 Play 서비스 프로세스가 깨지 않는다.
+
+**확인하지 못한 것.**
+
+- 실기의 다음 부팅에서 `dumpsys package`의 "Configurator: com.google.android.gms", Play 서비스의 WRITE_DEVICE_CONFIG granted=true, `dumpsys alarm`의 RETRY_UPDATE 횟수.
+- 스크립트가 실제 Play 서비스를 다시 컴파일하는지(`logcat -s DsaGappsCompile`, `pm art dump com.google.android.gms`의 reason=cmdline), 그 시간, 그 뒤 `dumpsys meminfo -d`의 `.App art`. toybox sed가 스크립트의 sed 식을 GNU sed와 같게 다루는지(단위 시험은 GNU sed로 돈다).
+- 절감과 시작 시간 비용의 숫자.
+- 유휴 refault(위 3)의 정책 쪽 처리, AiSeal의 1초 되풀이(`service.aiseal.enable`을 둘지, 첫 연결을 막을지), mDNS EPERM, 업데이트된 Google 앱의 기본 권한 상태.
+- 구성자가 된 Play 서비스는 이제 DeviceConfig에 실제로 쓴다. 그래서 아래 추가 조사의 `activity_manager/max_cached_processes`처럼 에이전트가 정해 두는 플래그를 Google의 값으로 바꿀 수 있고, 에이전트는 그때마다 다시 쓴다. 두 쪽이 얼마나 자주 번갈아 쓰는지는 실기에서 `dumpsys device_config`와 에이전트 로그로 본다.
+
 ### 추가 조사 (2026-11-10): Google Play 서비스가 실제로 드는 메모리와 캐시 프로세스 상한
 
 **기준.** 소유자 PC, Android 17 게스트, Google Play 설치, 열린 창 없음, 부팅 뒤 58분. 읽기만 하는 조사였다(`dumpsys meminfo`, `/proc/meminfo`, zram의 `mm_stat`, `settings get global activity_manager_constants`, `dumpsys activity settings`). 빌드하거나 설치하지 않았다.
