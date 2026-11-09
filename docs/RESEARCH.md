@@ -2023,6 +2023,36 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 결과: 작업 요약과 아티팩트 `idle-reclaim-measurement`(`idle-reclaim.md`, `idle-reclaim.json`, 원자료 `idle-reclaim-samples.txt`, `idle-reclaim-log.txt`). 회수마다 시각, 종류, 앞 회수와의 간격, init의 커널 시간, 단계별 시간, 앞 회수 이후의 refault와 `pgpgin`, 전후의 캐시, zram으로 간 양을 적고, 전체로는 횟수, 평균 간격, 커널 시간 합, kswapd와 kcompactd의 시간, 게스트 CPU 합(한 프로세서의 몇 %인지)과 그 가운데 측정 스크립트 몫을 적는다.
 - 해석할 때: `pgpgin`은 블록 장치에서 읽은 양이다. loop일 때는 같은 읽기가 loop 장치와 `/data`에서 두 번 세였지만, 파일 기반 erofs는 bio를 내지 않으므로 이제 한 번만 센다. v0.2.1 로그와 견줄 때 그만큼 줄어 보인다. 아직 CI의 값은 없다. 첫 develop 실행이 남긴다.
 
+### Play 서비스의 데스크톱에 쓸모없는 상주 구성 요소를 끈다 (FR-32)
+
+**조사.** 소유자 PC의 게스트(Android 17, API 37, Play 서비스 26.43.30, 업데이트된 시스템 앱, 부팅 뒤 71분, 창 없음)에서 읽기만 했다: `dumpsys activity services com.google.android.gms`, `dumpsys package com.google.android.gms`, `dumpsys notification`, `dumpsys location`, `dumpsys meminfo -s com.google.android.gms`, `ps -A`. 상태를 바꾸는 명령은 쓰지 않았다.
+
+- Play 서비스 프로세스는 `com.google.android.gms`와 `com.google.android.gms.unstable` 둘이다. 예전의 `.persistent` 프로세스는 이 버전에서 주 프로세스에 합쳐져 따로 없다. 주 프로세스: RSS 36 MiB, TOTAL PSS 81 MiB 가운데 zram에 나간 몫 71 MiB, AppContexts 387개(Chimera 모듈마다 컨텍스트가 하나씩 있다).
+- 돌고 있는 서비스는 31개다. 그 가운데 시스템이 묶은 것(위치 제공자, 지오코더, GNSS 보조, 활동 인식 제공자, Trust의 장소 제공자)과 Play 서비스가 부팅 때 스스로 시작해 계속 두는 것(`startRequested=true`)이 있다. 여러 API는 공용 중개 서비스(`chimera.PersistentApiService`, `PersistentApiServiceNoInstantApps`, `PersistentInternalBoundBrokerService`) 하나에 `chimera-action:` 바인딩으로 들어 있다. 이것들은 구성 요소 하나로 끌 수 없고, 끄면 푸시와 계정까지 멈춘다.
+- Play 서비스는 자기 구성 요소를 스스로 켜고 끈다. `enabledComponents`에 `thunderbird.EmergencyPersistentService`, `motionsicknessassist.service.MotionSicknessAssistService` 같은 이름이 명시적으로 켜져 있고, `disabledComponents`에도 Play 서비스가 직접 끈 것(`droidguard.DroidGuardPersistentService` 등)이 있다. 모듈이 내려받히거나 서버 플래그(Phenotype)가 바뀌면 이 상태를 다시 쓴다. 그래서 한 번 끄는 것으로는 남지 않는다.
+
+**끄는 것.** 모두 Play 서비스의 주 프로세스에서 도는 서비스다. 프로세스를 끝내지 않고(`DONT_KILL_APP`) 끄면 활동 관리자가 그 서비스만 내린다.
+
+| 구성 요소 | 하는 일 | 데스크톱에서 끄는 이유 |
+|---|---|---|
+| `crisisalerts.init.CrisisAlertsPersistentService` | 위치 기반 재난 알림 | 들고 다니는 휴대폰을 위한 기능이다. PC는 한곳에 있고, 재난 알림은 사용자의 휴대폰이 받는다 |
+| `thunderbird.EmergencyPersistentService`, `thunderbird.EmergencyLocationService` | 긴급 전화·문자 때 위치 전송(ELS) | 게스트에 전화와 문자가 없다 |
+| `motionsicknessassist.persistent.MotionSicknessAssistPersistentService`, `.service.MotionSicknessAssistService`, `.service.MotionAssistSysUiService`, `.settings.MotionSicknessAssistTileService` | 차 안에서의 멀미 방지 표시 | 차 안의 휴대폰을 위한 기능이다. 표시할 SystemUI(빠른 설정 타일)도 없다 |
+| `nearby.presence.service.LifeCycleService` | 근처 기기 존재 알림(BLE) | 게스트에 블루투스가 없다(`pm list features`에 없다). 앱이 쓰는 Nearby Connections는 공용 중개 서비스에 있어 그대로다 |
+| `cast.devicesuggestions.SuggestionsProviderChimeraService` | 출력 전환기의 Cast 기기 추천 | SystemUI의 출력 전환기가 없다. 앱의 Cast API는 그대로다 |
+| `remotegestures.api.RemoteGesturesService` | 시계의 제스처로 폰 조작 | 짝지은 시계가 없다 |
+| `com.google.android.location.internal.server.HardwareArProviderService` | 센서 허브의 하드웨어 활동 인식을 플랫폼에 잇는 제공자(`ActivityRecognitionProvider`) | 게스트에 하드웨어 활동 인식이 없다. 앱의 활동 인식 API와 위치 제공자는 다른 서비스라 그대로다 |
+| `mdm.services.SecureLockService` | 내 기기 찾기의 원격 "기기 잠금" 화면 | 게스트에 잠금 화면(keyguard)이 없고, PC 잠금은 호스트가 한다. 위치 찾기, 소리 내기, 초기화는 다른 서비스(`DeviceManagerApiService`, `RingService`, 기기 관리자 수신기)라 그대로다. 대가: 내 기기 찾기의 원격 잠금이 이 VM을 잠그지 않는다 |
+| `dtdi.lifecycle.LifecycleService` | 기기 간 연동(Phone Hub, 다른 기기로 앱 넘기기) | 이 게스트가 데스크톱 자체다. 부팅 완료 방송으로 시작해 계속 남는다 |
+
+**남겨 두는 것과 그 이유.** `gcm.GcmService`와 `gcm.nts.SchedulerService`(푸시, FCM), 공용 중개 서비스 셋(Phenotype, 계정 이벤트, 텔레메트리 등이 함께 들어 있다), 위치 서비스(`FusedLocationService`, `NetworkLocationService`, `GoogleLocationManagerService`, `GoogleLocationService`, `GeocodeService`, `GnssAssistanceService`, `LocationPersistentService`: 앱의 위치), `play.integrity.api.service.IntegrityApiPersistentService`와 `droidguard.DroidGuardService`(Play Integrity), `fido.authenticator.service.AuthenticatorService`(패스키), `auth.setup.devicesignals.LockScreenService`(계정 설정의 기기 신호), `advancedprotection.service.AdvancedProtectionSyncService`(계정 보호), `contextmanager.service.ContextManagerService`(앱이 쓰는 Awareness API), `auth.proximity.firstparty.SystemMemoryCacheService`(CryptAuth 기기 등록과 이어져 있어 계정에 영향이 없다고 확인하지 못했다), `common.stats.GmsCoreStatsService`, `clearcut.debug.ClearcutDebugDumpService`. 백업 전송 서비스는 돌고 있는 목록에 없었다. 시스템의 백업 관리자가 백업할 때 묶으므로 그대로 둔다. Phone Hub의 알림 수신기(`PhoneHubNotificationListenerService`)는 켜져 있지만 알림 수신기로 허용되지 않아 묶여 있지 않으므로 끄지 않았다.
+
+**다시 켜지는 길과 다시 끄는 방법.** 에이전트(`DesktopPlayServices`)가 시작할 때(부팅마다), 그리고 `com.google.android.gms`의 `PACKAGE_ADDED`, `PACKAGE_REPLACED`, `PACKAGE_CHANGED`를 받고 2초 뒤에 상태를 읽어 켜진 것을 한 번의 `setComponentEnabledSettings`로 끄고 로그에 남긴다("turned off Google Play services components a desktop does not use: ..."). Play 서비스가 모듈을 받거나 플래그로 구성 요소를 켜는 일도 패키지 관리자를 거치므로 모두 `PACKAGE_CHANGED`로 온다. 그래서 따로 Phenotype을 막을 필요가 없다. Phenotype 플래그를 밖에서 바꾸는 길은 user 빌드에 없다(플래그 저장소는 Play 서비스의 비공개 데이터이고, 플래그 덮어쓰기 방송은 디버그 빌드에서만 받는다). 시스템 설정의 `component-override`는 매니페스트의 기본값만 바꾸므로 Play 서비스가 명시적으로 켠 구성 요소에는 효과가 없어 쓰지 않았다. Play 서비스가 같은 구성 요소를 한 시간에 다섯 번 넘게 다시 켜면 에이전트는 그 구성 요소를 그 부팅 동안 두고 경고를 남긴다. 끝없이 다투면 CPU를 쓰기 때문이다. Play 서비스의 버전이 구성 요소를 없애거나 이름을 바꾸면 그 이름은 건너뛴다(패키지 관리자는 없는 구성 요소가 섞인 묶음 전체를 거절한다).
+
+**시험.** 에이전트: `gapps/DesktopPlayServicesTest.kt`(`fr32_desktop_irrelevant_play_services_stay_off_after_updates`, 가짜 패키지 관리자). 이미지 부팅 확인: CI의 작은 Google 앱 빌드는 서명되지 않아 Play 서비스가 설치되지 않으므로, Play 서비스 이름으로 이 서비스들과 `GcmService`를 선언한 코드 없는 앱(`dsa/guest/gms-probe`)을 두 번째 부팅 뒤 설치한다. 끌 것이 꺼지고 `GcmService`가 켜져 있는지, 셸에서 다시 켜고 자기 위에 다시 설치(업데이트 방송)한 뒤 다시 꺼지는지 본다(`overlays.rs`의 `play_services_problems`).
+
+**절감.** 재지 않았다. 이 조사는 게스트의 상태를 바꾸지 않았고, 끄는 것은 프로세스를 없애지 않는다. 그래서 기대하는 몫은 Play 서비스 주 프로세스 안의 그 서비스들의 모듈 코드와 힙, 그리고 그것들이 부팅 뒤 계속 하는 일(재난 알림과 ELS의 위치 요청, 근처 기기 탐색, 기기 간 연동의 상태 유지)이다. 어림으로 주 프로세스 PSS의 수 MiB에서 20 MiB 안쪽과, 깨어남과 부팅 직후 CPU가 줄어든다. 위의 "선택지 3을 정하기 위한 측정"은 실제 LiteGapps 빌드를 쓰므로 이 변경 뒤로는 이 서비스들을 끈 상태로 잰다. 확인: 소유자 PC에서 이 변경 앞뒤로 같은 조건(Google Play 설치, 창 없음, 부팅 10분 뒤)에서 `dumpsys meminfo -s com.google.android.gms`의 TOTAL PSS와 TOTAL SWAP PSS, `dumpsys activity services com.google.android.gms`의 서비스 수, `dsa memory`의 앱 메모리를 남긴다.
+
 ### 확인하지 못한 것
 
 - 0007의 효과 전부. 이 PC에서 빌드하거나 실행하지 않았다. Graphics test와 이미지의 그래픽 부팅 확인(Vulkan CTS 일부)이 먼저 판단하고, PC에서는 같은 조건(Google Play, YouTube 창 하나)으로 `dsa memory`의 앱 메모리와 PSS, `dsa-wm.log`의 렌더러 줄, 그리고 `androidboot.hardware.dsa_input_trace=1`일 때의 `stage=driver.flush` 줄(`scanned_mb_per_submit`)을 앞뒤로 잰다.

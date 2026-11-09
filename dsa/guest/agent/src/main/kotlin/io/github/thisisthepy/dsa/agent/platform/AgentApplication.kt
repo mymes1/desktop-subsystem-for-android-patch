@@ -93,6 +93,7 @@ class AgentApplication : Application() {
             arm64Supported = { "arm64-v8a" in android.os.Build.SUPPORTED_64_BIT_ABIS },
             packages = AndroidPackageInfo(this),
             googleDeviceId = AndroidGoogleDeviceId(this),
+            componentStates = AndroidComponentStates(this),
             widgets = AndroidWidgets(this, log),
             appProcesses = AndroidAppProcesses(this),
             widgetStore = AndroidWidgetStore(this),

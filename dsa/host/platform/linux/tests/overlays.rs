@@ -59,6 +59,12 @@
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
 //! checked fails with those refusals in its message.
 //!
+//! With the Google apps in place, the agent must keep Play services' desktop-irrelevant
+//! services off. The small build's Play services is not installed (it is not signed), so an app
+//! named as Play services that declares those services stands in for it (the Play services
+//! probe): once it is installed they must be off and its push service on, and after they are
+//! turned back on and the probe is installed over itself, as an update is, off again.
+//!
 //! A second boot check measures the idle reclaim with Google apps installed and no app window
 //! open, for the decision on backing off its interval (`idle_reclaim`). It installs LiteGapps'
 //! own newest build for the guest, downloaded into the mirror (the small stand-in build holds
@@ -72,7 +78,8 @@
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
 //! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
-//! (`dsa/guest/arm-probe/build.sh`), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
+//! (`dsa/guest/arm-probe/build.sh`), `DSA_GMS_PROBE` the Play services probe APK
+//! (`dsa/guest/gms-probe/build.sh`), `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when
 //! the folder carries none, and `DSA_ADB` the adb to reach the guest with (`adb` on the path
 //! when not set). It needs `/dev/kvm` and `/dev/vhost-vsock`. What it read stays in its folder
 //! (`/tmp/overlays-test-<pid>`) for the job to keep.
@@ -247,10 +254,19 @@ const PLAY_FEATURES: &[&str] = &[
     "android.software.home_screen",
     "android.software.input_methods",
 ];
+/// The Play services probe (`dsa/guest/gms-probe`): an app named as Google Play services that
+/// declares the services the agent keeps off on a desktop, and [GMS_KEPT], which it leaves on.
+const GMS_PROBE_MANIFEST: &str = include_str!("../../../../guest/gms-probe/AndroidManifest.xml");
+const GMS_PACKAGE: &str = "com.google.android.gms";
+/// Play services' push service, which the agent must leave on.
+const GMS_KEPT: &str = "com.google.android.gms.gcm.GcmService";
+/// How long the agent may take to turn the services off after Android announces a change:
+/// it waits two seconds for a burst of changes to end, then makes one call.
+const GMS_WAIT: Duration = Duration::from_secs(30);
 /// The API levels the mirror carries a build for, with the Android version LiteGapps names.
 const MIRROR_SDKS: &[(u32, &str)] = &[(36, "16.0"), (37, "17.0")];
-/// The whole test, both boots included, stays under fourteen minutes.
-const BUDGET: Duration = Duration::from_secs(840);
+/// The whole test, both boots included, stays under fifteen minutes.
+const BUDGET: Duration = Duration::from_secs(900);
 /// How long past its budget the test may run before it stops everything it started and
 /// ends: inside the job step's 16 minutes, so the step never kills it with its VM running.
 const OVERRUN: Duration = Duration::from_secs(60);
@@ -1521,6 +1537,170 @@ fn fr32_pr3_a_device_without_opengles_or_a_feature_play_needs_is_found() {
     assert_eq!(play_feature_problems("", "").len(), 1 + PLAY_FEATURES.len());
 }
 
+/// The services the Play services probe declares, by class name.
+fn probe_services(manifest: &str) -> Vec<&str> {
+    manifest
+        .split("<service ")
+        .skip(1)
+        .filter_map(|element| {
+            let rest = element.split("android:name=\"").nth(1)?;
+            rest.split('"').next()
+        })
+        .collect()
+}
+
+/// The components `dumpsys package` lists as turned off for each user, across the package's
+/// entries (an updated system app has two).
+fn disabled_components(dump: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut header: Option<usize> = None;
+    for line in dump.lines() {
+        let indent = line.len() - line.trim_start().len();
+        let text = line.trim();
+        if text == "disabledComponents:" {
+            header = Some(indent);
+            continue;
+        }
+        match header {
+            Some(level) if indent > level && !text.is_empty() && !text.contains([' ', ':']) => {
+                found.push(text)
+            }
+            Some(_) => header = None,
+            None => {}
+        }
+    }
+    found
+}
+
+/// What is wrong with the probe's components in `dump`, `when` naming the step.
+fn play_services_component_problems(dump: &str, when: &str) -> Vec<String> {
+    let off = disabled_components(dump);
+    let mut problems = Vec::new();
+    for service in probe_services(GMS_PROBE_MANIFEST) {
+        let is_off = off.contains(&service);
+        if service == GMS_KEPT && is_off {
+            problems.push(format!(
+                "{when}: the agent turned off {service}, which carries push messages"
+            ));
+        } else if service != GMS_KEPT && !is_off {
+            problems.push(format!(
+                "{when}: {service} is still on {} s after Android announced the change",
+                GMS_WAIT.as_secs()
+            ));
+        }
+    }
+    problems
+}
+
+#[test]
+fn fr32_the_play_services_components_turned_off_are_read_from_the_package_dump() {
+    let services = probe_services(GMS_PROBE_MANIFEST);
+    assert!(services.contains(&GMS_KEPT), "{services:?}");
+    assert!(
+        services
+            .contains(&"com.google.android.gms.crisisalerts.init.CrisisAlertsPersistentService"),
+        "{services:?}"
+    );
+    let turned_off: Vec<&str> = services
+        .iter()
+        .copied()
+        .filter(|service| *service != GMS_KEPT)
+        .collect();
+    let dump = format!(
+        "  Package [{GMS_PACKAGE}] (1a2b3c):\n    User 0: installed=true enabled=0\n      \
+         disabledComponents:\n{}\n      enabledComponents:\n        {GMS_KEPT}\n    \
+         User 10: installed=false\n",
+        turned_off
+            .iter()
+            .map(|service| format!("        {service}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert_eq!(disabled_components(&dump), turned_off);
+    assert!(play_services_component_problems(&dump, "after install").is_empty());
+
+    // One left on, and the push service turned off.
+    let one_on = dump.replace(&format!("        {}\n", turned_off[0]), "");
+    let problems = play_services_component_problems(&one_on, "after install");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains(turned_off[0]), "{problems:?}");
+    let push_off = dump.replace(
+        "      enabledComponents:\n",
+        &format!("        {GMS_KEPT}\n      enabledComponents:\n"),
+    );
+    let problems = play_services_component_problems(&push_off, "after install");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("push"), "{problems:?}");
+    // Nothing turned off at all.
+    assert_eq!(
+        play_services_component_problems("", "after install").len(),
+        turned_off.len()
+    );
+}
+
+/// Waits until every service the probe declares but [GMS_KEPT] is off, for [GMS_WAIT] at
+/// most, and returns the last package dump.
+fn wait_for_off(adb: &Adb) -> String {
+    let until = Instant::now() + GMS_WAIT;
+    loop {
+        let dump = adb
+            .shell(&format!("dumpsys package {GMS_PACKAGE}"))
+            .unwrap_or_default();
+        if play_services_component_problems(&dump, "").is_empty() || Instant::now() >= until {
+            return dump;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
+/// The agent with Play services installed. The probe stands in for it, since the small Google
+/// apps build is not signed and the package manager does not install it. After the install the
+/// services the agent keeps off must be off and the push service on. Then each is turned on
+/// again from the shell, as Play services' own setup does after an update, and the probe is
+/// installed over itself, which Android announces as an update: a moment later they must be
+/// off again.
+fn play_services_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<String>) {
+    let _ = adb.shell("logcat -c -b main");
+    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+        problems.push(format!("Google Play services: installing the probe: {why}"));
+        return;
+    }
+    let dump = wait_for_off(adb);
+    let _ = std::fs::write(dir.join("gms-probe-installed.txt"), &dump);
+    for problem in play_services_component_problems(&dump, "after install") {
+        problems.push(format!("Google Play services: {problem}"));
+    }
+
+    let enable = probe_services(GMS_PROBE_MANIFEST)
+        .iter()
+        .map(|service| format!("pm enable {GMS_PACKAGE}/{service} >/dev/null"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    if let Err(why) = adb.shell(&enable) {
+        problems.push(format!(
+            "Google Play services: turning the probe's services back on: {why}"
+        ));
+        return;
+    }
+    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+        problems.push(format!("Google Play services: updating the probe: {why}"));
+        return;
+    }
+    let dump = wait_for_off(adb);
+    let _ = std::fs::write(dir.join("gms-probe-updated.txt"), &dump);
+    for problem in play_services_component_problems(&dump, "after an update") {
+        problems.push(format!("Google Play services: {problem}"));
+    }
+    let log = adb.shell("logcat -d -s DsaAgent").unwrap_or_default();
+    let _ = std::fs::write(dir.join("gms-probe-agent-log.txt"), &log);
+    if !log.contains("turned off Google Play services components a desktop does not use") {
+        problems.push(
+            "Google Play services: the agent did not log which components it turned off"
+                .to_string(),
+        );
+    }
+}
+
 /// What the guest's own log of the running boot says went wrong with the overlay scripts.
 fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     // Init's messages are in the kernel's buffer, which logd reads, with the audit messages.
@@ -1559,6 +1739,12 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         .filter(|apk| apk.is_file())
         .expect(
             "DSA_ARM_PROBE names no ARM probe APK (dsa/guest/arm-probe/build.sh), so no ARM app can be started",
+        );
+    let gms_probe = std::env::var_os("DSA_GMS_PROBE")
+        .map(PathBuf::from)
+        .filter(|apk| apk.is_file())
+        .expect(
+            "DSA_GMS_PROBE names no Play services probe APK (dsa/guest/gms-probe/build.sh), so the agent's handling of Play services cannot be checked",
         );
     let adb_program = std::env::var_os("DSA_ADB")
         .map(PathBuf::from)
@@ -1751,7 +1937,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     eprintln!("{} s: Android stopped", started.elapsed().as_secs());
     let boot = deadline
         .saturating_duration_since(Instant::now())
-        .saturating_sub(Duration::from_secs(120));
+        .saturating_sub(Duration::from_secs(180));
     if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
         eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
     }) {
@@ -1817,6 +2003,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     }
     translation_problems(&adb, &dir, &table, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
+    play_services_problems(&adb, &gms_probe, &dir, &mut problems);
 
     // The service's own copy of the guest log, across both boots.
     let whole = lock(&log).join("\n");
