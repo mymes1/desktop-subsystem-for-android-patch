@@ -13,8 +13,8 @@
 # filesystem type of its own (fscontext=, sepolicy/arm-translation.cil). statfs on /system/bin
 # reports the image's superblock, the overlay's top lower layer, so a superblock labelled as
 # files would refuse that to every program but init, and bpfloader's refusal reboots Android.
-# Both go in one comma-separated argument: init's mount passes only its last argument that is
-# not a flag to the kernel and drops any other, and a mount given context= alone relabels the
+# Both go in one comma-separated argument: init passes only the last argument that is not a
+# flag to the kernel and drops any other, and context= alone relabels the
 # superblock to a file type, which the kernel refuses ("denied { relabelto } ...
 # system_lib_file ... tclass=filesystem"). The overlays are not nosuid, as /system is not: where nosuid is set, the kernel refuses init's
 # domain change into every service it starts from /system/bin, vold and apexd among them.
