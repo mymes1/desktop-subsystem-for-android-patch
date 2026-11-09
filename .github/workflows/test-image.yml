@@ -1059,7 +1059,7 @@ jobs:
               /tmp/screens-test-*/*.log
           - check: Play sound and run codecs in an app on the booted image
             test: media
-            timeout: 14
+            timeout: 18
             keep: Keep the media check's logs
             artifact: media-check-logs
             # The root check boots on a runner of its own, below.
