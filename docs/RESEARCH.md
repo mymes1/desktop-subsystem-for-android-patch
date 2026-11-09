@@ -2127,3 +2127,26 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 실기에서의 효과. 같은 조건(Google Play, 창 없음, 깨우기 한 번)으로 `dsa memory`의 Google Play 서비스 줄과 channeld의 `paged out` 로그 줄, gms의 RSS를 앞뒤로 재야 한다.
 - 플랫폼 정책에는 `sys_ptrace`를 소수 도메인에만 허용하는 neverallow가 있다. 이미지는 `secilc -N`으로 정책을 컴파일하므로 부팅은 막히지 않지만, 호환성 시험(VTS)에서는 걸릴 수 있다.
 - Google Play 서비스가 DeviceConfig `activity_manager`를 실제로 바꾸는지, 바꾼다면 얼마나 자주인지.
+
+## R27. 호스트 주소 변환 백엔드 고르기 (FR-36)
+
+FR-36의 주소 변환(`Geocoder`)을 호스트의 어떤 서비스로 답할지 2026-11-10에 문서로 확인했다. 실기에서 호출해 본 것은 아니다.
+
+### 확인한 것
+
+- Windows `Windows.Services.Maps.MapLocationFinder`: Microsoft 문서가 지도 서비스를 쓰기 전에 지도 인증 키(`MapService.ServiceToken`, Bing Maps 키)를 정해야 한다고 적는다. 같은 문서가 이 네임스페이스를 사용 중단으로 표시하고, Bing Maps for Enterprise가 퇴역하면 데이터를 더 받지 못한다고 적는다. 키 없이 오픈 소스 배포물에 넣을 수 없고 곧 끊길 서비스라서 쓰지 않는다.
+- OpenStreetMap Nominatim(공개 서버): 키가 없다. 사용 정책은 초당 1회 이하, 앱을 밝히는 User-Agent(라이브러리 기본값은 안 됨), 같은 질의의 캐시, 출처 표시(ODbL), 클라이언트 쪽 자동 완성과 대량 질의 금지, 그리고 OSMF가 요청하면 소프트웨어 업데이트 없이 다른 서버로 바꿀 수 있어야 한다는 조건을 둔다. 사용자가 한 번씩 부르는 주소 변환은 정책이 허용하는 쓰임이다.
+- macOS `CLGeocoder`: Apple의 서비스로 키가 없다. 프로그램마다 호출 빈도 제한이 있고, 넘으면 `kCLErrorNetwork`로 실패한다.
+- Linux: GeoClue는 위치만 주고 주소 변환은 없다.
+
+### 정한 것
+
+- Windows와 Linux는 Nominatim(`dsa_host_core::geocode::Nominatim`). 요청 사이 1초, 같은 질의 10분 캐시(64개), User-Agent `DSA/<버전>`(Linux는 저장소 주소 포함). 서버 주소는 `DSA_GEOCODER_URL` 환경 변수로 바꾼다. 출처 표시는 README의 기능 목록에 둔다.
+- macOS는 `CLGeocoder`.
+- 오류는 안드로이드의 실패 경로로 간다. 네트워크 없음, 서비스 실패, 빈도 초과는 `IOException`("Service not Available"), 받을 수 없는 요청은 `IllegalArgumentException`, 결과 없음은 빈 목록이다.
+
+### 확인하지 못한 것
+
+- 세 호스트 어디에서도 실제 호출로 결과를 확인하지 않았다. 이 PC에서는 빌드와 실행을 하지 않는다.
+- Windows의 WinHTTP User-Agent는 `DSA/<버전>`뿐이다. Nominatim이 이를 충분한 식별로 보는지는 확인하지 않았다.
+- 서버 주소를 바꾸는 방법이 환경 변수뿐이다. OSMF의 요청에 업데이트 없이 대응하려면 설정이나 서명된 릴리스 목록에서 받는 편이 낫다. 소유자가 정할 일이다.
