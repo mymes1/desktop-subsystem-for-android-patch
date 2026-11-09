@@ -1900,4 +1900,5 @@
   <data name="RootNote.Text" xml:space="preserve">
     <value>앱마다의 수준은 앱 페이지에서 고릅니다. 사용자마다 자기 Android의 앱을 정합니다.</value>
   </data>
+  <data name="AppsAdbShell.Text" xml:space="preserve"><value>adb 셸</value></data>
 </root>

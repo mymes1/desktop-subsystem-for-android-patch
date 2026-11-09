@@ -42,6 +42,14 @@
                             Severity="Informational" IsClosable="False"
                             IsOpen="{Binding RootUnavailable, Mode=OneWay}" Margin="0,0,0,8" />
                 <TextBlock Text="{l:Text AppsRootNote.Text}" Style="{StaticResource Note}" Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                            Visibility="{Binding ShowAdbShellRoot, Converter={StaticResource Visible}}">
+                    <TextBlock Text="{l:Text AppsAdbShell.Text}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <ComboBox ItemsSource="{Binding RootChoices}" DisplayMemberPath="Label"
+                              SelectedIndex="{Binding AdbShellRootIndex, Mode=OneWay}"
+                              IsEnabled="{Binding CanChangeAdbShellRoot}" ToolTip="{Binding AdbShellRootTip}"
+                              Tag="com.android.shell" SelectionChanged="OnRoot" />
+                </StackPanel>
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MaxWidth="360" />

@@ -6259,6 +6259,19 @@ class RootElevationImageTests(unittest.TestCase):
             if kind == "typetransition":
                 self.assertNotIn(source, apps)
 
+    def test_fr35_adb_shell_asks_for_root_like_an_app(self):
+        # adb shell gets exactly what an app gets: the su client, its socket and the helper.
+        granted = {(target, cls, frozenset(perms)) for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and source == "shell"}
+        self.assertEqual(granted, {
+            ("dsa_su_exec", "file", frozenset({"read", "open", "getattr", "map", "execute", "execute_no_trans"})),
+            ("dsa_su_socket", "sock_file", frozenset({"write"})),
+            ("dsa_su", "unix_stream_socket", frozenset({"connectto"})),
+        })
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "typetransition":
+                self.assertNotEqual(source, "shell")
+
     def test_fr35_only_the_helper_enters_the_root_domain(self):
         rules = self._rules(self.POLICY)
         entries = {source for kind, source, target, cls, perms in rules

@@ -29,6 +29,9 @@
 (typeattributeset exec_type (dsa_su_exec))
 ; User-installed apps run it in their own domain: it needs no privilege of its own.
 (allow untrusted_app_all dsa_su_exec (file (read open getattr map execute execute_no_trans)))
+; adb shell (uid 2000, domain shell) runs it the same way while developer mode is on; the kernel
+; guard and the helper still decide whether uid 2000 may see it and ask, like any app.
+(allow shell dsa_su_exec (file (read open getattr map execute execute_no_trans)))
 
 ; The helper.
 (type dsa_su)
@@ -55,6 +58,8 @@
 (typeattributeset mlstrustedsubject (dsa_su))
 (allow untrusted_app_all dsa_su_socket (sock_file (write)))
 (allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))
+(allow shell dsa_su_socket (sock_file (write)))
+(allow shell dsa_su (unix_stream_socket (connectto)))
 ; The helper listens on the sockets init hands it and talks on the ones it accepts.
 (allow dsa_su self (unix_stream_socket (listen accept read write getattr getopt setopt shutdown)))
 

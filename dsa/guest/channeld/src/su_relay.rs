@@ -50,6 +50,13 @@ pub const PACKAGES_LIST: &str = "/data/system/packages.list";
 /// The paths the guard watches: where the image's su can be.
 pub const SU_PATHS: [&str; 3] = ["/system/bin/su", "/system/xbin/su", "/sbin/su"];
 
+/// The uid `adb shell` runs as on Android (`AID_SHELL`).
+pub const SHELL_UID: u32 = 2000;
+
+/// The package the host names `adb shell` by. Android's shell package owns uid 2000, but the
+/// package list may leave it out, so [`with_uids`] maps it to [`SHELL_UID`] either way.
+pub const SHELL_PACKAGE: &str = "com.android.shell";
+
 /// A su invocation waiting for the host's answer.
 #[derive(Debug)]
 pub struct Pending {
@@ -167,6 +174,8 @@ pub fn with_uids(config: &RootElevationConfig, uids: &HashMap<String, u32>) -> R
         if app.uid == 0 {
             if let Some(uid) = uids.get(&app.package) {
                 app.uid = *uid;
+            } else if app.package == SHELL_PACKAGE {
+                app.uid = SHELL_UID;
             }
         }
     }
@@ -974,6 +983,32 @@ mod tests {
         // An app that is not installed keeps uid 0, which never sees su.
         assert_eq!(resolved.apps[1].uid, 0);
         assert!(!control_lines(&resolved).contains(&"allow 0".to_string()));
+    }
+
+    #[test]
+    fn fr35_adb_shell_asks_for_root_like_an_app() {
+        // The package list may not name the shell package; adb shell still gets uid 2000.
+        let uids = uids_from_packages_list("com.ask 10100 0 /data/user/0/com.ask default none\n");
+        let resolved = with_uids(
+            &config(true, vec![(SHELL_PACKAGE, 0, RootLevel::Ask)]),
+            &uids,
+        );
+        assert_eq!(resolved.apps[0].uid, SHELL_UID);
+        assert!(control_lines(&resolved).contains(&"allow 2000".to_string()));
+        assert_eq!(
+            package_for_uid(&resolved, SHELL_UID).as_deref(),
+            Some(SHELL_PACKAGE)
+        );
+        // Set to off, adb shell sees no su.
+        let off = with_uids(
+            &config(true, vec![(SHELL_PACKAGE, 0, RootLevel::Off)]),
+            &uids,
+        );
+        assert!(!control_lines(&off).contains(&"allow 2000".to_string()));
+        assert_eq!(package_for_uid(&off, SHELL_UID), None);
+        // Left out of the config (developer mode off), adb shell sees no su.
+        let absent = with_uids(&config(true, vec![]), &uids);
+        assert!(!control_lines(&absent).contains(&"allow 2000".to_string()));
     }
 
     #[test]

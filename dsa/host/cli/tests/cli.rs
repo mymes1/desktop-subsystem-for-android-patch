@@ -36,6 +36,16 @@ fn pr5_the_command_line_is_parsed() {
 }
 
 #[test]
+fn fr35_adb_shell_asks_for_root_like_an_app() {
+    use dsa_cli::AppsAction;
+    let invocation = parse(&args("apps root adb ask")).unwrap();
+    assert_eq!(
+        invocation.apps,
+        Some(AppsAction::Root("com.android.shell".into(), "ask".into()))
+    );
+}
+
+#[test]
 fn fr21_dsa_logcat_takes_buffers_tag_filters_and_a_dump() {
     use dsa_host_core::guest_log::{LogBuffer, LogFilter, DEFAULT_BUFFERS, INFO, SILENT};
     let invocation = parse(&args(
@@ -1004,6 +1014,7 @@ fn fr5_the_touch_gestures_line_says_why_it_cannot_be_used_and_is_hidden_without_
         network: None,
         adb_auto_connect_state: Default::default(),
         touch_gestures: state,
+        adb_shell_root: String::new(),
     };
     let line = |report: &SettingsReport| {
         dsa_cli::describe_settings(report)
@@ -2974,6 +2985,7 @@ fn fr15_settings_say_where_program_updates_come_from() {
         network: None,
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
     };
     let text = dsa_cli::describe_settings(&report);
     let line = text
@@ -3246,6 +3258,7 @@ fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
         network: None,
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
     };
     let channel_line = |report: &SettingsReport| {
         dsa_cli::describe_settings(report)
@@ -3277,6 +3290,7 @@ fn fr35_the_settings_apps_read_root_elevation_and_each_apps_level() {
         network: None,
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
     };
     assert_eq!(dsa_cli::settings_json(&report)["root_elevation"], true);
     let line = dsa_cli::describe_settings(&report)

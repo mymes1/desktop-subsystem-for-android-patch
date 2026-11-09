@@ -1449,6 +1449,10 @@ pub struct SettingsReport {
     /// Whether the caller's window manager can turn the host's touch gestures off, as it last
     /// told the service. Unknown until it has, and from a service that does not report it.
     pub touch_gestures: TouchGesturesState,
+    /// How far `adb shell` may elevate to root: "off", "ask" or "remember" while developer
+    /// mode is on, "unavailable" while root elevation is off, and empty while developer mode is
+    /// off (adb is closed) or from a service that does not report it.
+    pub adb_shell_root: String,
 }
 
 /// How a user's Android reaches the network.
@@ -3330,7 +3334,11 @@ impl HostApiService {
                     .find(|a| a.package == set.package_name)
                     .map(|a| a.level)
             })
-            .unwrap_or_else(|| "off".to_string());
+            .unwrap_or_else(|| {
+                crate::root_elevation::default_level(&set.package_name)
+                    .code()
+                    .to_string()
+            });
         if level.change_needs_admin() && !peer.administrator && current != level.code() {
             // The caller is not an administrator, so one is asked in the caller's own session,
             // through the prompt the app's su calls use. Running the command elevated would
@@ -3373,6 +3381,26 @@ impl HostApiService {
         }
     }
 
+    /// The adb shell item's level for `user`, as the Settings message reports it: empty while
+    /// developer mode is off, "unavailable" while root elevation is off for the computer, and
+    /// otherwise its level (ask unless the user set another).
+    fn adb_shell_root_now(&self, user: &str, settings: &Settings) -> String {
+        let Some((store, _facts)) = &self.settings else {
+            return String::new();
+        };
+        if !settings.developer_mode {
+            return String::new();
+        }
+        if !store.machine().root_elevation {
+            return "unavailable".to_string();
+        }
+        let Ok(saved) = store.root_apps(user) else {
+            return String::new();
+        };
+        crate::root_elevation::adb_shell_level(&saved)
+            .code()
+            .to_string()
+    }
     /// Fills each listed app's `root` with its level: "unavailable" when the feature is off
     /// for the computer, otherwise the per-app level ("off", "ask" or "remember").
     fn fill_app_root(&self, user: &str, installed: &mut types::InstalledApps) {
@@ -4985,6 +5013,7 @@ impl HostApiService {
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
+                wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
                 self.touch_gestures_now(&peer.user, &mut wire);
                 response::Body::Settings(wire)
             }
@@ -5146,6 +5175,7 @@ impl HostApiService {
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
                     android.adb_auto_connect(settings.adb_auto_connect);
+                    crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
                     {
@@ -5214,6 +5244,7 @@ impl HostApiService {
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
+                wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
                 self.touch_gestures_now(&peer.user, &mut wire);
                 response::Body::Settings(wire)
             }
@@ -5266,6 +5297,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         touch_gestures_off: settings.touch_gestures_off,
         touch_gestures_state: String::new(),
         touch_gestures_problem: String::new(),
+        adb_shell_root: String::new(),
         network: None,
         program_updates_available: facts.program_updates_available,
         update_channel_available: facts.update_channel_available,
@@ -5316,6 +5348,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             &settings.touch_gestures_state,
             &settings.touch_gestures_problem,
         ),
+        adb_shell_root: settings.adb_shell_root,
     }
 }
 

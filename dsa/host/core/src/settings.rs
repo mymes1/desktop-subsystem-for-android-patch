@@ -398,7 +398,8 @@ pub trait SettingsStore: Send + Sync {
         let _ = user;
         Ok(Vec::new())
     }
-    /// Records the root elevation level of one of `user`'s apps. Off forgets the app.
+    /// Records the root elevation level of one of `user`'s apps. The package's default level
+    /// (off for an app, ask for adb shell) forgets it.
     fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
         let _ = (user, package, level);
         Err("this service keeps no app root levels".into())
@@ -735,7 +736,7 @@ impl SettingsStore for FileSettings {
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         let mut apps = read_json::<Vec<RootApp>>(&file)?.unwrap_or_default();
         apps.retain(|app| app.package != package);
-        if level != "off" {
+        if level != crate::root_elevation::default_level(package).code() {
             apps.push(RootApp {
                 package: package.to_string(),
                 level: level.to_string(),
@@ -899,7 +900,7 @@ impl SettingsStore for MemorySettings {
         let mut all = self.root_apps.lock().unwrap_or_else(|e| e.into_inner());
         let apps = all.entry(user.to_string()).or_default();
         apps.retain(|app| app.package != package);
-        if level != "off" {
+        if level != crate::root_elevation::default_level(package).code() {
             apps.push(RootApp {
                 package: package.to_string(),
                 level: level.to_string(),

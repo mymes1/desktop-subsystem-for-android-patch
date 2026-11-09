@@ -152,8 +152,12 @@ impl ApprovalRequest {
         &self.app.icon_png
     }
 
-    /// The app's name for the prompt and the log: its label, else its package.
+    /// The app's name for the prompt and the log: its label, else its package. `adb shell`
+    /// is named as such, whatever the shell package's label.
     pub fn app_name(&self) -> &str {
+        if crate::root_elevation::is_adb_shell(self.package()) {
+            return crate::root_elevation::ADB_SHELL_NAME;
+        }
         let label = self.app.label.trim();
         if label.is_empty() {
             &self.app.package_name
@@ -222,7 +226,9 @@ impl ApprovalRequest {
                 ),
             };
         }
-        let app = if self.app_name() == self.package() {
+        let app = if crate::root_elevation::is_adb_shell(self.package()) {
+            self.app_name().to_string()
+        } else if self.app_name() == self.package() {
             format!("The Android app {}", self.package())
         } else {
             format!("The Android app {} ({})", self.app_name(), self.package())
@@ -1046,6 +1052,33 @@ mod tests {
         // The time, as an ISO 8601 UTC stamp.
         assert!(lines[0].contains('T') && lines[0].contains("Z "));
         assert!(lines[1].contains("within the grace"));
+    }
+
+    #[test]
+    fn fr35_adb_shell_asks_for_root_like_an_app() {
+        use crate::root_elevation::ADB_SHELL_PACKAGE;
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let root = elevation(
+            fake.clone(),
+            levels(true, &[(ADB_SHELL_PACKAGE, Level::Ask)]),
+        );
+        let mut shell = request(ADB_SHELL_PACKAGE);
+        shell.app.label = "Shell".into();
+        shell.uid = 2000;
+        assert!(root.answer(&shell).approved);
+        let seen = fake.seen.lock().unwrap();
+        assert_eq!(seen[0].app_name(), "adb shell");
+        assert_eq!(seen[0].message(), "adb shell wants to run `id` as root.");
+        drop(seen);
+        // Refused, su fails.
+        let refusing = FakePrompt::new(PromptAnswer::Denied);
+        let root = elevation(refusing, levels(true, &[(ADB_SHELL_PACKAGE, Level::Ask)]));
+        assert!(!root.answer(&shell).approved);
+        // Left out of the levels (developer mode off), adb shell may not ask.
+        let fake = FakePrompt::new(PromptAnswer::Approved);
+        let root = elevation(fake.clone(), levels(true, &[]));
+        assert!(!root.answer(&shell).approved);
+        assert_eq!(fake.asked.load(Ordering::SeqCst), 0);
     }
 
     #[test]
