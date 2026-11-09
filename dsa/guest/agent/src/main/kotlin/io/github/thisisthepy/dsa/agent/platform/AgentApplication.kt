@@ -107,6 +107,11 @@ class AgentApplication : Application() {
         HostInputMethod.onEditor = { state -> agent.editorChanged(state) }
         agent.start()
         dragCatcher.start()
+        io.github.thisisthepy.dsa.agent.install.GoogleAppsCompile(
+            AndroidGoogleAppsCompile(this),
+            android.os.SystemClock::elapsedRealtime,
+            log,
+        ).start()
         // Starting windows draw on a thread of their own, so a slow app theme never holds up
         // the agent's work or the home activity on the main thread.
         val splash = HandlerThread("dsa-splash").apply { start() }
