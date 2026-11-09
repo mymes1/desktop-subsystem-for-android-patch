@@ -142,14 +142,17 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   since the app's read access lasts only while it does. A `ShareResult` that failed is shown
   to the user as a toast.
 - **Network location and geocoding.** The image names the agent as the guest's network
-  location provider and geocode provider, so both work with or without Google Play. The
+  location provider, with or without Google Play, and as its geocode provider without Google
+  Play; on a boot with the Google apps image an overlay names Google's geocoder instead. The
   network provider (`HostNetworkLocationService`) asks the host for its location with
   `LocationRequest` while Android wants network locations, and reports each `LocationFix` as a
   `network` location; a `LocationStatus` that is not allowed disables the provider. The control
   daemon tells the host what it and the GNSS HAL want together. The geocode provider
   (`HostGeocodeService`) sends each lookup as `GeocodeRequest` and turns the `GeocodeResult`
   into Android `Address`es, or into the `IOException` Android's geocoder reports when the
-  service is not available.
+  service is not available. The host answers a position from administrative boundary data it
+  keeps (country, province, city, district and neighbourhood, with no street or house number)
+  and an address with no positions; nothing goes to a server.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.

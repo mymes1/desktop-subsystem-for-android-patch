@@ -12,9 +12,9 @@
   is enabled only while a host accessibility client watches a task. It is also the guest's
   widget host (platform/AndroidWidgets.kt), which draws the widgets the user placed on the
   host's desktop. Its print service (platform/HostPrintService.kt) sends what apps print to the
-  host's printers. It is the guest's network location provider and geocode provider, both
-  answered by the host (platform/HostNetworkLocationService.kt, platform/HostGeocodeService.kt),
-  and "Share on PC" in the share sheet (platform/ShareActivity.kt).
+  host's printers. It is the guest's network location provider, and without Google Play its
+  geocode provider, both answered by the host (platform/HostNetworkLocationService.kt,
+  platform/HostGeocodeService.kt), and "Share on PC" in the share sheet (platform/ShareActivity.kt).
   Every permission here is also in privapp-permissions-dsa-agent.xml, but for the runtime
   permissions, which default-permissions-dsa-agent.xml grants instead.
 -->
@@ -302,8 +302,10 @@
         </service>
 
         <!--
-          The guest's geocode provider: Android's Geocoder asks it, and it asks the host
-          (platform/HostGeocodeService.kt). Only the system may bind it.
+          The guest's geocode provider without Google Play: Android's Geocoder asks it, and it
+          asks the host (platform/HostGeocodeService.kt). With the Google apps image an overlay
+          names Google's geocoder, and the system does not bind this one. Only the system may
+          bind it.
         -->
         <service
             android:name=".platform.HostGeocodeService"

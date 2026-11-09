@@ -17,11 +17,14 @@ import java.io.IOException
 import java.util.Locale
 
 /**
- * The guest's geocode provider. The image names the agent as the provider
- * (`config_geocoderProviderPackageName`), so Android's `Geocoder` is present and every lookup
- * an app makes comes here, whether or not Google Play is installed. Each goes to the host
- * ([io.github.thisisthepy.dsa.agent.geocode.HostGeocoder]), and what the host found comes back
- * as Android `Address`es. A failure reaches the app as Android's geocoder reports one: an
+ * The guest's geocode provider while Google Play is not installed. The image names the agent as
+ * the provider (`config_geocoderProviderPackageName`), so Android's `Geocoder` is present and
+ * every lookup an app makes comes here; on a boot with the Google apps image an overlay names
+ * Google's geocoder instead, and this service is not bound. Each lookup goes to the host
+ * ([io.github.thisisthepy.dsa.agent.geocode.HostGeocoder]), which answers a position with its
+ * country, province, city, district and neighbourhood from boundary data it keeps, and an
+ * address with no positions. What the host found comes back as Android `Address`es. A failure
+ * reaches the app as Android's geocoder reports one: an
  * `IOException` (the service is not available, or too busy), or an
  * `IllegalArgumentException` for a lookup that cannot be answered.
  */
