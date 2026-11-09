@@ -14,7 +14,7 @@ A package is a folder holding:
 | File | What it is |
 |---|---|
 | `arm-translation.json` | `name`, `version`, `library` (the bridge in `system/lib64`), `abis` (`["arm64-v8a"]`), `license` |
-| `system.img` | an erofs image of `system/lib64`, `system/bin` and `system/etc`, with `system/lib64/libdsa_native_bridge.so` naming the bridge |
+| `system.img` | an erofs image of `system/lib64`, `system/bin` and `system/etc`, with `system/lib64/libdsa_native_bridge.so` naming the bridge, `system/lib64/arm64`, `system/bin/arm64` and `system/etc/ld.config.arm64.txt`, and binfmt_misc rules that start their runner from `/system/bin/dsa-arm-translation/` |
 
 ```
 dsa arm-translation install <folder>   # sends it to Android, used from the next start
@@ -39,8 +39,14 @@ At boot the host adds `androidboot.dsa.arm_translation=on` to the bootconfig whi
 package is installed and the setting is on, and `androidboot.dsa.arm_translation=default`
 while none is installed, the setting is on and the image has a default package. The image
 then imports the native bridge and ABI properties (`arm-translation-on.prop`, or the same
-lines as `arm-translation-default.prop`) and mounts that package over `/system`
-(`dsa-arm-translation.rc`), then mounts binfmt_misc, which nothing else in Android mounts, and
+lines as `arm-translation-default.prop`) and mounts that package at `/mnt/dsa-arm-translation`
+(`dsa-arm-translation.rc`). It binds the package's parts onto empty places the image carries
+for them: `system/lib64` onto `/system_ext/lib64`, where the zygote finds the bridge by name;
+`system/lib64/arm64` and `system/bin/arm64` onto the same paths, where the translator looks;
+`system/bin` onto `/system/bin/dsa-arm-translation`, where the binfmt_misc rules start the
+runners; and `system/etc/ld.config.arm64.txt` onto the same path. Nothing is laid over
+`/system/bin`, `/system/lib64` or `/system/etc`, whose own services would then run through the
+overlay and fail. It then mounts binfmt_misc, which nothing else in Android mounts, and
 registers the package's handlers so ARM64 programs an app starts run too. Without either
 value, the image is unchanged and Android installs x86_64 apps only. The guest has no 32-bit
 zygote, so only 64-bit ARM apps (`arm64-v8a`) can run. The host records what each boot was
