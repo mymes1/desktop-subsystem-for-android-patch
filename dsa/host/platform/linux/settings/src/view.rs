@@ -10,6 +10,11 @@ use crate::model::{
     GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
 };
 
+/// The dsa commands the Advanced page's command line group shows, each on its own row with a
+/// copy button that copies only that command. They are separate commands, not a pipeline, and
+/// they are typed as they are in every language.
+pub const COMMAND_LINE_COMMANDS: [&str; 3] = ["dsa status", "dsa settings", "dsa memory"];
+
 /// A problem in the user's language, with what the client said after it.
 pub fn problem_text(failure: &Failure) -> String {
     let words = match failure.problem {

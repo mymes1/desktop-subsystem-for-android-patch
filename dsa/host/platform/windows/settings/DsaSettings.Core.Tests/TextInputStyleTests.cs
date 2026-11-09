@@ -132,6 +132,43 @@ public class TextInputStyleTests
         Assert.Contains(border.Descendants(Ui + "Button"), b => (string?)b.Attribute("Click") == "OnCopyAdbCommand");
     }
 
+    // The command line card once showed "dsa status | dsa settings | dsa memory" on one line,
+    // which reads as a shell pipeline and could not be copied. Each command is its own filled
+    // row with a copy button, as the adb command is, and the button copies only that command.
+    [Fact]
+    public void Fr17_the_command_line_card_offers_one_copy_button_per_command()
+    {
+        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var card = page.Descendants(Wpf + "TextBlock")
+            .Single(t => (string?)t.Attribute("Text") == "{l:Text CommandLineCard.Header}")
+            .Ancestors(Ui + "CardControl").First();
+        var texts = card.Descendants(Wpf + "TextBox").Select(t => (string?)t.Attribute("Text") ?? "").ToList();
+        Assert.Equal(new[] { "dsa status", "dsa settings", "dsa memory" }, texts);
+        Assert.DoesNotContain(texts, t => t.Contains(" | "));
+
+        var buttons = card.Descendants(Ui + "Button").ToList();
+        Assert.Equal(texts.Count, buttons.Count);
+        foreach (var box in card.Descendants(Wpf + "TextBox"))
+        {
+            Assert.Equal("{StaticResource SelectableCode}", (string?)box.Attribute("Style"));
+            var border = box.Ancestors(Wpf + "Border").First();
+            Assert.Equal("{StaticResource CodeBlock}", (string?)border.Attribute("Style"));
+            var button = border.Descendants(Ui + "Button").Single();
+            Assert.Equal((string?)box.Attribute("Text"), (string?)button.Attribute("Tag"));
+            Assert.Equal("OnCopyCommand", (string?)button.Attribute("Click"));
+            Assert.Equal("Transparent", (string?)button.Attribute("Appearance"));
+            Assert.Equal("{ui:SymbolIcon Copy24}", (string?)button.Attribute("Icon"));
+            Assert.Equal("{l:Text CopyButton.ToolTip}", (string?)button.Attribute("ToolTip"));
+            Assert.Equal("{l:Text CopyButton.ToolTip}",
+                (string?)button.Attribute(XName.Get("AutomationProperties.Name")));
+        }
+
+        var code = File.ReadAllText(Path.Combine(SettingsFolder(), "DsaSettings", "Pages", "AdvancedPage.xaml.cs"));
+        var handler = code[code.IndexOf("void OnCopyCommand", StringComparison.Ordinal)..];
+        Assert.Contains("button.Tag is not string command", handler);
+        Assert.Contains("SymbolRegular.Checkmark24", handler);
+    }
+
     [Fact]
     public void Fr17_the_adb_port_is_a_library_box_with_a_body_text_label()
     {
