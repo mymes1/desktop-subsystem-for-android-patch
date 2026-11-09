@@ -20,6 +20,7 @@
 //! [`pressure`] tells the host how much memory the guest has, so the VM grows and shrinks.
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
 //! the guest's diagnostics; [`logd`] reads logd for it.
+//! [`keymint_key`] fetches KeyMint's root key from the host once each boot, for KeyMint alone.
 //!
 //! The daemon answers the host's clock probes itself ([`clock_answer`]), from the thread that
 //! reads the connection, so the answer carries the guest's clock as close to the probe's
@@ -33,6 +34,7 @@ pub mod binder;
 pub mod gamepad;
 pub mod gapps;
 pub mod image_store;
+pub mod keymint_key;
 pub mod logbridge;
 pub mod logd;
 pub mod pageout;
