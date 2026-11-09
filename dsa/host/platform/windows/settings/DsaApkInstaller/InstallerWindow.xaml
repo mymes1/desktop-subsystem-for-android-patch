@@ -79,9 +79,10 @@
                                    AutomationProperties.AutomationId="SourceText" />
                     </Grid>
                 </StackPanel>
+                <!-- Lifted while the window has the focus, dimmed while it does not. -->
                 <Border x:Name="AppIconTile" Grid.Column="1" VerticalAlignment="Top" CornerRadius="8"
                         Width="{StaticResource AppIconTileSize}" Height="{StaticResource AppIconTileSize}"
-                        Background="{StaticResource AppIconTileBrush}">
+                        Style="{StaticResource AppIconTile}">
                     <Image x:Name="AppIcon" HorizontalAlignment="Center" VerticalAlignment="Center"
                            Width="{StaticResource AppIconSize}" Height="{StaticResource AppIconSize}"
                            RenderOptions.BitmapScalingMode="HighQuality"

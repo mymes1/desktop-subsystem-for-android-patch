@@ -210,7 +210,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// Host to guest: the task's window is on a monitor of another scale; the task's app draws
-/// at `density_dpi` (160 at a scale of 100%). The host sends the matching ResizeTask right
+/// at `density_dpi` (96 at a scale of 100%). The host sends the matching ResizeTask right
 /// after it, and the agent applies both together, so the app relays out once.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
@@ -1841,7 +1841,7 @@ pub struct RemoveWidget {
     pub widget_id: i32,
 }
 /// Host to guest: the size of the widget's host window. The agent draws the widget at `width`
-/// by `height` pixels at `density_dpi` (160 at a scale of 100%), and tells the widget's app
+/// by `height` pixels at `density_dpi` (96 at a scale of 100%), and tells the widget's app
 /// its size in dp, so a widget with layouts for several sizes picks the one that fits.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResizeWidget {
@@ -2407,7 +2407,7 @@ pub struct CameraError {
 /// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
 /// after the agent connects, when the host knows them, and on each change. Every field is sent
 /// each time. The user does not change these in the guest: the host's are the guest's.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SystemSettings {
     /// The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
     /// name it; the guest's then stays as it is.
@@ -2435,6 +2435,13 @@ pub struct SystemSettings {
     /// colors. 0 when the host has none.
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
+    /// The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+    /// of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+    /// a host pixel, and scales text separately from everything else, so this is 160/96 times
+    /// the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+    /// the guest's as it is.
+    #[prost(float, tag = "8")]
+    pub font_scale: f32,
 }
 /// Host to guest: the computer's name, which the agent makes the guest's device name: the name
 /// Settings shows, and the one Bluetooth and Wi-Fi Direct show other devices when the guest has
