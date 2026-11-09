@@ -2809,6 +2809,156 @@ ARM_TRANSLATION_FS_CONFIG = [
     "system/etc/dsa/arm-translation-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/arm-translation-off.prop 0 0 644 capabilities=0x0",
 ]
+# Where an x86_64 image makes a translation package reachable, without laying anything over
+# /system/bin, /system/lib64 or /system/etc: an overlay there makes the services in the folder
+# run through overlayfs, which looks each file up with init's credentials, and init may not
+# read most services' programs, so their exec fails (bpfloader's first, which reboots Android).
+# The init script binds the package's folders onto these empty folders and its linker
+# configuration onto the empty file. /system_ext/lib64 is on the system namespace's linker
+# search path, where the zygote finds the bridge by name, and the system_ext partition has no
+# libraries of its own there; the runners go under /system/bin/, where the linker gives a
+# program the system section of its configuration. The links lead the translators that carry
+# them to their CPU description and their own folder in the mount, and the runner names older
+# packages' rules give to the bound runners. arm64 images take none of this: their own linker
+# reads /system/etc/ld.config.arm64.txt, which would then be empty.
+ARM_TRANSLATION_MOUNT = "/mnt/dsa-arm-translation"
+ARM_TRANSLATION_FOLDERS = {
+    "SYSTEM_EXT/lib64": "system/lib64",
+    "SYSTEM/lib64/arm64": "system/lib64/arm64",
+    "SYSTEM/bin/arm64": "system/bin/arm64",
+    "SYSTEM/bin/dsa-arm-translation": "system/bin",
+}
+ARM_TRANSLATION_LINKER_CONFIG = "SYSTEM/etc/ld.config.arm64.txt"
+# The runners Berberis (Digitalis) and Google's translator name in their binfmt_misc rules,
+# led to where the package's system/bin is bound. Packages made now name the bound place
+# themselves (make-package.py, and the host for Google's); these keep a package made before,
+# such as a release's default translator, starting its ARM64 programs.
+ARM_TRANSLATION_RUNNERS = ["berberis_program_runner_binfmt_misc_arm64",
+                           "ndk_translation_program_runner_binfmt_misc_arm64"]
+ARM_TRANSLATION_LINKS = {
+    "SYSTEM/etc/cpuinfo.arm64.txt": f"{ARM_TRANSLATION_MOUNT}/system/etc/cpuinfo.arm64.txt",
+    "SYSTEM/etc/berberis": f"{ARM_TRANSLATION_MOUNT}/system/etc/berberis",
+    **{f"SYSTEM/bin/{runner}": f"dsa-arm-translation/{runner}" for runner in ARM_TRANSLATION_RUNNERS},
+}
+ARM_TRANSLATION_REACH_FS_CONFIG = {
+    "META/filesystem_config.txt": [
+        "system/lib64/arm64 0 0 755 capabilities=0x0",
+        "system/bin/arm64 0 0 755 capabilities=0x0",
+        "system/bin/dsa-arm-translation 0 0 755 capabilities=0x0",
+        "system/etc/ld.config.arm64.txt 0 0 644 capabilities=0x0",
+        "system/etc/cpuinfo.arm64.txt 0 0 644 capabilities=0x0",
+        "system/etc/berberis 0 0 644 capabilities=0x0",
+        *[f"system/bin/{runner} 0 0 755 capabilities=0x0" for runner in ARM_TRANSLATION_RUNNERS],
+    ],
+    "META/system_ext_filesystem_config.txt": [
+        "system_ext/lib64 0 0 755 capabilities=0x0",
+    ],
+}
+
+
+def arm_translation_reach_names():
+    """Every target_files name the x86_64 image adds to reach a translation package."""
+    return ([folder + "/" for folder in ARM_TRANSLATION_FOLDERS] + [ARM_TRANSLATION_LINKER_CONFIG]
+            + list(ARM_TRANSLATION_LINKS))
+
+
+def arm_translation_reach_conflicts(names):
+    """What a build's own target files already have where the image binds a translation
+    package or puts its links: a file there would be hidden, or would hide the package's."""
+    conflicts = []
+    for folder in ARM_TRANSLATION_FOLDERS:
+        inside = sorted(name for name in names if name.startswith(folder + "/") and name != folder + "/")
+        if inside or folder in names:
+            conflicts.append(f"{folder} already has {inside[:3] or [folder]}, which binding the ARM "
+                             "translation package there would hide")
+    for name in [ARM_TRANSLATION_LINKER_CONFIG, *ARM_TRANSLATION_LINKS]:
+        if name in names or any(other.startswith(name + "/") for other in names):
+            conflicts.append(f"{name} is already in the build, where the ARM translation package "
+                             "goes")
+    return conflicts
+
+
+def check_arm_translation_reach(manifest, names, read, info=None):
+    """The problems with where an image makes a translation package reachable, given the names
+    in its target files, a function that reads one, and one that gives a name's zip entry. An
+    x86_64 image has each empty folder, the empty linker configuration and the links into the
+    mount; an arm64 image has none of them, above all no linker configuration for arm64, which
+    its own linker would read."""
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    added = arm_translation_reach_names()
+    if arch != "x86_64":
+        return [f"the {arch} image has {name}, which only an x86_64 image's translator needs"
+                for name in added if name in names or name.rstrip("/") in names]
+    problems = []
+    for folder in ARM_TRANSLATION_FOLDERS:
+        inside = [name for name in names if name.startswith(folder + "/") and name != folder + "/"]
+        if folder + "/" not in names and not inside:
+            problems.append(f"{folder} is missing, so the ARM translation package has nowhere to go")
+        elif inside:
+            problems.append(f"{folder} holds {sorted(inside)[:3]}, which the ARM translation package "
+                            "hides")
+    if ARM_TRANSLATION_LINKER_CONFIG not in names:
+        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is missing, so the translator's ARM64 "
+                        "linker has no namespaces")
+    elif read(ARM_TRANSLATION_LINKER_CONFIG):
+        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is not empty: it is the build's, not the "
+                        "place the package's goes")
+    for name, target in ARM_TRANSLATION_LINKS.items():
+        if name not in names:
+            problems.append(f"{name} is missing, so a translator never finds its own {target}")
+            continue
+        entry = info(name) if info is not None else None
+        if entry is not None and not stat.S_ISLNK(entry.external_attr >> 16):
+            problems.append(f"{name} is not a link to {target}")
+        elif read(name).decode(errors="replace") != target:
+            problems.append(f"{name} does not lead to {target}")
+    return problems
+
+
+# The folders nothing may be laid over or bound onto: the partitions' roots and the folders the
+# system's own programs and libraries are in. A service started from one through overlayfs is
+# looked up with init's credentials, which may not read most services' programs, so it fails.
+PROGRAM_FOLDERS = {"/system", "/system/bin", "/system/xbin", "/system/lib64", "/system/lib",
+                   "/system/etc", "/product", "/product/bin", "/product/lib64", "/system_ext",
+                   "/system_ext/bin", "/vendor", "/vendor/bin", "/vendor/lib64", "/odm"}
+
+
+def mounts_onto(rc):
+    """Each mount command of an init script: its type and where it mounts."""
+    found = []
+    for line in rc.splitlines():
+        words = line.split()
+        if len(words) >= 4 and words[0] == "mount":
+            found.append((words[1], words[3]))
+    return found
+
+
+def program_folder_problems(rc_name, rc):
+    """The mounts of the init script `rc_name` that lay something over a folder of the
+    system's programs (PROGRAM_FOLDERS), and, for the translation script, any overlay."""
+    problems = []
+    for kind, point in mounts_onto(rc):
+        if point.rstrip("/") in PROGRAM_FOLDERS:
+            problems.append(f"{rc_name} mounts {kind} onto {point}, so the services there run through "
+                            "it and fail to start")
+        elif rc_name == "dsa-arm-translation.rc" and kind == "overlay":
+            problems.append(f"{rc_name} lays an overlay over {point}; the package is bound onto "
+                            "folders of its own")
+    return problems
+
+
+def directory_entry(name):
+    """A zip entry for the empty folder `name` (ending in /)."""
+    info = zipfile.ZipInfo(name)
+    info.external_attr = (0o40755 << 16) | 0x10
+    return info
+
+
+def link_entry(name):
+    """A zip entry for a symbolic link at `name`, whose data is its target."""
+    info = zipfile.ZipInfo(name)
+    info.external_attr = 0o120777 << 16
+    return info
 
 
 # The default ARM translation package of an x86_64 image (Digitalis, built by the "Translator
@@ -3086,6 +3236,37 @@ GAPPS_FS_CONFIG = [
     "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-off.prop 0 0 644 capabilities=0x0",
 ]
+
+
+# The folders of /product and /system_ext the init script lays the Google apps image over:
+# never a partition's root, whose bin folder holds services that cannot start through an
+# overlay. The image the host makes holds every one of them, and the system must too, so each
+# overlay finds both layers; the image adds the ones the build leaves out, empty.
+GAPPS_PARTITIONS = ["PRODUCT", "SYSTEM_EXT"]
+GAPPS_FOLDERS = ["app", "priv-app", "framework", "etc/permissions", "etc/sysconfig",
+                 "etc/default-permissions", "etc/preferred-apps"]
+GAPPS_PARTITION_FS_CONFIG = {
+    "PRODUCT": "META/product_filesystem_config.txt",
+    "SYSTEM_EXT": "META/system_ext_filesystem_config.txt",
+}
+
+
+def gapps_folders():
+    """The target_files folders (PRODUCT/app, ...) the Google apps are laid over."""
+    return [f"{partition}/{folder}" for partition in GAPPS_PARTITIONS for folder in GAPPS_FOLDERS]
+
+
+def missing_folders(names, folders):
+    """The folders of `folders` that no name of a target_files archive is in or names."""
+    return [folder for folder in folders
+            if not any(name == folder + "/" or name.startswith(folder + "/") for name in names)]
+
+
+def gapps_folder_problems(names):
+    """The folders the Google apps are laid over that an image's target files lack: each one
+    lacking fails its overlay, so the Google apps never start."""
+    return [f"{folder} is missing, so the Google apps are never laid over /{folder.lower()}"
+            for folder in missing_folders(names, gapps_folders())]
 
 
 def add_gapps_import(text):
@@ -4013,7 +4194,8 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None, su_client=None):
+           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None, su_client=None,
+           arch=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -4029,7 +4211,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     image when `arm_translation` names the package's folder, and the patched framework's files
     in place of the build's own when `framework` maps their target_files names to their bytes,
     and the other system screen overlays (DESIGN_OVERLAYS) that `overlays` maps from their file
-    names to their APKs."""
+    names to their APKs. An image for `arch` x86_64 (the default) gets the empty folders, the
+    empty file and the links a translation package is reached through; every image gets the
+    folders the Google apps are laid over that the build lacks."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     default_translator = (Path(arm_translation) / ARM_TRANSLATION_IMAGE).read_bytes() if arm_translation else None
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -4112,6 +4296,21 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
 
     with zipfile.ZipFile(source) as zin, zipfile.ZipFile(dest, "w", zipfile.ZIP_STORED, allowZip64=True) as zout:
         names = set(zin.namelist())
+        # Where a translation package is bound (x86_64 only), and the folders the Google apps
+        # are laid over that the build lacks: both added empty, with their file modes.
+        reach = (arch or DEFAULT_ARCH) == "x86_64"
+        if reach:
+            conflicts = arm_translation_reach_conflicts(names)
+            if conflicts:
+                raise ValueError("; ".join(conflicts))
+        added_gapps_folders = missing_folders(names, gapps_folders())
+        added_fs_config = {}
+        if reach:
+            for config, rules in ARM_TRANSLATION_REACH_FS_CONFIG.items():
+                added_fs_config.setdefault(config, []).extend(rules)
+        for folder in added_gapps_folders:
+            config = GAPPS_PARTITION_FS_CONFIG[folder.split("/", 1)[0]]
+            added_fs_config.setdefault(config, []).append(f"{folder.lower()} 0 0 755 capabilities=0x0")
         for name in names:
             if name.endswith(".cil"):
                 cil_map[name] = zin.read(name)
@@ -4311,9 +4510,14 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                     if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
-                                                    if su_payload is not None else [])).encode()
-                elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
-                    data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
+                                                    if su_payload is not None else [])
+                                                 + added_fs_config.get(name, [])).encode()
+                elif name == SYSTEM_EXT_FS_CONFIG and (agent_payload is not None or name in added_fs_config):
+                    data = add_filesystem_config(data.decode(),
+                                                 (AGENT_FS_CONFIG if agent_payload is not None else [])
+                                                 + added_fs_config.get(name, [])).encode()
+                elif name in added_fs_config:
+                    data = add_filesystem_config(data.decode(), added_fs_config[name]).encode()
                 elif name in FSTAB_DIRS.values():
                     text = data.decode()
                     for directory, config in FSTAB_DIRS.items():
@@ -4364,9 +4568,17 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(ARM_TRANSLATION_DEFAULT_IMAGE, default_translator)
             zout.writestr(ARM_TRANSLATION_DEFAULT_PROPS,
                           ARM_TRANSLATION_PROPS["SYSTEM/etc/dsa/arm-translation-on.prop"].read_bytes())
+        if reach:
+            for folder in ARM_TRANSLATION_FOLDERS:
+                zout.writestr(directory_entry(folder + "/"), b"")
+            zout.writestr(ARM_TRANSLATION_LINKER_CONFIG, b"")
+            for name, target in ARM_TRANSLATION_LINKS.items():
+                zout.writestr(link_entry(name), target.encode())
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
+        for folder in added_gapps_folders:
+            zout.writestr(directory_entry(folder + "/"), b"")
         if VENDOR_PROPERTY_CONTEXTS not in names:
             zout.writestr(VENDOR_PROPERTY_CONTEXTS, update_vendor_property_contexts(""))
         zout.writestr(UNAVAILABLE_FEATURES, (HERE / "unavailable-features.xml").read_bytes())
@@ -5512,7 +5724,8 @@ def main():
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
            sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
-           framework=framework_payloads, overlays=design_overlays, su_client=args.su_client)
+           framework=framework_payloads, overlays=design_overlays, su_client=args.su_client,
+           arch=args.arch)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path

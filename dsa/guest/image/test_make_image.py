@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import re
+import stat
 import struct
 import subprocess
 import sys
@@ -5400,14 +5401,153 @@ class ArmTranslationImageTests(unittest.TestCase):
     def test_fr25_fr32_the_overlays_let_init_start_services_from_the_folders_they_cover(self):
         # On a nosuid mount the kernel refuses a domain change on exec (develop d69b9ff2:
         # "avc: denied { nosuid_transition } for comm="init" ... tcontext=u:r:vdc:s0", and vold
-        # failed). /system, /product and /system_ext are not nosuid, so neither are the
-        # overlays laid over them.
+        # failed). /product and /system_ext are not nosuid, so neither are the overlays laid
+        # over their folders. The translation script lays no overlay at all.
+        rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+        overlays = [line.strip() for line in rc.splitlines() if line.strip().startswith("mount overlay ")]
+        self.assertTrue(overlays)
+        for line in overlays:
+            self.assertNotIn("nosuid", line.split(), line)
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        self.assertEqual([line for line in rc.splitlines() if line.strip().startswith("mount overlay ")], [])
+
+    # What develop 3b9b304c laid over, which rebooted Android 5.6 s into the boot: an overlay
+    # over /system/bin runs bpfloader through overlayfs, which looks it up with init's
+    # credentials ("avc: denied { getattr } for comm="uprobestatsbpfl" name="bpfloader"
+    # scontext=u:r:init:s0 tcontext=u:object_r:bpfloader_platform_exec:s0", "overlayfs: failed
+    # to get metacopy (-13)", "execve('/system/bin/bpfloader'): 13[Permission denied]").
+    OLD_LAID_OVER_RC = (
+        "on post-fs-data && property:ro.boot.dsa.arm_translation=default\n"
+        "    mount overlay overlay /system/lib64 ro nodev lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64\n"
+        "    mount overlay overlay /system/bin ro nodev lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin\n"
+        "    mount overlay overlay /system/etc ro nodev lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc\n")
+    OLD_GAPPS_RC = (
+        "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
+        "    mount overlay overlay /product ro nodev lowerdir=/mnt/dsa-gapps/product:/product\n"
+        "    mount overlay overlay /system_ext ro nodev lowerdir=/mnt/dsa-gapps/system_ext:/system_ext\n")
+
+    def test_fr25_fr32_nothing_is_laid_over_the_folders_of_the_systems_programs(self):
         for rc_name in ("dsa-arm-translation.rc", "dsa-gapps.rc"):
             rc = (Path(make_image.__file__).with_name(rc_name)).read_text()
-            overlays = [line.strip() for line in rc.splitlines() if line.strip().startswith("mount overlay ")]
-            self.assertTrue(overlays, rc_name)
-            for line in overlays:
-                self.assertNotIn("nosuid", line.split(), f"{rc_name}: {line}")
+            self.assertEqual(make_image.program_folder_problems(rc_name, rc), [], rc_name)
+            for kind, point in make_image.mounts_onto(rc):
+                self.assertNotIn(point, make_image.PROGRAM_FOLDERS, f"{rc_name}: {kind} onto {point}")
+        old = make_image.program_folder_problems("dsa-arm-translation.rc", self.OLD_LAID_OVER_RC)
+        self.assertEqual(len(old), 3, old)
+        self.assertTrue(any("/system/bin" in problem for problem in old))
+        old = make_image.program_folder_problems("dsa-gapps.rc", self.OLD_GAPPS_RC)
+        self.assertEqual(len(old), 2, old)
+        # An overlay of the translator over a folder of its own is still not how it is reached.
+        sideways = "    mount overlay overlay /system/lib64/arm64 ro lowerdir=/a:/system/lib64/arm64\n"
+        self.assertEqual(len(make_image.program_folder_problems("dsa-arm-translation.rc", sideways)), 1)
+
+    def _modify_for(self, root, arch, extra=()):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("META/system_ext_filesystem_config.txt", "system_ext 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/product_filesystem_config.txt", "product 0 0 755 capabilities=0x0\n")
+            archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+            archive.writestr("PRODUCT/app/Camera/Camera.apk", "apk")
+            archive.writestr("SYSTEM_EXT/priv-app/", "")
+            for name in extra:
+                archive.writestr(name, "x")
+        modified = root / f"modified-{arch}.zip"
+        make_image.modify(source, modified, arch=arch)
+        return zipfile.ZipFile(modified)
+
+    def test_fr25_an_x86_64_image_carries_empty_places_for_the_package_and_an_arm64_image_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self._modify_for(root, "x86_64") as archive:
+                names = archive.namelist()
+                for folder in make_image.ARM_TRANSLATION_FOLDERS:
+                    info = archive.getinfo(folder + "/")
+                    self.assertTrue(stat.S_ISDIR(info.external_attr >> 16), folder)
+                    self.assertFalse([n for n in names if n.startswith(folder + "/") and n != folder + "/"],
+                                     f"{folder} stays empty, so the package hides nothing")
+                self.assertEqual(archive.read("SYSTEM/etc/ld.config.arm64.txt"), b"")
+                for name, target in make_image.ARM_TRANSLATION_LINKS.items():
+                    self.assertTrue(stat.S_ISLNK(archive.getinfo(name).external_attr >> 16), name)
+                    self.assertEqual(archive.read(name).decode(), target)
+                    if name.startswith("SYSTEM/etc/"):
+                        self.assertTrue(target.startswith("/mnt/dsa-arm-translation/system/etc/"), target)
+                    else:
+                        # An older package's rule names /system/bin/<runner>; the link leads
+                        # there from beside it, to where the package's system/bin is bound.
+                        self.assertEqual(target, "dsa-arm-translation/" + name.rsplit("/", 1)[1])
+                system = archive.read("META/filesystem_config.txt").decode()
+                system_ext = archive.read("META/system_ext_filesystem_config.txt").decode()
+                for rule in make_image.ARM_TRANSLATION_REACH_FS_CONFIG["META/filesystem_config.txt"]:
+                    self.assertIn(rule, system)
+                self.assertIn("system_ext/lib64 0 0 755 capabilities=0x0", system_ext)
+                manifest = {"arch": "x86_64"}
+                self.assertEqual(make_image.check_arm_translation_reach(
+                    manifest, names, archive.read, archive.getinfo), [])
+                # An arm64 image with these would have its own linker read the empty file.
+                self.assertTrue(make_image.check_arm_translation_reach(
+                    {"arch": "arm64"}, names, archive.read, archive.getinfo))
+            with self._modify_for(root, "arm64") as archive:
+                names = archive.namelist()
+                for name in make_image.arm_translation_reach_names():
+                    self.assertNotIn(name, names)
+                self.assertNotIn("system/lib64/arm64 ", archive.read("META/filesystem_config.txt").decode())
+                self.assertEqual(make_image.check_arm_translation_reach(
+                    {"arch": "arm64"}, names, archive.read, archive.getinfo), [])
+                problems = make_image.check_arm_translation_reach(
+                    {"arch": "x86_64"}, names, archive.read, archive.getinfo)
+                self.assertEqual(len(problems), len(make_image.arm_translation_reach_names()), problems)
+
+    def test_fr25_a_build_with_files_where_the_package_goes_is_refused(self):
+        for name in ["SYSTEM_EXT/lib64/libfoo.so", "SYSTEM/lib64/arm64/libc.so", "SYSTEM/bin/arm64/linker64",
+                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt"]:
+            with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError, msg=name) as caught:
+                self._modify_for(Path(tmp), "x86_64", extra=[name]).close()
+            self.assertIn(name.split("/")[0], str(caught.exception))
+        # An arm64 build is not bound into, so its own files there stay.
+        with tempfile.TemporaryDirectory() as tmp:
+            self._modify_for(Path(tmp), "arm64", extra=["SYSTEM/lib64/arm64/libc.so"]).close()
+
+    def test_fr25_check_image_finds_a_place_of_the_package_missing_or_filled(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+            infos = {name: archive.getinfo(name) for name in archive.namelist()}
+
+        def check(files):
+            return make_image.check_arm_translation_reach({"arch": "x86_64"}, list(files), files.__getitem__,
+                                                         infos.get)
+
+        self.assertEqual(check(files), [])
+        for name in make_image.arm_translation_reach_names():
+            gone = {n: d for n, d in files.items() if n != name}
+            self.assertTrue(check(gone), name)
+        filled = dict(files, **{"SYSTEM_EXT/lib64/libfoo.so": b"x"})
+        self.assertTrue(any("hides" in problem for problem in check(filled)))
+        config = dict(files, **{"SYSTEM/etc/ld.config.arm64.txt": b"[system]\n"})
+        self.assertTrue(any("not empty" in problem for problem in check(config)))
+        elsewhere = dict(files, **{"SYSTEM/etc/berberis": b"/system/etc/other"})
+        self.assertTrue(any("does not lead" in problem for problem in check(elsewhere)))
+
+    def test_fr32_the_folders_the_google_apps_are_laid_over_are_in_every_image(self):
+        rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+        overlaid = [point for kind, point in make_image.mounts_onto(rc) if kind == "overlay"]
+        self.assertEqual(sorted(overlaid), sorted("/" + folder.lower() for folder in make_image.gapps_folders()))
+        with tempfile.TemporaryDirectory() as tmp:
+            for arch in ("x86_64", "arm64"):
+                with self._modify_for(Path(tmp), arch) as archive:
+                    names = archive.namelist()
+                    self.assertEqual(make_image.gapps_folder_problems(names), [], arch)
+                    # The build's own folders keep their entries; only the missing ones are added.
+                    self.assertNotIn("PRODUCT/app/", names)
+                    self.assertEqual(names.count("SYSTEM_EXT/priv-app/"), 1)
+                    self.assertTrue(stat.S_ISDIR(archive.getinfo("PRODUCT/framework/").external_attr >> 16))
+                    product = archive.read("META/product_filesystem_config.txt").decode()
+                    self.assertIn("product/etc/default-permissions 0 0 755 capabilities=0x0", product)
+                    self.assertNotIn("product/app ", product)
+                    system_ext = archive.read("META/system_ext_filesystem_config.txt").decode()
+                    self.assertIn("system_ext/etc/preferred-apps 0 0 755 capabilities=0x0", system_ext)
+        self.assertEqual(len(make_image.gapps_folder_problems([])), len(make_image.gapps_folders()))
 
     def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
@@ -5465,12 +5605,18 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertIn(f"mount erofs loop@{image} /mnt/dsa-arm-translation ro nodev nosuid "
                           "fscontext=u:object_r:dsa_arm_translation_fs:s0,"
                           "context=u:object_r:system_lib_file:s0", section)
-            for directory in ["lib64", "bin", "etc"]:
-                self.assertIn(
-                    f"mount overlay overlay /system/{directory} ro nodev "
-                    f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
-                    section,
-                )
+            erofs = section.index(next(c for c in section if c.startswith("mount erofs ")))
+            # Each part of the package is bound onto the empty place the image carries for it,
+            # once the image is mounted, and nothing else is mounted from it.
+            binds = []
+            for folder, inside in make_image.ARM_TRANSLATION_FOLDERS.items():
+                binds.append(f"mount none /mnt/dsa-arm-translation/{inside} /{folder.lower()} bind")
+            config = make_image.ARM_TRANSLATION_LINKER_CONFIG
+            binds.append(f"mount none /mnt/dsa-arm-translation/{config.lower()} /{config.lower()} bind")
+            for bind in binds:
+                self.assertIn(bind, section)
+                self.assertGreater(section.index(bind), erofs, bind)
+            self.assertEqual(sorted(c for c in section if c.startswith("mount none ")), sorted(binds))
             # Nothing else in Android mounts binfmt_misc, so the handlers are registered only
             # once it is mounted here.
             mount = section.index("mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid")
@@ -5486,7 +5632,12 @@ class ArmTranslationImageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            # The places the package is bound onto: /system_ext/lib64 and /system/lib64/arm64
+            # (system libraries), /system/bin/arm64 and /system/bin/dsa-arm-translation (system
+            # files), and /system/etc/ld.config.arm64.txt (the linker's configuration).
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init system_file (dir (mounton)))", policy)
+            self.assertIn("(allow init system_linker_config_file (file (mounton)))", policy)
             self.assertIn("(typeattributeset fs_type (dsa_arm_translation_fs))", policy)
             self.assertIn("(typeattributeset contextmount_type (dsa_arm_translation_fs))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
@@ -5618,12 +5769,15 @@ class ArmTranslationImageTests(unittest.TestCase):
         section, rest = after.split("\n\n", 1)
         self.assertIn("mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
                       "fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
-        for partition in ["product", "system_ext"]:
+        for folder in make_image.gapps_folders():
+            point = "/" + folder.lower()
             self.assertIn(
-                f"mount overlay overlay /{partition} ro nodev "
-                f"lowerdir=/mnt/dsa-gapps/{partition}:/{partition}",
+                f"mount overlay overlay {point} ro nodev "
+                f"lowerdir=/mnt/dsa-gapps{point}:{point}",
                 section,
             )
+        for partition in ["product", "system_ext"]:
+            self.assertNotIn(f"mount overlay overlay /{partition} ", section)
         # Every mount waits for the host's word.
         self.assertNotIn("mount ", before)
         self.assertNotIn("mount ", rest)

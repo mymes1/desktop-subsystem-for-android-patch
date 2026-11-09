@@ -22,7 +22,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
 | `dsa-trace.rc` | Turns on main thread timing in every app when the input trace is on |
 | `dsa-arm-translation.rc`, `arm-translation-on.prop`, `arm-translation-off.prop` | Use an ARM translation package (the one the user installed, or the image's default one), only on a boot the host marks (`../arm-translation/README.md`) |
-| `dsa-gapps.rc`, `gapps-on.prop`, `gapps-off.prop` | Lay the Google apps the user installed (`dsa gapps install`) over `/product` and `/system_ext`, only on a boot the host marks |
+| `dsa-gapps.rc`, `gapps-on.prop`, `gapps-off.prop` | Lay the Google apps the user installed (`dsa gapps install`) over the app and configuration folders of `/product` and `/system_ext`, only on a boot the host marks |
 | `sepolicy/` | Policy added to the image: vsock for graphics, the control daemon's domain and binder service, the memory controls (`memory.cil`), the audio module's socket to the host (`audio.cil`), and what the agent needs to force Doze and set the battery (`agent.cil`) |
 
 ```
@@ -183,9 +183,18 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   which it selects while they have none and the image has a default package, name the native
   bridge and add `arm64-v8a` after `x86_64` to the ABIs. Then `dsa-arm-translation.rc` mounts
   the package's erofs image (the user's from `/data/vendor/dsa/arm-translation/system.img`, or
-  the default one from `/system/etc/dsa/arm-translation/default.img`) over `/system`'s `lib64`,
-  `bin` and `etc` before the zygote starts, mounts binfmt_misc and registers the package's
-  handlers. `sepolicy/arm-translation.cil` lets init do so; dsa-channeld writes and removes the
+  the default one from `/system/etc/dsa/arm-translation/default.img`) at
+  `/mnt/dsa-arm-translation` before the zygote starts, and binds its parts onto empty places
+  an x86_64 image carries for them: `system/lib64` onto `/system_ext/lib64`, on the linker
+  search path where the zygote finds the bridge by name; `system/lib64/arm64` and
+  `system/bin/arm64` onto the same paths; `system/bin` onto `/system/bin/dsa-arm-translation`,
+  where the binfmt_misc rules start the runners; and `system/etc/ld.config.arm64.txt` onto the
+  same path. Links lead `/system/etc/cpuinfo.arm64.txt` and `/system/etc/berberis` into the
+  mount. Nothing is laid over `/system/bin`, `/system/lib64` or `/system/etc`: a service run
+  through an overlay is looked up with init's credentials, and bpfloader's start failed that
+  way and rebooted Android. It then mounts binfmt_misc and registers the package's handlers.
+  `make-image.py` refuses a build that already has files in those places, and `check-image.py`
+  checks them. `sepolicy/arm-translation.cil` lets init do so; dsa-channeld writes and removes the
   user's image. Only an x86_64 image made with `--arm-translation` has the default package and
   its "default" file, so a boot told to use one on any other image stays x86_64 only.
 - With `--framework` (a folder from the "Framework build" workflow), SurfaceFlinger, libhwui
@@ -201,9 +210,12 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   and sends an erofs image of its apps, permission lists, system configuration and framework
   files, which dsa-channeld keeps at `/data/vendor/dsa/gapps/system.img`. While one is installed
   the host puts `androidboot.dsa.gapps=on` in the bootconfig. Then `dsa-gapps.rc` mounts the
-  image and lays its `product` and `system_ext` folders over `/product` and `/system_ext`
-  before the zygote starts, so each app's privileged permission list stays in its own
-  partition, where the package manager reads it. The product `build.prop` imports
+  image and lays each of its folders (`app`, `priv-app`, `framework`, and `etc`'s
+  `permissions`, `sysconfig`, `default-permissions` and `preferred-apps`) over the same folder
+  of `/product` and `/system_ext` before the zygote starts, so each app's privileged permission
+  list stays in its own partition, where the package manager reads it. A partition's root is
+  never laid over: its `bin` holds services, which would fail to start through the overlay.
+  The image adds those folders where the build lacks them, so each overlay finds both layers. The product `build.prop` imports
   `/system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop` just before the ARM translation
   import: the "on" file sets the fingerprint of the oem partition, which the image does not
   have, so the boot is an upgrade and the package manager installs the new system apps for every
