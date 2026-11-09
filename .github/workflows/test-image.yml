@@ -1023,7 +1023,8 @@ jobs:
   #
   # graphics: the host renderer on Mesa's software Vulkan driver. hello-gl2 (OpenGL ES through
   # ANGLE) and hello-vulkan are installed through the local API and opened in task windows,
-  # whose pictures must show each app's triangle on its fading grey background, and the fixed
+  # whose pictures must show each app's triangle on its fading grey background, neither app may
+  # be relaunched after it opens (Android starts at the density its window asks for), and the fixed
   # Vulkan CTS subset runs, each case with its own result. The two share one boot; the CTS
   # takes most of the step.
   boot-check:
