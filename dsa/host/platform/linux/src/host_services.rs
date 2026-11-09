@@ -12,7 +12,6 @@
 //!   Asset Links) and then answered as unavailable, with that reason.
 //! - The KeyMint root key is given once per boot on its own vsock port.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use dsa_host_core::backup::{folder_in, BackupService, FileAccess};
@@ -21,6 +20,7 @@ use dsa_host_core::host_keys::HostKeyStore;
 use dsa_host_core::keymint_root::KEYMINT_PORT;
 use dsa_host_core::passkeys::PasskeyService;
 use dsa_host_core::session::Session;
+use dsa_host_unix::backup_folder::keep_private;
 use dsa_host_unix::https_get::CurlHttpsGet;
 
 use crate::devices::file_share::UserFolders;
@@ -31,34 +31,6 @@ use crate::vsock::VsockHub;
 /// What an app that asks for a passkey is told on Linux.
 pub const NO_PASSKEYS: &str = "Linux has no passkey store DSA can use, so apps cannot make or \
      use passkeys on this computer; sign in another way, such as with a password";
-
-/// The mode the backup folder is kept at: its owner alone.
-pub const FOLDER_MODE: u32 = 0o700;
-
-/// The mode `mode` becomes for the backup folder, if it is not that already.
-pub fn private_mode(mode: u32) -> Option<u32> {
-    (mode & 0o7777 != FOLDER_MODE).then_some(FOLDER_MODE)
-}
-
-/// Keeps `folder` to its owner alone, when it is a folder (not a link) and is not already.
-fn keep_private(folder: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let Ok(metadata) = std::fs::symlink_metadata(folder) else {
-        return;
-    };
-    if !metadata.is_dir() {
-        return;
-    }
-    if let Some(mode) = private_mode(metadata.permissions().mode()) {
-        if let Err(error) = std::fs::set_permissions(folder, std::fs::Permissions::from_mode(mode))
-        {
-            eprintln!(
-                "backup: {} cannot be kept to its owner alone: {error}",
-                folder.display()
-            );
-        }
-    }
-}
 
 /// Uses `folder` with the file identity of `folders`' user, and keeps it theirs alone.
 fn file_access(folders: UserFolders, folder: std::path::PathBuf) -> FileAccess {
@@ -111,17 +83,6 @@ pub fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn fr36_the_backup_folder_is_kept_to_its_owner_alone() {
-        assert_eq!(private_mode(0o40755), Some(0o700));
-        assert_eq!(private_mode(0o40700), None);
-        assert_eq!(
-            private_mode(0o41700),
-            Some(0o700),
-            "no sticky or set-ID bits stay"
-        );
-    }
 
     #[test]
     fn fr36_a_passkey_request_on_linux_says_why_it_is_unavailable() {

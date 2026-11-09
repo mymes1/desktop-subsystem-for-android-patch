@@ -15,8 +15,10 @@
 //! process.
 //!
 //! [`https_get`] is the HTTPS fetch, through `curl`, that the passkey check reads a website's
-//! Digital Asset Links with: certificate checked, no redirect followed.
+//! Digital Asset Links with: certificate checked, no redirect followed. [`backup_folder`]
+//! keeps the user's backup folder to its owner alone.
 
+pub mod backup_folder;
 #[cfg(unix)]
 pub mod device_socket;
 #[cfg(unix)]
