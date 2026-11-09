@@ -6,8 +6,36 @@ import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.GuestMemory
 import io.github.thisisthepy.dsa.control.v1.ProcessMemory
 
-/** One process's share of the guest's memory, in KiB. */
-data class ProcessPss(val pid: Int, val name: String, val pssKb: Long, val swapPssKb: Long = 0)
+/**
+ * One process's share of the guest's memory, in KiB. [swapPssKb] is the part of [pssKb] that
+ * is swapped out to zram, at the size the pages had before compression. [googlePlay] says the
+ * process belongs to Google Play services ([GooglePlayPackages]).
+ */
+data class ProcessPss(
+    val pid: Int,
+    val name: String,
+    val pssKb: Long,
+    val swapPssKb: Long = 0,
+    val googlePlay: Boolean = false,
+)
+
+/**
+ * Which packages the memory report counts as Google Play services, so the user sees what the
+ * Google apps they installed cost apart from what Android and DSA cost.
+ */
+object GooglePlayPackages {
+    /** Google Play services, the Play Store and the services framework, by name. */
+    val CORE = setOf("com.google.android.gms", "com.android.vending", "com.google.android.gsf")
+
+    /**
+     * Whether [packageName] is one of the Google apps: Google Play itself ([CORE]), an app the
+     * Google apps image brought ([fromImage]), or another system app of Google's
+     * (`com.google.android.*`), which only that image puts in the system. A Google app the user
+     * installed from the store is not a system app and counts as the user's own.
+     */
+    fun isGooglePlay(packageName: String, system: Boolean, fromImage: Boolean): Boolean =
+        fromImage || packageName in CORE || (system && packageName.startsWith("com.google.android."))
+}
 
 /** Where the agent reads the guest's memory from: the kernel and the activity manager. */
 interface MemorySource {
@@ -116,6 +144,7 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
         .setZramOriginalKb(zram?.originalKb ?: 0)
         .setZramUsedKb(zram?.usedKb ?: 0)
         .setTotalPssKb(processes.sumOf { it.pssKb })
+        .setSwapPssKb(processes.sumOf { it.swapPssKb })
         .setSlabUnreclaimableKb(meminfo.slabUnreclaimableKb)
         .setKernelStackKb(meminfo.kernelStackKb)
         .setPageTablesKb(meminfo.pageTablesKb)
@@ -124,6 +153,13 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
         .setCmaTotalKb(meminfo.cmaTotalKb)
         .setHugetlbKb(meminfo.hugetlbKb)
         .setMemOnlineKb(memOnlineKb ?: 0)
+    // Every process of Google Play services, not only those among the largest: together they
+    // are what Google Play costs.
+    val googlePlay = processes.filter { it.googlePlay }
+    builder
+        .setGooglePlayProcesses(googlePlay.size)
+        .setGooglePlayPssKb(googlePlay.sumOf { it.pssKb })
+        .setGooglePlaySwapPssKb(googlePlay.sumOf { it.swapPssKb })
     processes
         .sortedWith(compareByDescending<ProcessPss> { it.pssKb }.thenBy { it.pid })
         .take(MemoryReporter.TOP_PROCESSES)
@@ -133,7 +169,8 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
                     .setPid(it.pid)
                     .setName(it.name)
                     .setPssKb(it.pssKb)
-                    .setSwapPssKb(it.swapPssKb),
+                    .setSwapPssKb(it.swapPssKb)
+                    .setGooglePlay(it.googlePlay),
             )
         }
     return builder.build()

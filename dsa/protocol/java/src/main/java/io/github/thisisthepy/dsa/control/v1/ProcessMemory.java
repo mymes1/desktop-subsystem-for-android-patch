@@ -156,7 +156,9 @@ public  final class ProcessMemory extends
   private long swapPssKb_;
   /**
    * <pre>
-   * How much of it is swapped out to compressed memory, proportionally, in KiB.
+   * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+   * size the pages had before zram compressed them, not the memory they take in zram, and it
+   * is counted in pss_kb.
    * </pre>
    *
    * <code>uint64 swap_pss_kb = 4;</code>
@@ -168,7 +170,9 @@ public  final class ProcessMemory extends
   }
   /**
    * <pre>
-   * How much of it is swapped out to compressed memory, proportionally, in KiB.
+   * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+   * size the pages had before zram compressed them, not the memory they take in zram, and it
+   * is counted in pss_kb.
    * </pre>
    *
    * <code>uint64 swap_pss_kb = 4;</code>
@@ -180,7 +184,9 @@ public  final class ProcessMemory extends
   }
   /**
    * <pre>
-   * How much of it is swapped out to compressed memory, proportionally, in KiB.
+   * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+   * size the pages had before zram compressed them, not the memory they take in zram, and it
+   * is counted in pss_kb.
    * </pre>
    *
    * <code>uint64 swap_pss_kb = 4;</code>
@@ -188,6 +194,50 @@ public  final class ProcessMemory extends
   private void clearSwapPssKb() {
     
     swapPssKb_ = 0L;
+  }
+
+  public static final int GOOGLE_PLAY_FIELD_NUMBER = 5;
+  private boolean googlePlay_;
+  /**
+   * <pre>
+   * The process belongs to Google Play services: one of the Google apps the user installed
+   * (Google Play services, the Play Store, the services framework and the other system apps
+   * the Google apps image brings).
+   * </pre>
+   *
+   * <code>bool google_play = 5;</code>
+   * @return The googlePlay.
+   */
+  @java.lang.Override
+  public boolean getGooglePlay() {
+    return googlePlay_;
+  }
+  /**
+   * <pre>
+   * The process belongs to Google Play services: one of the Google apps the user installed
+   * (Google Play services, the Play Store, the services framework and the other system apps
+   * the Google apps image brings).
+   * </pre>
+   *
+   * <code>bool google_play = 5;</code>
+   * @param value The googlePlay to set.
+   */
+  private void setGooglePlay(boolean value) {
+    
+    googlePlay_ = value;
+  }
+  /**
+   * <pre>
+   * The process belongs to Google Play services: one of the Google apps the user installed
+   * (Google Play services, the Play Store, the services framework and the other system apps
+   * the Google apps image brings).
+   * </pre>
+   *
+   * <code>bool google_play = 5;</code>
+   */
+  private void clearGooglePlay() {
+    
+    googlePlay_ = false;
   }
 
   public static io.github.thisisthepy.dsa.control.v1.ProcessMemory parseFrom(
@@ -431,7 +481,9 @@ public  final class ProcessMemory extends
 
     /**
      * <pre>
-     * How much of it is swapped out to compressed memory, proportionally, in KiB.
+     * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+     * size the pages had before zram compressed them, not the memory they take in zram, and it
+     * is counted in pss_kb.
      * </pre>
      *
      * <code>uint64 swap_pss_kb = 4;</code>
@@ -443,7 +495,9 @@ public  final class ProcessMemory extends
     }
     /**
      * <pre>
-     * How much of it is swapped out to compressed memory, proportionally, in KiB.
+     * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+     * size the pages had before zram compressed them, not the memory they take in zram, and it
+     * is counted in pss_kb.
      * </pre>
      *
      * <code>uint64 swap_pss_kb = 4;</code>
@@ -457,7 +511,9 @@ public  final class ProcessMemory extends
     }
     /**
      * <pre>
-     * How much of it is swapped out to compressed memory, proportionally, in KiB.
+     * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+     * size the pages had before zram compressed them, not the memory they take in zram, and it
+     * is counted in pss_kb.
      * </pre>
      *
      * <code>uint64 swap_pss_kb = 4;</code>
@@ -466,6 +522,52 @@ public  final class ProcessMemory extends
     public Builder clearSwapPssKb() {
       copyOnWrite();
       instance.clearSwapPssKb();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * The process belongs to Google Play services: one of the Google apps the user installed
+     * (Google Play services, the Play Store, the services framework and the other system apps
+     * the Google apps image brings).
+     * </pre>
+     *
+     * <code>bool google_play = 5;</code>
+     * @return The googlePlay.
+     */
+    @java.lang.Override
+    public boolean getGooglePlay() {
+      return instance.getGooglePlay();
+    }
+    /**
+     * <pre>
+     * The process belongs to Google Play services: one of the Google apps the user installed
+     * (Google Play services, the Play Store, the services framework and the other system apps
+     * the Google apps image brings).
+     * </pre>
+     *
+     * <code>bool google_play = 5;</code>
+     * @param value The googlePlay to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGooglePlay(boolean value) {
+      copyOnWrite();
+      instance.setGooglePlay(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The process belongs to Google Play services: one of the Google apps the user installed
+     * (Google Play services, the Play Store, the services framework and the other system apps
+     * the Google apps image brings).
+     * </pre>
+     *
+     * <code>bool google_play = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGooglePlay() {
+      copyOnWrite();
+      instance.clearGooglePlay();
       return this;
     }
 
@@ -489,10 +591,11 @@ public  final class ProcessMemory extends
             "name_",
             "pssKb_",
             "swapPssKb_",
+            "googlePlay_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0004\u0002\u0208" +
-              "\u0003\u0003\u0004\u0003";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0004\u0002\u0208" +
+              "\u0003\u0003\u0004\u0003\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

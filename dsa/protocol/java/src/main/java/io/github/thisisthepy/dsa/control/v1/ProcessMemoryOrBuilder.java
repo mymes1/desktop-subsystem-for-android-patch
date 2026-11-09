@@ -46,11 +46,25 @@ public interface ProcessMemoryOrBuilder extends
 
   /**
    * <pre>
-   * How much of it is swapped out to compressed memory, proportionally, in KiB.
+   * How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+   * size the pages had before zram compressed them, not the memory they take in zram, and it
+   * is counted in pss_kb.
    * </pre>
    *
    * <code>uint64 swap_pss_kb = 4;</code>
    * @return The swapPssKb.
    */
   long getSwapPssKb();
+
+  /**
+   * <pre>
+   * The process belongs to Google Play services: one of the Google apps the user installed
+   * (Google Play services, the Play Store, the services framework and the other system apps
+   * the Google apps image brings).
+   * </pre>
+   *
+   * <code>bool google_play = 5;</code>
+   * @return The googlePlay.
+   */
+  boolean getGooglePlay();
 }

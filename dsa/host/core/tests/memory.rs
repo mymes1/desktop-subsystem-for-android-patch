@@ -306,12 +306,17 @@ fn report() -> control::GuestMemory {
         zram_original_kb: 100 * MIB,
         zram_used_kb: 30 * MIB,
         total_pss_kb: 650 * MIB,
+        swap_pss_kb: 300 * MIB,
         top_processes: vec![control::ProcessMemory {
             pid: 500,
             name: "system".into(),
             pss_kb: 180 * MIB,
             swap_pss_kb: MIB,
+            ..Default::default()
         }],
+        google_play_processes: 2,
+        google_play_pss_kb: 135 * MIB,
+        google_play_swap_pss_kb: 120 * MIB,
         slab_unreclaimable_kb: 60 * MIB,
         kernel_stack_kb: 10 * MIB,
         page_tables_kb: 20 * MIB,
@@ -478,8 +483,9 @@ fn nfr1_the_log_line_sums_the_host_and_says_where_the_guests_memory_goes() {
     assert_eq!(
         snapshot().summary_line(),
         "memory: host 900 MiB (vm 600, window manager 120, graphics renderer 80, 2 app windows \
-         100); guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), pss 650 MiB, \
-         42 s ago"
+         100); guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), processes 440 \
+         MiB (350 resident, 90 compressed in zram), Google Play services 51 MiB (15 resident, 36 \
+         compressed in zram), 42 s ago"
     );
     let no_guest = MemorySnapshot {
         guest: None,
@@ -510,7 +516,9 @@ fn nfr1_the_report_dsa_memory_prints_names_every_part() {
         "Android (42 s ago): 2048 of 4096 MiB in use",
         "page cache 900 MiB",
         "swap 100 of 2048 MiB used; zram holds 100 MiB in 30 MiB",
-        "650 MiB PSS in all",
+        "processes: 440 MiB (350 resident, 90 compressed in zram) in all (300 MiB swapped out \
+         before compression)",
+        "Google Play services: 51 MiB (15 resident, 36 compressed in zram) in 2 processes",
         "kernel and everything else 358 MiB",
         "unreclaimable slab 60, kernel stacks 10, page tables 20, vmalloc 30, per-CPU 2",
         "zram store 30, unaccounted (drivers, GPU and DMA buffers) 206 MiB",
@@ -519,6 +527,97 @@ fn nfr1_the_report_dsa_memory_prints_names_every_part() {
     ] {
         assert!(text.contains(part), "{part:?} missing from:\n{text}");
     }
+}
+
+#[test]
+fn nfr2_swapped_out_memory_counts_at_the_size_zram_holds_it_in() {
+    // The owner's PC, an hour after boot with Google Play and no window: Google Play services'
+    // processes held 81 MiB of PSS, 74.6 MiB of it in zram, which compressed 3.14 to 1.
+    let guest = GuestMemory {
+        zram_original_kb: 314 * MIB,
+        zram_used_kb: 100 * MIB,
+        swap_total_kb: 2048 * MIB,
+        swap_free_kb: 1734 * MIB,
+        ..GuestMemory::default()
+    };
+    let gms = guest.share(81 * MIB, 74_600);
+    assert_eq!(gms.resident_kb, 81 * MIB - 74_600);
+    assert_eq!(gms.swapped_out_kb, 74_600);
+    assert_eq!(gms.compressed_kb, Some(23_758));
+    assert_eq!(gms.total_kb(), 8_344 + 23_758);
+    // Never the swapped-out size itself: that is what made the guest look 2.7 times bigger.
+    assert!(gms.total_kb() < 81 * MIB / 2);
+
+    // zram never holds a page in more than its size, whatever its statistics say.
+    let odd = GuestMemory {
+        zram_original_kb: MIB,
+        zram_used_kb: 2 * MIB,
+        ..GuestMemory::default()
+    };
+    assert_eq!(odd.compressed_kb(512), Some(512));
+    // Without the size zram stores, the swap in use from /proc/meminfo stands for it.
+    let from_meminfo = GuestMemory {
+        zram_used_kb: 100 * MIB,
+        swap_total_kb: 2048 * MIB,
+        swap_free_kb: 1748 * MIB,
+        ..GuestMemory::default()
+    };
+    assert_eq!(from_meminfo.compressed_kb(300 * MIB), Some(100 * MIB));
+}
+
+#[test]
+fn nfr2_a_guest_that_cannot_measure_zram_says_so_instead_of_counting_full_size() {
+    let guest = GuestMemory {
+        total_pss_kb: 200 * MIB,
+        swap_pss_kb: 150 * MIB,
+        ..GuestMemory::default()
+    };
+    let apps = guest.apps();
+    assert_eq!(apps.resident_kb, 50 * MIB);
+    assert_eq!(apps.compressed_kb, None);
+    assert_eq!(apps.total_kb(), 50 * MIB);
+    // Nothing swapped out needs no ratio.
+    assert_eq!(guest.share(10 * MIB, 0).compressed_kb, Some(0));
+    let snapshot = MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: guest,
+            age: Duration::from_secs(1),
+        }),
+        host: Vec::new(),
+    };
+    let text = snapshot.to_string();
+    assert!(
+        text.contains("processes: 50 MiB (50 resident, ? compressed in zram)"),
+        "{text}"
+    );
+    assert!(text.contains("Google Play services: not running"), "{text}");
+}
+
+#[test]
+fn nfr2_google_play_services_has_a_line_of_its_own_that_crosses_the_local_api() {
+    let snapshot = snapshot();
+    let guest = &snapshot.guest.as_ref().unwrap().memory;
+    let play = guest.google_play_share().unwrap();
+    assert_eq!(play.resident_kb, 15 * MIB);
+    assert_eq!(play.compressed_kb, Some(36 * MIB));
+    let wire = snapshot_to_wire(&snapshot);
+    let wired = wire.guest.as_ref().unwrap();
+    assert_eq!(wired.google_play_processes, 2);
+    assert_eq!(wired.google_play_pss_kb, 135 * MIB);
+    assert_eq!(wired.google_play_swap_pss_kb, 120 * MIB);
+    assert_eq!(wired.swap_pss_kb, 300 * MIB);
+    assert_eq!(snapshot_from_wire(wire), snapshot);
+    // A process of Google Play services among the largest is marked.
+    let mut marked = report();
+    marked.top_processes[0].google_play = true;
+    let marked = MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: GuestMemory::from_control(marked),
+            age: Duration::from_secs(1),
+        }),
+        host: Vec::new(),
+    };
+    assert!(marked.to_string().contains("system [Google Play services]"));
 }
 
 /// One user's running Android, as the service's log sees it.

@@ -1170,8 +1170,14 @@ message ProcessMemory {
   // Its proportional set size in KiB: its private pages plus its share of the pages it
   // shares with other processes.
   uint64 pss_kb = 3;
-  // How much of it is swapped out to compressed memory, proportionally, in KiB.
+  // How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+  // size the pages had before zram compressed them, not the memory they take in zram, and it
+  // is counted in pss_kb.
   uint64 swap_pss_kb = 4;
+  // The process belongs to Google Play services: one of the Google apps the user installed
+  // (Google Play services, the Play Store, the services framework and the other system apps
+  // the Google apps image brings).
+  bool google_play = 5;
 }
 
 // Guest to host, from the agent: how the guest uses its memory. Sent every few minutes, and
@@ -1215,6 +1221,15 @@ message GuestMemory {
   // MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
   // pstore). 0 when the guest cannot read it.
   uint64 mem_online_kb = 22;
+  // How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+  // were compressed, for every process total_pss_kb counts.
+  uint64 swap_pss_kb = 23;
+  // The processes of Google Play services (ProcessMemory.google_play), all of them and not
+  // only those among top_processes: how many run, their proportional set size, and how much
+  // of it is swapped out to zram, at the size before compression.
+  uint32 google_play_processes = 24;
+  uint64 google_play_pss_kb = 25;
+  uint64 google_play_swap_pss_kb = 26;
 }
 
 // From the agent to the guest's control daemon, on each connection to it: the agent has
