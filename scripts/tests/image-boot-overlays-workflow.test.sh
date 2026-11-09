@@ -27,4 +27,13 @@ make=$(grep -n 'name: Make the image' "$workflow" | head -1 | cut -d: -f1)
 test "$download" -lt "$inputs"
 test "$inputs" -lt "$make"
 grep -Fq '[[ -d .scratch/arm-translation ]] && programs+=(.scratch/arm-translation)' "$workflow"
+# The idle reclaim with Google apps installed is measured on a runner of its own, and the
+# overlay check leaves it out; its report goes to the job summary and its artifact.
+grep -Fq 'filter: --skip nfr3_the_idle_reclaim_with_google_apps_is_measured' "$workflow"
+grep -Fq 'filter: nfr3_the_idle_reclaim_with_google_apps_is_measured' "$workflow"
+grep -Fq 'summary: /tmp/overlays-test-*/idle-reclaim.md' "$workflow"
+grep -Fq 'if: always() && matrix.summary' "$workflow"
+grep -Fq 'cat "$report" >> "$GITHUB_STEP_SUMMARY"' "$workflow"
+grep -Fq '/tmp/overlays-test-*/idle-reclaim*' "$workflow"
+grep -Fq '"dsa/host/platform/linux/tests/idle_reclaim/**"' "$workflow"
 echo "image boot overlays workflow: ok"

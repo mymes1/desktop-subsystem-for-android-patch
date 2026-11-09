@@ -2,8 +2,8 @@
 # only while translation is on: "on" when the user installed a translation package, whose
 # system image (erofs) is on the user's disk, where dsa-channeld wrote it; "default" when they
 # did not and this x86_64 image carries its own default package, at
-# /system/etc/dsa/arm-translation/default.img. Here init mounts that image through a loop
-# device at /mnt/dsa-arm-translation before the zygote starts, and makes each part of it
+# /system/etc/dsa/arm-translation/default.img. Here init mounts that image straight from its
+# file at /mnt/dsa-arm-translation before the zygote starts, and makes each part of it
 # reachable where the runtime, the linker and the translator look for it. The properties come
 # from /system/etc/dsa/arm-translation-<value>.prop, which the product build.prop imports on
 # the same condition. A system script, because only init itself may bind anything onto /system.
@@ -40,12 +40,19 @@
 # packages whose rules still name those. Each binding keeps the image's nosuid, which is harmless: no
 # program there changes domain.
 #
+# erofs reads the image file itself (file-backed erofs), not through a loop device, which kept
+# a second copy of every page read from the image in the file's own page cache. directio asks
+# erofs to read the file's data without that copy where the file's filesystem allows it; where
+# it does not (a compressed file in /system, an encrypted one in /data without inline
+# encryption) the read is an ordinary cached one, as before. erofs opens and reads the file
+# with init's credentials, whichever process asked for the page.
+#
 # The image's files are labelled system libraries (context=), and its superblock gets a
 # filesystem type of its own (fscontext=, sepolicy/arm-translation.cil), which every domain
 # may statfs: statfs on each of those folders reports the image's superblock. Both go in one
-# comma-separated argument: init passes only the last argument that is not a flag to the
-# kernel and drops any other, and context= alone relabels the superblock to a file type, which
-# the kernel refuses ("denied { relabelto } ... system_lib_file ... tclass=filesystem").
+# comma-separated argument with directio: init passes only the last argument that is not a flag
+# to the kernel and drops any other, and context= alone relabels the superblock to a file type,
+# which the kernel refuses ("denied { relabelto } ... system_lib_file ... tclass=filesystem").
 #
 # ARM64 programs an app starts run through the package's translator: init mounts binfmt_misc,
 # which nothing else in Android mounts, and registers the package's handlers, which name their
@@ -56,7 +63,7 @@ on post-fs-data && property:ro.boot.dsa.arm_translation=on
     mkdir /data/vendor/dsa 0771 system system
     mkdir /data/vendor/dsa/arm-translation 0770 system system
     mkdir /mnt/dsa-arm-translation 0755 root root
-    mount erofs loop@/data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro nodev nosuid fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+    mount erofs /data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro nodev nosuid directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
     mount none /mnt/dsa-arm-translation/system/lib64 /system_ext/lib64 bind
     mount none /mnt/dsa-arm-translation/system/lib64/arm64 /system/lib64/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind
@@ -69,7 +76,7 @@ on post-fs-data && property:ro.boot.dsa.arm_translation=on
 
 on post-fs-data && property:ro.boot.dsa.arm_translation=default
     mkdir /mnt/dsa-arm-translation 0755 root root
-    mount erofs loop@/system/etc/dsa/arm-translation/default.img /mnt/dsa-arm-translation ro nodev nosuid fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+    mount erofs /system/etc/dsa/arm-translation/default.img /mnt/dsa-arm-translation ro nodev nosuid directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
     mount none /mnt/dsa-arm-translation/system/lib64 /system_ext/lib64 bind
     mount none /mnt/dsa-arm-translation/system/lib64/arm64 /system/lib64/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind

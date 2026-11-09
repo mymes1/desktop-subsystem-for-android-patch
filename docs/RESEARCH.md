@@ -1990,16 +1990,43 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 
 guest/mesa 0007(`dsa_shadow_memory.h`): 사본은 커널이 처음 쓸 때에야 내주는 0 페이지(익명 mmap)로 만들고, 앱이 매핑한 할당만 호스트와 맞춘다. 처음 매핑할 때 한 번 다시 읽어 그전에 장치가 쓴 것을 담는다. 앱이 매핑하지 않는 메모리(이미지 등, 앱 GPU 메모리의 대부분)는 보내지도, 다시 읽지도, 건드리지도 않는다. 기대: 프레임마다의 전체 읽어 오기가 매핑된 버퍼(유니폼, 정점, 스테이징, 보통 몇 MiB)로 줄고, GPU를 쓰는 프로세스마다 이미지 메모리만큼의 익명 메모리가 빠진다. 시험: `tests/shadow_memory_test.cpp`(mincore로 상주 페이지를 센다), `test_mapped_memory_patch.py`.
 
-### Google 앱의 비용에 대한 선택지 (바꾸지 않았다)
+### Google 앱의 비용에 대한 선택지 (4는 구현했고, 3은 먼저 잰다)
 
 1. 그대로 둔다. Google 앱은 사용자의 선택이고, 부팅 직후 PSS 약 +400 MiB, 앱을 닫은 뒤 약 +50 MiB, 캐시 수백 MiB가 그 값이다.
 2. Google 앱이 있을 때 캐시 프로세스 상한(지금 8)을 더 낮추거나 Play 서비스의 비상주 프로세스를 제한 대기 버킷에 둔다. 메모리는 줄지만 푸시 알림과 동기화가 늦어질 수 있다.
 3. 유휴 회수의 되풀이에 간격 늘리기(되풀이할 때마다 두 배, 앱을 열면 처음으로)를 둔다. 다시 찬 캐시가 대부분 내려놓은 작업 집합이라면 CPU 낭비가 줄고, 그 대가로 다시 찬 메모리가 게스트에 더 오래 머문다. NFR-3(대기 CPU)을 재야 정할 수 있다.
 4. Google 앱과 번역기 이미지를 loop 없이 erofs 파일 마운트에 `directio`로 붙인다(`CONFIG_EROFS_FS_BACKED_BY_FILE`). 지금은 loop가 이미지 파일의 캐시와 erofs의 캐시를 겹쳐 두므로 읽은 만큼이 두 번 잡힌다. 겹친 쪽은 차가워서 다듬기가 먼저 거두지만, 부팅 직후의 캐시 몇백 MiB 가운데 일부가 이것이다. 커널 설정과 init 스크립트를 바꾸고 실기에서 Google Play가 그대로 붙는지 확인해야 한다.
 
+소유자는 4를 구현하고, 3은 정책을 바꾸기 전에 먼저 재도록 정했다(2026-11-10).
+
+### 선택지 4: 이미지를 loop 없이 파일에서 바로 붙인다
+
+**확인한 것.** 고정한 커널은 `linux-msft-wsl-6.18.54.1`(6.18.54)이다. 그 원본을 읽었다(GitHub의 `microsoft/WSL2-Linux-Kernel` 태그, 빌드하지 않았다). 파일 기반 erofs(`CONFIG_EROFS_FS_BACKED_BY_FILE`, 6.12부터)가 있고 기본값이 y다. `fs/erofs/super.c`는 블록 장치가 아닌 원본을 `filp_open`으로 열어 그 파일에서 바로 읽고, `directio` 마운트 옵션(6.12부터)을 받아 `/proc/self/mountinfo`에 `,directio`로 보인다. `fs/erofs/fileio.c`는 읽을 때마다 파일을 연 쪽의 자격(`override_creds(file->f_cred)`, 여기서는 init)으로 `vfs_iocb_iter_read`를 부르고, `directio`이고 아래 파일이 `FMODE_CAN_ODIRECT`일 때만 `IOCB_DIRECT`를 붙인다. 쌓인 파일 시스템 위의 파일이나 파일 기반 erofs 위의 파일은 거절하지만, 블록 장치 위 erofs(`/system`)의 파일은 받는다. 스택 깊이는 늘리지 않으므로 그 위에 overlay를 놓아도 깊이 한도(2)에 닿지 않는다.
+
+**바꾼 것.** 커널 설정에 `CONFIG_EROFS_FS_BACKED_BY_FILE=y`를 적었다(loop 드라이버는 apexd가 쓰므로 남긴다). `dsa-gapps.rc`와 `dsa-arm-translation.rc`의 세 마운트는 `loop@` 없이 이미지 파일을 원본으로 하고, 커널에 넘기는 마지막 인자를 `directio,fscontext=...,context=...`로 했다. SELinux 정책에서는 쓰지 않게 된 init의 loop 장치 규칙을 뺐다. init이 이미지 파일을 읽는 규칙(`vendor_data_file`, `system_file`)과 슈퍼블록 형식, 파일 라벨, bind와 overlay는 그대로다. 시험: `test_android_config.py`의 `test_nfr2_fr25_fr32_the_images_are_mounted_from_their_files_without_a_loop_device`(설정, 고정 커널이 6.12 이상인지, 스크립트에 `loop@`가 없고 `directio`가 있는지), 이미지 부팅 확인 "Lay the ARM translator and Google Play over the booted system"은 두 부팅 모두에서 각 이미지의 마운트가 loop 장치(주 번호 7, `/dev/block/loop*`)가 아니고 원본이 이미지 파일이며 `directio`인지 본다(`overlays.rs`의 `file_backed_problems`).
+
+**기대하는 절감.** loop일 때는 이미지에서 읽은 쪽마다 erofs의 캐시와 이미지 파일(ext4)의 캐시에 한 벌씩 있었고, erofs의 메타데이터는 loop 장치의 블록 캐시에 한 벌 더 있었다. 파일 기반이면 메타데이터는 이미지 파일의 캐시에만 있고(몇 MiB), `directio`가 실제로 걸리면 데이터의 두 번째 벌이 없어진다. 부팅 직후 Google 앱이 더하는 캐시 290-650 MiB 가운데 erofs 쪽과 같은 크기의 두 번째 벌, 많게는 그 절반(약 150-300 MiB, 추정)이다. 다만 `directio`가 걸리는지는 아래 파일 시스템이 정한다.
+
+- Google 앱 이미지(`/data/vendor/dsa/gapps/system.img`)는 `/data`의 ext4 위에 있고, `/data`는 파일 단위 암호화(`fileencryption=aes-256-xts:aes-256-hctr2`)에 `inlinecrypt`가 없다. 6.18의 ext4는 인라인 암호화가 아닌 암호화 파일에 직접 I/O를 주지 않고(`ext4_dio_alignment`, `fscrypt_dio_supported`) 보통의 캐시 읽기로 돌린다. 그래서 지금의 이미지에서는 Google 앱의 두 번째 벌이 그대로 남고, 줄어드는 것은 메타데이터와 loop 장치뿐이다. 실패는 아니다. 읽기는 예전처럼 캐시를 거친다.
+- 사용자가 설치한 번역기(`/data/vendor/dsa/arm-translation/system.img`)도 같다.
+- 기본 번역기(`/system/etc/dsa/arm-translation/default.img`)는 `/system`의 erofs 위에 있다. erofs는 압축하지 않은 파일에만 직접 I/O를 준다. 이미지의 `/system`이 그 파일을 압축해 담았는지는 확인하지 못했다. 압축하지 않았다면 ARM 앱이 도는 동안 번역기의 두 번째 벌이 없어진다.
+
+Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정할 일이라 하지 않았다. (가) `/data`를 `inlinecrypt`로 붙이고 커널에 `CONFIG_BLK_INLINE_ENCRYPTION`, `CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK`, `CONFIG_FS_ENCRYPTION_INLINE_CRYPT`를 넣는다. 정책 플래그가 같으면 디스크 형식은 같지만 `/data`의 모든 읽기와 쓰기가 블록 계층의 소프트웨어 암호화로 바뀐다. 쓰기마다 바운스 페이지가 들고 성능은 재 봐야 한다. (나) Google 앱 이미지를 암호화하지 않는 곳(호스트가 붙이는 읽기 전용 디스크 등)에 둔다. 서비스, dsa-channeld, 이미지의 위치가 함께 바뀐다.
+
+### 선택지 3을 정하기 위한 측정
+
+이미지 부팅 확인에 "Measure the idle reclaim with Google Play on the booted image"를 더했다(`overlays.rs`의 `nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image`, `tests/idle_reclaim`). 측정이므로 잴 수 없을 때만 실패한다.
+
+- 조건: 게스트 4096 MiB, 프로세서 2개, 네트워크 없음, 앱 창 없음. Google 앱은 LiteGapps가 게스트의 API 수준에 내는 최신 Core 빌드를 확인이 미러로 내려받아 설치한다(사용자가 받는 빌드). LiteGapps에 닿지 못하면 확인용의 작은 빌드로 재고 경고를 남긴다. 그 빌드에는 도는 Play 서비스가 없으므로 그때의 숫자는 이미지를 붙인 시스템의 숫자일 뿐이다. 네트워크가 없으므로 Play 스토어의 업데이트와 동기화는 일어나지 않는다. 소유자 PC의 값과는 그만큼 다르다.
+- 방법: Android가 Google 앱과 함께 다시 시작한 뒤 300초 동안 게스트 안의 셸 스크립트가 1초마다 본다. 셸 내장 명령으로만 읽으므로 한 번 보는 데 `sleep` 말고는 프로세스를 만들지 않는다. 보는 것은 `/proc/stat`, init과 그 subcontext(벤더 스크립트의 `write`를 실행한다)와 kswapd0, kcompactd0의 `/proc/<pid>/stat` 시간, `/proc/vmstat`의 `workingset_refault_file`, `pgpgin`, `pswpin`, `pswpout`, `pgmajfault`, `compact_stall`, `/proc/meminfo`의 `Cached` 등이다. 회수의 커널 일은 쓰는 프로세스 안에서 일어나므로, init이 한 번 볼 때 30 ms 이상 커널 시간을 쓴 구간을 회수 한 번으로 센다. 종류는 게스트 로그(`logcat -v monotonic`)의 dsa-channeld 줄로, 없으면 zram으로 내보낸 페이지가 있었는지로 가른다. 단계별 시간(zram, `drop_caches`, 압축, 다듬기)은 init이 50 ms 이상 걸린 명령에 남기는 줄에서 읽는다.
+- 무엇이 캐시를 다시 채우는지: 10초마다 모든 프로세스의 major fault(매핑으로 읽어 들인 파일 페이지: APK, dex, 라이브러리)와 각 최상위 cgroup의 `workingset_refault_file`을 읽어, 회수 사이의 틈마다 늘어난 만큼을 프로세스별로 모은다. user 빌드에서 셸은 자기 프로세스의 `/proc/<pid>/io`만 읽을 수 있어서 `read_bytes`는 대부분 비어 있다. `read()`로 읽는 것은 major fault에 잡히지 않는다.
+- 결과: 작업 요약과 아티팩트 `idle-reclaim-measurement`(`idle-reclaim.md`, `idle-reclaim.json`, 원자료 `idle-reclaim-samples.txt`, `idle-reclaim-log.txt`). 회수마다 시각, 종류, 앞 회수와의 간격, init의 커널 시간, 단계별 시간, 앞 회수 이후의 refault와 `pgpgin`, 전후의 캐시, zram으로 간 양을 적고, 전체로는 횟수, 평균 간격, 커널 시간 합, kswapd와 kcompactd의 시간, 게스트 CPU 합(한 프로세서의 몇 %인지)과 그 가운데 측정 스크립트 몫을 적는다.
+- 해석할 때: `pgpgin`은 블록 장치에서 읽은 양이다. loop일 때는 같은 읽기가 loop 장치와 `/data`에서 두 번 세였지만, 파일 기반 erofs는 bio를 내지 않으므로 이제 한 번만 센다. v0.2.1 로그와 견줄 때 그만큼 줄어 보인다. 아직 CI의 값은 없다. 첫 develop 실행이 남긴다.
+
 ### 확인하지 못한 것
 
 - 0007의 효과 전부. 이 PC에서 빌드하거나 실행하지 않았다. Graphics test와 이미지의 그래픽 부팅 확인(Vulkan CTS 일부)이 먼저 판단하고, PC에서는 같은 조건(Google Play, YouTube 창 하나)으로 `dsa memory`의 앱 메모리와 PSS, `dsa-wm.log`의 렌더러 줄, 그리고 `androidboot.hardware.dsa_input_trace=1`일 때의 `stage=driver.flush` 줄(`scanned_mb_per_submit`)을 앞뒤로 잰다.
 - 프레임마다의 다시 읽기가 실제로 몇 MiB였는지. 0005 뒤의 읽어 오기에는 추적 줄이 없다.
-- 창이 없을 때 캐시를 다시 채우는 것이 무엇인지. 게스트에서 `/proc/vmstat`의 `workingset_refault_file`과 `pgpgin`을 회수 전후로 함께 남기면 가를 수 있다.
+- 창이 없을 때 캐시를 다시 채우는 것이 무엇인지. 게스트에서 `/proc/vmstat`의 `workingset_refault_file`과 `pgpgin`을 회수 전후로 함께 남기면 가를 수 있다. 위의 측정이 그것을 남긴다. 그 값은 아직 없다.
+- 파일 기반 erofs로 바꾼 뒤 실제로 줄어든 캐시. CI는 SELinux 강제 모드에서 마운트가 되는지와 마운트의 모양만 본다. 소유자 PC에서 Google Play를 둔 채 부팅 직후의 `dsa memory` 캐시 값을 v0.2.1과 견줘야 한다. 기본 번역기가 `/system` 안에 압축되어 있는지도 확인하지 못했다.
 - VM을 줄이는 HCS 요청이 시간 초과로 실패한 원인.
