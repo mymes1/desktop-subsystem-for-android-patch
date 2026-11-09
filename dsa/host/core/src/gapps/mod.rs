@@ -10,14 +10,17 @@
 //! build for another architecture or Android version. The image goes to the user's Android,
 //! which keeps it on the user's disk (`/data/vendor/dsa/gapps/system.img`), and the build's
 //! description goes with the user's settings. While one is recorded, each boot's bootconfig
-//! carries [`BOOTCONFIG_ON`], and the guest then lays the image over its `/product` and
-//! `/system_ext` before its package manager starts. Every change applies from the next start of
-//! Android, because the package manager reads the system apps and their permissions once.
+//! carries [`BOOTCONFIG_ON`], and the guest then lays each folder of the image over the same
+//! folder of its `/product` and `/system_ext` before its package manager starts, never a
+//! partition's root, whose services would then fail to start. Every change applies from the
+//! next start of Android, because the package manager reads the system apps and their
+//! permissions once.
 //!
 //! ```text
 //! image root
-//!   product/{app,priv-app,etc,framework}/...      over /product
-//!   system_ext/{app,priv-app,etc,framework}/...   over /system_ext
+//!   product/{app,priv-app,framework}/...             over the same folders of /product
+//!   product/etc/{permissions,sysconfig,default-permissions,preferred-apps}/...
+//!   system_ext/...                                   the same folders, over /system_ext
 //! ```
 
 pub mod listing;

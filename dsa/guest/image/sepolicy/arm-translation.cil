@@ -1,21 +1,25 @@
 ; Desktop Subsystem for Android (DSA)
 ; ARM app translation (dsa-arm-translation.rc). When the host says translation is on, init
-; mounts a package's erofs image through a loop device, its files labelled as system libraries,
-; and lays it over /system's lib64, bin and etc with overlayfs: the user's package from
-; /data/vendor/dsa/arm-translation, or the image's default one from /system/etc/dsa (system_file,
-; which init already reads). It then mounts binfmt_misc on /proc/sys/fs/binfmt_misc, which
-; nothing else in Android mounts, and registers the package's handlers there.
+; mounts a package's erofs image through a loop device at /mnt/dsa-arm-translation, its files
+; labelled as system libraries: the user's package from /data/vendor/dsa/arm-translation, or
+; the image's default one from /system/etc/dsa (system_file, which init already reads). It
+; then binds the image's folders onto the empty folders the x86_64 image carries for them
+; (/system_ext/lib64 and /system/lib64/arm64, system libraries; /system/bin/arm64 and
+; /system/bin/dsa-arm-translation, system files) and its linker configuration onto the empty
+; /system/etc/ld.config.arm64.txt. Nothing is laid over a folder the system's own programs
+; are in. It mounts binfmt_misc on /proc/sys/fs/binfmt_misc, which nothing else in Android
+; mounts, and registers the package's handlers there.
 (allow init vendor_data_file (file (read open getattr)))
 (allow init loop_control_device (chr_file (read write open ioctl getattr)))
 (allow init loop_device (blk_file (read open ioctl getattr)))
 (allow init tmpfs (dir (mounton)))
 (allow init system_file (dir (mounton)))
 (allow init system_lib_file (dir (mounton)))
+(allow init system_linker_config_file (file (mounton)))
 
-; The image's superblock. statfs on an overlay reports the filesystem of its top lower layer,
-; and the kernel checks the caller's filesystem getattr against that superblock's label. So
-; every program that asks how full /system/bin is (bpfloader is the first, and its failure
-; reboots Android) and init itself, when it lays the image over, are checked against this
+; The image's superblock. statfs on each folder the image is bound onto reports the image's
+; superblock, and the kernel checks the caller's filesystem getattr against its label. So
+; every program that asks how full one of them is, and init itself, are checked against this
 ; type. As an fs_type it is covered by the platform's "allow domain fs_type:filesystem getattr",
 ; as /system's own labeledfs is, so no domain needs a rule of its own. It is a
 ; contextmount_type because the platform forbids relabelling a superblock to any other

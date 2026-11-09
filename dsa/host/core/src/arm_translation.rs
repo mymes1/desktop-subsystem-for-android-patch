@@ -8,10 +8,15 @@
 //! ```text
 //! arm-translation.json   {"name": "...", "version": "...", "library": "libberberis_arm64.so",
 //!                         "abis": ["arm64-v8a"], "license": "Apache-2.0"}
-//! system.img             an erofs image whose system/lib64, system/bin and system/etc are
-//!                        laid over the guest's, with system/lib64/libdsa_native_bridge.so
-//!                        being (or linking to) the bridge library
+//! system.img             an erofs image of system/lib64, system/bin and system/etc, with
+//!                        system/lib64/libdsa_native_bridge.so being (or linking to) the
+//!                        bridge library
 //! ```
+//!
+//! The guest mounts the image and binds its parts onto empty places of its own (the bridge's
+//! folder onto `/system_ext/lib64`, the ARM64 libraries onto `/system/lib64/arm64`, the
+//! runners the binfmt_misc rules start onto `/system/bin/dsa-arm-translation`), so nothing is
+//! laid over a folder of the system's own programs.
 //!
 //! There are three, and the user chooses ([`Source`]):
 //!
@@ -365,7 +370,7 @@ pub fn bootconfig_for(store: &dyn SettingsStore, user: &str, image_dir: Option<&
 pub struct GuestArmTranslation {
     /// A package image the user installed is on the user's disk.
     pub installed: bool,
-    /// This boot runs with a package (the user's or the image's default) laid over the system.
+    /// This boot runs with a package (the user's or the image's default) in place.
     pub active: bool,
     /// The ABIs the guest's package manager installs apps for.
     pub abilist: String,
@@ -373,8 +378,8 @@ pub struct GuestArmTranslation {
 
 /// Whether the translator the user's settings choose (`wanted`) differs from what the running
 /// guest booted with, so that it applies only once Android starts again. `booted` is what the
-/// service told that boot to use; whether the guest has a translator laid over its system at
-/// all comes from the guest itself.
+/// service told that boot to use; whether the guest has a translator in place at all comes
+/// from the guest itself.
 pub fn restart_needed(
     wanted: Option<&Translator>,
     booted: Option<&Translator>,

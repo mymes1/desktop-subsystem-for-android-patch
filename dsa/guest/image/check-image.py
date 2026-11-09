@@ -379,6 +379,14 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # The default translator: in an x86_64 image's system partition when image.json describes
     # one, and nowhere in an arm64 image.
     problems += make_image.check_builtin_arm_translation(manifest, names, z.read)
+    # Where a package is bound: an x86_64 image's empty folders, empty linker configuration and
+    # links into the mount, and none of them in an arm64 image. Nothing is laid over a folder
+    # of the system's programs, by either script.
+    problems += make_image.check_arm_translation_reach(manifest, names, z.read, z.getinfo)
+    for rc_name in ["dsa-arm-translation.rc", "dsa-gapps.rc"]:
+        if f"SYSTEM/etc/init/{rc_name}" in names:
+            problems += make_image.program_folder_problems(
+                rc_name, z.read(f"SYSTEM/etc/init/{rc_name}").decode(errors="replace"))
     # The patched framework: the Framework build's files, for this build and architecture.
     problems += make_image.check_framework(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
@@ -413,6 +421,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                                 "for the host to say they are installed")
         if "on post-fs-data && property:ro.boot.dsa.gapps=on" not in rc:
             problems.append("dsa-gapps.rc never lays the Google apps over the system")
+        # Each folder the Google apps are laid over is in the system, so its overlay mounts.
+        problems += make_image.gapps_folder_problems(names)
     if "SYSTEM/etc/dsa/gapps-off.prop" in names:
         off = [line for line in z.read("SYSTEM/etc/dsa/gapps-off.prop").decode(errors="replace").splitlines()
                if line.strip() and not line.startswith("#")]
