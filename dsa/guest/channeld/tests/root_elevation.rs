@@ -217,6 +217,79 @@ fn resolved(enabled: bool) -> RootElevationConfig {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[test]
+fn fr35_a_late_helper_receives_the_latest_root_config() {
+    use dsa_guest_channeld::su_relay::HelperGuard;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+    use std::time::Duration;
+
+    let path = std::env::temp_dir().join(format!("fr35-late-{}", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let (switch, _) = switch_recorder();
+    let (to_host, _from_guest) = std::sync::mpsc::channel();
+    let mut guard = HelperGuard::with_host(switch, Arc::new(SuRelay::new()), to_host);
+    guard.socket = path.clone();
+    guard.start_wait = Duration::from_millis(10);
+    guard.write_config(&resolved(true), &[]).unwrap();
+    guard.write_config(&resolved(false), &[]).unwrap();
+    let mut latest = resolved(true);
+    latest.apps[0].level = RootLevel::Remember.into();
+    guard.write_config(&latest, &[]).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    // SAFETY: the address and descriptor live for the duration of the socket calls.
+    let listener = unsafe {
+        let fd = libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0);
+        assert!(fd >= 0);
+        let listener = OwnedFd::from_raw_fd(fd);
+        let mut address: libc::sockaddr_un = std::mem::zeroed();
+        address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+        for (to, from) in address.sun_path.iter_mut().zip(path.as_os_str().as_bytes()) {
+            *to = *from as libc::c_char;
+        }
+        assert_eq!(
+            libc::bind(
+                listener.as_raw_fd(),
+                (&address as *const libc::sockaddr_un).cast(),
+                std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t
+            ),
+            0
+        );
+        assert_eq!(libc::listen(listener.as_raw_fd(), 4), 0);
+        listener
+    };
+    let mut poll = libc::pollfd {
+        fd: listener.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    // SAFETY: poll and listener are valid for the call.
+    assert_eq!(unsafe { libc::poll(&mut poll, 1, 5000) }, 1);
+    // SAFETY: the listener and buffer remain valid for both calls.
+    let (peer, bytes) = unsafe {
+        let peer = libc::accept(
+            listener.as_raw_fd(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        assert!(peer >= 0);
+        let peer = OwnedFd::from_raw_fd(peer);
+        let mut bytes = vec![0u8; 4096];
+        let n = libc::recv(peer.as_raw_fd(), bytes.as_mut_ptr().cast(), bytes.len(), 0);
+        assert!(n > 8);
+        bytes.truncate(n as usize);
+        (peer, bytes)
+    };
+    assert_eq!(
+        dsa_protocol::decode(&bytes[8..]).unwrap().body,
+        Some(Body::RootElevationConfig(latest))
+    );
+    guard.write_config(&resolved(false), &[]).unwrap();
+    drop(peer);
+    let _ = std::fs::remove_file(&path);
+}
+
 #[test]
 fn fr35_the_daemon_never_writes_the_guard_itself_but_starts_and_stops_the_helper() {
     use dsa_guest_channeld::su_relay::HelperGuard;

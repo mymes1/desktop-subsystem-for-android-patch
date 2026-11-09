@@ -499,10 +499,11 @@ impl HelperGuard {
         bridge: &Arc<HelperBridge>,
         config: &RootElevationConfig,
         packet: &[u8],
-        wait: Duration,
+        _wait: Duration,
     ) -> std::io::Result<()> {
+        let mut latest = bridge.latest.lock().unwrap_or_else(|e| e.into_inner());
         if !config.enabled {
-            *bridge.latest.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            *latest = None;
             let active = bridge
                 .active
                 .lock()
@@ -516,7 +517,7 @@ impl HelperGuard {
             return send_packet(&self.socket, packet);
         }
 
-        *bridge.latest.lock().unwrap_or_else(|e| e.into_inner()) = Some(config.clone());
+        *latest = Some(config.clone());
         let existing = bridge
             .active
             .lock()
@@ -527,17 +528,19 @@ impl HelperGuard {
                 return Ok(());
             }
             conn.shutdown();
+            *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
-
-        let conn = connect_helper(&self.socket, packet, wait)?;
-        *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&conn));
         if !bridge.running.swap(true, Ordering::AcqRel) {
-            let bridge = Arc::clone(bridge);
+            let bridge_thread = Arc::clone(bridge);
             let socket_path = self.socket.clone();
             let start_wait = self.start_wait;
-            let _ = std::thread::Builder::new()
+            if let Err(error) = std::thread::Builder::new()
                 .name("dsa-su-bridge".into())
-                .spawn(move || run_bridge(bridge, socket_path, start_wait));
+                .spawn(move || run_bridge(bridge_thread, socket_path, start_wait))
+            {
+                bridge.running.store(false, Ordering::Release);
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -555,33 +558,6 @@ impl HelperGuard {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn connect_helper(
-    path: &std::path::Path,
-    packet: &[u8],
-    wait: Duration,
-) -> std::io::Result<Arc<crate::su_packet::Packet>> {
-    let path_str = path.to_str().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "the helper's socket path is not valid UTF-8",
-        )
-    })?;
-    let until = Instant::now() + wait;
-    loop {
-        match crate::su_packet::Packet::connect(path_str).and_then(|conn| {
-            conn.send(packet)?;
-            Ok(Arc::new(conn))
-        }) {
-            Ok(conn) => return Ok(conn),
-            Err(error) if Instant::now() < until && not_listening(&error) => {
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(error) => return Err(error),
-        }
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
 fn run_bridge(bridge: Arc<HelperBridge>, socket_path: PathBuf, start_wait: Duration) {
     loop {
         let conn = bridge
@@ -592,24 +568,39 @@ fn run_bridge(bridge: Arc<HelperBridge>, socket_path: PathBuf, start_wait: Durat
         let conn = match conn {
             Some(conn) => conn,
             None => {
-                let latest = bridge
-                    .latest
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone();
-                let Some(config) = latest.filter(|c| c.enabled) else {
-                    bridge.running.store(false, Ordering::Release);
-                    return;
+                let path = match socket_path.to_str() {
+                    Some(path) => path,
+                    None => return,
                 };
-                let packet = encode(Body::RootElevationConfig(config));
-                match connect_helper(&socket_path, &packet, start_wait) {
+                match crate::su_packet::Packet::connect(path) {
                     Ok(new_conn) => {
+                        let latest = bridge.latest.lock().unwrap_or_else(|e| e.into_inner());
+                        let Some(config) = latest.as_ref().filter(|c| c.enabled) else {
+                            bridge.running.store(false, Ordering::Release);
+                            return;
+                        };
+                        let packet = encode(Body::RootElevationConfig(config.clone()));
+                        if new_conn.send(&packet).is_err() {
+                            drop(latest);
+                            std::thread::sleep(Duration::from_millis(200));
+                            continue;
+                        }
+                        let new_conn = Arc::new(new_conn);
                         *bridge.active.lock().unwrap_or_else(|e| e.into_inner()) =
                             Some(Arc::clone(&new_conn));
                         new_conn
                     }
                     Err(_) => {
-                        std::thread::sleep(Duration::from_millis(200));
+                        let latest = bridge.latest.lock().unwrap_or_else(|e| e.into_inner());
+                        if latest.is_none() {
+                            bridge.running.store(false, Ordering::Release);
+                            return;
+                        }
+                        drop(latest);
+                        std::thread::sleep(
+                            Duration::from_millis(200)
+                                .min(start_wait.max(Duration::from_millis(1))),
+                        );
                         continue;
                     }
                 }

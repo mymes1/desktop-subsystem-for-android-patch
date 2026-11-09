@@ -116,6 +116,7 @@ public class AppsViewModelTests
     {
         var (vm, cli) = Make(new FakeCli()
             .Answer("apps list --json", List)
+            .Answer("settings --json", "{}")
             .Answer("launch com.example.notes", "Launching com.example.notes")
             .Answer("apps settings com.example.notes --json", "{\"opened\":\"com.example.notes\"}")
             .Answer("apps settings --json", "{\"opened\":null}"));
@@ -125,7 +126,7 @@ public class AppsViewModelTests
         await vm.ManageAsync();
         Assert.False(vm.HasError, vm.Error);
         Assert.Equal(
-            new[] { "apps list --json", "launch com.example.notes", "apps settings com.example.notes --json", "apps settings --json" },
+            new[] { "apps list --json", "settings --json", "launch com.example.notes", "apps settings com.example.notes --json", "apps settings --json" },
             cli.Calls);
     }
 
