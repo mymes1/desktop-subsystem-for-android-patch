@@ -3478,6 +3478,11 @@ AGENT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/privapp-permissions-dsa-agent
 # Android/obb/, where the agent puts the expansion files of the apps the host installs.
 AGENT_DEFAULT_PERMISSIONS = "SYSTEM_EXT/etc/default-permissions/default-permissions-dsa-agent.xml"
 AGENT_DEFAULT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/default-permissions-dsa-agent.xml"
+# The agent's system configuration: Android's backup manager uses a backup transport only when
+# a sysconfig file lists it, so this one names the agent's, which keeps app data in the host's
+# backup folder.
+AGENT_SYSCONFIG = "SYSTEM_EXT/etc/sysconfig/sysconfig-dsa-agent.xml"
+AGENT_SYSCONFIG_SOURCE = REPO / "dsa/guest/agent/sysconfig-dsa-agent.xml"
 AGENT_APKCERTS = (
     'name="DsaAgent.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="system_ext"'
@@ -3828,6 +3833,8 @@ AGENT_FS_CONFIG = [
     "system_ext/etc/permissions/privapp-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
     "system_ext/etc/default-permissions 0 0 755 capabilities=0x0",
     "system_ext/etc/default-permissions/default-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
+    "system_ext/etc/sysconfig 0 0 755 capabilities=0x0",
+    "system_ext/etc/sysconfig/sysconfig-dsa-agent.xml 0 0 644 capabilities=0x0",
 ]
 
 
@@ -4851,6 +4858,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(AGENT_APK, agent_payload)
             zout.writestr(AGENT_PERMISSIONS, AGENT_PERMISSIONS_SOURCE.read_bytes())
             zout.writestr(AGENT_DEFAULT_PERMISSIONS, AGENT_DEFAULT_PERMISSIONS_SOURCE.read_bytes())
+            zout.writestr(AGENT_SYSCONFIG, AGENT_SYSCONFIG_SOURCE.read_bytes())
         if vulkan_payload is not None and not replaced_vulkan_payload:
             zout.writestr(VULKAN_RANCHU_LIBRARY, vulkan_payload)
             replaced_vulkan_payload = True

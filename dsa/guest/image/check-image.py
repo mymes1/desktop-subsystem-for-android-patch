@@ -345,6 +345,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml" not in names:
         problems.append("SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml is missing, so the "
                         "framework refuses to boot with the agent")
+    if agent in names and make_image.AGENT_SYSCONFIG not in names:
+        problems.append(f"{make_image.AGENT_SYSCONFIG} is missing, so Android's backup manager does not use "
+                        "the agent's backup transport and app data never reaches the host's backup")
 
     # The network: eth0 shown as Wi-Fi, with its address and DNS servers from DHCP.
     problems.extend(make_image.network_problems(names, z.read, manifest["kernel_cmdline"]))

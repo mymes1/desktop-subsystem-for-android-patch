@@ -1313,6 +1313,25 @@ class ImageLayoutTests(unittest.TestCase):
                     fs_config,
                 )
 
+    def test_fr36_the_agents_backup_transport_is_listed_for_the_backup_manager(self):
+        # Android's backup manager uses a transport only when a sysconfig file lists it.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._target_files_with_system_ext(root)
+            agent = root / "agent.apk"
+            agent.write_bytes(b"PK agent")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, agent=agent)
+            with zipfile.ZipFile(modified) as archive:
+                listed = archive.read(make_image.AGENT_SYSCONFIG).decode()
+                fs_config = archive.read("META/system_ext_filesystem_config.txt").decode().splitlines()
+        self.assertIn('<backup-transport-whitelisted-service', listed)
+        self.assertIn('service="io.github.thisisthepy.dsa.agent/'
+                      'io.github.thisisthepy.dsa.agent.platform.HostBackupTransportService"', listed)
+        self.assertIn("system_ext/etc/sysconfig/sysconfig-dsa-agent.xml 0 0 644 capabilities=0x0", fs_config)
+        manifest = (make_image.REPO / "dsa/guest/agent/src/main/AndroidManifest.xml").read_text()
+        self.assertIn('android:name=".platform.HostBackupTransportService"', manifest)
+
     def test_fr11_the_agent_holds_the_storage_permissions_that_open_android_obb_to_it(self):
         # The agent puts the expansion files of an app the host installs in the app's folder
         # under Android/obb/, which Android opens to an installer only while it holds the
