@@ -21,6 +21,10 @@ mkdir -p "$out"
 "$out/shadow_blocks_test"
 
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/shadow_memory_test.cpp" -o "$out/shadow_memory_test"
+"$out/shadow_memory_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
     "$here/lost_stream_test.cpp" -o "$out/lost_stream_test"
 "$out/lost_stream_test"
 

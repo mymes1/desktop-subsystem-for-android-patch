@@ -45,7 +45,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use dsa_host_core::compositor::caption::CaptionBand;
+use dsa_host_core::compositor::caption::{BandSample, CaptionBand};
 use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
@@ -125,9 +125,29 @@ const WM_APP_COMMANDS: u32 = WM_APP + 1;
 const WM_APP_QUIT: u32 = WM_APP + 2;
 /// Sent to a task window when a frame of another size than the window's is kept for it.
 const WM_APP_FRAME_READY: u32 = WM_APP + 4;
-/// Sent to a task window when the color its title bar's band is filled with changes: the
-/// color in `wparam`, and `lparam` 0 when the band is left as the app draws it.
+/// Sent to a task window when what its presenter reads from the app's frame under the title
+/// bar changes ([`pack_band_sample`]).
 const WM_APP_BAND_COLOUR: u32 = WM_APP + 5;
+
+/// A band sample as the parameters of [`WM_APP_BAND_COLOUR`]: the fill color in `wparam`, and
+/// in `lparam` bit 0 set when there is a fill, bit 1 set when the band's luminance was read,
+/// and the luminance itself from bit 16.
+fn pack_band_sample(sample: BandSample) -> (WPARAM, LPARAM) {
+    let wparam = sample.fill.unwrap_or(0) as WPARAM;
+    let mut lparam = LPARAM::from(sample.fill.is_some());
+    if let Some(luminance) = sample.luminance {
+        lparam |= 2 | (luminance as LPARAM) << 16;
+    }
+    (wparam, lparam)
+}
+
+/// The band sample [`pack_band_sample`] put in a message's parameters.
+fn unpack_band_sample(wparam: WPARAM, lparam: LPARAM) -> BandSample {
+    BandSample {
+        fill: (lparam & 1 != 0).then_some(wparam as u32),
+        luminance: (lparam & 2 != 0).then_some(((lparam >> 16) & 0xFFFF) as u16),
+    }
+}
 
 /// The message window's timer, which reports windows left showing a frame of an older size
 /// and takes the commands whose wake-up message could not be posted.
@@ -637,11 +657,12 @@ unsafe extern "system" fn task_window_proc(
             0
         }
         WM_APP_BAND_COLOUR => {
-            // The app's frames show whether it leaves the title bar's band empty.
+            // The app's frames show whether it leaves the title bar's band empty, and how
+            // light the band is.
             if let Some(data) = window_data(hwnd) {
-                let fill = (lparam != 0).then_some(wparam as u32);
+                let sample = unpack_band_sample(wparam, lparam);
                 let presenter = data.presenter.borrow().clone();
-                data.caption.set_fill(hwnd, fill, presenter.as_deref());
+                data.caption.set_sample(hwnd, sample, presenter.as_deref());
             }
             0
         }
@@ -1629,16 +1650,10 @@ impl Ui {
                 // drops the message.
                 unsafe { PostMessageW(window as HWND, WM_APP_FRAME_READY, 0, 0) };
             }));
-            presenter.on_band_colour(Box::new(move |fill| {
+            presenter.on_band_colour(Box::new(move |sample| {
+                let (wparam, lparam) = pack_band_sample(sample);
                 // SAFETY: as above.
-                unsafe {
-                    PostMessageW(
-                        window as HWND,
-                        WM_APP_BAND_COLOUR,
-                        fill.unwrap_or(0) as WPARAM,
-                        LPARAM::from(fill.is_some()),
-                    )
-                };
+                unsafe { PostMessageW(window as HWND, WM_APP_BAND_COLOUR, wparam, lparam) };
             }));
             self.setup
                 .presenters
@@ -1790,6 +1805,28 @@ mod tests {
             vec!["stop_frames", "destroy", "release_content"]
         );
         assert!(!window.content_attached);
+    }
+
+    #[test]
+    fn fr22_a_band_sample_reaches_the_window_whole() {
+        for sample in [
+            BandSample::default(),
+            BandSample {
+                fill: Some(0xFFFF_FFFF),
+                luminance: None,
+            },
+            BandSample {
+                fill: None,
+                luminance: Some(0),
+            },
+            BandSample {
+                fill: Some(0xFF00_0000),
+                luminance: Some(1000),
+            },
+        ] {
+            let (wparam, lparam) = pack_band_sample(sample);
+            assert_eq!(unpack_band_sample(wparam, lparam), sample);
+        }
     }
 
     #[test]

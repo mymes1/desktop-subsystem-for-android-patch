@@ -115,7 +115,9 @@ public class ApkInstallerStyleTests
         Assert.Equal("1", (string?)tile.Attribute("Grid.Column"));
         Assert.Equal("Top", (string?)tile.Attribute("VerticalAlignment"));
         Assert.Equal("{StaticResource AppIconTileSize}", (string?)tile.Attribute("Width"));
-        Assert.Equal("{StaticResource AppIconTileBrush}", (string?)tile.Attribute("Background"));
+        // Its colours come from its style, which follows the window's activation and the theme.
+        Assert.Equal("{StaticResource AppIconTile}", (string?)tile.Attribute("Style"));
+        Assert.Null(tile.Attribute("Background"));
         Assert.NotNull(tile.Attribute("CornerRadius"));
         var icon = Named(doc, "AppIcon");
         Assert.Equal(tile, icon.Parent);

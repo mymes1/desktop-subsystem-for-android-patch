@@ -14,7 +14,9 @@
 //!   bar inset and keeps nothing it can be touched on there; sharing the band would make the
 //!   same point sometimes drag the window and sometimes press the app.
 //! - [`caption_tone`]: whether the buttons' glyphs are dark or light, from what the app told
-//!   the system about its status bar, so they stay readable over it.
+//!   the system about its status bar, and [`shown_tone`]: the tone actually drawn, from the
+//!   pixels of the app's frame under the band whenever they can be read ([`band_sample`]),
+//!   so the glyphs stay readable over what the app really draws there.
 //! - [`paint_buttons`]: the buttons as an image, in the tone and state they are in.
 //! - [`paint_title_bar`]: the whole band as an image: the app's icon and name at the left
 //!   (the platform lays the name out), the buttons at the right, and a fill when
@@ -61,6 +63,76 @@ pub fn caption_tone(appearance: StatusBarAppearance, status_bar_color: u32) -> C
                 CaptionTone::LightGlyphs
             }
         }
+    }
+}
+
+/// What a window read from the pixels of its app's frame under the title bar: the color to
+/// fill a band the app leaves empty ([`band_fill`]) and how light the band is
+/// ([`band_luminance`]). The default is a frame that could not be sampled.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct BandSample {
+    pub fill: Option<u32>,
+    /// The band's mean relative luminance, in thousandths (0 black, 1000 white).
+    pub luminance: Option<u16>,
+}
+
+/// Samples of a frame's band (`band`, from inside it) and of the row under it (`below`), each
+/// 0xAARRGGBB, as a window reads them.
+pub fn band_sample(band: &[u32], below: &[u32]) -> BandSample {
+    BandSample {
+        fill: band_fill(band, below),
+        luminance: band_luminance(band),
+    }
+}
+
+/// How light the app's pixels under the title bar are: the mean relative luminance of the
+/// opaque samples of `band` (0xAARRGGBB each), in thousandths. `None` when fewer than half of
+/// them are opaque, as over a band the app leaves empty, which says nothing about what shows
+/// under the glyphs.
+pub fn band_luminance(band: &[u32]) -> Option<u16> {
+    let opaque: Vec<f64> = band
+        .iter()
+        .filter(|color| *color >> 24 >= 0xF0)
+        .map(|color| relative_luminance(*color))
+        .collect();
+    if opaque.is_empty() || opaque.len() * 2 < band.len() {
+        return None;
+    }
+    let mean = opaque.iter().sum::<f64>() / opaque.len() as f64;
+    Some((mean * 1000.0).round().clamp(0.0, 1000.0) as u16)
+}
+
+/// Below this band luminance (thousandths) the glyphs turn light, and above
+/// [`DARK_GLYPHS_ABOVE`] dark. Black and white glyphs have the same contrast over a luminance
+/// of 179; at either bound the tone already shown keeps a contrast of at least 3.6 to 1, so
+/// between them it stays, and a band near the middle never makes the glyphs flicker.
+pub const LIGHT_GLYPHS_BELOW: u16 = 130;
+pub const DARK_GLYPHS_ABOVE: u16 = 240;
+
+/// The tone a window's caption glyphs are drawn in, given the tone the app's status bar
+/// reports (`reported`, from [`caption_tone`]), what the window last read from the app's
+/// frame under the band (`sample`), whether the app draws its own title bar (`app_drawn`,
+/// which is never filled over), and the tone shown now (`shown`).
+///
+/// The pixels under the glyphs decide whenever they could be read, since an app that draws
+/// edge to edge often leaves its status bar transparent, or reports icons for a status bar it
+/// does not show, while its own header runs under the band. A band the window fills takes the
+/// tone of the fill. Between [`LIGHT_GLYPHS_BELOW`] and [`DARK_GLYPHS_ABOVE`] the shown tone
+/// stays. Only a frame that could not be sampled leaves the reported tone.
+pub fn shown_tone(
+    reported: CaptionTone,
+    sample: BandSample,
+    app_drawn: bool,
+    shown: CaptionTone,
+) -> CaptionTone {
+    if let Some(fill) = sample.fill.filter(|_| !app_drawn) {
+        return caption_tone(StatusBarAppearance::Unspecified, fill);
+    }
+    match sample.luminance {
+        None => reported,
+        Some(luminance) if luminance < LIGHT_GLYPHS_BELOW => CaptionTone::LightGlyphs,
+        Some(luminance) if luminance > DARK_GLYPHS_ABOVE => CaptionTone::DarkGlyphs,
+        Some(_) => shown,
     }
 }
 
@@ -189,6 +261,139 @@ const GLYPH_AT_100: f64 = 10.0;
 /// The side of the app's icon in the title bar at 100%, in pixels: the small icon Windows 11
 /// draws in a caption.
 pub const ICON_AT_100: u32 = 16;
+
+/// The title bar's icon `side` pixels square from an image of `width` x `height` premultiplied
+/// BGRA pixels, as premultiplied BGRA rows.
+///
+/// A whole icon (`logo_only` false), plate and all, is fitted into the square as it is. An
+/// adaptive icon's foreground drawn alone (`logo_only`) keeps the margin the plate had around
+/// the app's shape, so its logo would look smaller than the icons of other apps; it is cropped
+/// to what it draws (its pixels at least [`LOGO_ALPHA`] opaque) and that is fitted into the
+/// square, keeping its proportions, with [`logo_padding`] on every side. A foreground that
+/// draws (nearly) to its edges already has its own plate and is fitted as a whole icon is.
+/// The crop is never smaller than a third of the image, so a tiny mark is not blown up.
+pub fn caption_icon(pixels: &[u8], width: u32, height: u32, side: u32, logo_only: bool) -> Vec<u8> {
+    let whole = (0.0, 0.0, f64::from(width), f64::from(height));
+    if !logo_only {
+        return fit_square(pixels, width, height, whole, side, 0);
+    }
+    let Some((left, top, right, bottom)) = drawn_bounds(pixels, width, height) else {
+        return fit_square(pixels, width, height, whole, side, 0);
+    };
+    let (drawn_width, drawn_height) = (right - left, bottom - top);
+    if drawn_width * 20 >= width * 19 && drawn_height * 20 >= height * 19 {
+        return fit_square(pixels, width, height, whole, side, 0);
+    }
+    let least = f64::from(width.min(height)) / 3.0;
+    let crop_width = f64::from(drawn_width).max(least);
+    let crop_height = f64::from(drawn_height).max(least);
+    let (middle_x, middle_y) = (f64::from(left + right) / 2.0, f64::from(top + bottom) / 2.0);
+    let crop = (
+        middle_x - crop_width / 2.0,
+        middle_y - crop_height / 2.0,
+        crop_width,
+        crop_height,
+    );
+    fit_square(pixels, width, height, crop, side, logo_padding(side))
+}
+
+/// How opaque a pixel of a background-less icon must be to count as part of its logo.
+pub const LOGO_ALPHA: u8 = 16;
+
+/// The space left on every side of a background-less icon's logo in a title bar icon `side`
+/// pixels square: a sixteenth of the side, at least one pixel once the side allows it, so
+/// the logo fills the box a whole icon fills at every scale but for a thin margin.
+pub fn logo_padding(side: u32) -> u32 {
+    if side < 8 {
+        0
+    } else {
+        ((side + 8) / 16).max(1)
+    }
+}
+
+/// The smallest rectangle (left, top, right, bottom, right and bottom exclusive) holding every
+/// pixel of `pixels` (premultiplied BGRA, `width` x `height`) at least [`LOGO_ALPHA`] opaque;
+/// `None` when no pixel is.
+fn drawn_bounds(pixels: &[u8], width: u32, height: u32) -> Option<(u32, u32, u32, u32)> {
+    let mut bounds: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..height {
+        for x in 0..width {
+            let at = ((y * width + x) * 4 + 3) as usize;
+            if pixels.get(at).is_some_and(|alpha| *alpha >= LOGO_ALPHA) {
+                bounds = Some(match bounds {
+                    None => (x, y, x + 1, y + 1),
+                    Some((l, t, r, b)) => (l.min(x), t.min(y), r.max(x + 1), b.max(y + 1)),
+                });
+            }
+        }
+    }
+    bounds
+}
+
+/// The `crop` rectangle (left, top, width, height, in source pixels, which may reach past the
+/// image, where it is transparent) of `pixels` fitted into a square `side` pixels across, less
+/// `padding` on every side, centred and keeping its proportions. Each pixel is the average of
+/// the source area it covers.
+fn fit_square(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    crop: (f64, f64, f64, f64),
+    side: u32,
+    padding: u32,
+) -> Vec<u8> {
+    let mut out = vec![0u8; side as usize * side as usize * 4];
+    let (crop_left, crop_top, crop_width, crop_height) = crop;
+    let inner = f64::from(side.saturating_sub(2 * padding));
+    if width == 0 || height == 0 || crop_width <= 0.0 || crop_height <= 0.0 || inner <= 0.0 {
+        return out;
+    }
+    if pixels.len() < (width * height * 4) as usize {
+        return out;
+    }
+    // Destination pixels per source pixel.
+    let scale = (inner / crop_width).min(inner / crop_height);
+    let left = (f64::from(side) - crop_width * scale) / 2.0;
+    let top = (f64::from(side) - crop_height * scale) / 2.0;
+    let area = 1.0 / (scale * scale);
+    let (image_width, image_height) = (f64::from(width), f64::from(height));
+    for y in 0..side {
+        let y0 = (crop_top + (f64::from(y) - top) / scale).max(crop_top.max(0.0));
+        let y1 = (crop_top + (f64::from(y) + 1.0 - top) / scale)
+            .min((crop_top + crop_height).min(image_height));
+        if y1 <= y0 {
+            continue;
+        }
+        for x in 0..side {
+            let x0 = (crop_left + (f64::from(x) - left) / scale).max(crop_left.max(0.0));
+            let x1 = (crop_left + (f64::from(x) + 1.0 - left) / scale)
+                .min((crop_left + crop_width).min(image_width));
+            if x1 <= x0 {
+                continue;
+            }
+            let mut sum = [0.0f64; 4];
+            let mut row = y0.floor();
+            while row < y1 {
+                let weight_y = (row + 1.0).min(y1) - row.max(y0);
+                let mut column = x0.floor();
+                while column < x1 {
+                    let weight = weight_y * ((column + 1.0).min(x1) - column.max(x0));
+                    let at = (row as usize * width as usize + column as usize) * 4;
+                    for (channel, value) in sum.iter_mut().enumerate() {
+                        *value += f64::from(pixels[at + channel]) * weight;
+                    }
+                    column += 1.0;
+                }
+                row += 1.0;
+            }
+            let at = (y as usize * side as usize + x as usize) * 4;
+            for (channel, value) in sum.iter().enumerate() {
+                out[at + channel] = (value / area).round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+    out
+}
 
 /// The space before the icon, and between the icon and the app's name, at 100%, in pixels,
 /// as a WinUI 3 title bar leaves them.
@@ -838,6 +1043,251 @@ mod tests {
         // A transparent status bar says nothing about what is behind it.
         assert_eq!(tone(0x0000_0000), CaptionTone::DarkGlyphs);
         assert_eq!(tone(0x10FF_FFFF), CaptionTone::DarkGlyphs);
+    }
+
+    /// A band of samples across the middle of the title bar, all `color`, with the row under
+    /// it in `below`.
+    fn sampled(color: u32, below: u32) -> BandSample {
+        band_sample(&[color; 8], &[below; 8])
+    }
+
+    #[test]
+    fn fr22_a_transparent_status_bar_over_a_light_header_gets_dark_glyphs() {
+        // An app that draws edge to edge: its status bar is transparent and says nothing, and
+        // its light header (the Play Store's Games and Apps tabs) runs under the band.
+        let reported = caption_tone(StatusBarAppearance::Unspecified, 0x0000_0000);
+        for header in [0xFFFF_FFFF, 0xFFF8_F9FA, 0xFFE8_F0FE, 0xFFDA_E2FF] {
+            let sample = sampled(header, header);
+            assert_eq!(sample.fill, None, "the app draws the band");
+            for shown in [CaptionTone::DarkGlyphs, CaptionTone::LightGlyphs] {
+                assert_eq!(
+                    shown_tone(reported, sample, false, shown),
+                    CaptionTone::DarkGlyphs,
+                    "{header:08X} while {shown:?} show"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fr22_a_transparent_status_bar_over_a_dark_header_gets_light_glyphs() {
+        // The same app in a dark theme: nothing reported, so the flag alone would say dark.
+        let reported = caption_tone(StatusBarAppearance::Unspecified, 0x0000_0000);
+        assert_eq!(reported, CaptionTone::DarkGlyphs);
+        for header in [
+            0xFF00_0000,
+            0xFF1F_1F1F,
+            0xFF14_1218,
+            0xFF20_2124,
+            0xFF67_50A4,
+        ] {
+            let sample = sampled(header, header);
+            for shown in [CaptionTone::DarkGlyphs, CaptionTone::LightGlyphs] {
+                assert_eq!(
+                    shown_tone(reported, sample, false, shown),
+                    CaptionTone::LightGlyphs,
+                    "{header:08X} while {shown:?} show"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fr22_a_dark_video_under_a_transparent_status_bar_gets_light_glyphs() {
+        // A full-bleed player (YouTube's Shorts) in the light theme: the app reports dark
+        // status bar icons, or nothing, and its dark video runs under the band, with a grey
+        // overlay here and there.
+        let video = [
+            0xFF10_1010,
+            0xFF2A_1E18,
+            0xFF05_0505,
+            0xFF3A_3A3A,
+            0xFF80_8080,
+            0xFF18_2028,
+            0xFF00_0000,
+            0xFF20_1810,
+        ];
+        let sample = band_sample(&video, &video);
+        assert_eq!(sample.fill, None);
+        for reported in [
+            caption_tone(StatusBarAppearance::Light, 0),
+            caption_tone(StatusBarAppearance::Unspecified, 0),
+        ] {
+            assert_eq!(reported, CaptionTone::DarkGlyphs);
+            assert_eq!(
+                shown_tone(reported, sample, false, reported),
+                CaptionTone::LightGlyphs
+            );
+        }
+    }
+
+    #[test]
+    fn fr22_a_status_bar_flag_that_disagrees_with_the_pixels_gives_way_to_them() {
+        // Dark status bar icons asked for (light glyphs) over a light header, and the reverse.
+        let light_header = sampled(0xFFFF_FFFF, 0xFFFF_FFFF);
+        let dark_header = sampled(0xFF12_1212, 0xFF12_1212);
+        let says_dark = caption_tone(StatusBarAppearance::Dark, 0);
+        let says_light = caption_tone(StatusBarAppearance::Light, 0);
+        assert_eq!(
+            shown_tone(says_dark, light_header, false, says_dark),
+            CaptionTone::DarkGlyphs
+        );
+        assert_eq!(
+            shown_tone(says_light, dark_header, false, says_light),
+            CaptionTone::LightGlyphs
+        );
+        // So do the glyphs over an app's own title bar, whose content fills the band.
+        assert_eq!(
+            shown_tone(says_dark, light_header, true, says_dark),
+            CaptionTone::DarkGlyphs
+        );
+        // A frame that could not be sampled leaves the flag: an empty band, or none read yet.
+        let empty = sampled(0x0000_0000, 0x0000_0000);
+        assert_eq!(empty, BandSample::default());
+        for reported in [says_dark, says_light] {
+            assert_eq!(shown_tone(reported, empty, false, says_light), reported);
+            assert_eq!(
+                shown_tone(reported, BandSample::default(), false, says_dark),
+                reported
+            );
+        }
+        // A band left empty above a toolbar takes the fill's tone, whatever the flag says.
+        let filled = sampled(0x0000_0000, 0xFFFF_FFFF);
+        assert_eq!(filled.fill, Some(0xFFFF_FFFF));
+        assert_eq!(
+            shown_tone(says_dark, filled, false, says_dark),
+            CaptionTone::DarkGlyphs
+        );
+    }
+
+    #[test]
+    fn fr22_a_band_near_the_middle_does_not_make_the_glyphs_flicker() {
+        let tone_of = |luminance: u16, shown| {
+            let sample = BandSample {
+                fill: None,
+                luminance: Some(luminance),
+            };
+            shown_tone(CaptionTone::DarkGlyphs, sample, false, shown)
+        };
+        // A header whose lightness wavers around the middle (an animation, a scrolled
+        // picture) keeps the tone it has, whichever it is.
+        let mut shown = CaptionTone::DarkGlyphs;
+        for luminance in [200, 150, 230, 140, 179] {
+            shown = tone_of(luminance, shown);
+            assert_eq!(shown, CaptionTone::DarkGlyphs, "at {luminance}");
+        }
+        shown = tone_of(100, shown);
+        assert_eq!(shown, CaptionTone::LightGlyphs);
+        for luminance in [150, 230, 140, 179, 240] {
+            shown = tone_of(luminance, shown);
+            assert_eq!(shown, CaptionTone::LightGlyphs, "at {luminance}");
+        }
+        assert_eq!(tone_of(241, shown), CaptionTone::DarkGlyphs);
+        // The samples are averaged, and only opaque ones count.
+        assert_eq!(band_luminance(&[0xFFFF_FFFF; 8]), Some(1000));
+        assert_eq!(band_luminance(&[0xFF00_0000; 8]), Some(0));
+        let half = [[0xFFFF_FFFF; 4], [0xFF00_0000; 4]].concat();
+        assert_eq!(band_luminance(&half), Some(500));
+        let mostly_empty = [&[0xFFFF_FFFF; 3][..], &[0x0000_0000; 5][..]].concat();
+        assert_eq!(band_luminance(&mostly_empty), None);
+        assert_eq!(band_luminance(&[]), None);
+    }
+
+    /// A square image `size` pixels across, transparent but for an opaque white square of
+    /// `logo` pixels in its middle, as premultiplied BGRA.
+    fn logo_image(size: u32, logo: u32) -> Vec<u8> {
+        let start = (size - logo) / 2;
+        let mut pixels = Vec::with_capacity((size * size * 4) as usize);
+        for y in 0..size {
+            for x in 0..size {
+                let inside =
+                    (start..start + logo).contains(&x) && (start..start + logo).contains(&y);
+                pixels.extend_from_slice(if inside { &[0xFF; 4] } else { &[0; 4] });
+            }
+        }
+        pixels
+    }
+
+    /// The columns of a `side` square icon whose middle row is at least half opaque.
+    fn drawn_columns(icon: &[u8], side: u32) -> std::ops::Range<u32> {
+        let row = side / 2;
+        let drawn: Vec<u32> = (0..side)
+            .filter(|x| icon[((row * side + x) * 4 + 3) as usize] >= 128)
+            .collect();
+        match (drawn.first(), drawn.last()) {
+            (Some(first), Some(last)) => *first..*last + 1,
+            _ => 0..0,
+        }
+    }
+
+    #[test]
+    fn fr22_a_logo_only_caption_icon_is_enlarged_to_the_size_of_a_whole_icon() {
+        // A foreground drawn alone at the scale of the whole icon: its logo covers the middle
+        // half of the square, where the plate used to surround it.
+        let foreground = logo_image(192, 96);
+        let whole = [0xFFu8; 4].repeat(192 * 192);
+        for dpi in [96, 120, 144, 192] {
+            let side = scaled(ICON_AT_100, dpi);
+            let padding = logo_padding(side);
+            let full = drawn_columns(&caption_icon(&whole, 192, 192, side, false), side);
+            let logo = drawn_columns(&caption_icon(&foreground, 192, 192, side, true), side);
+            assert_eq!(full, 0..side, "a whole icon fills its box at {dpi}");
+            assert_eq!(
+                logo,
+                padding..side - padding,
+                "the logo fills the same box but for the padding at {dpi}"
+            );
+            assert!(padding >= 1 && padding * 8 <= side, "{padding} of {side}");
+            // Unenlarged, it would have been half as wide.
+            let as_drawn = drawn_columns(&caption_icon(&foreground, 192, 192, side, false), side);
+            assert!(
+                as_drawn.len() * 3 < logo.len() * 2,
+                "{as_drawn:?} against {logo:?}"
+            );
+        }
+        // A wide logo keeps its proportions: it fills the width, and is centred down the
+        // middle.
+        let mut wide = vec![0u8; 100 * 100 * 4];
+        for y in 40..60 {
+            for x in 10..90 {
+                let at = (y * 100 + x) * 4;
+                wide[at..at + 4].copy_from_slice(&[0xFF; 4]);
+            }
+        }
+        let icon = caption_icon(&wide, 100, 100, 32, true);
+        assert_eq!(drawn_columns(&icon, 32), 2..30);
+        let alpha = |x: u32, y: u32| icon[((y * 32 + x) * 4 + 3) as usize];
+        assert_eq!(alpha(16, 2), 0, "a 4:1 logo is a quarter as tall as wide");
+        assert!(alpha(16, 16) > 200);
+    }
+
+    #[test]
+    fn fr22_a_caption_icon_with_its_background_is_unchanged() {
+        // A whole icon, plate and all: fitted as it is, logo_only or not.
+        let mut plated = [0xFFu8, 0x80, 0x40, 0xFF].repeat(64 * 64);
+        let middle = logo_image(64, 20);
+        for (at, pixel) in middle.chunks_exact(4).enumerate() {
+            if pixel[3] != 0 {
+                plated[at * 4..at * 4 + 4].copy_from_slice(pixel);
+            }
+        }
+        for side in [16, 24, 32] {
+            let plain = caption_icon(&plated, 64, 64, side, false);
+            assert_eq!(caption_icon(&plated, 64, 64, side, true), plain);
+            assert_eq!(drawn_columns(&plain, side), 0..side);
+        }
+        // At the icon's own size a whole icon comes out pixel for pixel.
+        assert_eq!(caption_icon(&plated, 64, 64, 64, false), plated);
+        // A foreground that draws nothing stays empty, with nothing to crop to.
+        let empty = vec![0u8; 64 * 64 * 4];
+        assert!(caption_icon(&empty, 64, 64, 16, true)
+            .iter()
+            .all(|b| *b == 0));
+        // A tiny mark is enlarged at most threefold.
+        let dot = logo_image(90, 2);
+        let icon = caption_icon(&dot, 90, 90, 30, true);
+        let drawn = drawn_columns(&icon, 30);
+        assert!(drawn.len() <= 2, "{drawn:?}");
     }
 
     #[test]
