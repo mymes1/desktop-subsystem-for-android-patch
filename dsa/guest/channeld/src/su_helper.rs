@@ -182,6 +182,127 @@ pub fn run() -> io::Result<()> {
     }
 }
 
+fn reply(stream: &mut UnixStream, kind: u8, payload: &[u8]) -> io::Result<()> {
+    su_wire::write_frame(
+        stream,
+        &Frame {
+            kind,
+            payload: payload.to_vec(),
+        },
+    )
+}
+
+fn call(stream: UnixStream, state: Arc<Mutex<State>>, relay: Arc<SuRelay>) -> io::Result<()> {
+    call_with(stream, state, relay, crate::su_process::run)
+}
+
+fn call_with(
+    mut stream: UnixStream,
+    state: Arc<Mutex<State>>,
+    relay: Arc<SuRelay>,
+    execute: fn(UnixStream, Option<String>, bool, u16, u16) -> io::Result<()>,
+) -> io::Result<()> {
+    let uid = peer_uid(stream.as_raw_fd())?;
+    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    let start = su_wire::read_frame(&mut stream)?;
+    if start.kind != su_wire::START
+        || start.payload.len() < 6
+        || start.payload[0] > 1
+        || start.payload[1] > 1
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid su invocation",
+        ));
+    }
+    let interactive = start.payload[0] == 1;
+    let rows = u16::from_be_bytes([start.payload[2], start.payload[3]]);
+    let cols = u16::from_be_bytes([start.payload[4], start.payload[5]]);
+    let command = match start.payload[1] {
+        0 if start.payload.len() == 6 => None,
+        1 => Some(
+            std::str::from_utf8(&start.payload[6..])
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "command is not UTF-8"))?
+                .to_owned(),
+        ),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid shell invocation",
+            ))
+        }
+    };
+    let (package, generation, daemon) = {
+        let state = state.lock().unwrap_or_else(|e| e.into_inner());
+        let package = state
+            .config
+            .as_ref()
+            .and_then(|config| package_for_uid(config, uid))
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "this app cannot request root",
+                )
+            })?;
+        let daemon = state
+            .daemon
+            .clone()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotConnected, "host is disconnected"))?;
+        (package.to_owned(), state.generation, daemon)
+    };
+    let (id, frame, wait) = relay.begin(
+        &package,
+        uid,
+        command.clone().into_iter().collect(),
+        interactive,
+    );
+    if let Err(error) = daemon.send(&frame) {
+        relay.expire(id);
+        return Err(error);
+    }
+    let answer = match wait.recv_timeout(ANSWER_TIMEOUT) {
+        Ok(answer) => answer,
+        Err(_) => {
+            relay.expire(id);
+            Outcome::Refused("the host did not answer in time".into())
+        }
+    };
+    let reason = match answer {
+        Outcome::Approved => None,
+        Outcome::Refused(reason) => Some(reason),
+    };
+    let still_allowed = {
+        let state = state.lock().unwrap_or_else(|e| e.into_inner());
+        state.generation == generation
+            && state
+                .config
+                .as_ref()
+                .and_then(|config| package_for_uid(config, uid))
+                .as_deref()
+                == Some(package.as_str())
+    };
+    if reason.is_some() || !still_allowed {
+        let reason = reason.unwrap_or_else(|| "the app's root permission changed".into());
+        reply(
+            &mut stream,
+            su_wire::STDERR,
+            format!("su: {reason}\n").as_bytes(),
+        )?;
+        return reply(&mut stream, su_wire::EXIT, &1i32.to_be_bytes());
+    }
+    stream.set_read_timeout(None)?;
+    let mut error_socket = stream.try_clone()?;
+    if let Err(error) = execute(stream, command, interactive, rows, cols) {
+        reply(
+            &mut error_socket,
+            su_wire::STDERR,
+            format!("su: {error}\n").as_bytes(),
+        )?;
+        reply(&mut error_socket, su_wire::EXIT, &1i32.to_be_bytes())?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,125 +510,4 @@ mod tests {
         );
         worker.join().unwrap();
     }
-}
-
-fn reply(stream: &mut UnixStream, kind: u8, payload: &[u8]) -> io::Result<()> {
-    su_wire::write_frame(
-        stream,
-        &Frame {
-            kind,
-            payload: payload.to_vec(),
-        },
-    )
-}
-
-fn call(stream: UnixStream, state: Arc<Mutex<State>>, relay: Arc<SuRelay>) -> io::Result<()> {
-    call_with(stream, state, relay, crate::su_process::run)
-}
-
-fn call_with(
-    mut stream: UnixStream,
-    state: Arc<Mutex<State>>,
-    relay: Arc<SuRelay>,
-    execute: fn(UnixStream, Option<String>, bool, u16, u16) -> io::Result<()>,
-) -> io::Result<()> {
-    let uid = peer_uid(stream.as_raw_fd())?;
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    let start = su_wire::read_frame(&mut stream)?;
-    if start.kind != su_wire::START
-        || start.payload.len() < 6
-        || start.payload[0] > 1
-        || start.payload[1] > 1
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid su invocation",
-        ));
-    }
-    let interactive = start.payload[0] == 1;
-    let rows = u16::from_be_bytes([start.payload[2], start.payload[3]]);
-    let cols = u16::from_be_bytes([start.payload[4], start.payload[5]]);
-    let command = match start.payload[1] {
-        0 if start.payload.len() == 6 => None,
-        1 => Some(
-            std::str::from_utf8(&start.payload[6..])
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "command is not UTF-8"))?
-                .to_owned(),
-        ),
-        _ => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "invalid shell invocation",
-            ))
-        }
-    };
-    let (package, generation, daemon) = {
-        let state = state.lock().unwrap_or_else(|e| e.into_inner());
-        let package = state
-            .config
-            .as_ref()
-            .and_then(|config| package_for_uid(config, uid))
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "this app cannot request root",
-                )
-            })?;
-        let daemon = state
-            .daemon
-            .clone()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotConnected, "host is disconnected"))?;
-        (package.to_owned(), state.generation, daemon)
-    };
-    let (id, frame, wait) = relay.begin(
-        &package,
-        uid,
-        command.clone().into_iter().collect(),
-        interactive,
-    );
-    if let Err(error) = daemon.send(&frame) {
-        relay.expire(id);
-        return Err(error);
-    }
-    let answer = match wait.recv_timeout(ANSWER_TIMEOUT) {
-        Ok(answer) => answer,
-        Err(_) => {
-            relay.expire(id);
-            Outcome::Refused("the host did not answer in time".into())
-        }
-    };
-    let reason = match answer {
-        Outcome::Approved => None,
-        Outcome::Refused(reason) => Some(reason),
-    };
-    let still_allowed = {
-        let state = state.lock().unwrap_or_else(|e| e.into_inner());
-        state.generation == generation
-            && state
-                .config
-                .as_ref()
-                .and_then(|config| package_for_uid(config, uid))
-                .as_deref()
-                == Some(package.as_str())
-    };
-    if reason.is_some() || !still_allowed {
-        let reason = reason.unwrap_or_else(|| "the app's root permission changed".into());
-        reply(
-            &mut stream,
-            su_wire::STDERR,
-            format!("su: {reason}\n").as_bytes(),
-        )?;
-        return reply(&mut stream, su_wire::EXIT, &1i32.to_be_bytes());
-    }
-    stream.set_read_timeout(None)?;
-    let mut error_socket = stream.try_clone()?;
-    if let Err(error) = execute(stream, command, interactive, rows, cols) {
-        reply(
-            &mut error_socket,
-            su_wire::STDERR,
-            format!("su: {error}\n").as_bytes(),
-        )?;
-        reply(&mut error_socket, su_wire::EXIT, &1i32.to_be_bytes())?;
-    }
-    Ok(())
 }
