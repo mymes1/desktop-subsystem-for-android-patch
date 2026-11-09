@@ -19,6 +19,9 @@ public final class SettingsViewModel: ObservableObject {
     /// The smallest limit the service takes, in MiB. Android does not start in less.
     public static let smallestMemoryLimitMb = 2048
     static let offeredLimitsMb = [2048, 3072, 4096, 6144, 8192, 12288, 16384]
+    /// The dsa commands the Advanced page's command line card shows, each on its own row with
+    /// a copy button that copies only that command. They are separate commands, not a pipeline.
+    public static let commandLineCommands = ["dsa status", "dsa settings", "dsa memory"]
 
     private let service: DsaService
     private let text: TextSource

@@ -1053,8 +1053,14 @@ msgstr "명령줄"
 msgid "The dsa command"
 msgstr "dsa 명령"
 
-msgid "dsa --help"
-msgstr "dsa --help"
+msgid "dsa status"
+msgstr "dsa status"
+
+msgid "dsa settings"
+msgstr "dsa settings"
+
+msgid "dsa memory"
+msgstr "dsa memory"
 
 msgid "Everything on these pages is also available from a terminal."
 msgstr "이 화면의 모든 기능을 터미널에서도 쓸 수 있습니다."

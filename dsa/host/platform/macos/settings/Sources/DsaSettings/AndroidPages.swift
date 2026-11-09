@@ -404,7 +404,10 @@ struct NetworkPage: View {
                           isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
                 Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
                 LabeledContent {
-                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                    HStack {
+                        Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                        CopyButton(text: vm.adbConnect)
+                    }
                 } label: {
                     RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
                 }
@@ -561,10 +564,9 @@ struct AdvancedPage: View {
                 }
             }
             Section(T("CommandLineHeader.Text")) {
-                LabeledContent {
-                    Text("dsa status | dsa settings | dsa memory").font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                } label: {
-                    RowLabel(title: T("CommandLineCard.Header"), detail: T("CommandLineCard.Description"))
+                RowLabel(title: T("CommandLineCard.Header"), detail: T("CommandLineCard.Description"))
+                ForEach(SettingsViewModel.commandLineCommands, id: \.self) { command in
+                    CommandRow(command: command)
                 }
             }
         }

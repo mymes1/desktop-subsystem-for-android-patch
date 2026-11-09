@@ -141,6 +141,45 @@ pub fn value_row(title: &str, value: &str) -> (adw::ActionRow, gtk::Label) {
     (row, label)
 }
 
+/// A flat copy button that puts what `source` shows at the moment of the click on the
+/// clipboard, and shows a check mark for a moment so the user sees that the copy happened.
+pub fn copy_button(source: &gtk::Label) -> gtk::Button {
+    let copy = gtk::Button::builder()
+        .icon_name("edit-copy-symbolic")
+        .tooltip_text(tr("Copy"))
+        .valign(gtk::Align::Center)
+        .build();
+    copy.add_css_class("flat");
+    copy.update_property(&[gtk::accessible::Property::Label(&tr("Copy"))]);
+    let source = source.clone();
+    copy.connect_clicked(move |button| {
+        button.clipboard().set_text(&source.label());
+        button.set_icon_name("object-select-symbolic");
+        let button = button.clone();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(1500), move || {
+            button.set_icon_name("edit-copy-symbolic");
+        });
+    });
+    copy
+}
+
+/// A row that shows one command in monospaced, selectable text, with a copy button that
+/// copies exactly that command.
+pub fn command_row(command: &str) -> (adw::ActionRow, gtk::Label) {
+    let row = adw::ActionRow::new();
+    let label = gtk::Label::builder()
+        .label(command)
+        .selectable(true)
+        .wrap(true)
+        .xalign(0.0)
+        .hexpand(true)
+        .build();
+    label.add_css_class("monospace");
+    row.add_prefix(&label);
+    row.add_suffix(&copy_button(&label));
+    (row, label)
+}
+
 pub fn button(label: &str) -> gtk::Button {
     gtk::Button::builder()
         .label(label)

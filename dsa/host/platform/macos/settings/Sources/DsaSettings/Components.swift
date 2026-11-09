@@ -144,6 +144,43 @@ struct ValueRow: View {
     }
 }
 
+/// A borderless copy button that puts `text` on the pasteboard and shows a check mark for a
+/// moment, so the user sees that the copy happened.
+struct CopyButton: View {
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = true
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+        }
+        .buttonStyle(.borderless)
+        .help(T("CopyButton.ToolTip"))
+        .accessibilityLabel(T("CopyButton.ToolTip"))
+    }
+}
+
+/// One command in monospaced, selectable text, with a button that copies exactly that command.
+struct CommandRow: View {
+    let command: String
+
+    var body: some View {
+        HStack {
+            Text(command).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            Spacer()
+            CopyButton(text: command)
+        }
+    }
+}
+
 /// A picture from bytes Android sent (an app's icon, a widget's preview), or a stand-in.
 struct PngImage: View {
     let data: Data?

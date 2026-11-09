@@ -859,3 +859,26 @@ fn fr17_the_identity_page_opens_with_this_computer_read_only_and_copies_its_spec
     }));
     assert_eq!(dsa.of_computer("manufacturer"), "");
 }
+
+#[test]
+fn fr17_the_command_line_group_offers_one_copy_button_per_command() {
+    // The group once showed a single command, and the other settings apps showed
+    // "dsa status | dsa settings | dsa memory" on one line, which reads as a shell pipeline and
+    // could not be copied. Each command is its own row with a button that copies only it.
+    assert_eq!(
+        view::COMMAND_LINE_COMMANDS,
+        ["dsa status", "dsa settings", "dsa memory"]
+    );
+    for command in view::COMMAND_LINE_COMMANDS {
+        assert!(!command.contains(" | "), "{command:?} reads as a pipeline");
+    }
+    let src = crate_dir().join("src/ui");
+    let system = std::fs::read_to_string(src.join("system.rs")).unwrap();
+    assert!(system.contains("for cli_command in view::COMMAND_LINE_COMMANDS {"));
+    assert!(system.contains("command_row(cli_command)"));
+    assert!(system.contains("adb_row.add_suffix(&copy_button(&adb_command));"));
+    let common = std::fs::read_to_string(src.join("common.rs")).unwrap();
+    assert!(common.contains("row.add_suffix(&copy_button(&label));"));
+    assert!(common.contains(".tooltip_text(tr(\"Copy\"))"));
+    assert!(common.contains("button.set_icon_name(\"object-select-symbolic\");"));
+}

@@ -103,6 +103,28 @@ public partial class AdvancedPage : Page
         GappsDeviceIdCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24 };
     }
 
+    /// <summary>Copies the one dsa command whose row the button is on (its <c>Tag</c>), and
+    /// shows a check mark on that button for a moment, as the adb command's button does. The
+    /// clipboard can be held by another program, and then the button stays as it was.</summary>
+    private async void OnCopyCommand(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Wpf.Ui.Controls.Button button || button.Tag is not string command)
+        {
+            return;
+        }
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(command, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return;
+        }
+        button.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24 };
+        await System.Threading.Tasks.Task.Delay(1500);
+        button.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24 };
+    }
+
     /// <summary>Asks first, saying what is lost, then resets Android's data.</summary>
     private async void OnResetData(object sender, RoutedEventArgs e)
     {
