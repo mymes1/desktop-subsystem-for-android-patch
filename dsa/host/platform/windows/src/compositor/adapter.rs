@@ -153,6 +153,12 @@ pub trait DisplayPresenter: Send + Sync {
         let _ = display_id;
     }
 
+    /// How many times the renderer has made its Vulkan device again after a GPU reset; 0 when
+    /// it cannot say.
+    fn device_generation(&self) -> u64 {
+        0
+    }
+
     /// What the renderer's process holds in memory, with the renderer's own count; `None`
     /// when it cannot say.
     fn memory(&self) -> Option<RendererProcessMemory> {
@@ -854,6 +860,10 @@ impl DisplayPresenter for GfxstreamAdapter {
         if let Some(backend) = &self.backend {
             backend.forget_display(display_id);
         }
+    }
+
+    fn device_generation(&self) -> u64 {
+        GfxstreamAdapter::device_generation(self)
     }
 
     fn memory(&self) -> Option<RendererProcessMemory> {

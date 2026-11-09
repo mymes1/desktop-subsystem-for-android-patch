@@ -60,7 +60,7 @@ use dsa_host_core::compositor::splash;
 use dsa_host_core::compositor::visible_change::{self, area_around, Area, PressWatch, Verdict};
 use dsa_host_core::compositor::window_sizing::{to_task_length, to_window_size, Scale};
 use windows::core::{Interface, BOOL, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
+use windows::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE, HMODULE, HWND, LUID, POINT};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP,
 };
@@ -91,6 +91,7 @@ use windows::Win32::Graphics::Dxgi::{
 };
 use windows_numerics::Matrix3x2;
 
+use super::device_recovery::{Recovering, Removable};
 use super::log::{
     host_clock, input_trace, input_trace_on, note, qpc_frequency, trace_detailed, trace_stage,
     trace_summary, CompositorLogger,
@@ -105,27 +106,127 @@ fn failed(what: &str, error: windows::core::Error) -> String {
     format!("{what}: {error}")
 }
 
-/// The Direct3D 11 device, and the DirectComposition device every task window of a process
-/// shares when the process has windows.
-pub struct Gpu {
+/// One set of devices: the Direct3D 11 device, and the DirectComposition device every task
+/// window of a process shares when the process has windows. A GPU reset removes them, and
+/// [`Gpu`] makes a new set.
+pub struct Devices {
     device: ID3D11Device,
     context: Mutex<ID3D11DeviceContext>,
     factory: IDXGIFactory2,
     dcomp: Option<Mutex<IDCompositionDevice>>,
     /// Whether the device is on the GPU the renderer named; frames cannot cross GPUs.
-    pub on_renderer_gpu: bool,
+    on_renderer_gpu: bool,
 }
 
 // SAFETY: the Direct3D 11 device and the DXGI factory are free-threaded. The immediate
 // context and the DirectComposition device are used only under their locks.
-unsafe impl Send for Gpu {}
-unsafe impl Sync for Gpu {}
+unsafe impl Send for Devices {}
+unsafe impl Sync for Devices {}
+
+impl Removable for Devices {
+    fn removed(&self) -> Option<i32> {
+        // SAFETY: a plain COM call with no arguments, which the device answers at any time.
+        unsafe { self.device.GetDeviceRemovedReason() }
+            .err()
+            .map(|error| error.code().0)
+    }
+}
+
+/// The devices a process shows or shares frames with, made again after a GPU reset.
+pub struct Gpu {
+    devices: Recovering<Devices>,
+}
 
 impl Gpu {
     /// Creates the devices on the GPU `luid` names (the renderer's), else on the default
     /// GPU, else on the software rasteriser. `composition` adds the DirectComposition device
-    /// that windows need; the window manager, which has none, leaves it out.
+    /// that windows need; the window manager, which has none, leaves it out. A GPU reset
+    /// makes them again the same way.
     pub fn new(luid: Option<[u8; 8]>, composition: bool) -> Result<Arc<Gpu>, String> {
+        let devices = Recovering::new(Box::new(move || Devices::new(luid, composition)))?;
+        Ok(Arc::new(Gpu { devices }))
+    }
+
+    /// Whether the device is on the GPU the renderer named; frames cannot cross GPUs.
+    pub fn on_renderer_gpu(&self) -> bool {
+        self.devices.current().0.on_renderer_gpu
+    }
+
+    /// How many times the devices were made: 1 until a GPU reset makes them again.
+    pub fn generation(&self) -> u64 {
+        self.devices.generation()
+    }
+
+    /// The current devices and their generation.
+    pub fn devices(&self) -> (Arc<Devices>, u64) {
+        self.devices.current()
+    }
+
+    /// Asks the device whether a GPU reset removed it, and makes new devices if it did.
+    /// Returns why it was removed and the new generation when it made them; an error when no
+    /// new ones could be made yet, which the next call tries again.
+    pub fn recover(&self) -> Result<Option<(i32, u64)>, String> {
+        self.devices.recover()
+    }
+
+    /// The devices of `generation` failed as removed devices do: new ones are made unless
+    /// someone made them already. Returns the generation now current.
+    pub fn replace(&self, generation: u64) -> Result<u64, String> {
+        self.devices.replace(generation)
+    }
+
+    /// Asks the driver to free the memory it keeps for this device beyond the resources that
+    /// are alive (its command buffers, caches and pools), as an app does on suspend. Called when
+    /// no task window is shown; the driver makes what it needs again on the next copy.
+    pub fn trim(&self) {
+        self.devices.current().0.trim();
+    }
+
+    /// The GPU memory this whole process uses on this device's GPU, in KiB: its dedicated
+    /// video memory (local) and the system memory the GPU maps for it (non-local). It counts
+    /// every API in the process, so the renderer's Vulkan memory is in it too.
+    pub fn video_memory_kb(&self) -> Option<(u64, u64)> {
+        self.devices.current().0.video_memory_kb()
+    }
+
+    /// A texture the renderer can open by its shared handle and copy a frame into. Made on new
+    /// devices when a GPU reset removed the current ones.
+    pub fn shared_texture(&self, width: u32, height: u32) -> Result<SharedTexture, String> {
+        let (mut texture, generation) = self
+            .devices
+            .with(|devices| devices.shared_texture(width, height))
+            .map_err(|e| failed("creating a shared texture for a task window", e))?;
+        texture.generation = generation;
+        Ok(texture)
+    }
+
+    /// Opens the texture another process shared by `handle`, which is a handle of this
+    /// process. The handle stays the caller's to close. Opened on new devices when a GPU
+    /// reset removed the current ones.
+    pub fn open_shared(&self, handle: isize, size: (u32, u32)) -> Result<OpenedTexture, String> {
+        let (texture, generation) = self
+            .devices
+            .with(|devices| devices.open_shared(handle))
+            .map_err(|e| failed("opening a task's shared frame texture", e))?;
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        // SAFETY: a plain COM call writing one local structure.
+        unsafe { texture.GetDesc(&mut desc) };
+        if (desc.Width, desc.Height) != size {
+            return Err(format!(
+                "a task's frame texture is {}x{}, not the {}x{} it was announced as",
+                desc.Width, desc.Height, size.0, size.1
+            ));
+        }
+        Ok(OpenedTexture {
+            texture,
+            size,
+            generation,
+        })
+    }
+}
+
+impl Devices {
+    fn new(luid: Option<[u8; 8]>, composition: bool) -> Result<Devices, String> {
         // SAFETY: plain COM calls; every out pointer is a local.
         unsafe {
             let factory: IDXGIFactory2 = CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0))
@@ -178,13 +279,13 @@ impl Gpu {
                         } else {
                             None
                         };
-                        return Ok(Arc::new(Gpu {
+                        return Ok(Devices {
                             device,
                             context: Mutex::new(context),
                             factory,
                             dcomp,
                             on_renderer_gpu,
-                        }));
+                        });
                     }
                     Err(error) => last_error = Some(error),
                 }
@@ -196,10 +297,7 @@ impl Gpu {
         }
     }
 
-    /// Asks the driver to free the memory it keeps for this device beyond the resources that
-    /// are alive (its command buffers, caches and pools), as an app does on suspend. Called when
-    /// no task window is shown; the driver makes what it needs again on the next copy.
-    pub fn trim(&self) {
+    fn trim(&self) {
         let context = self.context.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls under the context's lock. Every copy binds nothing, so
         // clearing the context's state loses nothing a later copy needs.
@@ -212,10 +310,7 @@ impl Gpu {
         }
     }
 
-    /// The GPU memory this whole process uses on this device's GPU, in KiB: its dedicated
-    /// video memory (local) and the system memory the GPU maps for it (non-local). It counts
-    /// every API in the process, so the renderer's Vulkan memory is in it too.
-    pub fn video_memory_kb(&self) -> Option<(u64, u64)> {
+    fn video_memory_kb(&self) -> Option<(u64, u64)> {
         // SAFETY: plain COM calls; the out structures are locals.
         unsafe {
             let adapter: IDXGIAdapter3 = self
@@ -238,8 +333,11 @@ impl Gpu {
         }
     }
 
-    /// A texture the renderer can open by its shared handle and copy a frame into.
-    pub fn shared_texture(&self, width: u32, height: u32) -> Result<SharedTexture, String> {
+    fn shared_texture(
+        &self,
+        width: u32,
+        height: u32,
+    ) -> Result<SharedTexture, windows::core::Error> {
         let desc = D3D11_TEXTURE2D_DESC {
             Width: width,
             Height: height,
@@ -260,49 +358,29 @@ impl Gpu {
         unsafe {
             let mut texture = None;
             self.device
-                .CreateTexture2D(&desc, None, Some(&mut texture))
-                .map_err(|e| failed("creating a shared texture for a task window", e))?;
+                .CreateTexture2D(&desc, None, Some(&mut texture))?;
             let texture: ID3D11Texture2D =
-                texture.ok_or("creating a shared texture returned no texture")?;
-            let resource: IDXGIResource1 = texture
-                .cast()
-                .map_err(|e| failed("reaching a shared texture's DXGI resource", e))?;
-            let handle = resource
-                .CreateSharedHandle(
-                    None,
-                    DXGI_SHARED_RESOURCE_READ.0 | DXGI_SHARED_RESOURCE_WRITE.0,
-                    PCWSTR::null(),
-                )
-                .map_err(|e| failed("sharing a task window's texture", e))?;
+                texture.ok_or_else(|| windows::core::Error::from(E_FAIL))?;
+            let resource: IDXGIResource1 = texture.cast()?;
+            let handle = resource.CreateSharedHandle(
+                None,
+                DXGI_SHARED_RESOURCE_READ.0 | DXGI_SHARED_RESOURCE_WRITE.0,
+                PCWSTR::null(),
+            )?;
             Ok(SharedTexture {
                 _texture: texture,
                 handle,
                 size: (width, height),
+                generation: 0,
             })
         }
     }
 
-    /// Opens the texture another process shared by `handle`, which is a handle of this
-    /// process. The handle stays the caller's to close.
-    pub fn open_shared(&self, handle: isize, size: (u32, u32)) -> Result<OpenedTexture, String> {
+    fn open_shared(&self, handle: isize) -> Result<ID3D11Texture2D, windows::core::Error> {
         // SAFETY: plain COM calls; the handle is only read.
         unsafe {
-            let device: ID3D11Device1 = self
-                .device
-                .cast()
-                .map_err(|e| failed("reaching the Direct3D 11.1 device", e))?;
-            let texture: ID3D11Texture2D = device
-                .OpenSharedResource1(HANDLE(handle as *mut c_void))
-                .map_err(|e| failed("opening a task's shared frame texture", e))?;
-            let mut desc = D3D11_TEXTURE2D_DESC::default();
-            texture.GetDesc(&mut desc);
-            if (desc.Width, desc.Height) != size {
-                return Err(format!(
-                    "a task's frame texture is {}x{}, not the {}x{} it was announced as",
-                    desc.Width, desc.Height, size.0, size.1
-                ));
-            }
-            Ok(OpenedTexture { texture, size })
+            let device: ID3D11Device1 = self.device.cast()?;
+            device.OpenSharedResource1(HANDLE(handle as *mut c_void))
         }
     }
 
@@ -317,6 +395,8 @@ impl Gpu {
 pub struct OpenedTexture {
     texture: ID3D11Texture2D,
     size: (u32, u32),
+    /// The generation of the devices it was opened on: after a GPU reset it is no use.
+    generation: u64,
 }
 
 // SAFETY: a Direct3D 11 resource may be used from any thread.
@@ -327,6 +407,11 @@ impl OpenedTexture {
     pub fn size(&self) -> (u32, u32) {
         self.size
     }
+
+    /// The generation of the devices it was opened on ([`Gpu::generation`]).
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 /// A texture the renderer copies a task's frame into, and an app window host shows it from,
@@ -336,6 +421,8 @@ pub struct SharedTexture {
     _texture: ID3D11Texture2D,
     handle: HANDLE,
     size: (u32, u32),
+    /// The generation of the devices it was made on: after a GPU reset it is made again.
+    generation: u64,
 }
 
 // SAFETY: a Direct3D 11 resource may be used from any thread; the handle is a kernel handle.
@@ -350,6 +437,11 @@ impl SharedTexture {
 
     pub fn size(&self) -> (u32, u32) {
         self.size
+    }
+
+    /// The generation of the devices it was made on ([`Gpu::generation`]).
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 }
 
@@ -369,7 +461,12 @@ type Newest = (ID3D11Texture2D, (u32, u32), (u32, u32));
 type Committed = ((u32, u32), (u32, u32), Scale);
 
 struct State {
-    target: IDCompositionTarget,
+    /// The devices everything below was made on, and their generation. A GPU reset removes
+    /// them; the window then makes all of it again on the new ones (`follow_gpu`).
+    devices: Arc<Devices>,
+    generation: u64,
+    /// The window's DirectComposition target: `None` only while it is made again.
+    target: Option<IDCompositionTarget>,
     /// The frame's visual, under the caption's.
     visual: IDCompositionVisual,
     /// The caption buttons' visual, above the frame's, and its surface and the surface's size.
@@ -473,7 +570,7 @@ const CAPTURE_STILL_FOR: Duration = Duration::from_millis(50);
 ///
 /// `texture` is a texture of `gpu`'s device; the caller holds the presenter's state lock.
 unsafe fn read_frame(
-    gpu: &Gpu,
+    gpu: &Devices,
     texture: &ID3D11Texture2D,
     (width, height): (u32, u32),
 ) -> Result<Vec<u8>, String> {
@@ -572,6 +669,54 @@ const SUMMARY_EVERY: usize = 20;
 /// the window never takes it.
 const CLAIM_WAIT: Duration = Duration::from_millis(100);
 
+/// A task window's DirectComposition target and its visuals: the frame's, the caption
+/// buttons' above it and the splash's under it.
+type Composition = (
+    IDCompositionTarget,
+    IDCompositionVisual,
+    IDCompositionVisual,
+    IDCompositionVisual,
+);
+
+/// Puts the visuals of a task window on the window `hwnd`, on `devices`. The window must have
+/// no target on any other DirectComposition device.
+fn compose_window(devices: &Devices, hwnd: isize) -> Result<Composition, String> {
+    let dcomp = devices.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+    // SAFETY: `hwnd` is a live window of this process; the rest are plain COM calls.
+    unsafe {
+        let target = dcomp
+            .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
+            .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
+        let root = dcomp
+            .CreateVisual()
+            .map_err(|e| failed("creating a task window's visual", e))?;
+        let visual = dcomp
+            .CreateVisual()
+            .map_err(|e| failed("creating a task window's visual", e))?;
+        // The caption buttons are drawn over the app, whose content runs under them.
+        let caption = dcomp
+            .CreateVisual()
+            .map_err(|e| failed("creating a task window's caption visual", e))?;
+        root.AddVisual(&visual, false, None::<&IDCompositionVisual>)
+            .map_err(|e| failed("adding a task window's frame visual", e))?;
+        root.AddVisual(&caption, true, &visual)
+            .map_err(|e| failed("adding a task window's caption visual", e))?;
+        // Until the first frame the window shows a splash under where the frame goes.
+        let splash = dcomp
+            .CreateVisual()
+            .map_err(|e| failed("creating a task window's splash visual", e))?;
+        root.AddVisual(&splash, false, &visual)
+            .map_err(|e| failed("adding a task window's splash visual", e))?;
+        target
+            .SetRoot(&root)
+            .map_err(|e| failed("setting a task window's visual", e))?;
+        dcomp
+            .Commit()
+            .map_err(|e| failed("committing a task window's visual", e))?;
+        Ok((target, visual, caption, splash))
+    }
+}
+
 /// Tells a window that a frame of another size is kept for it to take.
 pub type FrameReady = Box<dyn Fn() + Send + Sync>;
 
@@ -618,47 +763,16 @@ impl WindowPresenter {
         view: (u32, u32),
         logger: Option<Arc<CompositorLogger>>,
     ) -> Result<Arc<Self>, String> {
-        let dcomp = gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
-        // SAFETY: `hwnd` is a live window of this thread; the rest are plain COM calls.
-        let (target, visual, caption, splash) = unsafe {
-            let target = dcomp
-                .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
-                .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
-            let root = dcomp
-                .CreateVisual()
-                .map_err(|e| failed("creating a task window's visual", e))?;
-            let visual = dcomp
-                .CreateVisual()
-                .map_err(|e| failed("creating a task window's visual", e))?;
-            // The caption buttons are drawn over the app, whose content runs under them.
-            let caption = dcomp
-                .CreateVisual()
-                .map_err(|e| failed("creating a task window's caption visual", e))?;
-            root.AddVisual(&visual, false, None::<&IDCompositionVisual>)
-                .map_err(|e| failed("adding a task window's frame visual", e))?;
-            root.AddVisual(&caption, true, &visual)
-                .map_err(|e| failed("adding a task window's caption visual", e))?;
-            // Until the first frame the window shows a splash under where the frame goes.
-            let splash = dcomp
-                .CreateVisual()
-                .map_err(|e| failed("creating a task window's splash visual", e))?;
-            root.AddVisual(&splash, false, &visual)
-                .map_err(|e| failed("adding a task window's splash visual", e))?;
-            target
-                .SetRoot(&root)
-                .map_err(|e| failed("setting a task window's visual", e))?;
-            dcomp
-                .Commit()
-                .map_err(|e| failed("committing a task window's visual", e))?;
-            (target, visual, caption, splash)
-        };
-        drop(dcomp);
+        let (devices, generation) = gpu.devices();
+        let (target, visual, caption, splash) = compose_window(&devices, hwnd)?;
         Ok(Arc::new(WindowPresenter {
             task_id,
             hwnd,
             gpu,
             state: Mutex::new(State {
-                target,
+                devices,
+                generation,
+                target: Some(target),
                 visual,
                 caption,
                 caption_surface: None,
@@ -728,12 +842,13 @@ impl WindowPresenter {
         texture: &ID3D11Texture2D,
         region: (u32, u32),
     ) -> Option<Option<u32>> {
+        let devices = Arc::clone(&state.devices);
         // The band is the window's; the frame is sampled in its own pixels.
         let band = to_task_length(state.band, state.scale);
         if band == 0 || region.1 <= band + 2 || region.0 < BAND_SAMPLES {
             return None;
         }
-        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
         let mut changed = None;
         if state.band_pending {
             let probe = state.band_probe.clone()?;
@@ -789,8 +904,7 @@ impl WindowPresenter {
                 CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
                 MiscFlags: 0,
             };
-            let made = self
-                .gpu
+            let made = devices
                 .device
                 .CreateTexture2D(&desc, None, Some(&mut state.band_probe));
             if let Err(error) = made {
@@ -909,6 +1023,7 @@ impl WindowPresenter {
         // Presented with the visual's new scale, unless it is kept for the window to take.
         if let Err(why) = self.present_locked(&mut state, &texture, size, region, keep) {
             note(self.logger.as_deref(), &why);
+            self.recover(&mut state);
             return;
         }
         drop(state);
@@ -947,7 +1062,10 @@ impl WindowPresenter {
             // under its lock.
             match unsafe { self.present_back_buffer(&mut state, region) } {
                 Ok(new_size) => self.frame_shown(&mut state, view, new_size, None, started),
-                Err(why) => note(self.logger.as_deref(), &why),
+                Err(why) => {
+                    note(self.logger.as_deref(), &why);
+                    self.recover(&mut state);
+                }
             }
         }
         let committed = self.commit_visual(&mut state);
@@ -993,7 +1111,8 @@ impl WindowPresenter {
     /// Waits until the compositor has taken the last commit. Holds no lock of the presenter's
     /// state, so the connection thread takes frames meanwhile.
     fn wait_for_commit(&self) {
-        let Ok(dcomp) = self.gpu.dcomp() else {
+        let (devices, _) = self.gpu.devices();
+        let Ok(dcomp) = devices.dcomp() else {
             return;
         };
         let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
@@ -1003,13 +1122,114 @@ impl WindowPresenter {
         }
     }
 
+    /// Asks the device whether a GPU reset removed it, makes new devices if it did, and moves
+    /// the window onto the current devices. Called after anything on the devices failed, and
+    /// at every tick, so a window whose app draws nothing recovers too.
+    fn recover(&self, state: &mut State) {
+        match self.gpu.recover() {
+            Ok(Some((reason, generation))) => note(
+                self.logger.as_deref(),
+                &format!(
+                    "task {}: the GPU was reset (0x{:08x}); made new Direct3D devices \
+                     (number {generation}), and the window stays",
+                    self.task_id, reason as u32
+                ),
+            ),
+            Ok(None) => {}
+            Err(why) => note(
+                self.logger.as_deref(),
+                &format!(
+                    "task {}: the GPU was reset, and new Direct3D devices cannot be made yet \
+                     ({why}); tried again shortly",
+                    self.task_id
+                ),
+            ),
+        }
+        self.follow_gpu(state);
+    }
+
+    /// Moves the window onto the current devices when a GPU reset replaced the ones its
+    /// composition was made on: the target, visuals and surfaces are made again on the new
+    /// ones, and the swapchain with the next frame. The window, its size and its task stay;
+    /// the caption buttons and the splash come back when they are next drawn, and the frame
+    /// with the next one the app draws.
+    fn follow_gpu(&self, state: &mut State) {
+        let (devices, generation) = self.gpu.devices();
+        if generation == state.generation {
+            return;
+        }
+        // A window takes one target at a time: the old one goes first.
+        state.target = None;
+        state.swapchain = None;
+        state.buffers = None;
+        state.buffer_count = 0;
+        state.committed = None;
+        state.frame = (0, 0);
+        state.caption_surface = None;
+        state.splash_surface = None;
+        state.query = None;
+        state.samples = None;
+        state.last_frame = None;
+        state.readback = None;
+        state.watch = None;
+        state.band_probe = None;
+        state.band_pending = false;
+        // Made on the old devices: nothing can be copied from it now. The next frame comes
+        // in a texture opened on the new ones.
+        state.newest = None;
+        state.kept_region = None;
+        state.follow.release();
+        state.presents.forget();
+        if !state.first_shown && state.first_frame.is_some() {
+            state.first_frame = Some(0);
+        }
+        state.devices = Arc::clone(&devices);
+        state.generation = generation;
+        match compose_window(&devices, self.hwnd) {
+            Ok((target, visual, caption, splash)) => {
+                state.target = Some(target);
+                state.visual = visual;
+                state.caption = caption;
+                state.splash = splash;
+                note(
+                    self.logger.as_deref(),
+                    &format!(
+                        "task {}: the window moved to the new Direct3D devices; it shows the \
+                         app's next frame",
+                        self.task_id
+                    ),
+                );
+                if state.first_frame.is_none() && state.splash_image.is_some() {
+                    let view = state.asked;
+                    if let Err(why) = self.draw_splash(state, view) {
+                        note(self.logger.as_deref(), &why);
+                    }
+                }
+            }
+            Err(why) => {
+                // Tried again at the next tick, on whatever devices are current then.
+                state.generation = 0;
+                note(
+                    self.logger.as_deref(),
+                    &format!(
+                        "task {}: the window could not move to the new Direct3D devices: {why}",
+                        self.task_id
+                    ),
+                );
+            }
+        }
+        // A frame waiting for the window to take a size would wait for nothing now.
+        self.claim_released.notify_all();
+    }
+
     /// Time has passed: a window that waits long for a frame of the size asked for is logged,
-    /// once per size.
+    /// once per size, and a window whose devices a GPU reset removed moves to new ones.
     pub fn tick(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
             return;
         }
+        self.recover(&mut state);
         self.trace_shown(&mut state);
         self.release_idle_buffer(&mut state);
         if let Some(((width, height), waited)) = state.latency.stuck(Instant::now()) {
@@ -1046,6 +1266,7 @@ impl WindowPresenter {
         state.wanted_buffers = wanted;
         if let Err(why) = self.present_locked(state, &texture, size, region, false) {
             note(self.logger.as_deref(), &why);
+            self.recover(state);
         }
     }
 
@@ -1053,12 +1274,13 @@ impl WindowPresenter {
     /// as in a window that fills its monitor and has no title bar.
     pub fn hide_caption(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = Arc::clone(&state.devices);
         if state.closed {
             return;
         }
         // No band, nothing to sample under it.
         state.band = 0;
-        let Ok(dcomp) = self.gpu.dcomp() else {
+        let Ok(dcomp) = devices.dcomp() else {
             return;
         };
         let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
@@ -1074,6 +1296,7 @@ impl WindowPresenter {
     /// the next call, over every frame.
     pub fn show_caption(&self, left: i32, size: (u32, u32), pixels: &[u8]) -> Result<(), String> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = Arc::clone(&state.devices);
         if state.closed || size.0 == 0 || size.1 == 0 {
             return Ok(());
         }
@@ -1081,7 +1304,7 @@ impl WindowPresenter {
             return Err("the caption image is smaller than its size".into());
         }
         state.band = size.1;
-        let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+        let dcomp = devices.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls on objects this presenter owns; the update reads only
         // `pixels`, which holds the whole image.
         unsafe {
@@ -1116,7 +1339,7 @@ impl WindowPresenter {
                 back: 1,
             };
             {
-                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
                 context.UpdateSubresource(
                     &texture,
                     0,
@@ -1143,10 +1366,11 @@ impl WindowPresenter {
     /// Frames that arrive meanwhile stay in the shared texture.
     pub fn hide(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = Arc::clone(&state.devices);
         if state.closed || !state.hidden.hide() {
             return;
         }
-        if let Ok(dcomp) = self.gpu.dcomp() {
+        if let Ok(dcomp) = devices.dcomp() {
             let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
             // SAFETY: plain COM calls on objects this presenter owns.
             unsafe {
@@ -1185,12 +1409,14 @@ impl WindowPresenter {
         };
         if let Err(why) = self.present_locked(&mut state, &texture, size, region, false) {
             note(self.logger.as_deref(), &why);
+            self.recover(&mut state);
         }
     }
 
     /// The window is closing: nothing more is shown in it.
     pub fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = Arc::clone(&state.devices);
         if !state.closed {
             if let Some(summary) = state.latency.summary() {
                 note(
@@ -1203,13 +1429,15 @@ impl WindowPresenter {
         state.newest = None;
         // A screenshot waiting for a frame gets none.
         self.capture_done.notify_all();
-        let Ok(dcomp) = self.gpu.dcomp() else {
+        let Ok(dcomp) = devices.dcomp() else {
             return;
         };
         let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls on objects this presenter owns.
         unsafe {
-            let _ = state.target.SetRoot(None::<&IDCompositionVisual>);
+            if let Some(target) = &state.target {
+                let _ = target.SetRoot(None::<&IDCompositionVisual>);
+            }
             let _ = dcomp.Commit();
         }
     }
@@ -1220,6 +1448,7 @@ impl WindowPresenter {
     /// waiting [`CAPTURE_WAIT`] at most; a still app's newest frame is read at once.
     pub fn capture(&self) -> Result<Option<CapturedFrame>, String> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = Arc::clone(&state.devices);
         if state.closed {
             return Ok(None);
         }
@@ -1254,7 +1483,7 @@ impl WindowPresenter {
         };
         let band = to_task_length(state.band, state.scale);
         // SAFETY: the texture is one of this presenter's device, read under the state lock.
-        let rgba = unsafe { read_frame(&self.gpu, &texture, region)? };
+        let rgba = unsafe { read_frame(&devices, &texture, region)? };
         Ok(Some(CapturedFrame {
             width: region.0,
             height: region.1,
@@ -1271,6 +1500,13 @@ impl WindowPresenter {
         if state.closed {
             return Ok(());
         }
+        self.follow_gpu(&mut state);
+        if texture.generation != state.generation {
+            // Opened on devices a GPU reset removed: the window manager sends a texture made
+            // on new ones, and the frames after this one come in it.
+            return Ok(());
+        }
+        let devices = Arc::clone(&state.devices);
         let region = content_region(content, texture.size);
         state.newest = Some((texture.texture.clone(), texture.size, region));
         // Frames in quick succession say the window is drawing: its swapchain takes all its
@@ -1324,12 +1560,24 @@ impl WindowPresenter {
             );
             return Ok(());
         }
+        if texture.generation != state.generation {
+            // A GPU reset moved the window to new devices while the frame waited.
+            return Ok(());
+        }
         let keep = arrival == Arrival::Keep;
         if keep {
             state.kept_region = Some(region);
         }
         let shown =
-            self.present_locked(&mut state, &texture.texture, texture.size, region, keep)?;
+            match self.present_locked(&mut state, &texture.texture, texture.size, region, keep) {
+                Ok(shown) => shown,
+                Err(why) => {
+                    // A swapchain resize, a present or a commit that fails because a GPU reset
+                    // removed the devices moves the window to new ones; it stays open.
+                    self.recover(&mut state);
+                    return Err(why);
+                }
+            };
         self.trace_frame_colour(&mut state, &texture.texture, region);
         // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
         // under its lock.
@@ -1340,7 +1588,7 @@ impl WindowPresenter {
             // The band over the frame in the frame's own pixels.
             let band = to_task_length(state.band, state.scale);
             // SAFETY: as above.
-            let read = unsafe { read_frame(&self.gpu, &texture.texture, region) };
+            let read = unsafe { read_frame(&devices, &texture.texture, region) };
             state.captured = Some(read.map(|rgba| CapturedFrame {
                 width: region.0,
                 height: region.1,
@@ -1526,6 +1774,7 @@ impl WindowPresenter {
         texture: &ID3D11Texture2D,
         (width, height): (u32, u32),
     ) -> Result<(), String> {
+        let devices = Arc::clone(&state.devices);
         if width == 0 || height == 0 {
             return Ok(());
         }
@@ -1551,7 +1800,7 @@ impl WindowPresenter {
                 MiscFlags: 0,
             };
             let mut made = None;
-            self.gpu
+            devices
                 .device
                 .CreateTexture2D(&desc, None, Some(&mut made))
                 .map_err(|e| failed("creating the copy of the last frame", e))?;
@@ -1562,7 +1811,7 @@ impl WindowPresenter {
         let Some((last, _)) = &state.last_frame else {
             return Ok(());
         };
-        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
         let whole = D3D11_BOX {
             left: 0,
             top: 0,
@@ -1582,6 +1831,7 @@ impl WindowPresenter {
         source: &ID3D11Texture2D,
         area: Area,
     ) -> Result<Vec<u8>, String> {
+        let devices = Arc::clone(&state.devices);
         if state.readback.is_none() {
             let desc = D3D11_TEXTURE2D_DESC {
                 Width: visible_change::SIDE,
@@ -1598,7 +1848,7 @@ impl WindowPresenter {
                 CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
                 MiscFlags: 0,
             };
-            self.gpu
+            devices
                 .device
                 .CreateTexture2D(&desc, None, Some(&mut state.readback))
                 .map_err(|e| failed("creating the texture a press's area is read into", e))?;
@@ -1606,7 +1856,7 @@ impl WindowPresenter {
         let Some(readback) = &state.readback else {
             return Err("no texture to read a press's area into".into());
         };
-        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
         let from = D3D11_BOX {
             left: area.left,
             top: area.top,
@@ -1638,6 +1888,7 @@ impl WindowPresenter {
         texture: &ID3D11Texture2D,
         region: (u32, u32),
     ) -> Result<Option<[u8; 4]>, String> {
+        let devices = Arc::clone(&state.devices);
         if state.samples.is_none() {
             let desc = D3D11_TEXTURE2D_DESC {
                 Width: SAMPLE_GRID,
@@ -1654,7 +1905,7 @@ impl WindowPresenter {
                 CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
                 MiscFlags: 0,
             };
-            self.gpu
+            devices
                 .device
                 .CreateTexture2D(&desc, None, Some(&mut state.samples))
                 .map_err(|e| failed("creating the texture a frame is sampled into", e))?;
@@ -1662,7 +1913,7 @@ impl WindowPresenter {
         let Some(samples) = &state.samples else {
             return Ok(None);
         };
-        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
         for (index, (x, y)) in sample_points(region).into_iter().enumerate() {
             let index = index as u32;
             let pixel = D3D11_BOX {
@@ -1757,6 +2008,7 @@ impl WindowPresenter {
     /// and a commit reach the compositor separately, so this comes right after the present
     /// that goes with it.
     fn commit_visual(&self, state: &mut State) -> bool {
+        let devices = Arc::clone(&state.devices);
         let Some(buffers) = state.buffers else {
             // Nothing to show yet: the first frame commits it.
             return false;
@@ -1779,7 +2031,7 @@ impl WindowPresenter {
             M31: 0.0,
             M32: 0.0,
         };
-        let Ok(dcomp) = self.gpu.dcomp() else {
+        let Ok(dcomp) = devices.dcomp() else {
             return false;
         };
         let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
@@ -1842,6 +2094,7 @@ impl WindowPresenter {
 
     /// Draws the splash at the size of a `view` pixel client area, and commits it.
     fn draw_splash(&self, state: &mut State, view: (u32, u32)) -> Result<(), String> {
+        let devices = Arc::clone(&state.devices);
         let Some(image) = state.splash_image.as_ref() else {
             return Ok(());
         };
@@ -1859,7 +2112,7 @@ impl WindowPresenter {
             icon,
             splash::icon_edge(view, image.dpi, source),
         );
-        let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+        let dcomp = devices.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls on objects this presenter owns; the update reads only
         // `pixels`, which holds the whole image.
         unsafe {
@@ -1894,7 +2147,7 @@ impl WindowPresenter {
                 back: 1,
             };
             {
-                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
                 context.UpdateSubresource(
                     &texture,
                     0,
@@ -1921,6 +2174,7 @@ impl WindowPresenter {
         state: &mut State,
         (width, height): (u32, u32),
     ) -> Result<bool, String> {
+        let devices = Arc::clone(&state.devices);
         let Some(swapchain) = &state.swapchain else {
             return Ok(false);
         };
@@ -1939,7 +2193,7 @@ impl WindowPresenter {
             // What the presents before this one did, before this one changes the statistics.
             self.trace_shown(state);
         }
-        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
         // Sync interval 0: the present is queued without waiting for a vertical blank.
         swapchain
             .Present(0, DXGI_PRESENT(0))
@@ -2082,6 +2336,7 @@ impl WindowPresenter {
         (width, height): (u32, u32),
         stage: bool,
     ) -> Result<Shown, String> {
+        let devices = Arc::clone(&state.devices);
         // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
         // under its lock.
         unsafe {
@@ -2117,16 +2372,15 @@ impl WindowPresenter {
                         AlphaMode: DXGI_ALPHA_MODE_IGNORE,
                         Flags: 0,
                     };
-                    let swapchain = self
-                        .gpu
+                    let swapchain = devices
                         .factory
-                        .CreateSwapChainForComposition(&self.gpu.device, &desc, None)
+                        .CreateSwapChainForComposition(&devices.device, &desc, None)
                         .map_err(|e| failed("creating a task window's swapchain", e))?;
                     let swapchain: IDXGISwapChain2 = swapchain
                         .cast()
                         .map_err(|e| failed("reaching a task window's IDXGISwapChain2", e))?;
                     {
-                        let _dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+                        let _dcomp = devices.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
                         state
                             .visual
                             .SetContent(&swapchain)
@@ -2178,7 +2432,7 @@ impl WindowPresenter {
                 .GetBuffer(0)
                 .map_err(|e| failed("reaching a task window's back buffer", e))?;
             {
-                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
                 let region = D3D11_BOX {
                     left: 0,
                     top: 0,
@@ -2206,7 +2460,7 @@ impl WindowPresenter {
                 // buffers have anything to commit.
                 self.commit_visual(state);
             }
-            let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+            let context = devices.context.lock().unwrap_or_else(|e| e.into_inner());
             // The renderer writes the shared texture again once this returns, so the copy
             // out of it must be finished.
             if state.query.is_none() {
@@ -2215,7 +2469,7 @@ impl WindowPresenter {
                     Query: D3D11_QUERY_EVENT,
                     MiscFlags: 0,
                 };
-                let _ = self.gpu.device.CreateQuery(&desc, Some(&mut query));
+                let _ = devices.device.CreateQuery(&desc, Some(&mut query));
                 state.query = query;
             }
             if let Some(query) = &state.query {
