@@ -22,7 +22,6 @@ path = "src/su.rs"
 [dependencies]
 dsa-transport.workspace = true
 dsa-protocol.workspace = true
-sha2 = "0.11"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 dsa-guest-transport = { path = "../transport" }
