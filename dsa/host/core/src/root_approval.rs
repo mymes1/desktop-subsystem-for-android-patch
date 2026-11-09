@@ -345,10 +345,12 @@ impl FolderApprover {
             .collect::<Vec<_>>()
             .join(",");
         let line = format!(
-            "{{\"request_id\":{},\"package\":\"{}\",\"uid\":{},\"command\":[{}],\"interactive\":{},\"message\":\"{}\"}}\n",
+            "{{\"request_id\":{},\"package\":\"{}\",\"app_name\":\"{}\",\"uid\":{},\"icon_bytes\":{},\"command\":[{}],\"interactive\":{},\"message\":\"{}\"}}\n",
             request.request_id,
             escape_json(request.package()),
+            escape_json(request.app_name()),
             request.uid,
+            request.icon_png().len(),
             command,
             request.interactive,
             escape_json(&request.message()),
@@ -1274,7 +1276,9 @@ mod tests {
         assert_eq!(answer, PromptAnswer::Approved);
         let recorded = fs::read_to_string(dir.join(REQUESTS_FILE)).unwrap();
         assert!(recorded.contains("\"package\":\"com.ask.app\""));
+        assert!(recorded.contains("\"app_name\":\"Root Checker\""));
         assert!(recorded.contains("\"uid\":10123"));
+        assert!(recorded.contains("\"icon_bytes\":4"));
 
         fs::write(dir.join(ANSWER_FILE), "deny\n").unwrap();
         let denied = approver.ask(&request("com.ask.app"), Duration::from_secs(1));
