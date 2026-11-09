@@ -1096,8 +1096,10 @@ def framework_overlay_sources(dest, record=None):
                        for name, value in FRAMEWORK_OVERLAY_INTEGERS.items())
     booleans = "".join(f'    <bool name="{name}">{str(value).lower()}</bool>\n'
                        for name, value in FRAMEWORK_OVERLAY_BOOLEANS.items())
+    strings = "".join(f'    <string name="{name}" translatable="false">{value}</string>\n'
+                      for name, value in FRAMEWORK_OVERLAY_STRINGS.items())
     (dest / "res/values/dsa.xml").write_text(
-        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}</resources>\n')
+        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}{strings}</resources>\n')
     write_overlay_files(dest, {
         "res/values/dsa_design.xml": resources_xml(
             [f'<color name="{name}">{value}</color>' for name, value in DESIGN_COLORS.items()]
@@ -1115,6 +1117,7 @@ def framework_overlaid():
     map, so the framework matches its resources to its own by name."""
     return ([f"integer/{name}" for name in FRAMEWORK_OVERLAY_INTEGERS]
             + [f"bool/{name}" for name in FRAMEWORK_OVERLAY_BOOLEANS]
+            + [f"string/{name}" for name in FRAMEWORK_OVERLAY_STRINGS]
             + FRAMEWORK_DESIGN_OVERLAID)
 
 
@@ -3436,6 +3439,16 @@ FRAMEWORK_OVERLAY_BOOLEANS = {
     "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
     "config_checkWallpaperAtBoot": False,
 }
+# The device configurator: the package the framework lets write DeviceConfig, Android's server
+# flags (WRITE_DEVICE_CONFIG and WRITE_ALLOWLISTED_DEVICE_CONFIG are "configurator"
+# permissions). On a phone with Google Play it is Google Play services, whose platform
+# configurator copies the flags Google serves into DeviceConfig. The image is built from AOSP,
+# which names no configurator ("Configurator: none" in `dumpsys package`), so Play services was
+# never granted those permissions and retried: one boot on a PC fired its RETRY_UPDATE alarm 720
+# times in about ten minutes, each a run of the Play services process. Without Google Play
+# no package has this name, and the framework takes the configurator to be absent, as before.
+GAPPS_CONFIGURATOR = "com.google.android.gms"
+FRAMEWORK_OVERLAY_STRINGS = {"config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'

@@ -3188,6 +3188,22 @@ class TouchLatencyTests(unittest.TestCase):
         self.assertIn('<bool name="config_checkWallpaperAtBoot">false</bool>', values)
         self.assertIn("bool/config_checkWallpaperAtBoot", make_image.framework_overlaid())
 
+    def test_nfr2_google_play_services_is_the_device_configurator(self):
+        # WRITE_DEVICE_CONFIG is a "configurator" permission. With no configurator named, Play
+        # services' platform configurator could never write the flags it syncs, and retried
+        # about once a second after boot (its RETRY_UPDATE alarm).
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS,
+                         {"config_deviceConfiguratorPackageName": "com.google.android.gms"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = ET.fromstring((root / "src/res/values/dsa.xml").read_text())
+        strings = {item.get("name"): item.text for item in values.findall("string")}
+        self.assertEqual(strings["config_deviceConfiguratorPackageName"], "com.google.android.gms")
+        # The overlay is checked against the image's framework-res, so a renamed resource fails
+        # the image check instead of leaving Play services without the permission again.
+        self.assertIn("string/config_deviceConfiguratorPackageName", make_image.framework_overlaid())
+
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"
         contexts = make_image.update_vendor_file_contexts(existing)
