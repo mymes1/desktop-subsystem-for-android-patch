@@ -6,8 +6,9 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState,
-    GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
+    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
+    GappsState, GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status,
+    ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -443,6 +444,45 @@ pub fn start_size_choices() -> Vec<(String, Option<(u32, u32)>)> {
 pub fn start_size_index(window: Option<&AppWindow>) -> Option<usize> {
     let size = window.and_then(|w| w.start_size);
     start_size_choices().iter().position(|(_, s)| *s == size)
+}
+
+/// The ways an app's window can follow a monitor of another scale, in the order of
+/// [`DpiScaling::ALL`]. System (forced) is stored and can be chosen, but while Android cannot
+/// do it (`system_forced_available` is false), its label says it is not available yet.
+pub fn dpi_scaling_choices(system_forced_available: bool) -> Vec<(String, DpiScaling)> {
+    DpiScaling::ALL
+        .into_iter()
+        .map(|scaling| {
+            let label = match scaling {
+                DpiScaling::Auto => tr("Automatic"),
+                DpiScaling::App => tr("App"),
+                DpiScaling::System => tr("System"),
+                DpiScaling::SystemForced if system_forced_available => tr("System (forced)"),
+                DpiScaling::SystemForced => tr("System (forced), not available yet"),
+            };
+            (label, scaling)
+        })
+        .collect()
+}
+
+/// Where an app's scaling choice is among [`dpi_scaling_choices`].
+pub fn dpi_scaling_index(window: Option<&AppWindow>) -> usize {
+    let scaling = window.map(|w| w.dpi_scaling).unwrap_or_default();
+    DpiScaling::ALL
+        .iter()
+        .position(|s| *s == scaling)
+        .unwrap_or(0)
+}
+
+/// What the scaling row says under its title: why System (forced) works like System for now,
+/// while it is the app's choice and not available; otherwise what the choices do.
+pub fn dpi_scaling_subtitle(window: Option<&AppWindow>, system_forced_available: bool) -> String {
+    let scaling = window.map(|w| w.dpi_scaling).unwrap_or_default();
+    if scaling == DpiScaling::SystemForced && !system_forced_available {
+        tr("System (forced) gives the app the new scale without restarting it, even if it does not say it handles one. It is not available yet: it needs a change to Android's framework that this build does not have, so until then it works like System.")
+    } else {
+        tr("App: the app redraws at the new scale, and text stays sharp. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. No choice restarts the app.")
+    }
 }
 
 /// What an app's "Run as ARM" switch shows: whether it is on, whether it can be changed, and

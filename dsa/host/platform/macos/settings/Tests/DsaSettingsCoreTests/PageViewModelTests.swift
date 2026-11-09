@@ -98,7 +98,7 @@ final class PageViewModelTests: XCTestCase {
         let cli = FakeCli()
         cli.answer("apps list --json", #"{"apps":[\#(app)]}"#)
         cli.answer("app-window --json", #"{"apps":[]}"#)
-        cli.answer("app-window org.example.notes --fixed-size off --start-size 412x915 --json",
+        cli.answer("app-window org.example.notes --fixed-size off --start-size 412x915 --dpi-scaling auto --json",
                    #"{"apps":[{"package":"org.example.notes","fixed_size":false,"start_size":[412,915]}]}"#)
         let apps = AppsViewModel(service: AppsService(cli: cli), text: KeyText())
         await apps.refresh()
@@ -107,6 +107,56 @@ final class PageViewModelTests: XCTestCase {
         await apps.setStartSize("org.example.notes", 1)
         XCTAssertEqual(apps.rows.first?.startSizeIndex, 1)
         XCTAssertEqual(apps.message, "Apps_WindowChanged")
+    }
+
+    func test_fr4_dpi_scaling_choice_is_read_and_sent() async {
+        let cli = FakeCli()
+        cli.answer("apps list --json", #"{"apps":[\#(app)]}"#)
+        cli.answer("app-window --json",
+                   #"{"apps":[{"package":"org.example.notes","fixed_size":false,"start_size":null,"dpi_scaling":"system"}],"system_forced_available":false}"#)
+        cli.answer("app-window org.example.notes --fixed-size off --start-size auto --dpi-scaling app --json",
+                   #"{"apps":[{"package":"org.example.notes","fixed_size":false,"start_size":null,"dpi_scaling":"app"}]}"#)
+        let apps = AppsViewModel(service: AppsService(cli: cli), text: KeyText())
+        await apps.refresh()
+        await apps.loadWindowSettings()
+        XCTAssertNil(apps.error)
+        let shown = apps.rows.first.map { apps.dpiScalingChoices[$0.dpiScalingIndex].scaling }
+        XCTAssertEqual(shown, .system)
+        let app = apps.dpiScalingChoices.firstIndex { $0.scaling == .app } ?? -1
+        await apps.setDpiScaling("org.example.notes", app)
+        XCTAssertNil(apps.error)
+        XCTAssertEqual(apps.rows.first?.dpiScalingIndex, app)
+        XCTAssertEqual(apps.message, "Apps_WindowChanged")
+        // Choosing what the app has already sends nothing.
+        let calls = cli.calls.count
+        await apps.setDpiScaling("org.example.notes", app)
+        XCTAssertEqual(cli.calls.count, calls)
+    }
+
+    func test_fr4_system_forced_is_marked_not_available_yet() async {
+        let cli = FakeCli()
+        cli.answer("apps list --json", #"{"apps":[\#(app)]}"#)
+        // A dsa that does not say whether Android can do it counts as one that cannot yet.
+        cli.answer("app-window --json",
+                   #"{"apps":[{"package":"org.example.notes","fixed_size":false,"start_size":null,"dpi_scaling":"system-forced"}]}"#)
+        let apps = AppsViewModel(service: AppsService(cli: cli), text: KeyText())
+        await apps.refresh()
+        await apps.loadWindowSettings()
+        XCTAssertFalse(apps.systemForcedAvailable)
+        let forced = apps.dpiScalingChoices.first { $0.scaling == .systemForced }
+        XCTAssertEqual(forced?.available, false)
+        XCTAssertEqual(forced?.label, "Apps_DpiScaling_SystemForcedNotYet")
+        XCTAssertTrue(apps.dpiScalingChoices.filter { $0.scaling != .systemForced }.allSatisfy(\.available))
+        // It stays the app's stored choice, and the row says why it works like System.
+        XCTAssertEqual(apps.rows.first.map { apps.dpiScalingChoices[$0.dpiScalingIndex].scaling }, .systemForced)
+        XCTAssertEqual(apps.rows.first?.dpiScalingTip, "Apps_DpiScaling_SystemForcedTip")
+    }
+
+    func test_fr4_dpi_scaling_words_are_the_ones_dsa_takes() {
+        XCTAssertEqual(DpiScaling.allCases.map(\.rawValue), ["auto", "app", "system", "system-forced"])
+        XCTAssertEqual(DpiScaling.read(nil), .auto)
+        XCTAssertEqual(DpiScaling.read("enhanced"), .auto)
+        XCTAssertEqual(DpiScaling.read("system-forced"), .systemForced)
     }
 
     func test_fr17_widgets_placed_elsewhere_show_on_the_page() async {

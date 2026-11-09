@@ -32,7 +32,7 @@ dsa/guest/image/make-keys.sh .scratch/image-keys
 ANDROID_NDK_HOME=/path/to/ndk dsa/guest/channeld/build-android.sh .scratch/channeld
 dsa/guest/hwcomposer/build.sh .scratch .scratch/build-hwcomposer
 dsa/guest/audio/build.sh .scratch .scratch/build-audio
-(cd dsa/guest/agent && ./gradlew assembleRelease)
+(cd dsa/guest/agent && ./kotlin do assembleRelease)
 uv run dsa/guest/image/make-image.py --major 17 --keys .scratch/image-keys --channeld .scratch/channeld/dsa-channeld \
     --hwcomposer .scratch/build-hwcomposer/dsa-hwcomposer --audio .scratch/build-audio/dsa-audio \
     --agent dsa/guest/agent/build/outputs/apk/release/dsa-agent-release-unsigned.apk

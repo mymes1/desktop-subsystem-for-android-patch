@@ -76,10 +76,62 @@ public static class RootLevels
 /// has now, and the service's words when it was not set.</summary>
 public sealed record RootReport(bool Done, string Level, string Message);
 
+/// <summary>How an app's window follows a move to a monitor of another scale. No choice
+/// restarts the app.</summary>
+public enum DpiScaling
+{
+    /// <summary>App for apps that say they handle a change of density themselves, System for
+    /// the others.</summary>
+    Auto,
+    /// <summary>The app redraws at the new monitor's scale.</summary>
+    App,
+    /// <summary>The app keeps its scale and its window is scaled to the new monitor, at the
+    /// same physical size.</summary>
+    System,
+    /// <summary>The app gets the new scale without a restart even when it does not say it
+    /// handles one. It needs a change to Android's framework; until a build has it, it works
+    /// like <see cref="System"/>.</summary>
+    SystemForced,
+}
+
+/// <summary>The words dsa app-window --dpi-scaling takes and reports for each
+/// <see cref="DpiScaling"/>.</summary>
+public static class DpiScalings
+{
+    public static readonly IReadOnlyList<DpiScaling> All =
+        new[] { DpiScaling.Auto, DpiScaling.App, DpiScaling.System, DpiScaling.SystemForced };
+
+    public static string Code(DpiScaling scaling) => scaling switch
+    {
+        DpiScaling.App => "app",
+        DpiScaling.System => "system",
+        DpiScaling.SystemForced => "system-forced",
+        _ => "auto",
+    };
+
+    /// <summary>The choice dsa names; anything else, or nothing, is <see cref="DpiScaling.Auto"/>.</summary>
+    public static DpiScaling Parse(string? code) => code switch
+    {
+        "app" => DpiScaling.App,
+        "system" => DpiScaling.System,
+        "system-forced" => DpiScaling.SystemForced,
+        _ => DpiScaling.Auto,
+    };
+}
+
+/// <summary>Every app's window settings as dsa app-window reports them, and whether this build
+/// of Android scales an app the System (forced) way yet.</summary>
+public sealed record WindowSettingsList(IReadOnlyDictionary<string, AppWindowSetting> Apps, bool SystemForcedAvailable);
+
+/// <summary>A scaling choice the Apps page offers: what the list shows, the choice, and
+/// whether it does what it says yet.</summary>
+public sealed record DpiScalingChoice(string Label, DpiScaling Scaling, bool Available);
+
 /// <summary>The user's window settings for one app, as dsa app-window reports them: whether
-/// its windows keep their size, and the size they open at in density-independent pixels
-/// (null for the size Android gives the task).</summary>
-public sealed record AppWindowSetting(string Package, bool FixedSize, int? StartWidth, int? StartHeight)
+/// its windows keep their size, the size they open at in density-independent pixels (null for
+/// the size Android gives the task), and how its windows follow a monitor of another scale.</summary>
+public sealed record AppWindowSetting(string Package, bool FixedSize, int? StartWidth, int? StartHeight,
+    DpiScaling DpiScaling = DpiScaling.Auto)
 {
     public static AppWindowSetting Default(string package) => new(package, false, null, null);
 
@@ -266,10 +318,13 @@ public sealed class AppsService
     }
 
     /// <summary>The user's window settings for every app that has any, by package.</summary>
-    public async Task<IReadOnlyDictionary<string, AppWindowSetting>> WindowSettingsAsync()
+    public async Task<WindowSettingsList> WindowSettingsAsync()
     {
         var json = await RunJsonAsync("app-window").ConfigureAwait(true);
-        return ReadWindowSettings(json);
+        // A dsa that does not say counts as one whose Android cannot do it yet.
+        var forced = json.TryGetProperty("system_forced_available", out var available)
+            && available.ValueKind == JsonValueKind.True;
+        return new WindowSettingsList(ReadWindowSettings(json), forced);
     }
 
     private static IReadOnlyDictionary<string, AppWindowSetting> ReadWindowSettings(JsonElement json)
@@ -290,7 +345,10 @@ public sealed class AppsService
                 {
                     (width, height) = (w, h);
                 }
-                settings[package] = new AppWindowSetting(package, Bool(app, "fixed_size"), width, height);
+                var scaling = app.TryGetProperty("dpi_scaling", out var code) && code.ValueKind == JsonValueKind.String
+                    ? DpiScalings.Parse(code.GetString())
+                    : DpiScaling.Auto;
+                settings[package] = new AppWindowSetting(package, Bool(app, "fixed_size"), width, height, scaling);
             }
         }
         return settings;
@@ -303,7 +361,8 @@ public sealed class AppsService
         var json = await RunJsonAsync(
             "app-window", setting.Package,
             "--fixed-size", setting.FixedSize ? "on" : "off",
-            "--start-size", setting.StartSizeArgument).ConfigureAwait(true);
+            "--start-size", setting.StartSizeArgument,
+            "--dpi-scaling", DpiScalings.Code(setting.DpiScaling)).ConfigureAwait(true);
         return ReadWindowSettings(json).TryGetValue(setting.Package, out var now)
             ? now
             : AppWindowSetting.Default(setting.Package);
@@ -367,6 +426,8 @@ public sealed record AppRow(
     string? UninstallTip,
     bool Resizable = true,
     int StartSizeIndex = 0,
+    int DpiScalingIndex = 0,
+    string? DpiScalingTip = null,
     bool RunAsArm = false,
     bool CanRunAsArm = false,
     string? RunAsArmTip = null,
@@ -392,6 +453,7 @@ public sealed class AppsViewModel : ObservableObject
     private readonly ITextSource _text;
     private IReadOnlyList<InstalledAppInfo>? _apps;
     private IReadOnlyDictionary<string, AppWindowSetting> _windows = new Dictionary<string, AppWindowSetting>();
+    private bool _systemForcedAvailable;
     private string _search = "";
     private string? _highlighted;
     private string? _error;
@@ -508,6 +570,25 @@ public sealed class AppsViewModel : ObservableObject
     private StartSizeChoice Choice(string key, int width, int height) =>
         new(string.Format(CultureInfo.CurrentCulture, _text.Get(key), width, height), width, height);
 
+    /// <summary>The ways an app's window can follow a monitor of another scale, in the order of
+    /// <see cref="DpiScaling"/>. System (forced) is stored and can be chosen, but until Android
+    /// can do it, the list marks it as not available yet.</summary>
+    public IReadOnlyList<DpiScalingChoice> DpiScalingChoices => DpiScalings.All
+        .Select(scaling => scaling == DpiScaling.SystemForced && !_systemForcedAvailable
+            ? new DpiScalingChoice(_text.Get("Apps_DpiScaling_SystemForcedNotYet"), scaling, false)
+            : new DpiScalingChoice(_text.Get($"Apps_DpiScaling_{scaling}"), scaling, true))
+        .ToList();
+
+    /// <summary>Whether this build of Android scales an app the System (forced) way yet.</summary>
+    public bool SystemForcedAvailable => _systemForcedAvailable;
+
+    /// <summary>What the page says beside an app's scaling choice: why System (forced) works
+    /// like System for now, while it is chosen and not available; otherwise nothing.</summary>
+    public string? DpiScalingTipOf(AppWindowSetting setting) =>
+        setting.DpiScaling == DpiScaling.SystemForced && !_systemForcedAvailable
+            ? _text.Get("Apps_DpiScaling_SystemForcedTip")
+            : null;
+
     /// <summary>The window settings of <paramref name="package"/>.</summary>
     public AppWindowSetting WindowOf(string package) =>
         _windows.TryGetValue(package, out var setting) ? setting : AppWindowSetting.Default(package);
@@ -554,6 +635,8 @@ public sealed class AppsViewModel : ObservableObject
             app.SystemApp ? _text.Get("Apps_SystemTip") : null,
             !WindowOf(app.Package).FixedSize,
             StartSizeIndexOf(WindowOf(app.Package)),
+            (int)WindowOf(app.Package).DpiScaling,
+            DpiScalingTipOf(WindowOf(app.Package)),
             arm.On,
             arm.Available,
             RunAsArmTipOf(arm),
@@ -643,11 +726,14 @@ public sealed class AppsViewModel : ObservableObject
     {
         try
         {
-            _windows = await _service.WindowSettingsAsync().ConfigureAwait(true);
+            var list = await _service.WindowSettingsAsync().ConfigureAwait(true);
+            _windows = list.Apps;
+            _systemForcedAvailable = list.SystemForcedAvailable;
         }
         catch (DsaException e) when (e.Problem == Problem.Refused)
         {
             _windows = new Dictionary<string, AppWindowSetting>();
+            _systemForcedAvailable = false;
         }
         return null;
     }, reload: false);
@@ -689,6 +775,24 @@ public sealed class AppsViewModel : ObservableObject
             return Task.CompletedTask;
         }
         return SetWindowAsync(current with { StartWidth = choice.Width, StartHeight = choice.Height });
+    }
+
+    /// <summary>Has the app's windows follow a monitor of another scale the way at
+    /// <paramref name="index"/> of <see cref="DpiScalingChoices"/>. Windows that move from now
+    /// on follow it; no choice restarts the app.</summary>
+    public Task SetDpiScalingAsync(string package, int index)
+    {
+        if (index < 0 || index >= DpiScalings.All.Count)
+        {
+            return Task.CompletedTask;
+        }
+        var scaling = DpiScalings.All[index];
+        var current = WindowOf(package);
+        if (current.DpiScaling == scaling)
+        {
+            return Task.CompletedTask;
+        }
+        return SetWindowAsync(current with { DpiScaling = scaling });
     }
 
     /// <summary>The name an app goes by on the page.</summary>

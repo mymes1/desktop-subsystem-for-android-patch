@@ -185,9 +185,20 @@ fn fr17_the_windows_settings_app_makes_the_same_requests() {
     c.widgets().unwrap();
     c.background().unwrap();
     c.app_windows().unwrap();
-    c.set_app_window("com.example", true, Some((412, 915)))
-        .unwrap();
-    c.set_app_window("com.example", false, None).unwrap();
+    c.set_app_window(
+        "com.example",
+        true,
+        Some((412, 915)),
+        dsa_settings_linux::model::DpiScaling::Auto,
+    )
+    .unwrap();
+    c.set_app_window(
+        "com.example",
+        false,
+        None,
+        dsa_settings_linux::model::DpiScaling::System,
+    )
+    .unwrap();
     assert_eq!(
         fake.calls(),
         vec![
@@ -205,6 +216,8 @@ fn fr17_the_windows_settings_app_makes_the_same_requests() {
                 "on",
                 "--start-size",
                 "412x915",
+                "--dpi-scaling",
+                "auto",
                 "--json"
             ]),
             line(&[
@@ -214,6 +227,8 @@ fn fr17_the_windows_settings_app_makes_the_same_requests() {
                 "off",
                 "--start-size",
                 "auto",
+                "--dpi-scaling",
+                "system",
                 "--json"
             ]),
         ]

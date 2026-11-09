@@ -23,7 +23,13 @@ git -C "$source" fetch -q --depth 1 origin "$revision"
 git -C "$source" checkout -q --detach FETCH_HEAD
 git -C "$source" clean -fdxq
 
-(cd "$source" && ./gradlew --no-daemon :hello-gl2:app:assembleDebug :hello-vulkan:app:assembleDebug)
+# The default wrapper timeout (10 s) is too short for transient CDN stalls on CI runners.
+echo "networkTimeout=60000" >> "$source/gradle/wrapper/gradle-wrapper.properties"
+
+(cd "$source" && ./gradlew --no-daemon \
+    -Dorg.gradle.internal.http.connectionTimeout=60000 \
+    -Dorg.gradle.internal.http.socketTimeout=60000 \
+    :hello-gl2:app:assembleDebug :hello-vulkan:app:assembleDebug)
 
 mkdir -p "$out"
 cp "$(ls "$source"/hello-gl2/app/build/outputs/apk/debug/*.apk | head -n1)" "$out/hello-gl2.apk"
