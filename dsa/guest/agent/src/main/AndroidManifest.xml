@@ -125,6 +125,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
+    <!--
+      Keeping the activity manager's cached process limit, which it reads from the device
+      configuration (DeviceConfig), and setting it again when something else changes it.
+    -->
+    <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
+    <uses-permission android:name="android.permission.WRITE_DEVICE_CONFIG" />
 
     <application
         android:name=".platform.AgentApplication"

@@ -393,11 +393,45 @@ pub struct HostProcess {
     pub private_kb: u64,
 }
 
+/// What some of Android's processes cost, in KiB: their pages in memory, and their share of
+/// compressed memory (zram) at the compression zram measures. PSS counts what is swapped out
+/// at its size before compression, two or three times this. `compressed_kb` is `None` when the
+/// compression could not be measured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryShare {
+    pub resident_kb: u64,
+    pub compressed_kb: Option<u64>,
+}
+
+impl MemoryShare {
+    pub fn total_kb(&self) -> u64 {
+        self.resident_kb + self.compressed_kb.unwrap_or(0)
+    }
+
+    fn read(share: &Value) -> MemoryShare {
+        MemoryShare {
+            resident_kb: number(share, "resident_kb"),
+            compressed_kb: share["compressed_kb"].as_u64(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuestProcess {
     pub pid: i64,
     pub name: String,
     pub pss_kb: u64,
+    /// It belongs to Google Play services.
+    pub google_play: bool,
+    /// What it costs; `None` from a service that does not say.
+    pub cost: Option<MemoryShare>,
+}
+
+/// Every process of Google Play services together: how many, and what they cost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GooglePlayMemory {
+    pub processes: u64,
+    pub cost: MemoryShare,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -428,6 +462,10 @@ pub struct GuestMemory {
     pub top_processes: Vec<GuestProcess>,
     pub age_seconds: u64,
     pub kernel: Option<GuestKernel>,
+    /// What the processes cost together; `None` from a service that does not say.
+    pub apps: Option<MemoryShare>,
+    /// `None` while none of Google Play services' processes runs.
+    pub google_play: Option<GooglePlayMemory>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -490,10 +528,22 @@ impl Memory {
                         pid: signed(p, "pid"),
                         name: text(p, "name"),
                         pss_kb: number(p, "pss_kb"),
+                        google_play: p["google_play"].as_bool().unwrap_or(false),
+                        cost: p.get("resident_kb").map(|_| MemoryShare::read(p)),
                     })
                     .collect(),
                 age_seconds: number(g, "age_seconds"),
                 kernel,
+                apps: g
+                    .get("apps")
+                    .filter(|a| a.is_object())
+                    .map(MemoryShare::read),
+                google_play: g.get("google_play").filter(|p| p.is_object()).map(|p| {
+                    GooglePlayMemory {
+                        processes: number(p, "processes"),
+                        cost: MemoryShare::read(p),
+                    }
+                }),
             }
         });
         Memory {

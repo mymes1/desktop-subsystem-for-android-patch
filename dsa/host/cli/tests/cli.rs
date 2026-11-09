@@ -1566,6 +1566,7 @@ fn fr17_dsa_memory_json_carries_the_guest_breakdown_and_the_host_processes() {
                     name: "system_server".into(),
                     pss_kb: 150 * 1024,
                     swap_pss_kb: 0,
+                    google_play: false,
                 }],
                 ..GuestMemory::default()
             },
@@ -1584,6 +1585,66 @@ fn fr17_dsa_memory_json_carries_the_guest_breakdown_and_the_host_processes() {
     assert_eq!(json["guest"]["top_processes"][0]["name"], "system_server");
     assert_eq!(json["host"][0]["role"], "vm");
     assert_eq!(json["host_total_kb"], 900_000);
+}
+
+#[test]
+fn nfr2_dsa_memory_json_counts_zram_compressed_and_google_play_services_apart() {
+    use dsa_host_core::memory::{
+        GooglePlayMemory, GuestMemory, GuestMemoryReport, MemorySnapshot, ProcessMemory,
+    };
+    const MIB: u64 = 1024;
+    let json = dsa_cli::memory_json(&MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: GuestMemory {
+                zram_original_kb: 300 * MIB,
+                zram_used_kb: 100 * MIB,
+                total_pss_kb: 500 * MIB,
+                swap_pss_kb: 300 * MIB,
+                top_processes: vec![ProcessMemory {
+                    pid: 700,
+                    name: "com.google.android.gms".into(),
+                    pss_kb: 81 * MIB,
+                    swap_pss_kb: 75 * MIB,
+                    google_play: true,
+                }],
+                google_play: Some(GooglePlayMemory {
+                    processes: 2,
+                    pss_kb: 135 * MIB,
+                    swap_pss_kb: 123 * MIB,
+                }),
+                ..GuestMemory::default()
+            },
+            age: Duration::from_secs(12),
+        }),
+        host: Vec::new(),
+    });
+    let guest = &json["guest"];
+    assert_eq!(guest["apps"]["resident_kb"], 200 * MIB);
+    assert_eq!(guest["apps"]["compressed_kb"], 100 * MIB);
+    assert_eq!(guest["apps"]["total_kb"], 300 * MIB);
+    assert_eq!(guest["google_play"]["processes"], 2);
+    assert_eq!(guest["google_play"]["resident_kb"], 12 * MIB);
+    assert_eq!(guest["google_play"]["compressed_kb"], 41 * MIB);
+    assert_eq!(guest["google_play"]["total_kb"], 53 * MIB);
+    let gms = &guest["top_processes"][0];
+    assert_eq!(gms["google_play"], true);
+    assert_eq!(gms["resident_kb"], 6 * MIB);
+    assert_eq!(gms["compressed_kb"], 25 * MIB);
+
+    let without = dsa_cli::memory_json(&MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: GuestMemory {
+                total_pss_kb: 100 * MIB,
+                swap_pss_kb: 40 * MIB,
+                ..GuestMemory::default()
+            },
+            age: Duration::from_secs(1),
+        }),
+        host: Vec::new(),
+    });
+    assert!(without["guest"]["google_play"].is_null());
+    assert!(without["guest"]["apps"]["compressed_kb"].is_null());
+    assert_eq!(without["guest"]["apps"]["total_kb"], 60 * MIB);
 }
 
 #[test]

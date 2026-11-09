@@ -380,7 +380,9 @@ public sealed partial class DsaService
                 foreach (var p in processes.EnumerateArray())
                 {
                     var pid = p.TryGetProperty("pid", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : 0;
-                    top.Add(new GuestProcess(pid, String(p, "name"), Number(p, "pss_kb"), Number(p, "swap_pss_kb")));
+                    top.Add(new GuestProcess(pid, String(p, "name"), Number(p, "pss_kb"), Number(p, "swap_pss_kb"),
+                        Bool(p, "google_play", false),
+                        p.TryGetProperty("resident_kb", out _) ? ReadShare(p) : null));
                 }
             }
             guest = new GuestMemoryInfo(
@@ -388,7 +390,11 @@ public sealed partial class DsaService
                 Number(g, "buffers_kb"), Number(g, "cached_kb"), Number(g, "anon_pages_kb"),
                 Number(g, "shmem_kb"), Number(g, "slab_reclaimable_kb"), Number(g, "swap_total_kb"),
                 Number(g, "swap_free_kb"), Number(g, "zram_original_kb"), Number(g, "zram_used_kb"),
-                Number(g, "total_pss_kb"), top, Number(g, "age_seconds"), ReadKernel(g));
+                Number(g, "total_pss_kb"), top, Number(g, "age_seconds"), ReadKernel(g),
+                g.TryGetProperty("apps", out var apps) && apps.ValueKind == JsonValueKind.Object ? ReadShare(apps) : null,
+                g.TryGetProperty("google_play", out var play) && play.ValueKind == JsonValueKind.Object
+                    ? new GooglePlayMemory((uint)Number(play, "processes"), ReadShare(play))
+                    : null);
         }
         return new MemoryReport(guest, host, Number(json, "host_total_kb"), OptionalNumber(json, "vm_beyond_guest_kb"));
     }
@@ -397,6 +403,11 @@ public sealed partial class DsaService
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetUInt64()
             : null;
+
+    /// <summary>What processes cost, from an object with <c>resident_kb</c> and
+    /// <c>compressed_kb</c> (null when zram's compression is unknown).</summary>
+    private static MemoryShare ReadShare(JsonElement share) =>
+        new(Number(share, "resident_kb"), OptionalNumber(share, "compressed_kb"));
 
     /// <summary>The kernel's own memory, or null from a service that does not report it.</summary>
     private static GuestKernelInfo? ReadKernel(JsonElement guest)
