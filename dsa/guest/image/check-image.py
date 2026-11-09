@@ -15,7 +15,10 @@ other dex, another boot image or another compiler filter, when the files
 do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
 image's default one does not match image.json or would be refused by the host, when the patched
 framework image.json names (SurfaceFlinger, libhwui and libEGL from the Framework build) is not
-in the image as built, when the kernel or a DSA guest binary is built for another
+in the image as built, when DSA's KeyMint from the same build, when image.json names it, is not
+in the image as built, would not start in the KeyMint HAL's domain or lacks a library, or runs
+beside a KeyMint APEX the kernel command line still selects, when the kernel or a DSA guest
+binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
 first stage init needs, when the network adapter is not shown to Android as Wi-Fi with its
 address and DNS servers from DHCP, or when the kernel command line, a mount table or an init script
@@ -392,7 +395,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if f"SYSTEM/etc/init/{rc_name}" in names:
             problems += make_image.program_folder_problems(
                 rc_name, z.read(f"SYSTEM/etc/init/{rc_name}").decode(errors="replace"))
-    # The patched framework: the Framework build's files, for this build and architecture.
+    # The patched framework: the Framework build's files, for this build and architecture, and
+    # its KeyMint, the only one Android runs.
     problems += make_image.check_framework(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
     # x86_64 builds of Google Play services and the other system apps, not their ARM builds.

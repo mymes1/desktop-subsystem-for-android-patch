@@ -208,6 +208,22 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   build number and architecture; `image.json` lists their SHA-256 under `framework`, and
   `check-image.py` finds them in the image. `sepolicy/gpu-reset.cil` lets SurfaceFlinger tell
   the apps of a reset through `debug.dsa.gpu.resets`.
+- The same Framework build makes DSA's KeyMint, `dsa-keymint`. The KeyMint APEX the published
+  build selects wraps every key under a fixed all-zero root key, so a copy of the guest's disk
+  gives up every key on it. `dsa-keymint` is the same nonsecure KeyMint, patched to take its
+  root key from the host: dsa-channeld fetches it each boot and leaves it on tmpfs as
+  `/dev/dsa_keymint/root_key`. New keys are wrapped under the host's key; keys wrapped before
+  under the built-in one still open, and Android is asked to upgrade each one, which wraps it
+  again under the host's key, so an existing install loses no key. Without a key from the host
+  it behaves as the APEX did. When the framework folder has it, `make-image.py` installs it as
+  vendor files (`/vendor/bin/hw/dsa-keymint`, the `libssl` it needs, `dsa-keymint.rc`, and the
+  VINTF fragments and feature file the APEX carries), labels it as the APEX labelled its binary
+  (`hal_keymint_default_exec`, so it runs in the same domain as the same service), and selects
+  no KeyMint APEX (`androidboot.vendor.apex.com.android.hardware.keymint=none`). `image.json`
+  lists its files' SHA-256 under `framework`, and `check-image.py` checks that they are in the
+  image, that it declares every instance the service registers and has every library it needs,
+  and that no KeyMint APEX is active beside it. A framework folder from before the KeyMint has
+  none of these files, and the image keeps the APEX.
 - Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
   settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
   and makes an erofs image of its apps, permission lists, system configuration and framework
