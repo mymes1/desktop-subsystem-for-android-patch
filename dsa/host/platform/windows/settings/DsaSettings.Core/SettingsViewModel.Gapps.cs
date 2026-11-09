@@ -13,6 +13,10 @@ public enum GappsState
     /// <summary>What is installed differs from what Android started with: a new package waits
     /// for the next start, or a removed one is still in use until then.</summary>
     RestartPending,
+    /// <summary>The installed package's image was made by an older DSA, which this one no
+    /// longer uses: Android starts without Google's apps until Google Play is installed
+    /// again.</summary>
+    ReinstallNeeded,
 }
 
 /// <summary>The Google Play section of the Advanced page: install and remove the GApps package
@@ -26,6 +30,7 @@ public sealed partial class SettingsViewModel
 
     public GappsState GappsState => _gapps switch
     {
+        { ReinstallNeeded: true, Package: not null } => GappsState.ReinstallNeeded,
         { RestartNeeded: true } => GappsState.RestartPending,
         { Package: not null } => GappsState.Installed,
         _ => GappsState.NotInstalled,
@@ -33,8 +38,11 @@ public sealed partial class SettingsViewModel
 
     public bool HasGappsPackage => _gapps?.Package is not null;
 
-    /// <summary>Install is offered only while no package is installed.</summary>
-    public bool CanInstallGapps => CanChange && !HasGappsPackage;
+    /// <summary>Install is offered while no package is installed, and while the installed one
+    /// must be installed again.</summary>
+    public bool CanInstallGapps => CanChange && (!HasGappsPackage || GappsReinstallNeeded);
+
+    public bool GappsReinstallNeeded => GappsState == GappsState.ReinstallNeeded;
 
     public bool CanRemoveGapps => CanChange && HasGappsPackage;
 
@@ -55,6 +63,7 @@ public sealed partial class SettingsViewModel
                 (GappsState.Installed, { } p) => Describe("Gapps_Installed", p),
                 (GappsState.RestartPending, { } p) => Describe("Gapps_InstalledPending", p),
                 (GappsState.RestartPending, null) => _text.Get("Gapps_RemovedPending"),
+                (GappsState.ReinstallNeeded, { } p) => Describe("Gapps_ReinstallNeeded", p),
                 _ => _text.Get("Gapps_NotInstalled"),
             };
         }

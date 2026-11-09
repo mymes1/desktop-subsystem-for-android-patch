@@ -35,6 +35,9 @@ public struct GappsInfo: Equatable, Sendable {
     public var restartNeeded: Bool
     public var termsUrl: String
     public var registrationUrl: String
+    /// The package's image was made by an older DSA and cannot be made again, so Android starts
+    /// without Google's apps until the user installs Google Play again.
+    public var reinstallNeeded: Bool = false
 
     public static let defaultTermsUrl = "https://policies.google.com/terms"
     public static let defaultRegistrationUrl = "https://www.google.com/android/uncertified/"
@@ -61,7 +64,8 @@ public extension DsaService {
                 : nil,
             restartNeeded: json.bool("restart_needed"),
             termsUrl: terms.isEmpty ? GappsInfo.defaultTermsUrl : terms,
-            registrationUrl: registration.isEmpty ? GappsInfo.defaultRegistrationUrl : registration)
+            registrationUrl: registration.isEmpty ? GappsInfo.defaultRegistrationUrl : registration,
+            reinstallNeeded: json.bool("reinstall_needed"))
     }
 
     func gapps() async throws -> GappsInfo {
@@ -74,7 +78,8 @@ public extension DsaService {
         DsaService.readGapps(try await runJson(["gapps", "install"]))
     }
 
-    /// Removes the Google apps; they are gone from the next start of Android.
+    /// Removes the Google apps; they are gone from the next start of Android. Android is not
+    /// started for it, so this works while Google's apps keep Android from starting.
     func removeGapps() async throws -> GappsInfo {
         DsaService.readGapps(try await runJson(["gapps", "remove"]))
     }
@@ -92,6 +97,9 @@ public final class GappsViewModel: ObservableObject {
         case installed
         /// What is installed differs from what Android started with.
         case restartPending
+        /// The installed package's image was made by an older DSA, which this one no longer
+        /// uses: Android starts without Google's apps until Google Play is installed again.
+        case reinstallNeeded
     }
 
     private let service: DsaService
@@ -110,11 +118,17 @@ public final class GappsViewModel: ObservableObject {
     public var loaded: Bool { info != nil }
     public var canChange: Bool { loaded && !isBusy }
     public var hasPackage: Bool { info?.package != nil }
-    public var canInstall: Bool { canChange && !hasPackage }
+    /// Install is offered while no package is installed, and while the installed one must be
+    /// installed again.
+    public var canInstall: Bool { canChange && (!hasPackage || reinstallNeeded) }
     public var canRemove: Bool { canChange && hasPackage }
     public var restartNeeded: Bool { info?.restartNeeded ?? false }
+    public var reinstallNeeded: Bool { hasPackage && (info?.reinstallNeeded ?? false) }
 
     public var state: State {
+        if reinstallNeeded {
+            return .reinstallNeeded
+        }
         if restartNeeded {
             return .restartPending
         }
@@ -133,6 +147,14 @@ public final class GappsViewModel: ObservableObject {
             return installedText(info)
         case .restartPending:
             return info.package == nil ? text.get("Gapps_RemovedRestart") : text.get("Gapps_InstalledRestart")
+        case .reinstallNeeded:
+            guard let package = info.package else {
+                return text.get("Gapps_NotInstalled")
+            }
+            return text.format(
+                "Gapps_ReinstallNeeded", package.version,
+                package.androidVersion.isEmpty ? "?" : package.androidVersion,
+                package.arch.isEmpty ? "?" : package.arch)
         }
     }
 

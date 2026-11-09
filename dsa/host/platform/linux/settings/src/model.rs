@@ -852,6 +852,9 @@ pub enum GappsState {
     /// What is installed differs from what the running Android booted with: a new package
     /// waits for a restart, or a removed one is still in use until then.
     RestartPending,
+    /// The installed package's image was made by an older DSA, which this one no longer
+    /// uses: Android starts without Google's apps until Google Play is installed again.
+    ReinstallNeeded,
 }
 
 /// Where Google Play stands for the user.
@@ -865,6 +868,8 @@ pub struct Gapps {
     /// once Android knows it.
     pub device_id: Option<String>,
     pub restart_needed: bool,
+    /// The package must be installed again: see [`GappsState::ReinstallNeeded`].
+    pub reinstall_needed: bool,
     pub terms_url: String,
     pub registration_url: String,
 }
@@ -889,6 +894,7 @@ impl Gapps {
             active: android.map(|a| flag(a, "active", false)),
             device_id: android.and_then(|a| optional_text(a, "device_id")),
             restart_needed: flag(json, "restart_needed", false),
+            reinstall_needed: flag(json, "reinstall_needed", false),
             terms_url: optional_text(json, "terms_url")
                 .unwrap_or_else(|| GAPPS_TERMS_URL.to_string()),
             registration_url: optional_text(json, "registration_url")
@@ -897,7 +903,9 @@ impl Gapps {
     }
 
     pub fn state(&self) -> GappsState {
-        if self.restart_needed {
+        if self.reinstall_needed && self.package.is_some() {
+            GappsState::ReinstallNeeded
+        } else if self.restart_needed {
             GappsState::RestartPending
         } else if self.package.is_some() {
             GappsState::Installed
@@ -906,10 +914,10 @@ impl Gapps {
         }
     }
 
-    /// Whether the install button may be pressed: only without a package, and not while a
-    /// request is under way.
+    /// Whether the install button may be pressed: without a package, or with one that must
+    /// be installed again, and not while a request is under way.
     pub fn can_install(&self, busy: bool) -> bool {
-        !busy && self.package.is_none()
+        !busy && (self.package.is_none() || self.state() == GappsState::ReinstallNeeded)
     }
 
     /// Whether the remove button may be pressed: only with a package, and not while a
@@ -1349,7 +1357,8 @@ impl Client {
         Ok(Gapps::read(&self.json(&["gapps", "install"])?))
     }
 
-    /// Removes the Google apps package, starting Android first when it is not running.
+    /// Removes the Google apps package. Android is not started for it, so this works while
+    /// Google's apps keep Android from starting; Android goes without them from its next start.
     pub fn remove_gapps(&self) -> Result<Gapps, Failure> {
         Ok(Gapps::read(&self.json(&["gapps", "remove"])?))
     }

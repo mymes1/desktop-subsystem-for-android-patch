@@ -766,6 +766,10 @@ pub fn gapps_status(gapps: &Gapps) -> String {
         GappsState::RestartPending => {
             tr("Removed. The Google apps stay in Android until it restarts.")
         }
+        GappsState::ReinstallNeeded => trf(
+            "{0} was installed by an older DSA and is no longer used, so Android starts without Google's apps. Install Google Play again.",
+            &[&package],
+        ),
         GappsState::Installed if gapps.package.is_some() => trf("Installed: {0}.", &[&package]),
         _ => tr("Not installed."),
     }
