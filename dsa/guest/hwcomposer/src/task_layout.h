@@ -109,6 +109,8 @@ struct LayerFill {
     int64_t bufferHeight = 0;
     float cropWidth = 0;
     float cropHeight = 0;
+    // The layer's plane alpha: 0 shows nothing of it.
+    float alpha = 1.0f;
 };
 
 // Whether the task's app has drawn at the size of `bounds`: one of its drawn layers fills the
@@ -127,6 +129,14 @@ uint64_t drawnGeometry(const Rect& bounds, const std::vector<LayerFill>& layers)
 // without that layer it would show black where the layer is, so a task with an earlier frame keeps
 // that one; a first frame has nothing better to show.
 bool leavesLastFrame(bool layerMissing, bool hasFrame);
+
+// Whether a frame goes unsent because nothing in it shows what the app drew: no layer of the
+// task shows a buffer, or every one that does is fully transparent. That is the task as it
+// ends: its app's surface is hidden or removed before the task is, and what is left (the task's
+// own surface, a background or letterbox colour) is no picture of the app. Sent, it would
+// empty the window just before it closes, and the window would close as an empty frame. A task
+// with an earlier frame keeps that one, which its window then closes with; a first frame goes.
+bool leavesLastFrameUndrawn(const std::vector<LayerFill>& layers, bool hasFrame);
 
 // Whether a task's frame goes to the host, after the task's size changed.
 //
