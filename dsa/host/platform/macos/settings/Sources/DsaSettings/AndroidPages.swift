@@ -450,11 +450,12 @@ struct NetworkPage: View {
     }
 }
 
-/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps, the
-/// traces, the logs and the command line.
+/// Advanced: the clipboard, file sharing, links, freezing, the app data backup, resetting the
+/// data, ARM apps, the traces, the logs and the command line.
 struct AdvancedPage: View {
     @ObservedObject var vm: SettingsViewModel
     @ObservedObject var gapps: GappsViewModel
+    @ObservedObject var backup: BackupViewModel
 
     var body: some View {
         Form {
@@ -491,6 +492,7 @@ struct AdvancedPage: View {
                 SwitchRow(title: T("LinksCard.Header"), detail: T("LinksCard.Description"),
                           isOn: vm.linksInAndroid, enabled: vm.canChange, set: { await vm.setLinksInAndroid($0) })
             }
+            BackupSection(vm: backup)
             Section(T("ResetDataHeader.Text")) {
                 if vm.resetDone {
                     Banner(kind: .success, title: T("ResetDoneBar.Title"), message: T("ResetDoneBar.Message"))

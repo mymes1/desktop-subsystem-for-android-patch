@@ -9374,6 +9374,295 @@
         }
       }
     },
+    "BackupHeader.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업"
+          }
+        }
+      }
+    },
+    "BackupErrorBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The backup could not be used"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 사용하지 못했습니다"
+          }
+        }
+      }
+    },
+    "BackupUnavailableBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup is not available"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 사용할 수 없습니다"
+          }
+        }
+      }
+    },
+    "BackupDoneBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료했습니다"
+          }
+        }
+      }
+    },
+    "BackupFolderCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업 폴더"
+          }
+        }
+      }
+    },
+    "BackupLastCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last backup"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 백업"
+          }
+        }
+      }
+    },
+    "BackupLastRestoreCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last restore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 복원"
+          }
+        }
+      }
+    },
+    "BackupContentsCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the backup"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업 내용"
+          }
+        }
+      }
+    },
+    "BackupLastErrorCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last problem"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 문제"
+          }
+        }
+      }
+    },
+    "BackupNowCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 백업"
+          }
+        }
+      }
+    },
+    "BackupNowCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saves the data of every app in Android to the backup folder, encrypted. Android starts first when it is not running, and backing up can take a while."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android에 있는 모든 앱의 데이터를 암호화해 백업 폴더에 저장합니다. Android가 실행 중이 아니면 먼저 시작하며, 백업에는 시간이 걸릴 수 있습니다."
+          }
+        }
+      }
+    },
+    "BackupNowButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back up now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 백업"
+          }
+        }
+      }
+    },
+    "BackupRestoreCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복원"
+          }
+        }
+      }
+    },
+    "BackupRestoreCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installs the apps of the backup that Android does not have and puts every app's data back from the backup."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업에 있지만 Android에 없는 앱을 설치하고, 모든 앱의 데이터를 백업의 데이터로 되돌립니다."
+          }
+        }
+      }
+    },
+    "BackupRestoreButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복원"
+          }
+        }
+      }
+    },
+    "BackupRestoreConfirm.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore from the backup?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업에서 복원할까요?"
+          }
+        }
+      }
+    },
+    "BackupRestoreConfirm.Action": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복원"
+          }
+        }
+      }
+    },
     "Backup_RestoreWarning": {
       "extractionState": "manual",
       "localizations": {
@@ -9387,6 +9676,244 @@
           "stringUnit": {
             "state": "translated",
             "value": "백업에 있지만 Android에 없는 앱을 설치하고, 백업에 있는 모든 앱의 데이터를 백업의 데이터로 바꿉니다. 백업 이후 그 앱들이 저장한 내용은 사라집니다."
+          }
+        }
+      }
+    },
+    "BackupKeyCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키"
+          }
+        }
+      }
+    },
+    "BackupKeyCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key that opens the backup. Without it, the backup cannot be restored on another computer."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업을 여는 키입니다. 이 키가 없으면 다른 컴퓨터에서 백업을 복원할 수 없습니다."
+          }
+        }
+      }
+    },
+    "BackupKeyShowButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키 보기"
+          }
+        }
+      }
+    },
+    "BackupKeyImportCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키 사용"
+          }
+        }
+      }
+    },
+    "BackupKeyImportCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the recovery key of a backup folder made on another computer or by another user, so it can be restored here."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다른 컴퓨터나 다른 사용자가 만든 백업 폴더의 복구 키를 넣으면 여기서 복원할 수 있습니다."
+          }
+        }
+      }
+    },
+    "BackupKeyImportButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키 사용"
+          }
+        }
+      }
+    },
+    "BackupKeySheet.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키"
+          }
+        }
+      }
+    },
+    "BackupKeySheet.Message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write this key down and keep it somewhere safe. Without it, the backup cannot be restored on another computer, and anyone who has it can read the backup."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 키를 적어 안전한 곳에 보관하세요. 이 키가 없으면 다른 컴퓨터에서 백업을 복원할 수 없고, 이 키를 가진 사람은 누구나 백업을 읽을 수 있습니다."
+          }
+        }
+      }
+    },
+    "BackupKeySheetDone.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료"
+          }
+        }
+      }
+    },
+    "BackupImportSheet.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키 사용"
+          }
+        }
+      }
+    },
+    "BackupImportSheet.Message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the recovery key you wrote down for the backup folder. DSA then reads that backup with it, and you can restore from it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백업 폴더용으로 적어 둔 복구 키를 넣으세요. 그러면 DSA가 이 키로 백업을 읽고, 그 백업에서 복원할 수 있습니다."
+          }
+        }
+      }
+    },
+    "BackupImportSheet.PlaceholderText": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키"
+          }
+        }
+      }
+    },
+    "BackupImportSheetUse.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use key"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키 사용"
+          }
+        }
+      }
+    },
+    "BackupImportRefused.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recovery key was not accepted"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 키를 받아들이지 않았습니다"
           }
         }
       }
