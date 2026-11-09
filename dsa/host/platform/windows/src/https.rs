@@ -184,8 +184,7 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
         }
     }
     // SAFETY: a valid request with no extra headers or body.
-    if unsafe { WinHttpSendRequest(request.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0) }
-        == 0
+    if unsafe { WinHttpSendRequest(request.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0) } == 0
     {
         return Err(format!("{url}: {}", last_error("sending the request")));
     }
@@ -338,8 +337,12 @@ mod tests {
         assert!(!policy.follow_redirects);
         assert_eq!(policy.limit, Some(1024));
         let mut body = Vec::new();
-        let error = get("http://example.com/.well-known/assetlinks.json", &policy, &mut body)
-            .unwrap_err();
+        let error = get(
+            "http://example.com/.well-known/assetlinks.json",
+            &policy,
+            &mut body,
+        )
+        .unwrap_err();
         assert!(error.contains("not an https address"), "{error}");
     }
 

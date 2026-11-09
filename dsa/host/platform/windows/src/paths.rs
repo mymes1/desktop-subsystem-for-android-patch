@@ -26,6 +26,7 @@
 //!   monitor-refresh.txt              their fastest monitor's refresh rate, for the guest's
 //!   monitor-density.txt              their main monitor's DPI, for the density Android starts at
 //!   start-menu.json                 the Start menu shortcuts the window manager made
+//!   keys\                            the sealed backup and KeyMint root keys, which uninstalling keeps
 //!   tmp\                             files that cannot be avoided, in user processes
 //! ```
 //!
@@ -230,11 +231,17 @@ impl UserRoot {
         ]
     }
 
+    /// Where the user's backup key and KeyMint root key are kept, each sealed in a file.
+    pub fn keys(&self) -> PathBuf {
+        join(&self.0, &["keys"])
+    }
+
     /// Whether uninstalling keeps the entry named `name` in this root: the Android disk and the
-    /// image version recorded with it, which is the user's data.
+    /// image version recorded with it, which is the user's data, and the sealed keys, without
+    /// which Android's keys on that disk and the backup folder could not be read again.
     pub fn kept_on_uninstall(name: &str) -> bool {
         let name = name.to_ascii_lowercase();
-        name == "android.vhdx" || name == "android.image-version"
+        name == "android.vhdx" || name == "android.image-version" || name == "keys"
     }
 }
 
