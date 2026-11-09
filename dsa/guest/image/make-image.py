@@ -3926,6 +3926,12 @@ ROOT_ELEVATION_RULES = {
         "apps cannot reach the elevation helper's socket",
     "(allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))":
         "apps cannot connect to the elevation helper",
+    "(allow shell dsa_su_exec (file (read open getattr map execute execute_no_trans)))":
+        "adb shell cannot run the su client",
+    "(allow shell dsa_su_socket (sock_file (write)))":
+        "adb shell cannot reach the elevation helper's socket",
+    "(allow shell dsa_su (unix_stream_socket (connectto)))":
+        "adb shell cannot connect to the elevation helper",
     "(typeattributeset mlstrustedsubject (dsa_su))":
         "the elevation helper is not mlstrustedsubject, so an app, which runs at an MLS level of its own, "
         "cannot connect to it",

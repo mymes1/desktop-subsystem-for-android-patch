@@ -35,6 +35,42 @@ pub const GRACE: Duration = Duration::from_secs(15 * 60);
 /// with [`DecisionDenied::timed_out`] if no answer comes in this long.
 pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// The package the host names `adb shell` by: Android's shell package, which owns uid 2000,
+/// the uid `adb shell` runs as. While developer mode is on, `adb shell` asks for root through
+/// the same approval as an app, under this package.
+pub const ADB_SHELL_PACKAGE: &str = "com.android.shell";
+
+/// The name the approval prompt, the log and the settings apps show for `adb shell`.
+pub const ADB_SHELL_NAME: &str = "adb shell";
+
+/// The other names `dsa apps root` takes for `adb shell`.
+pub const ADB_SHELL_ALIASES: [&str; 3] = ["adb", "adb-shell", "shell"];
+
+/// The package `name` stands for: [`ADB_SHELL_PACKAGE`] for one of [`ADB_SHELL_ALIASES`],
+/// otherwise `name` itself.
+pub fn package_for_name(name: &str) -> &str {
+    if ADB_SHELL_ALIASES.contains(&name) {
+        ADB_SHELL_PACKAGE
+    } else {
+        name
+    }
+}
+
+/// Whether `package` is the adb shell item rather than an app.
+pub fn is_adb_shell(package: &str) -> bool {
+    package == ADB_SHELL_PACKAGE
+}
+
+/// A package's level when the user has not set one: ask for `adb shell`, which only a
+/// developer who turned developer mode on can reach, and off for every app.
+pub fn default_level(package: &str) -> Level {
+    if is_adb_shell(package) {
+        Level::Ask
+    } else {
+        Level::Off
+    }
+}
+
 /// How far an app may elevate to root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Level {
@@ -263,26 +299,53 @@ impl Default for Policy {
 }
 
 /// The computer's switch and `user`'s app levels as `store` keeps them. A level the store
-/// cannot read is left out (off), and a store that cannot list the apps gives none.
+/// cannot read is left out (off), and a store that cannot list the apps gives none. While
+/// `user`'s developer mode is on, the adb shell item is among them at its stored level (ask
+/// unless set); with developer mode off adb is closed, so the item is left out.
 pub fn stored(store: &dyn SettingsStore, user: &str) -> (bool, Vec<AppLevel>) {
     let on = store.machine().root_elevation;
-    let apps = match store.root_apps(user) {
-        Ok(apps) => apps
-            .into_iter()
-            .filter_map(|app| {
-                Some(AppLevel {
-                    level: Level::from_code(&app.level)?,
-                    package: app.package,
-                })
-            })
-            .filter(|app| app.level != Level::Off)
-            .collect(),
+    let saved = match store.root_apps(user) {
+        Ok(apps) => Some(apps),
         Err(why) => {
             eprintln!("root elevation: cannot read the app levels of {user}: {why}");
-            Vec::new()
+            None
         }
     };
+    let developer_mode = store
+        .get(user)
+        .map(|settings| settings.developer_mode)
+        .unwrap_or(false);
+    let mut apps: Vec<AppLevel> = saved
+        .iter()
+        .flatten()
+        .filter(|app| !is_adb_shell(&app.package))
+        .filter_map(|app| {
+            Some(AppLevel {
+                level: Level::from_code(&app.level)?,
+                package: app.package.clone(),
+            })
+        })
+        .filter(|app| app.level != Level::Off)
+        .collect();
+    if let Some(saved) = saved.as_ref().filter(|_| developer_mode) {
+        let level = adb_shell_level(saved);
+        if level != Level::Off {
+            apps.push(AppLevel {
+                package: ADB_SHELL_PACKAGE.to_string(),
+                level,
+            });
+        }
+    }
     (on, apps)
+}
+
+/// The adb shell item's level among `saved`: its stored level, or ask when none is stored.
+pub fn adb_shell_level(saved: &[crate::settings::RootApp]) -> Level {
+    saved
+        .iter()
+        .find(|app| is_adb_shell(&app.package))
+        .and_then(|app| Level::from_code(&app.level))
+        .unwrap_or(default_level(ADB_SHELL_PACKAGE))
 }
 
 /// Gives `user`'s Android their root elevation settings as `store` keeps them: when the
@@ -464,6 +527,41 @@ mod tests {
         assert!(!Level::Off.change_needs_admin());
         assert!(!Level::Ask.change_needs_admin());
         assert!(Level::Remember.change_needs_admin());
+    }
+
+    #[test]
+    fn fr35_adb_shell_asks_for_root_like_an_app() {
+        use crate::settings::{MachineSettings, MemorySettings};
+        let store = MemorySettings::default();
+        store
+            .set_machine(MachineSettings {
+                root_elevation: true,
+                ..store.machine()
+            })
+            .unwrap();
+        // Developer mode off: adb is closed, so the item is not given to Android.
+        let (on, apps) = stored(&store, "u");
+        assert!(on);
+        assert!(apps.iter().all(|app| app.package != ADB_SHELL_PACKAGE));
+        // Developer mode on: the item asks by default.
+        let mut settings = store.get("u").unwrap();
+        settings.developer_mode = true;
+        store.set("u", &settings).unwrap();
+        let (_, apps) = stored(&store, "u");
+        assert!(apps.contains(&AppLevel {
+            package: ADB_SHELL_PACKAGE.into(),
+            level: Level::Ask,
+        }));
+        // Set to off it stays off, and Android no longer lets adb shell see su.
+        store.set_root_app("u", ADB_SHELL_PACKAGE, "off").unwrap();
+        let (_, apps) = stored(&store, "u");
+        assert!(apps.iter().all(|app| app.package != ADB_SHELL_PACKAGE));
+        // Back to the default, ask, the stored entry is forgotten.
+        store.set_root_app("u", ADB_SHELL_PACKAGE, "ask").unwrap();
+        assert!(store.root_apps("u").unwrap().is_empty());
+        assert_eq!(package_for_name("adb"), ADB_SHELL_PACKAGE);
+        assert_eq!(package_for_name("com.example"), "com.example");
+        assert_eq!(default_level("com.example"), Level::Off);
     }
 
     #[test]

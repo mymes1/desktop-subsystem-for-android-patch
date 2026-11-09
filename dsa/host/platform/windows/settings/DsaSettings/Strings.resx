@@ -1900,4 +1900,5 @@
   <data name="RootNote.Text" xml:space="preserve">
     <value>Choose each app's level on the Apps page. Each user chooses for the apps in their own Android.</value>
   </data>
+  <data name="AppsAdbShell.Text" xml:space="preserve"><value>adb shell</value></data>
 </root>

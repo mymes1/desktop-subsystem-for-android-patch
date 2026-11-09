@@ -1682,6 +1682,12 @@ pub struct Settings {
     /// value it read.
     #[prost(bool, tag = "37")]
     pub root_elevation: bool,
+    /// How far `adb shell` may elevate to root while developer mode is on, like an app's level:
+    /// "off", "ask" (the default) or "remember". Empty while developer mode is off, because adb
+    /// is closed and the level does nothing; "unavailable" while root_elevation is off. A client
+    /// cannot change it here: SetAppRoot with the package "com.android.shell" sets it.
+    #[prost(string, tag = "38")]
+    pub adb_shell_root: ::prost::alloc::string::String,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
