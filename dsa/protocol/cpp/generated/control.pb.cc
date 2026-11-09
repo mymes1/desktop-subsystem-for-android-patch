@@ -1197,8 +1197,9 @@ PROTOBUF_CONSTEXPR ProcessMemory::ProcessMemory(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.pss_kb_)*/uint64_t{0u}
-  , /*decltype(_impl_.swap_pss_kb_)*/uint64_t{0u}
   , /*decltype(_impl_.pid_)*/0
+  , /*decltype(_impl_.google_play_)*/false
+  , /*decltype(_impl_.swap_pss_kb_)*/uint64_t{0u}
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct ProcessMemoryDefaultTypeInternal {
   PROTOBUF_CONSTEXPR ProcessMemoryDefaultTypeInternal()
@@ -1233,6 +1234,10 @@ PROTOBUF_CONSTEXPR GuestMemory::GuestMemory(
   , /*decltype(_impl_.cma_total_kb_)*/uint64_t{0u}
   , /*decltype(_impl_.hugetlb_kb_)*/uint64_t{0u}
   , /*decltype(_impl_.mem_online_kb_)*/uint64_t{0u}
+  , /*decltype(_impl_.swap_pss_kb_)*/uint64_t{0u}
+  , /*decltype(_impl_.google_play_pss_kb_)*/uint64_t{0u}
+  , /*decltype(_impl_.google_play_swap_pss_kb_)*/uint64_t{0u}
+  , /*decltype(_impl_.google_play_processes_)*/0u
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct GuestMemoryDefaultTypeInternal {
   PROTOBUF_CONSTEXPR GuestMemoryDefaultTypeInternal()
@@ -2547,6 +2552,7 @@ PROTOBUF_CONSTEXPR SystemSettings::SystemSettings(
   , /*decltype(_impl_.time_24_hour_)*/false
   , /*decltype(_impl_.dark_mode_)*/false
   , /*decltype(_impl_.accent_color_)*/0u
+  , /*decltype(_impl_.font_scale_)*/0
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct SystemSettingsDefaultTypeInternal {
   PROTOBUF_CONSTEXPR SystemSettingsDefaultTypeInternal()
@@ -25049,8 +25055,9 @@ ProcessMemory::ProcessMemory(const ProcessMemory& from)
   new (&_impl_) Impl_{
       decltype(_impl_.name_){}
     , decltype(_impl_.pss_kb_){}
-    , decltype(_impl_.swap_pss_kb_){}
     , decltype(_impl_.pid_){}
+    , decltype(_impl_.google_play_){}
+    , decltype(_impl_.swap_pss_kb_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -25063,8 +25070,8 @@ ProcessMemory::ProcessMemory(const ProcessMemory& from)
       _this->GetArenaForAllocation());
   }
   ::memcpy(&_impl_.pss_kb_, &from._impl_.pss_kb_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.pid_) -
-    reinterpret_cast<char*>(&_impl_.pss_kb_)) + sizeof(_impl_.pid_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.swap_pss_kb_) -
+    reinterpret_cast<char*>(&_impl_.pss_kb_)) + sizeof(_impl_.swap_pss_kb_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ProcessMemory)
 }
 
@@ -25075,8 +25082,9 @@ inline void ProcessMemory::SharedCtor(
   new (&_impl_) Impl_{
       decltype(_impl_.name_){}
     , decltype(_impl_.pss_kb_){uint64_t{0u}}
-    , decltype(_impl_.swap_pss_kb_){uint64_t{0u}}
     , decltype(_impl_.pid_){0}
+    , decltype(_impl_.google_play_){false}
+    , decltype(_impl_.swap_pss_kb_){uint64_t{0u}}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.name_.InitDefault();
@@ -25111,8 +25119,8 @@ void ProcessMemory::Clear() {
 
   _impl_.name_.ClearToEmpty();
   ::memset(&_impl_.pss_kb_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.pid_) -
-      reinterpret_cast<char*>(&_impl_.pss_kb_)) + sizeof(_impl_.pid_));
+      reinterpret_cast<char*>(&_impl_.swap_pss_kb_) -
+      reinterpret_cast<char*>(&_impl_.pss_kb_)) + sizeof(_impl_.swap_pss_kb_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -25152,6 +25160,14 @@ const char* ProcessMemory::_InternalParse(const char* ptr, ::_pbi::ParseContext*
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           _impl_.swap_pss_kb_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool google_play = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.google_play_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -25213,6 +25229,12 @@ uint8_t* ProcessMemory::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(4, this->_internal_swap_pss_kb(), target);
   }
 
+  // bool google_play = 5;
+  if (this->_internal_google_play() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(5, this->_internal_google_play(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -25241,14 +25263,19 @@ size_t ProcessMemory::ByteSizeLong() const {
     total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_pss_kb());
   }
 
-  // uint64 swap_pss_kb = 4;
-  if (this->_internal_swap_pss_kb() != 0) {
-    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_swap_pss_kb());
-  }
-
   // int32 pid = 1;
   if (this->_internal_pid() != 0) {
     total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_pid());
+  }
+
+  // bool google_play = 5;
+  if (this->_internal_google_play() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // uint64 swap_pss_kb = 4;
+  if (this->_internal_swap_pss_kb() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_swap_pss_kb());
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -25278,11 +25305,14 @@ void ProcessMemory::MergeFrom(const ProcessMemory& from) {
   if (from._internal_pss_kb() != 0) {
     _this->_internal_set_pss_kb(from._internal_pss_kb());
   }
-  if (from._internal_swap_pss_kb() != 0) {
-    _this->_internal_set_swap_pss_kb(from._internal_swap_pss_kb());
-  }
   if (from._internal_pid() != 0) {
     _this->_internal_set_pid(from._internal_pid());
+  }
+  if (from._internal_google_play() != 0) {
+    _this->_internal_set_google_play(from._internal_google_play());
+  }
+  if (from._internal_swap_pss_kb() != 0) {
+    _this->_internal_set_swap_pss_kb(from._internal_swap_pss_kb());
   }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
@@ -25308,8 +25338,8 @@ void ProcessMemory::InternalSwap(ProcessMemory* other) {
       &other->_impl_.name_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ProcessMemory, _impl_.pid_)
-      + sizeof(ProcessMemory::_impl_.pid_)
+      PROTOBUF_FIELD_OFFSET(ProcessMemory, _impl_.swap_pss_kb_)
+      + sizeof(ProcessMemory::_impl_.swap_pss_kb_)
       - PROTOBUF_FIELD_OFFSET(ProcessMemory, _impl_.pss_kb_)>(
           reinterpret_cast<char*>(&_impl_.pss_kb_),
           reinterpret_cast<char*>(&other->_impl_.pss_kb_));
@@ -25358,12 +25388,16 @@ GuestMemory::GuestMemory(const GuestMemory& from)
     , decltype(_impl_.cma_total_kb_){}
     , decltype(_impl_.hugetlb_kb_){}
     , decltype(_impl_.mem_online_kb_){}
+    , decltype(_impl_.swap_pss_kb_){}
+    , decltype(_impl_.google_play_pss_kb_){}
+    , decltype(_impl_.google_play_swap_pss_kb_){}
+    , decltype(_impl_.google_play_processes_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&_impl_.mem_total_kb_, &from._impl_.mem_total_kb_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.mem_online_kb_) -
-    reinterpret_cast<char*>(&_impl_.mem_total_kb_)) + sizeof(_impl_.mem_online_kb_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.google_play_processes_) -
+    reinterpret_cast<char*>(&_impl_.mem_total_kb_)) + sizeof(_impl_.google_play_processes_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GuestMemory)
 }
 
@@ -25394,6 +25428,10 @@ inline void GuestMemory::SharedCtor(
     , decltype(_impl_.cma_total_kb_){uint64_t{0u}}
     , decltype(_impl_.hugetlb_kb_){uint64_t{0u}}
     , decltype(_impl_.mem_online_kb_){uint64_t{0u}}
+    , decltype(_impl_.swap_pss_kb_){uint64_t{0u}}
+    , decltype(_impl_.google_play_pss_kb_){uint64_t{0u}}
+    , decltype(_impl_.google_play_swap_pss_kb_){uint64_t{0u}}
+    , decltype(_impl_.google_play_processes_){0u}
     , /*decltype(_impl_._cached_size_)*/{}
   };
 }
@@ -25424,8 +25462,8 @@ void GuestMemory::Clear() {
 
   _impl_.top_processes_.Clear();
   ::memset(&_impl_.mem_total_kb_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.mem_online_kb_) -
-      reinterpret_cast<char*>(&_impl_.mem_total_kb_)) + sizeof(_impl_.mem_online_kb_));
+      reinterpret_cast<char*>(&_impl_.google_play_processes_) -
+      reinterpret_cast<char*>(&_impl_.mem_total_kb_)) + sizeof(_impl_.google_play_processes_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -25616,6 +25654,38 @@ const char* GuestMemory::_InternalParse(const char* ptr, ::_pbi::ParseContext* c
         } else
           goto handle_unusual;
         continue;
+      // uint64 swap_pss_kb = 23;
+      case 23:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 184)) {
+          _impl_.swap_pss_kb_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 google_play_processes = 24;
+      case 24:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 192)) {
+          _impl_.google_play_processes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 google_play_pss_kb = 25;
+      case 25:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 200)) {
+          _impl_.google_play_pss_kb_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 google_play_swap_pss_kb = 26;
+      case 26:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 208)) {
+          _impl_.google_play_swap_pss_kb_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -25779,6 +25849,30 @@ uint8_t* GuestMemory::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(22, this->_internal_mem_online_kb(), target);
   }
 
+  // uint64 swap_pss_kb = 23;
+  if (this->_internal_swap_pss_kb() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(23, this->_internal_swap_pss_kb(), target);
+  }
+
+  // uint32 google_play_processes = 24;
+  if (this->_internal_google_play_processes() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(24, this->_internal_google_play_processes(), target);
+  }
+
+  // uint64 google_play_pss_kb = 25;
+  if (this->_internal_google_play_pss_kb() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(25, this->_internal_google_play_pss_kb(), target);
+  }
+
+  // uint64 google_play_swap_pss_kb = 26;
+  if (this->_internal_google_play_swap_pss_kb() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(26, this->_internal_google_play_swap_pss_kb(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -25921,6 +26015,34 @@ size_t GuestMemory::ByteSizeLong() const {
         this->_internal_mem_online_kb());
   }
 
+  // uint64 swap_pss_kb = 23;
+  if (this->_internal_swap_pss_kb() != 0) {
+    total_size += 2 +
+      ::_pbi::WireFormatLite::UInt64Size(
+        this->_internal_swap_pss_kb());
+  }
+
+  // uint64 google_play_pss_kb = 25;
+  if (this->_internal_google_play_pss_kb() != 0) {
+    total_size += 2 +
+      ::_pbi::WireFormatLite::UInt64Size(
+        this->_internal_google_play_pss_kb());
+  }
+
+  // uint64 google_play_swap_pss_kb = 26;
+  if (this->_internal_google_play_swap_pss_kb() != 0) {
+    total_size += 2 +
+      ::_pbi::WireFormatLite::UInt64Size(
+        this->_internal_google_play_swap_pss_kb());
+  }
+
+  // uint32 google_play_processes = 24;
+  if (this->_internal_google_play_processes() != 0) {
+    total_size += 2 +
+      ::_pbi::WireFormatLite::UInt32Size(
+        this->_internal_google_play_processes());
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -26006,6 +26128,18 @@ void GuestMemory::MergeFrom(const GuestMemory& from) {
   if (from._internal_mem_online_kb() != 0) {
     _this->_internal_set_mem_online_kb(from._internal_mem_online_kb());
   }
+  if (from._internal_swap_pss_kb() != 0) {
+    _this->_internal_set_swap_pss_kb(from._internal_swap_pss_kb());
+  }
+  if (from._internal_google_play_pss_kb() != 0) {
+    _this->_internal_set_google_play_pss_kb(from._internal_google_play_pss_kb());
+  }
+  if (from._internal_google_play_swap_pss_kb() != 0) {
+    _this->_internal_set_google_play_swap_pss_kb(from._internal_google_play_swap_pss_kb());
+  }
+  if (from._internal_google_play_processes() != 0) {
+    _this->_internal_set_google_play_processes(from._internal_google_play_processes());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -26025,8 +26159,8 @@ void GuestMemory::InternalSwap(GuestMemory* other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   _impl_.top_processes_.InternalSwap(&other->_impl_.top_processes_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GuestMemory, _impl_.mem_online_kb_)
-      + sizeof(GuestMemory::_impl_.mem_online_kb_)
+      PROTOBUF_FIELD_OFFSET(GuestMemory, _impl_.google_play_processes_)
+      + sizeof(GuestMemory::_impl_.google_play_processes_)
       - PROTOBUF_FIELD_OFFSET(GuestMemory, _impl_.mem_total_kb_)>(
           reinterpret_cast<char*>(&_impl_.mem_total_kb_),
           reinterpret_cast<char*>(&other->_impl_.mem_total_kb_));
@@ -48678,6 +48812,7 @@ SystemSettings::SystemSettings(const SystemSettings& from)
     , decltype(_impl_.time_24_hour_){}
     , decltype(_impl_.dark_mode_){}
     , decltype(_impl_.accent_color_){}
+    , decltype(_impl_.font_scale_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -48698,8 +48833,8 @@ SystemSettings::SystemSettings(const SystemSettings& from)
       _this->GetArenaForAllocation());
   }
   ::memcpy(&_impl_.first_day_of_week_, &from._impl_.first_day_of_week_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.accent_color_) -
-    reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.font_scale_) -
+    reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.font_scale_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.SystemSettings)
 }
 
@@ -48715,6 +48850,7 @@ inline void SystemSettings::SharedCtor(
     , decltype(_impl_.time_24_hour_){false}
     , decltype(_impl_.dark_mode_){false}
     , decltype(_impl_.accent_color_){0u}
+    , decltype(_impl_.font_scale_){0}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.time_zone_.InitDefault();
@@ -48757,8 +48893,8 @@ void SystemSettings::Clear() {
   _impl_.time_zone_.ClearToEmpty();
   _impl_.regional_format_.ClearToEmpty();
   ::memset(&_impl_.first_day_of_week_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.accent_color_) -
-      reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+      reinterpret_cast<char*>(&_impl_.font_scale_) -
+      reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.font_scale_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -48832,6 +48968,14 @@ const char* SystemSettings::_InternalParse(const char* ptr, ::_pbi::ParseContext
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 61)) {
           _impl_.accent_color_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<uint32_t>(ptr);
           ptr += sizeof(uint32_t);
+        } else
+          goto handle_unusual;
+        continue;
+      // float font_scale = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 69)) {
+          _impl_.font_scale_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
         } else
           goto handle_unusual;
         continue;
@@ -48918,6 +49062,16 @@ uint8_t* SystemSettings::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteFixed32ToArray(7, this->_internal_accent_color(), target);
   }
 
+  // float font_scale = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = this->_internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(8, this->_internal_font_scale(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -48976,6 +49130,15 @@ size_t SystemSettings::ByteSizeLong() const {
     total_size += 1 + 4;
   }
 
+  // float font_scale = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = this->_internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    total_size += 1 + 4;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -49016,6 +49179,13 @@ void SystemSettings::MergeFrom(const SystemSettings& from) {
   if (from._internal_accent_color() != 0) {
     _this->_internal_set_accent_color(from._internal_accent_color());
   }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_font_scale = from._internal_font_scale();
+  uint32_t raw_font_scale;
+  memcpy(&raw_font_scale, &tmp_font_scale, sizeof(tmp_font_scale));
+  if (raw_font_scale != 0) {
+    _this->_internal_set_font_scale(from._internal_font_scale());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -49045,8 +49215,8 @@ void SystemSettings::InternalSwap(SystemSettings* other) {
       &other->_impl_.regional_format_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.accent_color_)
-      + sizeof(SystemSettings::_impl_.accent_color_)
+      PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.font_scale_)
+      + sizeof(SystemSettings::_impl_.font_scale_)
       - PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.first_day_of_week_)>(
           reinterpret_cast<char*>(&_impl_.first_day_of_week_),
           reinterpret_cast<char*>(&other->_impl_.first_day_of_week_));

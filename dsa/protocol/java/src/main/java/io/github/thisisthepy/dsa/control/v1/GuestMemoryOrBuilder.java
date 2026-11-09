@@ -196,4 +196,39 @@ public interface GuestMemoryOrBuilder extends
    * @return The memOnlineKb.
    */
   long getMemOnlineKb();
+
+  /**
+   * <pre>
+   * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+   * were compressed, for every process total_pss_kb counts.
+   * </pre>
+   *
+   * <code>uint64 swap_pss_kb = 23;</code>
+   * @return The swapPssKb.
+   */
+  long getSwapPssKb();
+
+  /**
+   * <pre>
+   * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+   * only those among top_processes: how many run, their proportional set size, and how much
+   * of it is swapped out to zram, at the size before compression.
+   * </pre>
+   *
+   * <code>uint32 google_play_processes = 24;</code>
+   * @return The googlePlayProcesses.
+   */
+  int getGooglePlayProcesses();
+
+  /**
+   * <code>uint64 google_play_pss_kb = 25;</code>
+   * @return The googlePlayPssKb.
+   */
+  long getGooglePlayPssKb();
+
+  /**
+   * <code>uint64 google_play_swap_pss_kb = 26;</code>
+   * @return The googlePlaySwapPssKb.
+   */
+  long getGooglePlaySwapPssKb();
 }

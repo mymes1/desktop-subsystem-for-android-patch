@@ -210,7 +210,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// Host to guest: the task's window is on a monitor of another scale; the task's app draws
-/// at `density_dpi` (160 at a scale of 100%). The host sends the matching ResizeTask right
+/// at `density_dpi` (96 at a scale of 100%). The host sends the matching ResizeTask right
 /// after it, and the agent applies both together, so the app relays out once.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
@@ -1169,9 +1169,16 @@ pub struct ProcessMemory {
     /// shares with other processes.
     #[prost(uint64, tag = "3")]
     pub pss_kb: u64,
-    /// How much of it is swapped out to compressed memory, proportionally, in KiB.
+    /// How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+    /// size the pages had before zram compressed them, not the memory they take in zram, and it
+    /// is counted in pss_kb.
     #[prost(uint64, tag = "4")]
     pub swap_pss_kb: u64,
+    /// The process belongs to Google Play services: one of the Google apps the user installed
+    /// (Google Play services, the Play Store, the services framework and the other system apps
+    /// the Google apps image brings).
+    #[prost(bool, tag = "5")]
+    pub google_play: bool,
 }
 /// Guest to host, from the agent: how the guest uses its memory. Sent every few minutes, and
 /// in answer to RequestGuestMemory. Sizes are in KiB, as the guest kernel counts them, and 0
@@ -1237,6 +1244,19 @@ pub struct GuestMemory {
     /// pstore). 0 when the guest cannot read it.
     #[prost(uint64, tag = "22")]
     pub mem_online_kb: u64,
+    /// How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+    /// were compressed, for every process total_pss_kb counts.
+    #[prost(uint64, tag = "23")]
+    pub swap_pss_kb: u64,
+    /// The processes of Google Play services (ProcessMemory.google_play), all of them and not
+    /// only those among top_processes: how many run, their proportional set size, and how much
+    /// of it is swapped out to zram, at the size before compression.
+    #[prost(uint32, tag = "24")]
+    pub google_play_processes: u32,
+    #[prost(uint64, tag = "25")]
+    pub google_play_pss_kb: u64,
+    #[prost(uint64, tag = "26")]
+    pub google_play_swap_pss_kb: u64,
 }
 /// From the agent to the guest's control daemon, on each connection to it: the agent has
 /// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
@@ -1841,7 +1861,7 @@ pub struct RemoveWidget {
     pub widget_id: i32,
 }
 /// Host to guest: the size of the widget's host window. The agent draws the widget at `width`
-/// by `height` pixels at `density_dpi` (160 at a scale of 100%), and tells the widget's app
+/// by `height` pixels at `density_dpi` (96 at a scale of 100%), and tells the widget's app
 /// its size in dp, so a widget with layouts for several sizes picks the one that fits.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResizeWidget {
@@ -2407,7 +2427,7 @@ pub struct CameraError {
 /// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
 /// after the agent connects, when the host knows them, and on each change. Every field is sent
 /// each time. The user does not change these in the guest: the host's are the guest's.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SystemSettings {
     /// The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
     /// name it; the guest's then stays as it is.
@@ -2435,6 +2455,13 @@ pub struct SystemSettings {
     /// colors. 0 when the host has none.
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
+    /// The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+    /// of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+    /// a host pixel, and scales text separately from everything else, so this is 160/96 times
+    /// the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+    /// the guest's as it is.
+    #[prost(float, tag = "8")]
+    pub font_scale: f32,
 }
 /// Host to guest: the computer's name, which the agent makes the guest's device name: the name
 /// Settings shows, and the one Bluetooth and Wi-Fi Direct show other devices when the guest has

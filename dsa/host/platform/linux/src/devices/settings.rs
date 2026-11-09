@@ -1,5 +1,9 @@
 //! The user's desktop settings for their Android: the time zone, the languages, the regional
-//! format, the clock, the first day of the week, the dark theme and the accent color.
+//! format, the clock, the first day of the week, the dark theme, the accent color and the
+//! text size.
+//!
+//! The text size is GNOME's `text-scaling-factor` through the portal, else KDE's
+//! `forceFontDPI` (through the portal, else from its configuration files), else 100%.
 //!
 //! The time zone comes from systemd's `timedated`, else `/etc/localtime`. The languages and
 //! formats come from the session's locale (`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LC_TIME`,
@@ -262,6 +266,26 @@ impl SystemSettingsSource for DesktopSettings {
             .portal_read(APPEARANCE, "accent-color")
             .and_then(|v| accent(&v))
             .unwrap_or(0);
+        let text_scale_percent = self
+            .portal_read("org.gnome.desktop.interface", "text-scaling-factor")
+            .and_then(|v| f64::try_from(v).ok())
+            .and_then(text_scale_from_factor)
+            .or_else(|| {
+                self.portal_read("org.kde.kdeglobals.General", "forceFontDPI")
+                    .and_then(|v| i32::try_from(v).ok())
+                    .and_then(text_scale_from_font_dpi)
+            })
+            .or_else(|| {
+                let home = env("XDG_CONFIG_HOME")
+                    .filter(|v| !v.is_empty())
+                    .map(std::path::PathBuf::from)
+                    .or_else(|| env("HOME").map(|home| Path::new(&home).join(".config")))?;
+                ["kdeglobals", "kcmfonts"].iter().find_map(|file| {
+                    let text = std::fs::read_to_string(home.join(file)).ok()?;
+                    kde_font_dpi(&text).and_then(text_scale_from_font_dpi)
+                })
+            })
+            .unwrap_or(100);
         SystemSettings {
             time_zone: time_zone(),
             regional_format: regional_format(&env, &first),
@@ -270,6 +294,7 @@ impl SystemSettingsSource for DesktopSettings {
             first_day_of_week,
             dark_mode,
             accent_color,
+            text_scale_percent,
         }
         .checked()
     }
@@ -309,6 +334,36 @@ fn accent(value: &OwnedValue) -> Option<u32> {
         })
         .collect();
     accent_from_rgb(&channels)
+}
+
+/// The text size in percent from GNOME's `text-scaling-factor` (1.0 is the default); none
+/// when it is not a size.
+pub fn text_scale_from_factor(factor: f64) -> Option<u32> {
+    (factor.is_finite() && factor > 0.0).then(|| (factor * 100.0).round() as u32)
+}
+
+/// The text size in percent from KDE's `forceFontDPI` (96 is 100%); none when it is not set,
+/// which KDE writes as 0.
+pub fn text_scale_from_font_dpi(dpi: i32) -> Option<u32> {
+    (dpi > 0).then(|| (dpi as u32 * 100 + 48) / 96)
+}
+
+/// `forceFontDPI` in the `[General]` group of a KDE configuration file.
+pub fn kde_font_dpi(text: &str) -> Option<i32> {
+    let mut general = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            general = line == "[General]";
+        } else if general {
+            if let Some((key, value)) = line.split_once('=') {
+                if key.trim() == "forceFontDPI" {
+                    return value.trim().parse().ok();
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Red, green and blue from 0 to 1 as 0xAARRGGBB.
@@ -369,6 +424,23 @@ mod tests {
         assert_eq!(first_day(1, "19971130"), 7);
         assert_eq!(first_day(1, "19971201"), 1);
         assert_eq!(first_day(9, "19971130"), 0);
+    }
+
+    #[test]
+    fn fr4_the_text_size_follows_the_desktops_text_scaling() {
+        assert_eq!(text_scale_from_factor(1.0), Some(100));
+        assert_eq!(text_scale_from_factor(1.5), Some(150));
+        assert_eq!(text_scale_from_factor(1.25), Some(125));
+        assert_eq!(text_scale_from_factor(0.0), None);
+        assert_eq!(text_scale_from_factor(f64::NAN), None);
+        assert_eq!(text_scale_from_font_dpi(96), Some(100));
+        assert_eq!(text_scale_from_font_dpi(144), Some(150));
+        assert_eq!(text_scale_from_font_dpi(0), None);
+        assert_eq!(
+            kde_font_dpi("[KDE]\nforceFontDPI=1\n[General]\nfont=Noto\nforceFontDPI=120\n"),
+            Some(120)
+        );
+        assert_eq!(kde_font_dpi("[General]\nfont=Noto\n"), None);
     }
 
     #[test]

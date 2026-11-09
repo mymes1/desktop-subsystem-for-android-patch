@@ -70,6 +70,13 @@ data class TaskSnapshot(
      */
     val handlesDensityChange: Boolean = false,
     /**
+     * Whether the task's top and root activities say they handle a change of font scale
+     * themselves (configChanges include fontScale), so Android redraws them at a new font
+     * scale instead of restarting them. The agent holds a new font scale while a task that
+     * does not is open. The host is not told it.
+     */
+    val handlesFontScaleChange: Boolean = false,
+    /**
      * Where in the title bar band the app has controls, relative to the task's top left
      * corner: filled in by the agent from what the app keeps clear of system gestures, while
      * [transparentCaption] is set.
@@ -154,6 +161,24 @@ const val CONFIG_DENSITY = 0x1000
  * changes.
  */
 fun handlesDensityChange(configChanges: Int): Boolean = (configChanges and CONFIG_DENSITY) != 0
+
+/** ActivityInfo.CONFIG_FONT_SCALE: the bit of an activity's configChanges for a change of font scale. */
+const val CONFIG_FONT_SCALE = 0x40000000
+
+/**
+ * Whether an activity whose manifest declares [configChanges] handles a change of font scale
+ * itself. Android restarts any other activity when the font scale changes.
+ */
+fun handlesFontScaleChange(configChanges: Int): Boolean = (configChanges and CONFIG_FONT_SCALE) != 0
+
+/**
+ * The open apps Android would restart for a change of font scale: each app task whose
+ * activities do not say they handle one, by package.
+ */
+fun restartedByFontScale(tasks: List<TaskSnapshot>): List<String> =
+    tasks.filter { it.kind == TaskKind.APP && !it.handlesFontScaleChange }
+        .map { it.packageName ?: "task ${it.taskId}" }
+        .distinct()
 
 /**
  * Whether a task's app asked to fill the screen, in any of the ways an app asks: its task left

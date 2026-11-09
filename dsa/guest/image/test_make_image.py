@@ -1017,7 +1017,7 @@ class ImageLayoutTests(unittest.TestCase):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
         self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
-        self.assertIn("androidboot.lcd_density=160", make_image.kernel_cmdline("", hwcomposer=False))
+        self.assertIn("androidboot.lcd_density=96", make_image.kernel_cmdline("", hwcomposer=False))
         # No build.prop sets it, the input's included: init reads them before any script, and
         # the first value would hold every boot at the image's density.
         for vendor in (False, True):
@@ -2055,7 +2055,7 @@ class ImageLayoutTests(unittest.TestCase):
         # The one freeform display every task window lives on.
         self.assertIn("androidboot.dsa.display_width=1920", cmdline)
         self.assertIn("androidboot.dsa.display_height=1080", cmdline)
-        self.assertIn("androidboot.dsa.display_dpi=160", cmdline)
+        self.assertIn("androidboot.dsa.display_dpi=96", cmdline)
         self.assertIn(
             "androidboot.vendor.apex.com.android.hardware.gatekeeper=com.android.hardware.gatekeeper.nonsecure",
             cmdline,
@@ -2314,7 +2314,7 @@ class GuestMemoryTests(unittest.TestCase):
 
     def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
         rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
-        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-160}\n", rc)
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-96}\n", rc)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
             self.assertIn(
