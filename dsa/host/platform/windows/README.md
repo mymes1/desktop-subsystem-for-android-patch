@@ -274,10 +274,15 @@ after two minutes. `"keep_window_manager": false` turns this off.
   other display, such as Android's whole screen, are dropped, so no window shows more
   than one app.
 - One Android pixel is one pixel of the window, so frames are shown 1:1 and stay sharp
-  at any monitor scale. Each task draws at the density of its window's monitor: 160 dpi at
-  100%, 240 at 150%, 320 at 200%. A window that opens on, or moves to, a monitor of
-  another scale asks Android for that density, and then for the size that keeps the app
-  the same size to the eye. Density is set per task, so windows on monitors of different
+  at any monitor scale. Each task draws at the density of its window's monitor: 96 dpi at
+  100%, 144 at 150%, 192 at 200%, since an Android dp is 1/160 inch and a Windows pixel
+  at 100% 1/96 inch. Android scales text on its own, so its font scale is 160/96 times
+  the Windows text size (Accessibility > Text size), and text keeps the size of Windows'
+  text. A change to the text size reaches Android at once. Android restarts an app that
+  does not say it handles a change of font scale, so while such an app is open the new
+  scale waits, and it applies as soon as none is. A window that opens on, or moves to, a
+  monitor of another scale asks Android for that density, and then for the size that
+  keeps the app the same size to the eye. Density is set per task, so windows on monitors of different
   scales are each sharp.
 - Resizing a window asks Android to give its task the window's new client size. During a
   live resize only the latest size is sent, and the next one waits until the app has drawn
@@ -292,7 +297,7 @@ after two minutes. `"keep_window_manager": false` turns this off.
   see the user's monitors from session 0, so the window manager and the app windows record
   them in `%LOCALAPPDATA%\DSA\monitors.txt`, and the main monitor's DPI beside it in
   `monitor-density.txt`: Android starts at the density a window on the main monitor gives its
-  task (160 dpi at 100%, 240 at 150%), so an app that opens there is not relaunched for a
+  task (96 dpi at 100%, 144 at 150%), so an app that opens there is not relaunched for a
   change of density right after it starts. A monitor longer than the display, or one
   attached after Android started, caps its windows at the display's size, and a maximised
   window is centred on the screen, until the next start of Android. If Android gives the

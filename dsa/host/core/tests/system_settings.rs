@@ -117,6 +117,7 @@ fn seoul() -> SystemSettings {
         first_day_of_week: 1,
         dark_mode: true,
         accent_color: 0xFF00_78D4,
+        text_scale_percent: 100,
     }
 }
 

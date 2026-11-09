@@ -1151,7 +1151,7 @@ fn fr4_a_task_window_opens_at_its_monitors_scale() {
     let running = start(None);
     running.android.start();
     let mut notes = task(1, "Notes", 400, 300);
-    notes.density_dpi = 160;
+    notes.density_dpi = 96;
     notes.max_width = 1920;
     notes.max_height = 1080;
     running.android.publish(TaskEvent::Updated(notes));
@@ -1159,9 +1159,9 @@ fn fr4_a_task_window_opens_at_its_monitors_scale() {
     let dpi = unsafe { GetDpiForWindow(open[0].hwnd as HWND) }.max(96);
     let wanted = density_for_dpi(dpi);
 
-    let (width, height) = rescale((400, 300), 160, wanted);
+    let (width, height) = rescale((400, 300), 96, wanted);
     assert_eq!(client_size(open[0].hwnd), (width as i32, height as i32));
-    if wanted != 160 {
+    if wanted != 96 {
         wait_for("the density to reach the guest", || {
             let requests = running.android.requests.lock().unwrap().clone();
             (requests.first()

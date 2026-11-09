@@ -12,7 +12,8 @@ use std::time::Instant;
 use super::caption::{caption_tone, CaptionBand, CaptionTone};
 use super::window_mode::WindowMode;
 use super::window_sizing::{
-    to_task_length, to_window_rect, Scale, ScalingMode, WindowSizing, BASE_DENSITY, SETTLE,
+    to_task_length, to_window_rect, Scale, ScalingMode, WindowSizing, BASE_DENSITY,
+    DENSITY_AT_BASE_DPI, SETTLE,
 };
 use crate::app_windows::AppWindowSettings;
 use crate::tasks::{Bounds, Task, TaskEvent, TaskOrientation, TaskRequest};
@@ -213,7 +214,7 @@ pub type WindowOpened = ((u32, u32), Vec<TaskRequest>, Vec<WindowChange>);
 pub fn start_size(task: &Task, app: Option<&AppWindowSettings>) -> Option<(u32, u32)> {
     let current = window_size(&task.bounds);
     let density = if task.density_dpi == 0 {
-        BASE_DENSITY
+        DENSITY_AT_BASE_DPI
     } else {
         task.density_dpi
     };
@@ -1357,7 +1358,7 @@ mod tests {
     fn fr4_a_window_on_another_scale_asks_for_its_monitors_density() {
         let mut windows = TaskWindows::new();
         let mut clock = task(1, "Clock", 400, 300);
-        clock.density_dpi = 160;
+        clock.density_dpi = 96;
         clock.handles_density_change = true;
         windows.apply(&TaskEvent::Updated(clock));
         assert_eq!(
@@ -1366,7 +1367,7 @@ mod tests {
                 (800, 600),
                 vec![TaskRequest::SetDensity {
                     task_id: 1,
-                    density_dpi: 320
+                    density_dpi: 192
                 }],
                 vec![]
             ))
@@ -1377,7 +1378,7 @@ mod tests {
                 vec![],
                 vec![TaskRequest::SetDensity {
                     task_id: 1,
-                    density_dpi: 160
+                    density_dpi: 96
                 }]
             )
         );
@@ -1442,7 +1443,7 @@ mod tests {
     fn fr4_the_first_scale_a_window_reports_sizes_it_for_its_monitor() {
         let mut windows = TaskWindows::new();
         let mut clock = task(1, "Clock", 400, 300);
-        clock.density_dpi = 160;
+        clock.density_dpi = 96;
         clock.handles_density_change = true;
         windows.apply(&TaskEvent::Updated(clock));
         assert_eq!(
@@ -1455,7 +1456,7 @@ mod tests {
                 }],
                 vec![TaskRequest::SetDensity {
                     task_id: 1,
-                    density_dpi: 240
+                    density_dpi: 144
                 }]
             )
         );
@@ -1465,18 +1466,18 @@ mod tests {
                 vec![],
                 vec![TaskRequest::SetDensity {
                     task_id: 1,
-                    density_dpi: 160
+                    density_dpi: 96
                 }]
             )
         );
     }
 
-    /// A task window on a 100% monitor whose task draws at 160 dpi, as Android starts on a
+    /// A task window on a 100% monitor whose task draws at 96 dpi, as Android starts on a
     /// 100% main monitor; its app says it handles a change of density (`app`) or not.
     fn notes_at_100(handles_density_change: bool) -> (TaskWindows, Task) {
         let mut windows = TaskWindows::new();
         let mut notes = task(1, "Notes", 400, 300);
-        notes.density_dpi = 160;
+        notes.density_dpi = 96;
         notes.max_width = 1920;
         notes.max_height = 1920;
         notes.handles_density_change = handles_density_change;
@@ -1582,7 +1583,7 @@ mod tests {
         }]);
         windows.apply(&TaskEvent::Removed { task_id: 1 });
         let mut handles = task(1, "Notes", 400, 300);
-        handles.density_dpi = 160;
+        handles.density_dpi = 96;
         handles.handles_density_change = true;
         windows.apply(&TaskEvent::Updated(handles));
         windows.window_dpi(1, 96);
@@ -1599,7 +1600,7 @@ mod tests {
         }]);
         windows.apply(&TaskEvent::Removed { task_id: 1 });
         let mut forced = task(1, "Notes", 400, 300);
-        forced.density_dpi = 160;
+        forced.density_dpi = 96;
         windows.apply(&TaskEvent::Updated(forced));
         windows.window_dpi(1, 96);
         let (_, requests) = windows.window_dpi(1, 192);
@@ -1618,7 +1619,7 @@ mod tests {
             requests,
             vec![TaskRequest::SetDensity {
                 task_id: 1,
-                density_dpi: 320
+                density_dpi: 192
             }]
         );
         assert_eq!(windows.scale(1), (1, 1));
@@ -1634,7 +1635,7 @@ mod tests {
         );
         // Another activity on top that does not say so: the task keeps the density it has
         // from now on, and a later move scales the window instead.
-        notes.density_dpi = 320;
+        notes.density_dpi = 192;
         notes.bounds.right = notes.bounds.left + 800;
         notes.bounds.bottom = notes.bounds.top + 600;
         notes.handles_density_change = false;
@@ -1657,7 +1658,7 @@ mod tests {
         }]);
         windows.apply(&TaskEvent::Removed { task_id: 1 });
         let mut notes = task(1, "Notes", 400, 300);
-        notes.density_dpi = 160;
+        notes.density_dpi = 96;
         notes.max_width = 1920;
         notes.max_height = 1920;
         windows.apply(&TaskEvent::Updated(notes.clone()));
@@ -1671,19 +1672,19 @@ mod tests {
             requests,
             vec![TaskRequest::SetDensity {
                 task_id: 1,
-                density_dpi: 320
+                density_dpi: 192
             }]
         );
         assert_eq!(windows.scale(1), (1, 1));
         // Its next activity does not say so either, and the choice still holds.
-        notes.density_dpi = 320;
+        notes.density_dpi = 192;
         windows.apply(&TaskEvent::Updated(notes));
         let (_, requests) = windows.window_dpi(1, 96);
         assert_eq!(
             requests,
             vec![TaskRequest::SetDensity {
                 task_id: 1,
-                density_dpi: 160
+                density_dpi: 96
             }]
         );
         assert_eq!(windows.scale(1), (1, 1));
@@ -1778,7 +1779,7 @@ mod tests {
     fn portrait_app(task_id: i32, width: i32, height: i32) -> Task {
         Task {
             orientation: TaskOrientation::Portrait,
-            density_dpi: 160,
+            density_dpi: 96,
             max_width: 1920,
             max_height: 1080,
             ..task(task_id, "Reader", width, height)
