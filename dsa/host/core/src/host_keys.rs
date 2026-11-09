@@ -64,6 +64,13 @@ impl KeyPurpose {
     pub fn sealed_by_hardware(self) -> bool {
         self == KeyPurpose::KeyMintRoot
     }
+
+    /// The purpose whose [`KeyPurpose::name`] is `name`.
+    pub fn named(name: &str) -> Option<KeyPurpose> {
+        [KeyPurpose::Backup, KeyPurpose::KeyMintRoot]
+            .into_iter()
+            .find(|purpose| purpose.name() == name)
+    }
 }
 
 /// 32 secret bytes, wiped from memory when dropped. `Debug` never shows them.
@@ -440,6 +447,125 @@ pub trait SealerSource: Send + Sync {
     /// The sealer named `name`, to open a secret it sealed; an error says why this computer
     /// cannot open it.
     fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError>;
+}
+
+/// A [`Sealer`] that keeps the secret itself in a credential store that keeps secrets rather
+/// than seals bytes (the Secret Service, a keychain): what it returns is empty, and the sealed
+/// file only records that the store holds the secret. [`Sealer::forget`] removes it from the
+/// store once the secret is sealed by the hardware.
+pub struct StoredSealer {
+    name: &'static str,
+    description: String,
+    store: Arc<dyn HostKeyStore>,
+}
+
+impl StoredSealer {
+    /// `name` is both the sealer's name and its kind (`secret-service`, `keychain`).
+    pub fn new(
+        name: &'static str,
+        description: &str,
+        store: Arc<dyn HostKeyStore>,
+    ) -> StoredSealer {
+        StoredSealer {
+            name,
+            description: description.to_string(),
+            store,
+        }
+    }
+
+    fn purpose(label: &str) -> Result<KeyPurpose, KeyError> {
+        KeyPurpose::named(label)
+            .ok_or_else(|| KeyError::Failed(format!("{label} is not a key DSA keeps")))
+    }
+}
+
+impl Sealer for StoredSealer {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn seal(&self, plain: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
+        let purpose = Self::purpose(label)?;
+        let secret = Secret::from_slice(plain).ok_or_else(|| {
+            KeyError::Failed(format!(
+                "the {} is not {SECRET_LEN} bytes",
+                purpose.description()
+            ))
+        })?;
+        self.store.store(purpose, &secret)?;
+        Ok(Vec::new())
+    }
+
+    fn unseal(&self, _: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
+        let purpose = Self::purpose(label)?;
+        match self.store.load(purpose)? {
+            Some(secret) => Ok(secret.bytes().to_vec()),
+            None => Err(KeyError::Unreadable(format!(
+                "{} no longer holds the {}",
+                self.description,
+                purpose.description()
+            ))),
+        }
+    }
+
+    fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    fn forget(&self, label: &str) -> Result<(), KeyError> {
+        self.store.remove(Self::purpose(label)?)
+    }
+}
+
+/// Whether hardware can seal now: `Ok`, or why not.
+pub type HardwareCheck = Box<dyn Fn() -> Result<(), String> + Send + Sync>;
+
+/// The sealers of a computer with one hardware sealer and one credential store: the hardware
+/// whenever `usable` says it works, the store otherwise. Each opens what it sealed.
+pub struct HardwareOrStore {
+    hardware: Arc<dyn Sealer>,
+    usable: HardwareCheck,
+    store: Arc<dyn Sealer>,
+}
+
+impl HardwareOrStore {
+    pub fn new(
+        hardware: Arc<dyn Sealer>,
+        usable: HardwareCheck,
+        store: Arc<dyn Sealer>,
+    ) -> HardwareOrStore {
+        HardwareOrStore {
+            hardware,
+            usable,
+            store,
+        }
+    }
+}
+
+impl SealerSource for HardwareOrStore {
+    fn hardware(&self, _: KeyPurpose) -> Hardware {
+        match (self.usable)() {
+            Ok(()) => Hardware::Usable(Arc::clone(&self.hardware)),
+            Err(why) => Hardware::Unusable(why),
+        }
+    }
+
+    fn fallback(&self, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        Ok(Arc::clone(&self.store))
+    }
+
+    fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        if name == self.hardware.name() {
+            Ok(Arc::clone(&self.hardware))
+        } else if name == self.store.name() {
+            Ok(Arc::clone(&self.store))
+        } else {
+            Err(KeyError::Unreadable(format!(
+                "the {} was sealed by {name}, which this computer does not seal with",
+                purpose.description()
+            )))
+        }
+    }
 }
 
 /// How long [`SealedKeys::protection`] trusts what it last found of the hardware.
@@ -846,6 +972,105 @@ mod tests {
             Err(KeyError::Unreadable(_))
         ));
         assert!(keys.protection(KeyPurpose::Backup).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A keyring in memory, as the Secret Service or a keychain keeps secrets.
+    #[derive(Default)]
+    struct Keyring(Mutex<std::collections::HashMap<&'static str, Secret>>);
+
+    impl HostKeyStore for Keyring {
+        fn load(&self, purpose: KeyPurpose) -> Result<Option<Secret>, KeyError> {
+            Ok(self.0.lock().unwrap().get(purpose.name()).cloned())
+        }
+        fn store(&self, purpose: KeyPurpose, secret: &Secret) -> Result<(), KeyError> {
+            self.0
+                .lock()
+                .unwrap()
+                .insert(purpose.name(), secret.clone());
+            Ok(())
+        }
+        fn remove(&self, purpose: KeyPurpose) -> Result<(), KeyError> {
+            self.0.lock().unwrap().remove(purpose.name());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn fr36_a_key_a_keyring_kept_moves_to_the_hardware_and_leaves_the_keyring() {
+        let dir = scratch("keyring");
+        let keyring = Arc::new(Keyring::default());
+        let works = Arc::new(AtomicBool::new(false));
+        let hardware: Arc<dyn Sealer> = Arc::new(NamedSealer {
+            name: "tpm2",
+            hardware: true,
+            forgotten: Arc::default(),
+        });
+        let source = HardwareOrStore::new(
+            hardware,
+            {
+                let works = Arc::clone(&works);
+                Box::new(move || {
+                    if works.load(Ordering::SeqCst) {
+                        Ok(())
+                    } else {
+                        Err("no TPM".into())
+                    }
+                })
+            },
+            Arc::new(StoredSealer::new(
+                "secret-service",
+                "your keyring",
+                keyring.clone(),
+            )),
+        );
+        let keys = SealedKeys::new(&dir, Arc::new(source));
+        let first = load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
+        assert_eq!(sealer_in(&keys, KeyPurpose::KeyMintRoot), "secret-service");
+        assert_eq!(
+            keyring.load(KeyPurpose::KeyMintRoot).unwrap(),
+            Some(first.clone())
+        );
+        let protection = keys.protection(KeyPurpose::KeyMintRoot).unwrap().unwrap();
+        assert_eq!(protection.sealed_by, "secret-service");
+        assert_eq!(protection.fallback_reason, "no TPM");
+
+        works.store(true, Ordering::SeqCst);
+        assert_eq!(keys.load(KeyPurpose::KeyMintRoot).unwrap(), Some(first));
+        assert_eq!(sealer_in(&keys, KeyPurpose::KeyMintRoot), "tpm2");
+        assert_eq!(
+            keyring.load(KeyPurpose::KeyMintRoot).unwrap(),
+            None,
+            "the keyring keeps no second copy once the TPM seals it"
+        );
+        // A keyring that lost its item says so rather than giving another key.
+        let lost = SealedKeys::new(
+            scratch("keyring-lost"),
+            Arc::new(HardwareOrStore::new(
+                Arc::new(NamedSealer {
+                    name: "tpm2",
+                    hardware: true,
+                    forgotten: Arc::default(),
+                }),
+                Box::new(|| Err("no TPM".into())),
+                Arc::new(StoredSealer::new(
+                    "secret-service",
+                    "your keyring",
+                    Arc::new(Keyring::default()),
+                )),
+            )),
+        );
+        std::fs::create_dir_all(lost.dir()).unwrap();
+        std::fs::write(
+            lost.path(KeyPurpose::KeyMintRoot),
+            sealed_file("secret-service", &[]),
+        )
+        .unwrap();
+        assert!(matches!(
+            lost.load(KeyPurpose::KeyMintRoot),
+            Err(KeyError::Unreadable(_))
+        ));
+        let _ = std::fs::remove_dir_all(lost.dir());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
