@@ -15,10 +15,10 @@ use std::time::Duration;
 use dsa_host_core::session::GuestLauncher;
 use dsa_host_windows::android_vm::AndroidVmLauncher;
 use dsa_host_windows::hcn::{
-    endpoints_named, host_holds, host_route_to, networks_named, shared_status, SharedNetwork,
-    VmNetwork, VmNetworking,
+    endpoints_named, host_holds, host_interface_holding, host_route_to, networks_named,
+    shared_status, SharedNetwork, VmNetwork, VmNetworking,
 };
-use dsa_host_windows::network::{endpoint_name, host_side_adapter, nat_path_problem, network_name};
+use dsa_host_windows::network::{endpoint_name, nat_path_problem, network_name};
 use dsa_host_windows::vm::AndroidVmConfig;
 use dsa_protocol::auth::BootSecret;
 
@@ -186,7 +186,7 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
             .expect("a NAT network has a way through the host");
         eprintln!("the way between the host and the guest: {path:?}");
         let endpoint = network.status().endpoint;
-        assert_eq!(nat_path_problem(network.name(), &endpoint, &path), None);
+        assert_eq!(nat_path_problem(&endpoint, &path), None);
         // HCN names no address for the guest: the endpoint asks for DHCP, and the guest takes
         // its address from the network's DHCP server when it brings eth0 up. No guest boots
         // here, so there is none yet.
@@ -211,7 +211,6 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
     // The address after the gateway, on the network's /24: one the DHCP server can give the
     // guest, and so routed as the guest's address is.
     let guest = Ipv4Addr::from(u32::from(gateway) + 1);
-    let own = host_side_adapter(&network_name(vm));
     assert_eq!(
         status.dns_servers,
         vec![gateway.to_string()],
@@ -224,17 +223,23 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
         host_holds(gateway),
         "the gateway {gateway} is not this computer's"
     );
+    let own =
+        host_interface_holding(gateway).expect("an adapter of this computer holds the gateway");
+    // Windows names that adapter after the network, cut short ("vEthernet (DSA dsa-test-fr)"
+    // here), so it is known by its interface, never by that name.
+    eprintln!("this computer's adapter for Android's network: {own:?}");
     // The host sends to the guest's addresses through that adapter, not its default route.
+    let route = host_route_to(guest);
     assert_eq!(
-        host_route_to(guest).as_deref(),
-        Some(own.as_str()),
-        "this computer would not reach Android at {guest} through {own}"
+        route.as_ref().map(|r| r.luid),
+        Some(own.luid),
+        "this computer would not reach Android at {guest} through {own:?}, but {route:?}"
     );
     // And the host's own way out is not that adapter, so what the guest sends leaves where
     // this computer's traffic leaves: through a VPN when one is connected.
     let out = host_route_to(Ipv4Addr::new(8, 8, 8, 8));
     eprintln!("this computer's traffic leaves through {out:?}");
-    assert_ne!(out.as_deref(), Some(own.as_str()));
+    assert_ne!(out.map(|o| o.luid), Some(own.luid));
     networking.detach();
     assert_gone(vm);
 }
