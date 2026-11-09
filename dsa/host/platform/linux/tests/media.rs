@@ -40,7 +40,6 @@ use boot_check::{lock, run_bounded, Process as Service, Watchdog};
 use dsa_host_core::guest_log::LogFilter;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::session::SessionState;
-use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_unix::socket::UnixLocalConnector;
 
 const PROBE_PACKAGE: &str = "io.github.thisisthepy.dsa.mediaprobe";
@@ -292,16 +291,50 @@ fn restart_for_root(
         }
         std::thread::sleep(Duration::from_millis(250));
     }
-    let settings = FileSettings::new(dir.join("machine/settings"));
-    let mut machine = settings.machine();
-    machine.root_elevation = enabled;
-    settings.set_machine(machine)?;
-    // SAFETY: geteuid takes no pointers and always succeeds.
-    let user = format!("uid:{}", unsafe { libc::geteuid() });
-    settings.set_root_app(&user, PROBE_PACKAGE, "ask")?;
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let output = Command::new("sudo")
+        .arg("env")
+        .arg(format!(
+            "DSA_ROOT_TEST_SOCKET={}",
+            dir.join("host.sock").display()
+        ))
+        .arg(format!("DSA_ROOT_TEST_ENABLED={}", u8::from(enabled)))
+        .arg(executable)
+        .args(["--exact", "fr35_set_machine_switch_as_admin", "--nocapture"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "setting root elevation: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    if enabled {
+        let result = api
+            .set_app_root(PROBE_PACKAGE, "ask")
+            .map_err(|e| e.to_string())?;
+        if result.level != "ask" {
+            return Err(format!(
+                "setting the probe's root level: {}",
+                result.message
+            ));
+        }
+    }
     api.ensure_running(Duration::from_secs(360), Duration::from_secs(2), |_| {})
         .map_err(|e| e.to_string())?;
     adb.connect(Duration::from_secs(120))
+}
+
+#[test]
+fn fr35_set_machine_switch_as_admin() {
+    let Some(socket) = std::env::var_os("DSA_ROOT_TEST_SOCKET") else {
+        return;
+    };
+    let enabled = std::env::var("DSA_ROOT_TEST_ENABLED").unwrap() == "1";
+    let mut api = client(Path::new(&socket), Duration::from_secs(10));
+    let mut settings = api.settings().unwrap().settings;
+    settings.root_elevation = enabled;
+    api.set_settings(&settings).unwrap();
 }
 
 fn root_approval_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(), String> {
@@ -771,7 +804,7 @@ fn boot_check(check_media: bool, check_root: bool) {
         // Keep the first boot's init and kernel messages before the approval check restarts it.
         for (name, command) in [
             ("boot-logcat.txt", "logcat -d -b all"),
-            ("guard.txt", "cat /proc/filesystems; cat /proc/mounts; cat /sys/kernel/security/lsm; ls -lZ /sys/kernel/security /sys/kernel/security/dsa_su"),
+            ("guard.txt", "ls -ldZ /system/xbin /system/xbin/su; stat /system/xbin /system/xbin/su; cat /proc/filesystems; cat /proc/mounts; cat /sys/kernel/security/lsm; ls -lZ /sys/kernel/security /sys/kernel/security/dsa_su"),
         ] {
             let output = adb.shell(command).unwrap_or_else(|error| error);
             let _ = std::fs::write(dir.join(name), output);
