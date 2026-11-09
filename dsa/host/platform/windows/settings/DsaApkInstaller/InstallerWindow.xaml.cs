@@ -27,7 +27,10 @@ public partial class InstallerWindow : FluentWindow
         _vm = new ApkInstallViewModel(
             new ProcessDsaRunner(ProcessDsaCli.Locate(AppContext.BaseDirectory)), App.Text, path);
         InitializeComponent();
-        Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/apk-installer.ico"));
+        // Width and Height are the size it prefers; on a screen too small for that it opens
+        // smaller, inside the work area, so its title bar can be grabbed.
+        Dsa.Settings.StartupPlacement.Attach(this);
+        Icon =BitmapFrame.Create(new Uri("pack://application:,,,/Assets/apk-installer.ico"));
         Resources["SensitiveText"] = App.Text.Get("ApkWindow_Sensitive");
         Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture);
         TitleBar.Title = Title;
