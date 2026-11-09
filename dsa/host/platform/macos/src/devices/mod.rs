@@ -16,7 +16,7 @@
 //! settings           time zone, languages, format,    [`settings`]
 //!                    dark mode and accent color
 //! folders            the user's home folders          [`shared_folders`]
-//! address lookups    CLGeocoder                       [`geocode`]
+//! address lookups    the boundaries in the bundle     [`geocode`]
 //! sharing            NSSharingServicePicker           [`share`]
 //! ```
 //!

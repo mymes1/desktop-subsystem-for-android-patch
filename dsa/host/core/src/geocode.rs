@@ -1,24 +1,26 @@
 //! Address lookups (geocoding) for the apps of the user's Android, answered by the host.
 //!
-//! An app calls Android's `Geocoder`. The agent is the guest's geocode provider, and sends
-//! each lookup to the host as a `GeocodeRequest`: a place's name to positions (forward), or a
-//! position to addresses (reverse). The session checks it ([`GeocodeQuery::from_control`])
-//! and hands it to one watcher in the user's session ([`serve`]), which looks it up with the
-//! host's geocoding service through a [`Geocoder`] and reports what it found. The answer goes
-//! back to the guest as a `GeocodeResult`, which the agent turns into Android `Address`es, or
-//! into the error Android's geocoder reports. The guest holds no geocoding engine or data.
+//! An app calls Android's `Geocoder`. Without Google Play the agent is the guest's geocode
+//! provider, and sends each lookup to the host as a `GeocodeRequest`: a place's name to
+//! positions (forward), or a position to addresses (reverse). The session checks it
+//! ([`GeocodeQuery::from_control`]) and hands it to one watcher in the user's session
+//! ([`serve`]), which looks it up through a [`Geocoder`] and reports what it found. The answer
+//! goes back to the guest as a `GeocodeResult`, which the agent turns into Android
+//! `Address`es, or into the error Android's geocoder reports. The guest holds no geocoding
+//! engine or data. With Google Play, Google's own geocoder answers and the agent is not asked.
 //!
-//! The platform supplies the [`Geocoder`]: macOS has its own (`CLGeocoder`). Windows' own
-//! (`Windows.Services.Maps.MapLocationFinder`) needs a paid Bing Maps key and is retired with
-//! Bing Maps for Enterprise, so Windows and Linux use [`Nominatim`], OpenStreetMap's open
-//! geocoder, which needs no key. Its public server asks for at most one request a second, an
-//! identifying user agent, and no bulk use; [`Nominatim`] keeps to that, caches what it found,
-//! and its address can be changed without a new release ([`GEOCODER_URL_ENV`]).
+//! Every host answers from the administrative boundaries it keeps ([`BoundaryGeocoder`], over
+//! [`crate::boundaries`]): a position becomes its country, province, city, district and
+//! neighbourhood. No server is asked, so no key is needed and the position stays on the
+//! computer. Windows' own geocoder needs a paid Bing Maps key and goes with Bing Maps for
+//! Enterprise, and a public geocoding server is not meant to be every installation's default.
+//! A forward lookup (an address to positions) finds nothing: the boundaries hold no streets
+//! or house numbers to place an address on.
 //!
-//! Nothing a guest or a geocoding service sends ends the session or the watcher: a request that
-//! cannot be answered is answered with an error.
+//! Nothing a guest or a geocoder does ends the session or the watcher: a request that cannot
+//! be answered is answered with an error.
 
-use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -26,8 +28,8 @@ use dsa_protocol::control;
 use dsa_protocol::host_api::types;
 use dsa_transport::Connector;
 
+use crate::boundaries::Boundaries;
 use crate::host_api::HostApiClient;
-use crate::update::store::Fetch;
 
 /// The most addresses one lookup returns, whatever the app asks for.
 pub const MAX_RESULTS: u32 = 10;
@@ -41,22 +43,9 @@ pub const MAX_PART_CHARS: usize = 256;
 /// The most lines an address keeps.
 pub const MAX_ADDRESS_LINES: usize = 8;
 
-/// OpenStreetMap's public geocoding server.
-pub const NOMINATIM_URL: &str = "https://nominatim.openstreetmap.org";
-
-/// The environment variable that names another Nominatim server, such as one the user runs
-/// or one OpenStreetMap asks applications to move to.
-pub const GEOCODER_URL_ENV: &str = "DSA_GEOCODER_URL";
-
-/// The least time between two requests to a Nominatim server: its usage policy allows one a
-/// second.
-pub const NOMINATIM_SPACING: Duration = Duration::from_secs(1);
-
-/// How long a lookup's answer is reused for the same lookup.
-pub const CACHE_LIFETIME: Duration = Duration::from_secs(600);
-
-/// How many answers are kept for reuse.
-pub const CACHE_ENTRIES: usize = 64;
+/// How long the boundaries stay in memory after the last lookup. They take some megabytes,
+/// and lookups come in bursts, while an app shows where the user is.
+pub const IDLE_UNLOAD: Duration = Duration::from_secs(600);
 
 /// A box on the map, in degrees.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -94,7 +83,7 @@ pub struct GeocodeQuery {
 /// Why a lookup has no answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeocodeErrorKind {
-    /// No network, or the geocoding service failed.
+    /// The host cannot answer now: its address data is missing or damaged.
     Unavailable,
     /// The user turned geocoding off on the host, or nobody on the host can answer.
     Refused,
@@ -124,7 +113,7 @@ impl GeocodeError {
 /// there is no answer.
 pub type GeocodeOutcome = Result<Vec<Address>, GeocodeError>;
 
-/// One address a lookup found. Empty strings are parts the service did not give.
+/// One address a lookup found. Empty strings are parts the host does not know.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Address {
     pub address_lines: Vec<String>,
@@ -476,221 +465,106 @@ pub fn outcome_from_host_api(report: types::ReportGeocode) -> Result<GeocodeOutc
     Ok(Err(GeocodeError::new(kind, report.message)))
 }
 
-/// The host's geocoding service, as the platform runs it.
+/// What answers the lookups on the host.
 pub trait Geocoder {
-    /// Looks `query` up. It may block until the service answers.
+    /// Looks `query` up.
     fn geocode(&mut self, query: &GeocodeQuery) -> GeocodeOutcome;
+
+    /// Called while no lookup comes, so the geocoder can let go of what it holds.
+    fn idle(&mut self) {}
 }
 
-/// OpenStreetMap's Nominatim geocoder, over `fetch`. It waits [`NOMINATIM_SPACING`] between
-/// requests and reuses an answer for the same lookup for [`CACHE_LIFETIME`].
-pub struct Nominatim<F: Fetch> {
-    fetch: F,
-    base_url: String,
-    last_request: Option<Instant>,
-    cache: VecDeque<(String, Instant, Vec<Address>)>,
+/// The host's geocoder: positions to addresses from the boundary file at its path, which it
+/// reads at the first lookup and lets go of after [`IDLE_UNLOAD`] without one.
+pub struct BoundaryGeocoder {
+    path: PathBuf,
+    loaded: Option<(Boundaries, Instant)>,
+    unload_after: Duration,
 }
 
-impl<F: Fetch> Nominatim<F> {
-    /// A geocoder that asks the server at `base_url` ("https://nominatim.openstreetmap.org").
-    pub fn new(fetch: F, base_url: &str) -> Nominatim<F> {
-        Nominatim {
-            fetch,
-            base_url: base_url.trim_end_matches('/').to_string(),
-            last_request: None,
-            cache: VecDeque::new(),
+impl BoundaryGeocoder {
+    pub fn new(path: impl Into<PathBuf>) -> BoundaryGeocoder {
+        BoundaryGeocoder {
+            path: path.into(),
+            loaded: None,
+            unload_after: IDLE_UNLOAD,
         }
     }
 
-    /// A geocoder that asks the server [`GEOCODER_URL_ENV`] names, or [`NOMINATIM_URL`].
-    pub fn from_env(fetch: F) -> Nominatim<F> {
-        let url = std::env::var(GEOCODER_URL_ENV)
-            .ok()
-            .filter(|url| url.starts_with("https://") || url.starts_with("http://"))
-            .unwrap_or_else(|| NOMINATIM_URL.to_string());
-        Nominatim::new(fetch, &url)
+    /// The geocoder of the host program at `exe`, with the file installed beside it
+    /// ([`crate::boundaries::installed_file`]).
+    pub fn installed(exe: &Path) -> BoundaryGeocoder {
+        BoundaryGeocoder::new(crate::boundaries::installed_file(exe))
     }
 
-    /// The URL that asks the server for `query`.
-    pub fn url(&self, query: &GeocodeQuery) -> String {
-        let mut url = match &query.lookup {
-            Lookup::Forward {
-                query: name,
-                bounds,
-            } => {
-                let mut url = format!(
-                    "{}/search?format=jsonv2&addressdetails=1&limit={}&q={}",
-                    self.base_url,
-                    query.max_results,
-                    percent_encode(name)
-                );
-                if let Some(b) = bounds {
-                    // left, top, right, bottom; a preference, not a filter.
-                    url.push_str(&format!(
-                        "&viewbox={},{},{},{}",
-                        b.lower_left_longitude,
-                        b.upper_right_latitude,
-                        b.upper_right_longitude,
-                        b.lower_left_latitude
-                    ));
-                }
-                url
-            }
+    /// The geocoder of the running program.
+    pub fn for_this_program() -> BoundaryGeocoder {
+        match std::env::current_exe() {
+            Ok(exe) => BoundaryGeocoder::installed(&exe),
+            Err(_) => BoundaryGeocoder::new(crate::boundaries::FILE_NAME),
+        }
+    }
+
+    /// Lets go of the boundaries `time` after the last lookup instead.
+    pub fn unloading_after(mut self, time: Duration) -> BoundaryGeocoder {
+        self.unload_after = time;
+        self
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Whether the boundaries are in memory now.
+    pub fn is_loaded(&self) -> bool {
+        self.loaded.is_some()
+    }
+
+    fn boundaries(&mut self) -> Result<&Boundaries, GeocodeError> {
+        if self.loaded.is_none() {
+            let boundaries = Boundaries::read(&self.path).map_err(|why| {
+                GeocodeError::new(
+                    GeocodeErrorKind::Unavailable,
+                    format!("the host's address data cannot be read: {why}"),
+                )
+            })?;
+            self.loaded = Some((boundaries, Instant::now()));
+        }
+        let (boundaries, used) = self.loaded.as_mut().expect("read above");
+        *used = Instant::now();
+        Ok(boundaries)
+    }
+}
+
+impl Geocoder for BoundaryGeocoder {
+    fn geocode(&mut self, query: &GeocodeQuery) -> GeocodeOutcome {
+        match query.lookup {
+            // The boundaries hold no streets or house numbers to place an address on.
+            Lookup::Forward { .. } => Ok(Vec::new()),
             Lookup::Reverse {
                 latitude,
                 longitude,
-            } => format!(
-                "{}/reverse?format=jsonv2&addressdetails=1&lat={latitude}&lon={longitude}",
-                self.base_url
-            ),
-        };
-        if !query.language.is_empty() {
-            url.push_str("&accept-language=");
-            url.push_str(&percent_encode(&query.language));
-        }
-        url
-    }
-
-    fn cached(&mut self, url: &str) -> Option<Vec<Address>> {
-        self.cache
-            .retain(|(_, at, _)| at.elapsed() < CACHE_LIFETIME);
-        self.cache
-            .iter()
-            .find(|(key, _, _)| key == url)
-            .map(|(_, _, addresses)| addresses.clone())
-    }
-}
-
-impl<F: Fetch> Geocoder for Nominatim<F> {
-    fn geocode(&mut self, query: &GeocodeQuery) -> GeocodeOutcome {
-        let url = self.url(query);
-        if let Some(addresses) = self.cached(&url) {
-            return Ok(addresses);
-        }
-        if let Some(last) = self.last_request {
-            let since = last.elapsed();
-            if since < NOMINATIM_SPACING {
-                std::thread::sleep(NOMINATIM_SPACING - since);
+            } => {
+                let language = query.language.clone();
+                let boundaries = self.boundaries()?;
+                Ok(boundaries
+                    .address(latitude, longitude, &language)
+                    .into_iter()
+                    .collect())
             }
         }
-        self.last_request = Some(Instant::now());
-        let mut body = Vec::new();
-        if let Err(why) = self.fetch.fetch(&url, &mut body) {
-            let kind = if why.contains(" 429") {
-                GeocodeErrorKind::Busy
-            } else {
-                GeocodeErrorKind::Unavailable
-            };
-            return Err(GeocodeError::new(
-                kind,
-                format!("the geocoding service did not answer: {why}"),
-            ));
-        }
-        let addresses = parse_nominatim(&body, query.max_results).map_err(|why| {
-            GeocodeError::new(
-                GeocodeErrorKind::Unavailable,
-                format!("the geocoding service's answer cannot be read: {why}"),
-            )
-        })?;
-        if self.cache.len() >= CACHE_ENTRIES {
-            self.cache.pop_front();
-        }
-        self.cache
-            .push_back((url, Instant::now(), addresses.clone()));
-        Ok(addresses)
     }
-}
 
-/// `text` as a URL query value.
-pub fn percent_encode(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(byte as char)
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
+    fn idle(&mut self) {
+        let unload_after = self.unload_after;
+        if self
+            .loaded
+            .as_ref()
+            .is_some_and(|(_, used)| used.elapsed() >= unload_after)
+        {
+            self.loaded = None;
         }
     }
-    out
-}
-
-/// The addresses in a Nominatim answer (`format=jsonv2&addressdetails=1`): a list for a
-/// search, one object for a reverse lookup, and an object with `error` when a position has
-/// no address.
-pub fn parse_nominatim(body: &[u8], max_results: u32) -> Result<Vec<Address>, String> {
-    let value: serde_json::Value =
-        serde_json::from_slice(body).map_err(|e| format!("not JSON: {e}"))?;
-    let places: Vec<&serde_json::Value> = match &value {
-        serde_json::Value::Array(places) => places.iter().collect(),
-        serde_json::Value::Object(object) if object.contains_key("error") => Vec::new(),
-        serde_json::Value::Object(_) => vec![&value],
-        _ => return Err("neither a place nor a list of places".into()),
-    };
-    Ok(places
-        .into_iter()
-        .take(max_results.clamp(1, MAX_RESULTS) as usize)
-        .filter_map(nominatim_place)
-        .collect())
-}
-
-fn nominatim_place(place: &serde_json::Value) -> Option<Address> {
-    let text = |value: Option<&serde_json::Value>| -> String {
-        match value {
-            Some(serde_json::Value::String(text)) => text.clone(),
-            Some(serde_json::Value::Number(number)) => number.to_string(),
-            _ => String::new(),
-        }
-    };
-    let degrees = |key: &str| -> Option<f64> {
-        match place.get(key)? {
-            serde_json::Value::String(text) => text.parse().ok(),
-            serde_json::Value::Number(number) => number.as_f64(),
-            _ => None,
-        }
-    };
-    let parts = place.get("address");
-    let part = |keys: &[&str]| -> String {
-        keys.iter()
-            .map(|key| text(parts.and_then(|p| p.get(*key))))
-            .find(|value| !value.is_empty())
-            .unwrap_or_default()
-    };
-    let display = text(place.get("display_name"));
-    let position = degrees("lat").zip(degrees("lon"));
-    if display.is_empty() && position.is_none() {
-        return None;
-    }
-    let house_number = part(&["house_number"]);
-    let name = text(place.get("name"));
-    Some(
-        Address {
-            address_lines: vec![display],
-            feature_name: if name.is_empty() {
-                house_number.clone()
-            } else {
-                name
-            },
-            premises: part(&["building", "house_name"]),
-            sub_thoroughfare: house_number,
-            thoroughfare: part(&["road", "pedestrian", "footway", "path", "square"]),
-            sub_locality: part(&[
-                "suburb",
-                "city_district",
-                "quarter",
-                "neighbourhood",
-                "borough",
-            ]),
-            locality: part(&["city", "town", "village", "municipality", "hamlet"]),
-            sub_admin_area: part(&["county", "state_district", "district"]),
-            admin_area: part(&["state", "province", "region"]),
-            postal_code: part(&["postcode"]),
-            country_code: part(&["country_code"]),
-            country_name: part(&["country"]),
-            position,
-        }
-        .checked(),
-    )
 }
 
 /// How long a request to the service is waited for.
@@ -729,7 +603,10 @@ pub fn serve(
         warned = false;
         while !stop.load(Ordering::Relaxed) {
             let query = match stream.next(POLL) {
-                Ok(None) => continue,
+                Ok(None) => {
+                    geocoder.idle();
+                    continue;
+                }
                 Ok(Some(query)) => query,
                 Err(why) => {
                     log(&format!("geocoding: the service connection ended: {why}"));

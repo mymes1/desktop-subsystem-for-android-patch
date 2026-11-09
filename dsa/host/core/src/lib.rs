@@ -24,7 +24,8 @@
 //! - [`power_hints`]: the guest's power hints, and how hard the host runs its processors.
 //! - [`location`]: the host's location, which the guest's GNSS HAL and its network location
 //!   provider give its apps.
-//! - [`geocode`]: address lookups of the guest's apps, answered by the host's geocoder.
+//! - [`geocode`]: address lookups of the guest's apps, answered by the host from the
+//!   administrative boundaries it keeps ([`boundaries`]).
 //! - [`share`]: what the guest's apps share with the host's share UI ("Share on PC").
 //! - [`links`]: web links apps in the guest open, which the host opens in its browser.
 //! - [`apk_info`]: what an APK on the host says about itself (its name, icon, version,
@@ -72,6 +73,7 @@ pub mod arm_translation;
 pub mod audio;
 pub mod background;
 pub mod bootconfig;
+pub mod boundaries;
 pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;

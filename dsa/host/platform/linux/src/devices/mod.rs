@@ -14,7 +14,7 @@
 //! folders            the XDG user folders, opened with the user's own rights
 //! settings           the time zone, the locale, and the portal's appearance settings
 //! web links          xdg-open
-//! address lookups    OpenStreetMap's Nominatim, through curl
+//! address lookups    the administrative boundaries in /usr/lib/dsa/geodata
 //! sharing            the OpenURI portal's app chooser, else xdg-open
 //! power              UPower, power-profiles-daemon, logind and /proc/meminfo
 //! ```

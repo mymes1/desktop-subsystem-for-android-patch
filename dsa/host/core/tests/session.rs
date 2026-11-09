@@ -5701,36 +5701,28 @@ fn next_matching<T>(agent: &mut Box<dyn Connection>, pick: impl Fn(Body) -> Opti
     }
 }
 
-/// A geocoding service that answers every lookup with one address, and records the lookups.
-struct FakeGeocoder {
+/// The host's geocoder over the boundary fixture (tests/data, written by
+/// dsa/host/core/geodata/test_build_geodata.py), recording the lookups it is given.
+struct RecordingGeocoder {
     seen: Arc<Mutex<Vec<dsa_host_core::geocode::GeocodeQuery>>>,
-    answer: dsa_host_core::geocode::Address,
+    inner: dsa_host_core::geocode::BoundaryGeocoder,
 }
 
-impl dsa_host_core::geocode::Geocoder for FakeGeocoder {
+impl dsa_host_core::geocode::Geocoder for RecordingGeocoder {
     fn geocode(
         &mut self,
         query: &dsa_host_core::geocode::GeocodeQuery,
     ) -> dsa_host_core::geocode::GeocodeOutcome {
         self.seen.lock().unwrap().push(query.clone());
-        Ok(vec![self.answer.clone()])
+        dsa_host_core::geocode::Geocoder::geocode(&mut self.inner, query)
     }
 }
 
-fn city_hall() -> dsa_host_core::geocode::Address {
-    dsa_host_core::geocode::Address {
-        address_lines: vec!["110 Sejong-daero, Jung-gu, Seoul, South Korea".into()],
-        feature_name: "Seoul City Hall".into(),
-        sub_thoroughfare: "110".into(),
-        thoroughfare: "Sejong-daero".into(),
-        sub_locality: "Jung-gu".into(),
-        locality: "Seoul".into(),
-        postal_code: "04524".into(),
-        country_code: "KR".into(),
-        country_name: "South Korea".into(),
-        position: Some((37.5663, 126.9779)),
-        ..Default::default()
-    }
+fn boundary_fixture() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("address-boundaries-fixture.bin")
 }
 
 /// Sends `request` until a watcher has it (one that comes before the watcher has connected is
@@ -5785,7 +5777,8 @@ fn fr36_network_location_and_geocoder_come_from_the_host() {
         Body::LocationFix(seoul().to_control())
     );
 
-    // The geocoder answers through a watcher in the user's session.
+    // Without Google Play the host's geocoder answers, through a watcher in the user's
+    // session, from the boundary data the host keeps.
     let (_service, connector) = service_over(&session);
     let seen = Arc::new(Mutex::new(Vec::new()));
     let stop = Arc::new(AtomicBool::new(false));
@@ -5793,9 +5786,9 @@ fn fr36_network_location_and_geocoder_come_from_the_host() {
         let (seen, stop) = (Arc::clone(&seen), Arc::clone(&stop));
         thread::spawn(move || {
             let mut connector = connector;
-            let mut geocoder = FakeGeocoder {
+            let mut geocoder = RecordingGeocoder {
                 seen,
-                answer: city_hall(),
+                inner: geocode::BoundaryGeocoder::new(boundary_fixture()),
             };
             geocode::serve(
                 &mut connector,
@@ -5823,7 +5816,8 @@ fn fr36_network_location_and_geocoder_come_from_the_host() {
         "{}",
         forward.message
     );
-    assert_eq!(forward.addresses, vec![city_hall().to_control()]);
+    // An address is not turned into positions: the lookup runs and finds nothing.
+    assert!(forward.addresses.is_empty(), "{:?}", forward.addresses);
 
     let reverse = geocode_until_answered(
         &mut agent,
@@ -5833,6 +5827,7 @@ fn fr36_network_location_and_geocoder_come_from_the_host() {
             latitude_degrees: 37.5663,
             longitude_degrees: 126.9779,
             max_results: 1,
+            language: "ko-KR".into(),
             ..Default::default()
         },
     );
@@ -5842,7 +5837,16 @@ fn fr36_network_location_and_geocoder_come_from_the_host() {
         "{}",
         reverse.message
     );
-    assert_eq!(reverse.addresses, vec![city_hall().to_control()]);
+    // A known position comes back as its city, district and dong.
+    assert_eq!(reverse.addresses.len(), 1);
+    let address = &reverse.addresses[0];
+    assert_eq!(address.country_code, "KR");
+    assert_eq!(address.admin_area, "서울특별시");
+    assert_eq!(address.locality, "서울특별시");
+    assert_eq!(address.sub_locality, "중구");
+    assert_eq!(address.thoroughfare, "명동");
+    assert_eq!(address.address_lines, vec!["대한민국 서울특별시 중구 명동"]);
+    assert!(address.has_position);
 
     let seen = seen.lock().unwrap().clone();
     let forward_seen = seen
