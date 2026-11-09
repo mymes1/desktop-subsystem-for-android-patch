@@ -583,4 +583,30 @@ TEST(fr4_a_frame_missing_a_layer_does_not_replace_a_tasks_last_frame) {
     EXPECT_TRUE(!leavesLastFrame(/*layerMissing=*/false, /*hasFrame=*/true));
 }
 
+TEST(fr3_content_stays_attached_until_the_window_is_gone_as_its_task_ends) {
+    const Rect bounds{300, 200, 1000, 700};
+    LayerFill app;
+    app.frame = bounds;
+    app.drawn = true;
+    LayerFill background;
+    background.frame = bounds;
+    background.drawn = false;
+
+    // The app's surface is gone and only the task's background is left: the window keeps the
+    // app's last frame and closes with it.
+    EXPECT_TRUE(leavesLastFrameUndrawn({background}, /*hasFrame=*/true));
+    EXPECT_TRUE(leavesLastFrameUndrawn({}, /*hasFrame=*/true));
+    // A surface faded out entirely shows nothing either.
+    LayerFill faded = app;
+    faded.alpha = 0.0f;
+    EXPECT_TRUE(leavesLastFrameUndrawn({background, faded}, /*hasFrame=*/true));
+
+    // A frame that shows the app goes, and a first frame always goes.
+    EXPECT_TRUE(!leavesLastFrameUndrawn({background, app}, /*hasFrame=*/true));
+    LayerFill dimmed = app;
+    dimmed.alpha = 0.5f;
+    EXPECT_TRUE(!leavesLastFrameUndrawn({dimmed}, /*hasFrame=*/true));
+    EXPECT_TRUE(!leavesLastFrameUndrawn({background}, /*hasFrame=*/false));
+}
+
 int main() { return ::dsa::test::runAll(); }
