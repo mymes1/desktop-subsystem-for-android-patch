@@ -359,7 +359,7 @@
     <value>Update the Android image automatically</value>
   </data>
   <data name="ImageUpdatesCard.Description" xml:space="preserve">
-    <value>Download signed security updates and new versions of Android. They apply at the next start of Android.</value>
+    <value>Download signed security updates and new versions of Android. They apply when Android restarts, as the setting below says.</value>
   </data>
   <data name="UpdatesMachineNote.Text" xml:space="preserve">
     <value>These settings apply to every user of this PC, and only an administrator can change them. A switch that stays off is not offered by this installation.</value>
@@ -1886,10 +1886,28 @@
     <value>Android update</value>
   </data>
   <data name="Android_UpToDate" xml:space="preserve">
-    <value>No Android update is waiting. DSA checks every day, and an update applies at the next start of Android.</value>
+    <value>No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open.</value>
   </data>
   <data name="AndroidCheckButton.Content" xml:space="preserve">
     <value>Check now</value>
+  </data>
+  <data name="Android_RestartPending" xml:space="preserve">
+    <value>Android {0} is downloaded. Restart Android to use it now.</value>
+  </data>
+  <data name="AndroidRestartButton.Content" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
+  <data name="AndroidRestartConfirm.Title" xml:space="preserve">
+    <value>Restart Android now?</value>
+  </data>
+  <data name="AndroidRestartConfirm.Body" xml:space="preserve">
+    <value>Android restarts into Android {0}. Its app windows close; open the apps again once it has started.</value>
+  </data>
+  <data name="ImageAutoRestartCard.Header" xml:space="preserve">
+    <value>Restart Android into updates by itself</value>
+  </data>
+  <data name="ImageAutoRestartCard.Description" xml:space="preserve">
+    <value>On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android.</value>
   </data>
   <data name="IdentitySpecsCard.Header" xml:space="preserve">
     <value>Device specifications</value>

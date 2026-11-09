@@ -175,11 +175,16 @@ struct StoreLauncher {
     other_keys: bool,
     /// The running boot's secret, which the agent answers the host's challenge with.
     secret: Arc<Mutex<Option<BootSecret>>>,
+    /// The images it started, in order.
+    boots: Arc<Mutex<Vec<String>>>,
 }
 
 impl GuestLauncher for StoreLauncher {
     fn start(&mut self, secret: &BootSecret) -> Result<(), String> {
         *self.secret.lock().unwrap() = Some(secret.clone());
+        if let Ok(state) = self.store.state() {
+            self.boots.lock().unwrap().push(state.current.version);
+        }
         let current = self.store.state().map_err(|e| e.to_string())?.current;
         if !self.store.image_dir(&current.version).is_dir() {
             return Err(format!(
@@ -213,6 +218,7 @@ fn updating_android(
             broken: broken.iter().map(|b| b.to_string()).collect(),
             other_keys: false,
             secret: Arc::clone(&secret),
+            boots: Default::default(),
         },
         Box::new(listener),
         ControlHandshake::new("test host", WAIT),
@@ -267,6 +273,7 @@ fn updating_android(
             boot_timeout: Duration::from_secs(5),
             trial_running: Arc::new(AtomicBool::new(false)),
             rollback: Default::default(),
+            image_restart: Default::default(),
         },
         done,
     )
@@ -397,6 +404,7 @@ fn fr14_a_new_image_whose_agent_never_connects_is_given_up_within_bounded_time()
             broken: Vec::new(),
             other_keys: false,
             secret: Arc::clone(&secret),
+            boots: Default::default(),
         },
         Box::new(listener),
         ControlHandshake::new("test host", WAIT),
@@ -415,6 +423,7 @@ fn fr14_a_new_image_whose_agent_never_connects_is_given_up_within_bounded_time()
         boot_timeout: Duration::from_secs(600),
         trial_running: Arc::new(AtomicBool::new(false)),
         rollback: Default::default(),
+        image_restart: Default::default(),
     };
     let began = Instant::now();
     android.start();
@@ -493,6 +502,7 @@ fn fr14_a_new_image_on_a_disk_from_other_keys_is_neither_blamed_nor_kept() {
             broken: Vec::new(),
             other_keys: true,
             secret: Arc::clone(&secret),
+            boots: Default::default(),
         },
         Box::new(listener),
         ControlHandshake::new("test host", WAIT),
@@ -510,6 +520,7 @@ fn fr14_a_new_image_on_a_disk_from_other_keys_is_neither_blamed_nor_kept() {
         boot_timeout: WAIT,
         trial_running: Arc::new(AtomicBool::new(false)),
         rollback: Default::default(),
+        image_restart: Default::default(),
     };
     android.start();
 
@@ -889,4 +900,266 @@ fn fr14_a_desktop_that_was_away_is_told_only_how_the_update_ended() {
         "the previous image runs again"
     );
     done.store(true, Ordering::Relaxed);
+}
+
+/// A user's Android over the store whose guest dozes as a real one does: the session turns the
+/// screen off once no window has been shown for a moment, and the agent then says the device
+/// is idle. Its follower restarts it into each image downloaded while it runs, as the service's
+/// does. Also returns the images its guest booted, in order.
+fn dozing_android(
+    store: &Arc<ImageStore>,
+) -> (
+    Arc<UpdatingAndroid>,
+    Arc<Mutex<Vec<String>>>,
+    Arc<AtomicBool>,
+) {
+    use dsa_protocol::control::{envelope::Body, DeviceIdle, Envelope, GuestBoot};
+    let (listener, connector) = memory::pair();
+    let secret = Arc::new(Mutex::new(None));
+    let boots = Arc::new(Mutex::new(Vec::new()));
+    let session = Arc::new(Session::new(
+        StoreLauncher {
+            store: Arc::clone(store),
+            broken: Vec::new(),
+            other_keys: false,
+            secret: Arc::clone(&secret),
+            boots: Arc::clone(&boots),
+        },
+        Box::new(listener),
+        ControlHandshake::new("test host", WAIT),
+        SessionConfig {
+            connect_timeout: WAIT,
+            stop_timeout: WAIT,
+            doze_delay: Duration::from_millis(200),
+            ..SessionConfig::default()
+        },
+    ));
+    let done = Arc::new(AtomicBool::new(false));
+    let finished = Arc::clone(&done);
+    let watched = Arc::clone(&session);
+    thread::spawn(move || {
+        let mut connector = connector;
+        let up = |state| {
+            matches!(
+                state,
+                SessionState::Active | SessionState::Dozing | SessionState::Frozen
+            )
+        };
+        while !finished.load(Ordering::Relaxed) {
+            let boot_secret = secret.lock().unwrap().clone();
+            if let (SessionState::Starting, Some(boot_secret)) = (watched.state(), boot_secret) {
+                thread::sleep(Duration::from_millis(100));
+                if let Ok(mut agent) = connector.connect(WAIT) {
+                    let _ = guest_connect(
+                        &mut *agent,
+                        &local_hello(Role::Guest, "agent"),
+                        &boot_secret,
+                        WAIT,
+                    );
+                    let _ = agent.send(&dsa_protocol::encode(&Envelope {
+                        body: Some(Body::GuestBoot(GuestBoot {
+                            boot_completed: true,
+                            agent_connected: true,
+                        })),
+                    }));
+                    watched.wait_for(SessionState::Active, Duration::from_secs(1));
+                    // Idle whenever its screen is off, until this boot ends.
+                    while up(watched.state()) && !finished.load(Ordering::Relaxed) {
+                        let idle = Envelope {
+                            body: Some(Body::DeviceIdle(DeviceIdle { idle: true })),
+                        };
+                        if agent.send(&dsa_protocol::encode(&idle)).is_err() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    });
+    let android = Arc::new(UpdatingAndroid {
+        session,
+        store: Arc::clone(store),
+        notices: Arc::new(UpdateNotices::default()),
+        boot_timeout: Duration::from_secs(5),
+        trial_running: Arc::new(AtomicBool::new(false)),
+        rollback: Default::default(),
+        image_restart: Default::default(),
+    });
+    dsa_host_core::update::service::follow_waiting_image(&android, Duration::from_millis(50));
+    (android, boots, done)
+}
+
+fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !done() {
+        assert!(Instant::now() < deadline, "{what}");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// The service's check finds 16.0.2 and downloads it.
+fn download_new_image(store: &ImageStore, android: &UpdatingAndroid) {
+    dsa_host_core::update::service::check_alerting(
+        store,
+        &server(&[16], &[("16.0.2", 16, 2)], &key()),
+        "mem://list.json",
+        &trusted(),
+        &android.notices,
+        &mut |_: &Download| {},
+    )
+    .unwrap();
+}
+
+/// The new image passed its trial, and the guest booted the old image and then the new one.
+fn wait_applied(store: &ImageStore, boots: &Mutex<Vec<String>>) {
+    wait_until("the new image is applied", || {
+        let state = store.state().unwrap();
+        state.current.version == "16.0.2" && !state.on_trial && boots.lock().unwrap().len() == 2
+    });
+    assert_eq!(*boots.lock().unwrap(), ["16.0.1", "16.0.2"]);
+}
+
+/// Shows a task window and waits until Android is awake for it.
+fn open_a_window(android: &UpdatingAndroid) {
+    android.session.windows_shown(true).unwrap();
+    wait_until("Android is awake for the window", || {
+        android.session.state() == SessionState::Active
+    });
+}
+
+#[test]
+fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
+    use dsa_host_core::native_abi::in_user_language;
+    use dsa_host_core::update::alerts::{buttons_of, LATER, RESTART_NOW};
+
+    // No app window is open, so Android dozes: it restarts into the new image at once, and
+    // the desktop is told once that is over, not asked.
+    {
+        let store = fresh_store();
+        let (android, boots, done) = dozing_android(&store);
+        let (_service, desktop) = desktops(&android);
+        android.start();
+        assert!(android.session.wait_for(SessionState::Dozing, WAIT));
+        download_new_image(&store, &android);
+        wait_applied(&store, &boots);
+        let shown = shown_on_desktop(&desktop, "alice");
+        assert_eq!(keys(&shown), ["dsa:update:android:applied:16.0.2"]);
+        assert_eq!(android.restart_pending(), None);
+        done.store(true, Ordering::Relaxed);
+    }
+
+    // App windows are open: the desktop asks, with [Restart now] and [Later], and nothing
+    // restarts. [Restart now] restarts it into the new image.
+    {
+        let store = fresh_store();
+        let (android, boots, done) = dozing_android(&store);
+        let (_service, desktop) = desktops(&android);
+        android.start();
+        assert!(android.session.wait_for(SessionState::Active, WAIT));
+        open_a_window(&android);
+        download_new_image(&store, &android);
+        wait_until("the user is asked", || {
+            android.image_restart.asked().is_some()
+        });
+        let shown = shown_on_desktop(&desktop, "alice");
+        assert_eq!(
+            keys(&shown),
+            ["dsa:update:android:restart:16.0.2"],
+            "asked, without the news that it waits for the next start"
+        );
+        let asked = in_user_language(shown[0].clone(), false);
+        assert_eq!(asked.title, "Restart Android to update");
+        let actions: Vec<&str> = buttons_of(&asked.key, false)
+            .iter()
+            .map(|button| button.action)
+            .collect();
+        assert_eq!(actions, [RESTART_NOW, LATER]);
+        thread::sleep(Duration::from_secs(1));
+        assert_eq!(boots.lock().unwrap().len(), 1, "nothing restarts meanwhile");
+        assert!(store.state().unwrap().on_trial, "not applied yet");
+        assert_eq!(android.session.state(), SessionState::Active);
+        assert_eq!(android.restart_pending().as_deref(), Some("16.0.2"));
+        assert!(
+            android
+                .update_notice()
+                .is_some_and(|notice| notice.contains("restart Android")),
+            "dsa status says how to apply it"
+        );
+
+        let mut client = dsa_host_core::host_api::HostApiClient::connect(
+            &mut DesktopOf(desktop.clone(), "alice"),
+            "desktop",
+            WAIT,
+        )
+        .unwrap();
+        let (version, detail) = client.restart_for_update().unwrap();
+        assert_eq!(version.as_deref(), Some("16.0.2"), "{detail}");
+        wait_applied(&store, &boots);
+        let shown = shown_on_desktop(&desktop, "alice");
+        assert_eq!(keys(&shown), ["dsa:update:android:applied:16.0.2"]);
+        let (version, _) = client.restart_for_update().unwrap();
+        assert_eq!(version, None, "nothing waits any more");
+        done.store(true, Ordering::Relaxed);
+    }
+
+    // [Later], or no answer: the image is applied once every window is closed and Android
+    // dozes.
+    {
+        let store = fresh_store();
+        let (android, boots, done) = dozing_android(&store);
+        let (_service, desktop) = desktops(&android);
+        android.start();
+        assert!(android.session.wait_for(SessionState::Active, WAIT));
+        open_a_window(&android);
+        download_new_image(&store, &android);
+        wait_until("the user is asked", || {
+            android.image_restart.asked().is_some()
+        });
+        assert_eq!(
+            keys(&shown_on_desktop(&desktop, "alice")),
+            ["dsa:update:android:restart:16.0.2"]
+        );
+        thread::sleep(Duration::from_millis(500));
+        assert_eq!(boots.lock().unwrap().len(), 1);
+        android.session.windows_shown(false).unwrap();
+        wait_applied(&store, &boots);
+        assert_eq!(
+            keys(&shown_on_desktop(&desktop, "alice")),
+            ["dsa:update:android:applied:16.0.2"]
+        );
+        done.store(true, Ordering::Relaxed);
+    }
+
+    // The setting off: the image waits for the next start, even while Android dozes, and the
+    // desktop says so.
+    {
+        let store = fresh_store();
+        let (android, boots, done) = dozing_android(&store);
+        let (_service, desktop) = desktops(&android);
+        android.image_auto_restart(false);
+        android.start();
+        assert!(android.session.wait_for(SessionState::Dozing, WAIT));
+        download_new_image(&store, &android);
+        thread::sleep(Duration::from_millis(1500));
+        assert_eq!(boots.lock().unwrap().len(), 1, "not restarted");
+        assert!(store.state().unwrap().on_trial, "not applied yet");
+        let shown = shown_on_desktop(&desktop, "alice");
+        assert_eq!(keys(&shown), ["dsa:update:android:ready:16.0.2"]);
+        assert!(
+            in_user_language(shown[0].clone(), false)
+                .text
+                .contains("used the next time Android starts"),
+            "{:?}",
+            shown[0]
+        );
+        // The settings app still offers [Restart now].
+        assert_eq!(android.restart_pending().as_deref(), Some("16.0.2"));
+        android.stop();
+        assert!(android.session.wait_for(SessionState::Stopped, WAIT));
+        android.start();
+        wait_applied(&store, &boots);
+        done.store(true, Ordering::Relaxed);
+    }
 }

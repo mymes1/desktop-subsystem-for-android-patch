@@ -279,6 +279,26 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertFalse(android.isSwitching)
     }
 
+    func test_fr14_a_downloaded_image_is_applied_without_the_user_restarting() async {
+        let cli = FakeCli()
+        let idle = #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#
+        cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16,"restart_pending":"16.0.2"}"#)
+        cli.answer("android restart --json", #"{"restarting":"16.0.2","detail":"restarting"}"#)
+        let android = AndroidVersionViewModel(cli: cli, text: KeyText())
+        await android.load()
+        XCTAssertTrue(android.isRestartPending)
+        XCTAssertTrue(android.canRestartNow)
+        XCTAssertEqual(android.restartPending, "16.0.2")
+        XCTAssertTrue(android.updateStatusText.hasPrefix("Android_RestartPending"), android.updateStatusText)
+        // [Restart now] asks the service, then reads the version again.
+        cli.answer("android version --json", idle)
+        await android.restartNow()
+        XCTAssertNil(android.error)
+        XCTAssertTrue(cli.calls.contains(["android", "restart", "--json"]))
+        XCTAssertFalse(android.isRestartPending)
+        XCTAssertEqual(android.updateStatusText, "Android_UpToDate")
+    }
+
     func test_fr14_the_updates_page_shows_the_version_followed_the_download_and_checks_now() async {
         let cli = FakeCli()
         cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16,"notice":"downloading Android 16.0.2: 45% (0.81 of 1.8 GB)"}"#)

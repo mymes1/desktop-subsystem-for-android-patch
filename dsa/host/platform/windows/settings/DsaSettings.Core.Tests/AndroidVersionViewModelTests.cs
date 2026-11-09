@@ -82,6 +82,53 @@ public class AndroidVersionViewModelTests
     }
 
     [Fact]
+    public async Task Fr14_a_downloaded_image_is_applied_without_the_user_restarting()
+    {
+        var waiting = Running17.Replace("\"notice\":null",
+            "\"notice\":null,\"restart_pending\":\"17.0.0-16373615-9\"");
+        var cli = new FakeCli()
+            .Answer("android version --json", waiting)
+            .Answer("android restart --json", "{\"restarting\":\"17.0.0-16373615-9\",\"detail\":\"restarting\"}");
+        var vm = new AndroidVersionViewModel(cli, new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.IsRestartPending);
+        Assert.True(vm.CanRestartNow);
+        Assert.Equal("17.0.0-16373615-9", vm.RestartPending);
+        Assert.Equal("Android_RestartPending", vm.UpdateStatusText);
+
+        // [Restart now] asks the service, then reads the version again.
+        cli.Answer("android version --json", Running17);
+        await vm.RestartNowAsync();
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Contains("android restart --json", cli.Calls);
+        Assert.False(vm.IsRestartPending);
+        Assert.Equal("Android_UpToDate", vm.UpdateStatusText);
+
+        // Nothing waits: no button.
+        var idle = new AndroidVersionViewModel(Cli(), new KeyText());
+        await idle.LoadAsync();
+        Assert.False(idle.IsRestartPending);
+        Assert.False(idle.CanRestartNow);
+    }
+
+    [Fact]
+    public async Task Fr14_image_auto_restart_is_on_by_default_and_turned_off_through_the_service()
+    {
+        const string Settings = "{\"render_gpu\":\"display\",\"version\":\"0.0.9\"}";
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("settings set image-auto-restart off --json",
+                "{\"render_gpu\":\"display\",\"version\":\"0.0.9\",\"image_auto_restart\":false}");
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.ImageAutoRestart, "on when the service does not say");
+        await vm.SetImageAutoRestartAsync(false);
+        Assert.Contains("settings set image-auto-restart off --json", cli.Calls);
+        Assert.False(vm.ImageAutoRestart);
+    }
+
+    [Fact]
     public async Task Fr14_check_now_asks_for_the_version_already_followed()
     {
         var pinned = Running17.Replace("\"channel\":\"latest\"", "\"channel\":\"17\"");

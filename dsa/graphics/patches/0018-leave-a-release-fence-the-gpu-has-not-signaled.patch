@@ -1,0 +1,60 @@
+diff --git a/host/vulkan/VkAndroidNativeBuffer.cpp b/host/vulkan/VkAndroidNativeBuffer.cpp
+--- a/host/vulkan/VkAndroidNativeBuffer.cpp
++++ b/host/vulkan/VkAndroidNativeBuffer.cpp
+@@ -102,6 +102,13 @@ AndroidNativeBufferInfo::QsriWaitFencePool::~QsriWaitFencePool() {
+     VK_ANB_DEBUG("exit");
+ }
+
++void AndroidNativeBufferInfo::QsriWaitFencePool::abandonFence(VkFence fence) {
++    std::lock_guard<std::mutex> lock(mMutex);
++    // Left pending, neither reset nor destroyed: the GPU may still signal it. One fence is
++    // what a hung release costs.
++    mUsedFences.erase(fence);
++}
++
+ void AndroidNativeBufferInfo::QsriWaitFencePool::returnFence(VkFence fence) {
+     std::lock_guard<std::mutex> lock(mMutex);
+     if (!mUsedFences.erase(fence)) {
+@@ -878,7 +885,7 @@ VkResult AndroidNativeBufferInfo::on_vkQueueSignalReleaseImageANDROID(
+             return submitResult;
+         }
+     }
+-    auto waitForQsriFenceTask = [this, vk, device = mDevice, qsriFence, traceId] {
++    auto waitForQsriFenceTask = [this, emu, vk, device = mDevice, qsriFence, traceId] {
+         (void)traceId;
+         GFXSTREAM_TRACE_EVENT(GFXSTREAM_TRACE_DEFAULT_CATEGORY, "Wait for QSRI fence",
+                               GFXSTREAM_TRACE_FLOW(traceId));
+@@ -890,8 +897,19 @@ VkResult AndroidNativeBufferInfo::on_vkQueueSignalReleaseImageANDROID(
+             case VK_SUCCESS:
+                 break;
+             case VK_TIMEOUT:
+-                VK_ANB_ERR("Timeout when waiting for the Qsri fence.");
+-                break;
++                // The GPU has not finished the release (the app's drawing it waits on, or
++                // the GPU itself hung). The fence is still pending, so it never goes back to
++                // the pool: resetting it and submitting with it again while the GPU may still
++                // signal it is not allowed, and can confuse the driver further. The release
++                // timeline still moves on, so the guest is not left waiting, and the
++                // renderer checks its own device before its next operation.
++                ERR("The GPU has not released ColorBuffer %u (%ux%u, queue family %u) in %llu "
++                    "ms; its fence is left, and the device is checked.",
++                    mColorBufferHandle, mExtent.width, mExtent.height, mLastUsedQueueFamilyIndex,
++                    static_cast<unsigned long long>(kTimeoutNs / 1000000ULL));
++                mQsriWaitFencePool->abandonFence(qsriFence);
++                emu->suspectDeviceLost();
++                return;
+             default:
+                 ERR("Failed to wait for QSRI fence: %s\n", string_VkResult(res));
+                 // The loss reaches the guest through its next call on the device; the
+diff --git a/host/vulkan/VkAndroidNativeBuffer.h b/host/vulkan/VkAndroidNativeBuffer.h
+--- a/host/vulkan/VkAndroidNativeBuffer.h
++++ b/host/vulkan/VkAndroidNativeBuffer.h
+@@ -161,6 +161,8 @@ class AndroidNativeBufferInfo {
+         ~QsriWaitFencePool();
+         VkFence getFenceFromPool();
+         void returnFence(VkFence fence);
++        // A fence whose wait timed out, still pending: it is never used again.
++        void abandonFence(VkFence fence);
+
+        private:
+         std::mutex mMutex;

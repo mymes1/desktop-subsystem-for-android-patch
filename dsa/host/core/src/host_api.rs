@@ -161,6 +161,22 @@ pub trait UserAndroid: Send + Sync {
     fn update_alert_told(&self, user: &str, alert: &UpdateAlert) {
         let _ = (user, alert);
     }
+    /// Lets this Android restart by itself into an Android image downloaded while it runs
+    /// (`on`), or leaves the image for its next start, as the user's image auto-restart
+    /// setting says.
+    fn image_auto_restart(&self, on: bool) {
+        let _ = on;
+    }
+    /// The Android image this running Android waits to restart into, if one does.
+    fn restart_pending(&self) -> Option<String> {
+        None
+    }
+    /// Restarts this Android now into the image that waits for it, and returns that image;
+    /// `None` when none waits, and nothing restarts. The restart happens on its own after the
+    /// answer. An error says why it cannot.
+    fn restart_for_update(&self) -> Result<Option<String>, String> {
+        Ok(None)
+    }
     /// The runtime ID of the VM (such as a GUID on Windows), if running.
     fn vm_id(&self) -> Option<String> {
         None
@@ -4137,6 +4153,7 @@ impl HostApiService {
             Some(request::Body::UseAndroidVersion(chosen)) => {
                 self.android_versions(peer, Some(chosen))
             }
+            Some(request::Body::RestartForUpdate(_)) => self.restart_for_update(peer),
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
             Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
             Some(request::Body::SetDeviceIdentity(set)) => {
@@ -4367,6 +4384,7 @@ impl HostApiService {
                         | request::Body::ResetData(_)
                         | request::Body::GetAndroidVersions(_)
                         | request::Body::UseAndroidVersion(_)
+                        | request::Body::RestartForUpdate(_)
                         | request::Body::SetRunAsArm(_)
                         | request::Body::SetAppRoot(_)
                         | request::Body::ReportTouchGestures(_) => unreachable!("answered above"),
@@ -5078,8 +5096,45 @@ impl HostApiService {
                 }),
         };
         match report {
-            Ok(report) => response::Body::AndroidVersions(versions_to_wire(&report)),
+            Ok(mut report) => {
+                report.restart_pending = self
+                    .androids
+                    .android(&peer.user)
+                    .ok()
+                    .and_then(|android| android.restart_pending());
+                response::Body::AndroidVersions(versions_to_wire(&report))
+            }
             Err(body) => body,
+        }
+    }
+
+    /// Restarts the caller's Android into the Android image that waits for it.
+    fn restart_for_update(&self, peer: &Peer) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.restart_for_update() {
+            Ok(Some(version)) => {
+                eprintln!(
+                    "local API: {} asked to restart Android into {version} now",
+                    peer.user
+                );
+                response::Body::UpdateRestart(types::UpdateRestart {
+                    detail: format!(
+                        "Android restarts now into Android {version}. Its app windows close; \
+                         open the apps again once it has started"
+                    ),
+                    version,
+                })
+            }
+            Ok(None) => response::Body::UpdateRestart(types::UpdateRestart {
+                version: String::new(),
+                detail: "no downloaded Android image waits: Android is not running, or it \
+                         already runs the newest image"
+                    .into(),
+            }),
+            Err(why) => error(ErrorCode::Unavailable, why),
         }
     }
 
@@ -5238,6 +5293,7 @@ impl HostApiService {
             shared_folders: wanted.shared_folders,
             advanced_networking: wanted.advanced_networking,
             touch_gestures_off: wanted.touch_gestures_off,
+            image_auto_restart: wanted.image_auto_restart,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -5297,6 +5353,7 @@ impl HostApiService {
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
                     android.adb_auto_connect(settings.adb_auto_connect);
+                    android.image_auto_restart(settings.image_auto_restart);
                     crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
@@ -5317,7 +5374,7 @@ impl HostApiService {
                      {}, links in Android {}, program updates {} ({} channel), image updates \
                      {}, input trace {}, resize trace {}, developer mode {} (adb port {}, \
                      auto-connect {}), file sharing {} ({}), advanced networking {}, touch \
-                     gestures off in task windows {}",
+                     gestures off in task windows {}, image auto-restart {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -5336,7 +5393,8 @@ impl HostApiService {
                     on_off(settings.file_sharing),
                     settings.shared_folders.join(", "),
                     on_off(settings.advanced_networking),
-                    on_off(settings.touch_gestures_off)
+                    on_off(settings.touch_gestures_off),
+                    on_off(settings.image_auto_restart)
                 );
                 if settings.root_elevation != machine.root_elevation {
                     // The switch is the computer's, so every user's Android follows it. The
@@ -5417,6 +5475,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         shared_folders: settings.shared_folders.clone(),
         advanced_networking: settings.advanced_networking,
         touch_gestures_off: settings.touch_gestures_off,
+        image_auto_restart: settings.image_auto_restart,
         touch_gestures_state: String::new(),
         touch_gestures_problem: String::new(),
         adb_shell_root: String::new(),
@@ -5455,6 +5514,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             shared_folders: settings.shared_folders,
             advanced_networking: settings.advanced_networking,
             touch_gestures_off: settings.touch_gestures_off,
+            image_auto_restart: settings.image_auto_restart,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -5486,6 +5546,7 @@ fn versions_to_wire(report: &crate::update::versions::VersionReport) -> types::A
         target_major: report.target_major,
         on_trial: report.on_trial,
         notice: report.notice.clone().unwrap_or_default(),
+        restart_pending: report.restart_pending.clone().unwrap_or_default(),
     }
 }
 
@@ -5502,6 +5563,7 @@ fn versions_from_wire(wire: types::AndroidVersions) -> crate::update::versions::
         target_major: wire.target_major,
         on_trial: wire.on_trial,
         notice: text(wire.notice),
+        restart_pending: text(wire.restart_pending),
     }
 }
 
@@ -5774,6 +5836,21 @@ impl HostApiClient {
             response::Body::AndroidVersions(report) => Ok(versions_from_wire(report)),
             _ => Err(ClientError::Malformed(
                 "expected the Android versions".into(),
+            )),
+        }
+    }
+
+    /// Restarts the caller's Android now into the Android image that waits for it. Returns the
+    /// image it restarts into (`None` when none waits) and what happens next, in words.
+    pub fn restart_for_update(&mut self) -> Result<(Option<String>, String), ClientError> {
+        let body = request::Body::RestartForUpdate(types::RestartForUpdate {});
+        match self.exchange(body, self.timeout)? {
+            response::Body::UpdateRestart(restart) => Ok((
+                Some(restart.version).filter(|version| !version.is_empty()),
+                restart.detail,
+            )),
+            _ => Err(ClientError::Malformed(
+                "expected the answer to a restart into the new Android image".into(),
             )),
         }
     }

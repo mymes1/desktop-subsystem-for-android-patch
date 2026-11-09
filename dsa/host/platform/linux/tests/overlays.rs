@@ -32,7 +32,8 @@
 //! package's two rules take (a fixed-address executable and a position-independent one)
 //! running through the translator and writing what it was made to write, the bridge library
 //! where the zygote looks, and the ARM64 ABI offered, with no native bridge failure in the log.
-//! The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
+//! `pm list features` must report OpenGL ES 3.2 (`reqGlEsVersion=0x30002`) and the features
+//! Google Play takes for granted, or Play hides the apps that need them. The platform lets no domain but init read binfmt_misc, so the shell cannot look at the
 //! registered rules; a program that runs proves its rule is registered, enabled, and starts a
 //! runner that is there and works, which reading the rule never did. An ARM app is then
 //! installed and started: the ARM probe, whose only code is an ARM64 library that the framework's
@@ -204,6 +205,23 @@ const CRASH_SIGNS: &[&str] = &[
     "CHECK failed",
     "Fatal signal",
     "FATAL EXCEPTION",
+];
+/// The OpenGL ES version `pm list features` must report, 3.2: ANGLE gives every app 3.2 on the
+/// host GPU's Vulkan. Google Play hides every app whose manifest asks for a version above the
+/// reported one, and v0.2.1 reported 0x0, which hid YouTube, Chrome and most games.
+const GLES_FEATURE: &str = "feature:reqGlEsVersion=0x30002";
+/// Features Google Play takes for granted in the apps it lists, by name. Each one missing hides
+/// every app that does not mark it optional.
+const PLAY_FEATURES: &[&str] = &[
+    "android.hardware.ram.normal",
+    "android.hardware.screen.landscape",
+    "android.hardware.screen.portrait",
+    "android.hardware.touchscreen",
+    "android.hardware.vulkan.level",
+    "android.hardware.vulkan.version",
+    "android.software.app_widgets",
+    "android.software.home_screen",
+    "android.software.input_methods",
 ];
 /// The API levels the mirror carries a build for, with the Android version LiteGapps names.
 const MIRROR_SDKS: &[(u32, &str)] = &[(36, "16.0"), (37, "17.0")];
@@ -1313,6 +1331,77 @@ fn arm_app_run_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<St
     let _ = adb.shell(&format!("am force-stop {PROBE_PACKAGE}"));
 }
 
+/// What in `pm list features` (`features`) and `ro.opengles.version` (`gles`) makes Google Play
+/// call apps incompatible with the device.
+fn play_feature_problems(features: &str, gles: &str) -> Vec<String> {
+    let lines: Vec<&str> = features.lines().map(str::trim).collect();
+    let mut problems = Vec::new();
+    if !lines.contains(&GLES_FEATURE) {
+        let reported = lines
+            .iter()
+            .find(|line| line.starts_with("feature:reqGlEsVersion="))
+            .copied()
+            .unwrap_or("no reqGlEsVersion");
+        problems.push(format!(
+            "Android reports {reported} (ro.opengles.version {:?}), not OpenGL ES 3.2 \
+             ({GLES_FEATURE}), so Google Play hides every app that needs OpenGL ES",
+            gles.trim()
+        ));
+    }
+    for feature in PLAY_FEATURES {
+        let declared = lines.iter().any(|line| {
+            line.strip_prefix("feature:")
+                .is_some_and(|rest| rest.split('=').next() == Some(*feature))
+        });
+        if !declared {
+            problems.push(format!(
+                "Android does not declare {feature}, so Google Play hides every app that needs it"
+            ));
+        }
+    }
+    problems
+}
+
+#[test]
+fn fr32_pr3_a_device_without_opengles_or_a_feature_play_needs_is_found() {
+    let complete = format!(
+        "{GLES_FEATURE}\n{}\nfeature:android.software.webview\n",
+        PLAY_FEATURES
+            .iter()
+            .map(|feature| match *feature {
+                "android.hardware.vulkan.level" => format!("feature:{feature}=1"),
+                "android.hardware.vulkan.version" => format!("feature:{feature}=4206592"),
+                _ => format!("feature:{feature}"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(play_feature_problems(&complete, "196610").is_empty());
+
+    // v0.2.1 on a real PC: no ro.opengles.version, and so reqGlEsVersion=0x0.
+    let without_gles = complete.replace(GLES_FEATURE, "feature:reqGlEsVersion=0x0");
+    let problems = play_feature_problems(&without_gles, "");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("reqGlEsVersion=0x0"), "{problems:?}");
+    let gles_3_1 = complete.replace(GLES_FEATURE, "feature:reqGlEsVersion=0x30001");
+    assert_eq!(play_feature_problems(&gles_3_1, "196609").len(), 1);
+
+    let without_vulkan = complete.replace("feature:android.hardware.vulkan.level=1\n", "");
+    let problems = play_feature_problems(&without_vulkan, "196610");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(
+        problems[0].contains("android.hardware.vulkan.level"),
+        "{problems:?}"
+    );
+    // A feature whose name only starts with a wanted one does not stand in for it.
+    let lookalike = complete.replace(
+        "feature:android.software.home_screen\n",
+        "feature:android.software.home_screen_extra\n",
+    );
+    assert_eq!(play_feature_problems(&lookalike, "196610").len(), 1);
+    assert_eq!(play_feature_problems("", "").len(), 1 + PLAY_FEATURES.len());
+}
+
 /// What the guest's own log of the running boot says went wrong with the overlay scripts.
 fn log_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
     // Init's messages are in the kernel's buffer, which logd reads, with the audit messages.
@@ -1468,6 +1557,21 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     log_problems(&adb, &dir, "first boot", &mut problems);
     // An ARM app, after the boot's log is read: the probe clears the log to read its own start.
     arm_app_run_problems(&adb, &probe, &dir, &mut problems);
+    // What Google Play compares each app's manifest with, which the Google apps do not change.
+    match (
+        adb.shell("pm list features"),
+        adb.shell("getprop ro.opengles.version"),
+    ) {
+        (Ok(features), Ok(gles)) => {
+            let _ = std::fs::write(dir.join("features.txt"), &features);
+            for problem in play_feature_problems(&features, &gles) {
+                problems.push(format!("Google Play: {problem}"));
+            }
+        }
+        (Err(why), _) | (_, Err(why)) => {
+            problems.push(format!("reading the device's features: {why}"))
+        }
+    }
 
     // Google apps from the mirror, through the local API as `dsa gapps install` does. The
     // guest reports its API level a moment after it is ready, so the install is tried again

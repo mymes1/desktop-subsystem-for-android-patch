@@ -10,14 +10,28 @@
 //! update was applied replaces the news that it was ready, and a click on it opens the
 //! settings app's Updates page ([`UPDATES_URL`]); nothing about it goes to the guest.
 
-use dsa_host_core::notifications::Notification;
-use dsa_host_core::update::alerts::thread_of;
+use dsa_host_core::notifications::{Notification, NotificationAction};
+use dsa_host_core::update::alerts::{buttons_of, thread_of};
 
 /// The link that opens the settings app on its Updates page.
 pub const UPDATES_URL: &str = "dsa-settings://updates";
 
 /// The category every DSA notification has, which asks macOS to report dismissals.
 pub const CATEGORY: &str = "org.thisisthepy.dsa.notification";
+
+/// The category of DSA's question whether Android restarts into a downloaded image, whose
+/// actions are [Restart now] ([`RESTART_NOW`](dsa_host_core::update::alerts::RESTART_NOW)) and
+/// [Later].
+pub const RESTART_CATEGORY: &str = "org.thisisthepy.dsa.update-restart";
+
+/// What the user did with a banner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Response {
+    /// Clicked or cleared it.
+    Notification(NotificationAction),
+    /// Chose [Restart now] on DSA's question: the service restarts Android into the new image.
+    RestartForUpdate,
+}
 
 /// How loudly a notification arrives (`UNNotificationInterruptionLevel`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +62,8 @@ pub struct Content {
     /// Groups an app's notifications together.
     pub thread: String,
     pub interruption: Interruption,
+    /// [`CATEGORY`], or [`RESTART_CATEGORY`] for the question with its buttons.
+    pub category: &'static str,
 }
 
 /// The content of `notification`'s banner. The app's name heads it when the notification has
@@ -64,6 +80,11 @@ pub fn content(notification: &Notification) -> Content {
     } else {
         Interruption::Passive
     };
+    let category = if buttons_of(&notification.key, false).is_empty() {
+        CATEGORY
+    } else {
+        RESTART_CATEGORY
+    };
     match thread_of(&notification.key) {
         Some(thread) => Content {
             identifier: thread.clone(),
@@ -72,6 +93,7 @@ pub fn content(notification: &Notification) -> Content {
             body: notification.text.clone(),
             thread,
             interruption,
+            category,
         },
         None => Content {
             identifier: notification.key.clone(),
@@ -80,6 +102,7 @@ pub fn content(notification: &Notification) -> Content {
             body: notification.text.clone(),
             thread: notification.package_name.clone(),
             interruption,
+            category,
         },
     }
 }
@@ -95,12 +118,16 @@ mod center {
 
     use block2::{Block, RcBlock};
     use dsa_host_core::notifications::{Notification, NotificationAction};
+    use dsa_host_core::update::alerts::RESTART_NOW;
+    use dsa_host_core::update::alerts::{
+        buttons_of, is_update_key, AlertKind, Subject, UpdateAlert,
+    };
     use objc2::msg_send;
     use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
     use objc2::sel;
 
-    use super::{content, CATEGORY};
+    use super::{content, Response, CATEGORY, RESTART_CATEGORY};
     use crate::objc::{class, file_url, ns_string, string_of};
 
     #[link(name = "UserNotifications", kind = "framework")]
@@ -116,7 +143,7 @@ mod center {
     /// is in front, as the guest's own notifications would be.
     const PRESENT: usize = 2 | 8 | 16;
 
-    static ACTIONS: Mutex<Option<Sender<NotificationAction>>> = Mutex::new(None);
+    static ACTIONS: Mutex<Option<Sender<Response>>> = Mutex::new(None);
 
     unsafe extern "C-unwind" fn did_receive(
         _this: &AnyObject,
@@ -131,8 +158,10 @@ mod center {
             let request: *mut AnyObject = msg_send![notification, request];
             let key = string_of(msg_send![request, identifier]);
             let action = match string_of(action).as_str() {
-                DEFAULT_ACTION => Some(NotificationAction::Open { key }),
-                DISMISS_ACTION => Some(NotificationAction::Dismiss { key }),
+                DEFAULT_ACTION => Some(Response::Notification(NotificationAction::Open { key })),
+                DISMISS_ACTION => Some(Response::Notification(NotificationAction::Dismiss { key })),
+                RESTART_NOW if is_update_key(&key) => Some(Response::RestartForUpdate),
+                // [Later] only closes the banner.
                 _ => None,
             };
             if let (Some(action), Ok(actions)) = (action, ACTIONS.lock()) {
@@ -193,11 +222,13 @@ mod center {
     impl NotificationCenter {
         /// Connects to the Notification Center and asks the user, the first time, to allow
         /// DSA's notifications. What the user does with them goes to `actions`. `icons` is a
-        /// folder for the icons attached to notifications. Fails when this process is not an
-        /// application bundle, which the Notification Center serves only.
+        /// folder for the icons attached to notifications. The buttons of DSA's question are
+        /// labelled in Korean when `korean`. Fails when this process is not an application
+        /// bundle, which the Notification Center serves only.
         pub fn new(
-            actions: Sender<NotificationAction>,
+            actions: Sender<Response>,
             icons: PathBuf,
+            korean: bool,
         ) -> Result<NotificationCenter, String> {
             unsafe {
                 let bundle_class = class(c"NSBundle")?;
@@ -228,8 +259,40 @@ mod center {
                     intentIdentifiers: empty,
                     options: CUSTOM_DISMISS
                 ];
+                // DSA's question has [Restart now] and [Later], which run in the background:
+                // neither brings an app to the front.
+                let action_class = class(c"UNNotificationAction")?;
+                let asked = UpdateAlert::new(Subject::Android, AlertKind::Restart, "0").key();
+                let mutable_array_class = class(c"NSMutableArray")?;
+                let buttons: *mut AnyObject = msg_send![mutable_array_class, array];
+                for button in buttons_of(&asked, korean) {
+                    let id = ns_string(button.action);
+                    let title = ns_string(&button.label);
+                    let action: *mut AnyObject = msg_send![
+                        action_class,
+                        actionWithIdentifier: &*id,
+                        title: &*title,
+                        options: 0usize
+                    ];
+                    if !action.is_null() {
+                        let _: () = msg_send![buttons, addObject: action];
+                    }
+                }
+                let restart_id = ns_string(RESTART_CATEGORY);
+                let restart_category: *mut AnyObject = msg_send![
+                    category_class,
+                    categoryWithIdentifier: &*restart_id,
+                    actions: buttons,
+                    intentIdentifiers: empty,
+                    options: CUSTOM_DISMISS
+                ];
                 let set_class = class(c"NSSet")?;
-                let categories: *mut AnyObject = msg_send![set_class, setWithObject: category];
+                let both: *mut AnyObject = msg_send![mutable_array_class, array];
+                let _: () = msg_send![both, addObject: category];
+                if !restart_category.is_null() {
+                    let _: () = msg_send![both, addObject: restart_category];
+                }
+                let categories: *mut AnyObject = msg_send![set_class, setWithArray: both];
                 let _: () = msg_send![&*center, setNotificationCategories: categories];
 
                 let answered = RcBlock::new(|_granted: Bool, _error: *mut AnyObject| {});
@@ -288,7 +351,8 @@ mod center {
                 let _: () = msg_send![&*banner, setSubtitle: &*ns_string(&content.subtitle)];
                 let _: () = msg_send![&*banner, setBody: &*ns_string(&content.body)];
                 let _: () = msg_send![&*banner, setThreadIdentifier: &*ns_string(&content.thread)];
-                let _: () = msg_send![&*banner, setCategoryIdentifier: &*ns_string(CATEGORY)];
+                let _: () =
+                    msg_send![&*banner, setCategoryIdentifier: &*ns_string(content.category)];
                 let level_selector = sel!(setInterruptionLevel:);
                 let can_level: bool = msg_send![&*banner, respondsToSelector: level_selector];
                 if can_level {
@@ -413,6 +477,21 @@ mod tests {
         // A click names the identifier, which is the host's to act on.
         assert!(is_update_key(&applied.identifier));
         assert_eq!(UPDATES_URL, "dsa-settings://updates");
+        assert_eq!(ready.category, CATEGORY);
+    }
+
+    #[test]
+    fn fr14_the_question_to_restart_has_the_category_with_its_buttons() {
+        use dsa_host_core::update::alerts::{AlertKind, Subject, UpdateAlert};
+        let asked = content(
+            &UpdateAlert::new(Subject::Android, AlertKind::Restart, "16.0.3").notification(),
+        );
+        assert_eq!(asked.category, RESTART_CATEGORY);
+        assert_eq!(
+            asked.identifier, "dsa:update:android",
+            "the news that it was applied replaces it"
+        );
+        assert_eq!(content(&note("t", 3)).category, CATEGORY);
     }
 
     #[test]

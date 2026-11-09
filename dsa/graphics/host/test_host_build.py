@@ -223,6 +223,28 @@ class HostGraphicsBuildTests(unittest.TestCase):
         header = (HERE.parent / "include" / "dsa_shared_color_buffer.h").read_text(encoding="utf-8")
         self.assertIn("#define DSA_SHARED_COLOR_BUFFER_BIT 0x80000000u", header)
 
+    def test_nfr5_a_release_fence_the_gpu_has_not_signaled_is_never_used_again(self):
+        # v0.2.1 on an Intel Arc GPU: "VkAndroidNativeBuffer.cpp:893: Timeout when waiting for
+        # the Qsri fence." The timed-out fence went back to the pool still pending, and the
+        # next release reset it and submitted with it again.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0018", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0018-leave-a-release-fence-the-gpu-has-not-signaled.patch").read_text(encoding="utf-8")
+        self.assertIn("+                mQsriWaitFencePool->abandonFence(qsriFence);", patch)
+        self.assertIn("+                emu->suspectDeviceLost();", patch)
+        self.assertIn("-                VK_ANB_ERR(\"Timeout when waiting for the Qsri fence.\");", patch)
+
+    def test_nfr5_a_frame_copy_into_a_task_window_never_waits_without_an_end(self):
+        # A copy the GPU did not finish in a second was waited for with UINT64_MAX, so a hung
+        # GPU held the renderer's device, and every task window's frames, until Windows reset
+        # it.
+        display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        self.assertNotIn("UINT64_MAX", display)
+        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &took_ns)"), 3)
+        tests = (HERE.parent / "tests" / "test.sh").read_text(encoding="utf-8")
+        self.assertIn("copy_wait_test.cpp", tests)
+
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration
         # the loader hides MoltenVK: creating the instance failed with

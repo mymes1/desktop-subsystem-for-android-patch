@@ -476,6 +476,15 @@ public final class SettingsViewModel: ObservableObject {
         await change { try await service.setImageUpdates(on) }
     }
 
+    /// Whether Android restarts by itself into a downloaded image: at once with no app window
+    /// open, otherwise after asking or once every window is closed. On by default.
+    public var imageAutoRestart: Bool { settings?.imageAutoRestart ?? true }
+
+    public func setImageAutoRestart(_ on: Bool) async {
+        if on == imageAutoRestart && loaded { return }
+        await change { try await service.setImageAutoRestart(on) }
+    }
+
     public func setPrereleaseUpdates(_ on: Bool) async {
         if on == prereleaseUpdates && loaded { return }
         await change { try await service.setPrereleaseUpdates(on) }

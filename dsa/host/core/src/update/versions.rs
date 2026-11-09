@@ -124,6 +124,9 @@ pub struct VersionReport {
     pub on_trial: bool,
     /// The latest news about the image, if any.
     pub notice: Option<String>,
+    /// The image the asking user's running Android waits to restart into, if one does: one
+    /// the service downloaded after that Android started.
+    pub restart_pending: Option<String>,
 }
 
 /// Why a version was not chosen.
