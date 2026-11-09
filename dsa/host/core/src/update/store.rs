@@ -417,6 +417,9 @@ impl ImageStore {
             supported_majors: supported,
             on_trial: state.on_trial,
             notice,
+            // The store is every user's; which of them waits to restart is told by each
+            // user's Android.
+            restart_pending: None,
         })
     }
 

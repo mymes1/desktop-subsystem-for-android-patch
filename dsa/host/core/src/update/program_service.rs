@@ -1219,6 +1219,23 @@ impl UserAndroid for WithProgramStatus {
         self.android.update_alert_told(user, alert);
         self.status.notices.alerts().told(user, alert);
     }
+    fn image_auto_restart(&self, on: bool) {
+        self.android.image_auto_restart(on)
+    }
+    fn restart_pending(&self) -> Option<String> {
+        self.android.restart_pending()
+    }
+    fn restart_for_update(&self) -> Result<Option<String>, String> {
+        // Setup stops every Android and starts the service again; Android starts from the
+        // newest image afterwards anyway.
+        if let Some(version) = self.status.installing() {
+            return Err(format!(
+                "DSA {version} is being installed; Android starts with the newest image once \
+                 the service has restarted"
+            ));
+        }
+        self.android.restart_for_update()
+    }
     fn vm_id(&self) -> Option<String> {
         self.android.vm_id()
     }
