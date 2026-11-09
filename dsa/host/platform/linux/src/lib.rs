@@ -25,7 +25,9 @@
 //! - [`service`]: the system service behind `/run/dsa/host.sock`, one session per user
 //!   (`dsa-linux-hostd`);
 //! - [`root_approval`]: the administrator prompt an Android app's root request waits for,
-//!   through polkit in the user's desktop session.
+//!   through polkit in the user's desktop session;
+//! - [`secret_service`]: each user's backup key and KeyMint root key, kept in their Secret
+//!   Service through a helper that runs as them.
 //!
 //! The rules are plain functions and types, tested on every host. The parts that talk to
 //! the window system, the buses, the devices and the VM build on Linux only, so the workspace
@@ -60,6 +62,7 @@ pub mod pstore;
 #[cfg(target_os = "linux")]
 pub mod renderer;
 pub mod root_approval;
+pub mod secret_service;
 #[cfg(target_os = "linux")]
 pub mod service;
 pub mod shell;
