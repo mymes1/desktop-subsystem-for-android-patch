@@ -118,5 +118,6 @@ pub mod tasks;
 pub mod touch_gestures;
 pub mod update;
 pub mod video;
+pub mod video_layout;
 pub mod widgets;
 pub mod window_manager;

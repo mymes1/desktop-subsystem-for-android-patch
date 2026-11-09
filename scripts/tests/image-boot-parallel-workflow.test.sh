@@ -20,7 +20,7 @@ check() { # test, timeout, artifact, check name
 }
 check widgets 12 widget-boot-logs "Place a widget on the booted image"
 check system_screens 14 system-screens-captures "Check Android's system screens on the booted image"
-check media 14 media-check-logs "Play sound and run codecs in an app on the booted image"
+check media 18 media-check-logs "Play sound and run codecs in an app on the booted image"
 check media 23 root-check-logs "Approve and refuse root for an app on the booted image"
 check overlays 16 overlay-check-logs "Lay the ARM translator and Google Play over the booted system"
 check graphics 28 graphics-check-results "Run the Vulkan CTS subset and the graphics test apps on the booted image"

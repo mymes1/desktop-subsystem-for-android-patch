@@ -13,10 +13,20 @@ and AV1, each offered only when the host's GPU decodes it.
    the GPU's video engine does the work (`dsa/host/platform/windows/src/video_decoder.rs`).
 3. Each access unit the app queues is copied out of the framework's input buffer, sent as a
    `VideoPacket`, and the input buffer goes back to the framework at once.
-4. Each picture comes back as a `VideoFrame` (NV12), in presentation order. The component
-   copies it into a graphics buffer from the framework's output pool: a buffer of the app's
-   surface (through `IGraphicBufferAllocator`), or a buffer of its own when the app reads the
-   pictures itself, and finishes the work the picture came from.
+4. Each picture comes back as a `VideoFrame` (NV12, its visible size only), in presentation
+   order. The component copies it into a graphics buffer from the framework's output pool: a
+   buffer of the app's surface (through `IGraphicBufferAllocator`), or a buffer of its own when
+   the app reads the pictures itself, and finishes the work the picture came from with the
+   picture's rectangle as the block's crop.
+
+The buffers are YV12 (`src/output_buffer.h`), as the platform's software decoders allocate
+for a surface, at the picture's size rounded up to 2; samples past the picture repeat its
+edge. The guest's gralloc has no NV12 buffer the composer may use, so a dequeue of an NV12
+buffer from an app's surface failed (`C2_CORRUPTED`) on every picture and no video reached
+the screen. While every buffer of the surface is shown or queued the allocator answers
+`C2_BLOCKING`, and the component waits on its waitable descriptor, up to 2 s, before it drops
+the picture; a flush or a stop ends the wait. A failure that repeats is logged once in a
+hundred.
 
 The store asks the host which formats it decodes when it starts, and lists only those. The
 framework builds its list of codecs once a boot, so the first list waits up to 20 s for the
@@ -38,13 +48,17 @@ output of audio decoders. It answers as the platform's own store does (`dmabuf-u
 must also answer them, because the framework then asks it for each allocation and fails the
 allocation when it refuses: before the store answered, every `MediaCodec.start()` in an app
 failed with NO_MEMORY. The image workflow's boot check decodes H.264 and AAC with every
-decoder in an ordinary app (`dsa/host/platform/linux/tests/media.rs`).
+decoder in an ordinary app (`dsa/host/platform/linux/tests/media.rs`). It also serves the
+video port with a host decoder of its own, so DSA's H.264 and VP9 decoders are listed, and
+decodes colour bars at 426x240 and 360x640 with them and the guest's own decoders, to buffers
+and to surfaces on screen that change partway, as a player and a feed of short videos do.
 
 ## Building and testing
 
 - `build.sh [scratch] [out]` fetches the pinned sources and builds `dsa-codec2` with the NDK.
 - `test.sh` builds and runs the rules on the build machine: the video port's messages against
-  the protocol vectors and the copy of a picture into a buffer's planes.
+  the protocol vectors, the copy of a picture into a buffer's planes, and the output buffers'
+  format, size, crop and allocation failures.
 
 `make-image.py --codec2 <out>/dsa-codec2` installs it with its init script, VINTF fragment,
 label (`mediacodec`), service label, `media_codecs_c2.xml` and `sepolicy/codec2.cil`.

@@ -5,12 +5,14 @@
 // they stay in step with the host's, and the copy of a decoded picture into a guest buffer's
 // planes. The protocol folder is the only argument.
 
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "output_buffer.h"
 #include "picture_copy.h"
 #include "test_main.h"
 #include "video_messages.h"
@@ -115,6 +117,115 @@ TEST(pr4_a_picture_too_short_for_its_size_is_not_copied) {
     YuvPlanes planes{{y.data(), 1, 4}, {u.data(), 1, 2}, {v.data(), 1, 2}};
     EXPECT_TRUE(!copyNv12(nv12, sizeof(nv12), 4, 2, 4, planes));
     EXPECT_EQ(y, std::vector<uint8_t>(8, 0));
+}
+
+// A YV12 buffer as the gralloc lays one out: the Cr plane, then the Cb plane, each row of
+// `chromaStride` bytes.
+struct Yv12 {
+    std::vector<uint8_t> y, v, u;
+    uint32_t yStride, chromaStride;
+    Yv12(uint32_t width, uint32_t height)
+        : y(static_cast<size_t>(((width + 15) & ~15u)) * height, 0xee),
+          v(static_cast<size_t>((((width + 1) / 2) + 15) & ~15u) * ((height + 1) / 2), 0xee),
+          u(v.size(), 0xee),
+          yStride((width + 15) & ~15u),
+          chromaStride((((width + 1) / 2) + 15) & ~15u) {}
+    YuvPlanes planes() { return {{y.data(), 1, yStride}, {u.data(), 1, chromaStride}, {v.data(), 1, chromaStride}}; }
+};
+
+// An NV12 picture of one colour: luma `luma`, chroma `cb`, `cr`.
+std::vector<uint8_t> flatNv12(uint32_t width, uint32_t height, uint8_t luma, uint8_t cb, uint8_t cr) {
+    const uint32_t stride = width + (width & 1);
+    std::vector<uint8_t> nv12(static_cast<size_t>(stride) * (height + (height + 1) / 2), luma);
+    for (size_t i = static_cast<size_t>(stride) * height; i < nv12.size(); i += 2) {
+        nv12[i] = cb;
+        nv12[i + 1] = cr;
+    }
+    return nv12;
+}
+
+TEST(fr26_a_426x240_picture_fills_its_yv12_buffer_with_its_chroma) {
+    const std::vector<uint8_t> nv12 = flatNv12(426, 240, 81, 90, 240);
+    Yv12 buffer(426, 240);
+    EXPECT_TRUE(copyNv12(nv12.data(), nv12.size(), 426, 240, 426, buffer.planes(), 426, 240));
+    for (uint32_t row = 0; row < 120; ++row) {
+        for (uint32_t x = 0; x < 213; ++x) {
+            if (buffer.u[row * buffer.chromaStride + x] != 90 || buffer.v[row * buffer.chromaStride + x] != 240) {
+                ::dsa::test::fail(__FILE__, __LINE__, "chroma lost at row " + std::to_string(row));
+                return;
+            }
+        }
+    }
+    EXPECT_EQ(buffer.y[239 * buffer.yStride + 425], 81);
+}
+
+TEST(fr26_a_buffer_larger_than_the_picture_takes_its_edge_not_zero) {
+    // A 5x3 picture in a 6x4 buffer: the extra column and row repeat the edge.
+    const std::vector<uint8_t> nv12 = flatNv12(5, 3, 81, 90, 240);
+    Yv12 buffer(6, 4);
+    std::fill(buffer.y.begin(), buffer.y.end(), 0);
+    std::fill(buffer.u.begin(), buffer.u.end(), 0);
+    std::fill(buffer.v.begin(), buffer.v.end(), 0);
+    EXPECT_TRUE(copyNv12(nv12.data(), nv12.size(), 5, 3, 6, buffer.planes(), 6, 4));
+    for (uint32_t row = 0; row < 4; ++row) {
+        for (uint32_t x = 0; x < 6; ++x) {
+            EXPECT_EQ(buffer.y[row * buffer.yStride + x], 81);
+        }
+    }
+    for (uint32_t row = 0; row < 2; ++row) {
+        for (uint32_t x = 0; x < 3; ++x) {
+            EXPECT_EQ(buffer.u[row * buffer.chromaStride + x], 90);
+            EXPECT_EQ(buffer.v[row * buffer.chromaStride + x], 240);
+        }
+    }
+    // A buffer smaller than the picture is refused.
+    EXPECT_TRUE(!copyNv12(nv12.data(), nv12.size(), 5, 3, 6, buffer.planes(), 4, 3));
+}
+
+TEST(fr26_output_buffers_are_yv12_at_the_pictures_size_rounded_to_two) {
+    EXPECT_EQ(kOutputFormat, 0x32315659u);
+    const PictureSize even = bufferSizeFor(360, 640);
+    EXPECT_EQ(even.width, 360u);
+    EXPECT_EQ(even.height, 640u);
+    const PictureSize odd = bufferSizeFor(425, 239);
+    EXPECT_EQ(odd.width, 426u);
+    EXPECT_EQ(odd.height, 240u);
+}
+
+TEST(fr26_the_crop_is_the_visible_picture_inside_its_buffer) {
+    const Crop crop = cropFor(425, 239, bufferSizeFor(425, 239));
+    EXPECT_EQ(crop.left, 0u);
+    EXPECT_EQ(crop.top, 0u);
+    EXPECT_EQ(crop.width, 425u);
+    EXPECT_EQ(crop.height, 239u);
+    const Crop clamped = cropFor(1920, 1080, PictureSize{1280, 720});
+    EXPECT_EQ(clamped.width, 1280u);
+    EXPECT_EQ(clamped.height, 720u);
+}
+
+TEST(fr26_a_surface_with_every_buffer_in_use_is_waited_for) {
+    // The framework's allocator answers with positive c2_status_t values.
+    EXPECT_TRUE(classifyAllocateError(11) == AllocateFailure::Wait);    // C2_BLOCKING
+    EXPECT_TRUE(classifyAllocateError(110) == AllocateFailure::Wait);   // C2_TIMED_OUT
+    EXPECT_TRUE(classifyAllocateError(1) == AllocateFailure::Stopped);  // C2_BAD_STATE
+    EXPECT_TRUE(classifyAllocateError(14) == AllocateFailure::Failed);  // C2_CORRUPTED
+    EXPECT_TRUE(classifyAllocateError(12) == AllocateFailure::Failed);  // C2_NO_MEMORY
+    // The AIDL Status enum's BLOCKING, which the allocator never sends, is not a wait.
+    EXPECT_TRUE(classifyAllocateError(-9930) == AllocateFailure::Failed);
+}
+
+TEST(fr26_a_failure_on_every_picture_is_logged_once_in_a_while) {
+    FailureThrottle throttle(100);
+    uint32_t count = 0;
+    int logged = 0;
+    for (int i = 0; i < 250; ++i) {
+        logged += throttle.shouldLog(&count) ? 1 : 0;
+    }
+    EXPECT_EQ(count, 250u);
+    EXPECT_EQ(logged, 3);  // the 1st, the 100th and the 200th
+    throttle.reset();
+    EXPECT_TRUE(throttle.shouldLog(&count));
+    EXPECT_EQ(count, 1u);
 }
 
 int main(int argc, char** argv) {
