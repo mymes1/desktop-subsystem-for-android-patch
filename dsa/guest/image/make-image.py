@@ -2859,6 +2859,21 @@ ARM_TRANSLATION_FOLDERS = {
     "SYSTEM/bin/dsa-arm-translation": "system/bin",
 }
 ARM_TRANSLATION_LINKER_CONFIG = "SYSTEM/etc/ld.config.arm64.txt"
+# The library Berberis (Digitalis) runs its translated code in. It opens it by this absolute
+# path, never by name, so that it can load it at an address it reserved first; with the
+# package's system/lib64 bound onto /system_ext/lib64 alone, the path held nothing and every
+# ARM app aborted as it started ("exec_region_elf_backed.cc:48: CHECK failed: 0 != 0"). The
+# image carries an empty file there, and the init script binds the package's onto it. A link
+# into the mount would not do: the linker checks the path it really opened, which would be
+# under /mnt, against the system namespace, which may not load from there.
+ARM_TRANSLATION_EXEC_REGION = "SYSTEM/lib64/libberberis_exec_region.so"
+# The empty files the init script binds a package's files onto, each with what is lost
+# without it.
+ARM_TRANSLATION_BOUND_FILES = {
+    ARM_TRANSLATION_LINKER_CONFIG: "the translator's ARM64 linker has no namespaces",
+    ARM_TRANSLATION_EXEC_REGION: "the translator cannot load the library its code runs in, and "
+                                 "every ARM app aborts as it starts",
+}
 # The runners Berberis (Digitalis) and Google's translator name in their binfmt_misc rules,
 # led to where the package's system/bin is bound. Packages made now name the bound place
 # themselves (make-package.py, and the host for Google's); these keep a package made before,
@@ -2876,6 +2891,7 @@ ARM_TRANSLATION_REACH_FS_CONFIG = {
         "system/bin/arm64 0 0 755 capabilities=0x0",
         "system/bin/dsa-arm-translation 0 0 755 capabilities=0x0",
         "system/etc/ld.config.arm64.txt 0 0 644 capabilities=0x0",
+        "system/lib64/libberberis_exec_region.so 0 0 644 capabilities=0x0",
         "system/etc/cpuinfo.arm64.txt 0 0 644 capabilities=0x0",
         "system/etc/berberis 0 0 644 capabilities=0x0",
         *[f"system/bin/{runner} 0 0 755 capabilities=0x0" for runner in ARM_TRANSLATION_RUNNERS],
@@ -2888,7 +2904,7 @@ ARM_TRANSLATION_REACH_FS_CONFIG = {
 
 def arm_translation_reach_names():
     """Every target_files name the x86_64 image adds to reach a translation package."""
-    return ([folder + "/" for folder in ARM_TRANSLATION_FOLDERS] + [ARM_TRANSLATION_LINKER_CONFIG]
+    return ([folder + "/" for folder in ARM_TRANSLATION_FOLDERS] + list(ARM_TRANSLATION_BOUND_FILES)
             + list(ARM_TRANSLATION_LINKS))
 
 
@@ -2901,7 +2917,7 @@ def arm_translation_reach_conflicts(names):
         if inside or folder in names:
             conflicts.append(f"{folder} already has {inside[:3] or [folder]}, which binding the ARM "
                              "translation package there would hide")
-    for name in [ARM_TRANSLATION_LINKER_CONFIG, *ARM_TRANSLATION_LINKS]:
+    for name in [*ARM_TRANSLATION_BOUND_FILES, *ARM_TRANSLATION_LINKS]:
         if name in names or any(other.startswith(name + "/") for other in names):
             conflicts.append(f"{name} is already in the build, where the ARM translation package "
                              "goes")
@@ -2927,12 +2943,12 @@ def check_arm_translation_reach(manifest, names, read, info=None):
         elif inside:
             problems.append(f"{folder} holds {sorted(inside)[:3]}, which the ARM translation package "
                             "hides")
-    if ARM_TRANSLATION_LINKER_CONFIG not in names:
-        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is missing, so the translator's ARM64 "
-                        "linker has no namespaces")
-    elif read(ARM_TRANSLATION_LINKER_CONFIG):
-        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is not empty: it is the build's, not the "
-                        "place the package's goes")
+    for name, lost in ARM_TRANSLATION_BOUND_FILES.items():
+        if name not in names:
+            problems.append(f"{name} is missing, so {lost}")
+        elif read(name):
+            problems.append(f"{name} is not empty: it is the build's, not the place the package's "
+                            "goes")
     for name, target in ARM_TRANSLATION_LINKS.items():
         if name not in names:
             problems.append(f"{name} is missing, so a translator never finds its own {target}")
@@ -4639,7 +4655,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if reach:
             for folder in ARM_TRANSLATION_FOLDERS:
                 zout.writestr(directory_entry(folder + "/"), b"")
-            zout.writestr(ARM_TRANSLATION_LINKER_CONFIG, b"")
+            for name in ARM_TRANSLATION_BOUND_FILES:
+                zout.writestr(name, b"")
             for name, target in ARM_TRANSLATION_LINKS.items():
                 zout.writestr(link_entry(name), target.encode())
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())

@@ -86,7 +86,10 @@ class MakePackageTests(unittest.TestCase):
                 make_package.stage(bundle(tmp), Path(tmp) / "staging", "libhoudini.so")
 
     def test_fr25_a_bundle_without_what_the_guest_binds_is_refused(self):
-        missing_parts = ["lib64/arm64/libc.so", "bin/arm64/linker64", "etc/ld.config.arm64.txt"]
+        missing_parts = ["lib64/arm64/libc.so", "bin/arm64/linker64", "etc/ld.config.arm64.txt",
+                         # Berberis opens it by /system/lib64/libberberis_exec_region.so; without
+                         # it every ARM app aborted as it started.
+                         "lib64/libberberis_exec_region.so"]
         if sys.platform != "win32":
             # Found once the bridge's link is made, which needs privileges on Windows.
             missing_parts.append("bin/berberis_program_runner_binfmt_misc_arm64")

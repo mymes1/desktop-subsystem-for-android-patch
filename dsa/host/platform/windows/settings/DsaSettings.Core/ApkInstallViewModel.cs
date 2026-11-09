@@ -202,6 +202,35 @@ public sealed class ApkInstallViewModel : ObservableObject
         Fail(_text.Get("ApkWindow_NotApkTitle"), UnsupportedFile.Message(kind, FileName, detail));
     }
 
+    /// <summary>Why an app with native code may not run here, or empty. Code for this PC's own
+    /// processor runs. So does arm64-v8a code while Android runs it through its ARM translator,
+    /// which dsa says (<see cref="ApkDetails.RunsArm64"/>). The translator runs no 32-bit ARM
+    /// code, so an app with only that is still flagged with the translator on, and anything
+    /// else is flagged while there is no translator or dsa could not say.</summary>
+    private string AbiWarning(ApkDetails apk)
+    {
+        var abis = string.Join(", ", apk.Abis);
+        if (apk.Abis.Count == 0 || apk.Abis.Any(abi => _hostAbis.Contains(abi)))
+        {
+            return "";
+        }
+        if (apk.RunsArm64 == true)
+        {
+            if (apk.Abis.Contains(ArmAbi64))
+            {
+                return "";
+            }
+            if (apk.Abis.All(abi => abi.StartsWith("armeabi", StringComparison.Ordinal)))
+            {
+                return F("ApkWindow_Abi32Warning", abis);
+            }
+        }
+        return F("ApkWindow_AbiWarning", abis);
+    }
+
+    /// <summary>The ABI of 64-bit ARM code, the one the ARM translator runs.</summary>
+    private const string ArmAbi64 = "arm64-v8a";
+
     /// <summary>The file read again keeps the icon read before when this reading has none, so
     /// a second look never takes the app's icon away.</summary>
     private ApkDetails KeepIcon(ApkDetails apk) =>
@@ -221,9 +250,7 @@ public sealed class ApkInstallViewModel : ObservableObject
         PublisherValue = apk.SignerSha256 is { } signer
             ? F("ApkWindow_Signer", apk.SignerScheme ?? "", signer)
             : _text.Get("ApkWindow_Unsigned");
-        CompatibilityWarning = apk.Abis.Count > 0 && !apk.Abis.Any(abi => _hostAbis.Contains(abi))
-            ? F("ApkWindow_AbiWarning", string.Join(", ", apk.Abis))
-            : "";
+        CompatibilityWarning = AbiWarning(apk);
         CompatibilityTitle = CompatibilityWarning.Length > 0 ? _text.Get("ApkWindow_AbiWarningTitle") : "";
         var version = VersionText(apk.VersionName, apk.VersionCode);
         Summary = apk.Kind switch

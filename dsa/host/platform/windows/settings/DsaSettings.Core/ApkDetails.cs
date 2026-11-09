@@ -47,7 +47,9 @@ public enum ApkInstallKind
 /// <summary>What <c>dsa apk-info</c> says of an APK: the file's own information, and when
 /// Android runs, what it has of the app. Of a split-APK bundle, the information is its base
 /// APK's, and <see cref="Apks"/>, <see cref="Obbs"/> and <see cref="TotalSize"/> say what
-/// installing it sends.</summary>
+/// installing it sends. <see cref="RunsArm64"/> says whether this PC's Android runs arm64-v8a
+/// code, natively or through its ARM translator, and is null when dsa could not ask the
+/// service.</summary>
 public sealed record ApkDetails(
     string Package,
     string? Label,
@@ -70,7 +72,8 @@ public sealed record ApkDetails(
     IReadOnlyList<string>? Apks = null,
     int SplitCount = 0,
     IReadOnlyList<string>? Obbs = null,
-    long TotalSize = 0)
+    long TotalSize = 0,
+    bool? RunsArm64 = null)
 {
     /// <summary>Whether the file is a split-APK bundle rather than one APK.</summary>
     public bool IsBundle => Format != "apk";
@@ -144,7 +147,10 @@ public sealed record ApkDetails(
             Names(root, "apks"),
             (int)Long(root, "split_count"),
             Names(root, "obbs"),
-            Long(root, "total_size"));
+            Long(root, "total_size"),
+            root.TryGetProperty("runs_arm64", out var arm64) && arm64.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? arm64.GetBoolean()
+                : null);
     }
 
     private static ApkIcon? ReadIcon(JsonElement icon)
