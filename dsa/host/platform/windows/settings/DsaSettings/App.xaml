@@ -82,13 +82,36 @@
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             </Style>
-            <!-- Subtitle: 20 px, 28 px line, for a value that leads a card. -->
-            <Style x:Key="SubtitleText" TargetType="TextBlock">
+            <!-- A value a card shows on its right, as the Windows Settings app shows one: against
+                 the card's right edge, wrapped lines right-aligned too, and never wider than
+                 320 px, on every page. The card keeps at least 120 px for its control, so a value
+                 that only took the box's right side would still start 120 px from the edge and
+                 a short one would hang in the middle; TextAlignment puts every line against the
+                 edge. No colour of its own, so a disabled card greys it. Every text in a card's
+                 content uses this style or one based on it. -->
+            <Style x:Key="CardValue" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="FontWeight" Value="Normal" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="LineHeight" Value="20" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="TextAlignment" Value="Right" />
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="MaxWidth" Value="320" />
+            </Style>
+            <!-- A smaller line under a card's value, in the description's size and colour. -->
+            <Style x:Key="CardValueCaption" TargetType="TextBlock" BasedOn="{StaticResource CardValue}">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="LineHeight" Value="16" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+            <!-- A value that leads a card, in the type ramp's Subtitle: 20 px on a 28 px line. -->
+            <Style x:Key="CardValueSubtitle" TargetType="TextBlock" BasedOn="{StaticResource CardValue}">
                 <Setter Property="FontFamily" Value="{DynamicResource StrongDisplayFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="20" />
                 <Setter Property="LineHeight" Value="28" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="Note" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
