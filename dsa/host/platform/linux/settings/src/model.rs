@@ -270,6 +270,9 @@ pub struct Settings {
     pub arm_translation: bool,
     pub stop_without_asking: bool,
     pub advanced_networking: bool,
+    /// Whether Android restarts by itself into an Android image the service downloaded. On
+    /// by default; off, the image is used the next time the user starts Android.
+    pub image_auto_restart: bool,
     pub network: Option<Network>,
     pub file_sharing: bool,
     pub shared_folders: Vec<String>,
@@ -344,6 +347,7 @@ impl Settings {
             arm_translation: flag(json, "arm_translation", true),
             stop_without_asking: flag(json, "stop_without_asking", false),
             advanced_networking: flag(json, "advanced_networking", false),
+            image_auto_restart: flag(json, "image_auto_restart", true),
             network: json
                 .get("network")
                 .filter(|n| n.is_object())
@@ -777,6 +781,8 @@ pub struct AndroidVersion {
     pub supported: Vec<i64>,
     pub target_major: i64,
     pub notice: Option<String>,
+    /// The downloaded image the user's running Android waits to restart into, if one does.
+    pub restart_pending: Option<String>,
 }
 
 impl AndroidVersion {
@@ -793,6 +799,7 @@ impl AndroidVersion {
                 .collect(),
             target_major: signed(json, "target_major"),
             notice: optional_text(json, "notice"),
+            restart_pending: optional_text(json, "restart_pending").filter(|v| !v.is_empty()),
         }
     }
 }
@@ -1625,6 +1632,13 @@ impl Client {
 
     pub fn android_version(&self) -> Result<AndroidVersion, Failure> {
         Ok(AndroidVersion::read(&self.json(&["android", "version"])?))
+    }
+
+    /// Restarts the user's Android now into the downloaded image that waits for it, then
+    /// reads the version again.
+    pub fn restart_android(&self) -> Result<AndroidVersion, Failure> {
+        self.json(&["android", "restart"])?;
+        self.android_version()
     }
 
     /// Chooses an Android version for every user of the computer, which only an

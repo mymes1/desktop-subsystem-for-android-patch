@@ -150,7 +150,8 @@ public sealed partial class DsaService
         Bool(json, "touch_gestures_off", missing: true),
         ReadTouchGesturesState(OptionalString(json, "touch_gestures_state")),
         OptionalString(json, "touch_gestures_problem") is { Length: > 0 } problem ? problem : null,
-        Bool(json, "root_elevation"));
+        Bool(json, "root_elevation"),
+        Bool(json, "image_auto_restart", missing: true));
 
     /// <summary>The touch gestures state a name stands for. An empty or unknown name, as an
     /// older service gives, is unknown.</summary>
@@ -227,6 +228,10 @@ public sealed partial class DsaService
     /// <summary>Whether Windows' three- and four-finger touch gestures are off while a DSA app
     /// window is in front.</summary>
     public Task<SettingsInfo> SetTouchGesturesOffAsync(bool on) => SetAsync("touch-gestures-off", on ? "on" : "off");
+
+    /// <summary>Whether Android restarts by itself into an Android image the service
+    /// downloaded.</summary>
+    public Task<SettingsInfo> SetImageAutoRestartAsync(bool on) => SetAsync("image-auto-restart", on ? "on" : "off");
 
     /// <summary>Whether stopping an app from the notification area skips the question that
     /// confirms it.</summary>
