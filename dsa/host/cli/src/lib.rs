@@ -2528,13 +2528,16 @@ pub fn memory_json(memory: &MemorySnapshot) -> Value {
     }
     let guest = memory.guest.as_ref().map(|report| {
         let guest = &report.memory;
-        let google_play = guest.google_play.zip(guest.google_play_share()).map(|(play, cost)| {
-            let mut value = share(&cost);
-            value["processes"] = json!(play.processes);
-            value["pss_kb"] = json!(play.pss_kb);
-            value["swap_pss_kb"] = json!(play.swap_pss_kb);
-            value
-        });
+        let google_play = guest
+            .google_play
+            .zip(guest.google_play_share())
+            .map(|(play, cost)| {
+                let mut value = share(&cost);
+                value["processes"] = json!(play.processes);
+                value["pss_kb"] = json!(play.pss_kb);
+                value["swap_pss_kb"] = json!(play.swap_pss_kb);
+                value
+            });
         json!({
             "mem_total_kb": guest.mem_total_kb,
             "mem_free_kb": guest.mem_free_kb,
