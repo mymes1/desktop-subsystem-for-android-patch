@@ -46,8 +46,15 @@ class AndroidAppInfoSource(
         }
         val label = app.loadLabel(pm).toString().ifEmpty { packageName }
         var size = WINDOW_ICON_SIZE
+        // The icon a launcher shows, which the Start menu shows too: the launcher activity's,
+        // which may differ from the app's own, as an activity alias's often does.
+        val iconRes = try {
+            launcherIconResource(pm, packageName) ?: app.icon
+        } catch (e: RuntimeException) {
+            app.icon
+        }
         val drawable = try {
-            sharpIcon(pm, app, app.icon, WINDOW_ICON_SIZE) { pm.getApplicationIcon(app) }
+            sharpIcon(pm, app, iconRes, WINDOW_ICON_SIZE) { pm.getApplicationIcon(app) }
         } catch (e: Exception) {
             log.warn("could not load the icon of $packageName", e)
             null
@@ -62,7 +69,7 @@ class AndroidAppInfoSource(
                     large
                 } else {
                     size = ICON_SIZE
-                    sharpIconPng(pm, app, app.icon) { pm.getApplicationIcon(app) }
+                    sharpIconPng(pm, app, iconRes) { pm.getApplicationIcon(app) }
                 }
             }
         } catch (e: Exception) {
@@ -77,6 +84,19 @@ class AndroidAppInfoSource(
         }
         return AppDetails(label, icon, captionIcon, supportsMultipleWindows(pm, packageName))
     }
+}
+
+/**
+ * The icon resource of [packageName]'s launcher activity, as the list of installed apps draws
+ * it (the activity's or alias's own icon, else the app's); null when the app has no launcher
+ * activity of its own or none with an icon.
+ */
+internal fun launcherIconResource(pm: PackageManager, packageName: String): Int? {
+    val launch = pm.getLaunchIntentForPackage(packageName) ?: return null
+    val resolved = pm.resolveActivity(launch, PackageManager.ResolveInfoFlags.of(0)) ?: return null
+    // A match whose icon comes from another package cannot be loaded from this app's resources.
+    if (resolved.resolvePackageName != null || resolved.activityInfo?.packageName != packageName) return null
+    return resolved.iconResource.takeIf { it != 0 }
 }
 
 /**
