@@ -2564,8 +2564,9 @@ message PasskeyRequest {
   // The SHA-256 of each certificate the calling app is signed with now (its signing
   // certificate, or every signer of an app with several).
   repeated bytes signer_sha256 = 5;
-  // The web origin, only for a browser Android lets set one (it holds
-  // CREDENTIAL_MANAGER_SET_ORIGIN); empty for any other app.
+  // The web origin the credential manager reports, only for a browser the agent recognises
+  // by its package and signing certificate (a privileged browser, or one the image
+  // carries); empty for any other app, whose request is checked as an app's.
   string origin = 6;
   // The hash of the client data a browser made itself; empty when it gave none.
   bytes client_data_hash = 7;

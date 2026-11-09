@@ -19,11 +19,16 @@
 //!
 //! Who is trusted, and for what:
 //! - Android's framework (system_server) is trusted to say which app called: the package and
-//!   the certificates it is signed with (`CallingAppInfo`), and that an app setting an origin
-//!   holds `CREDENTIAL_MANAGER_SET_ORIGIN`, a privileged permission only the image grants.
-//!   An app cannot set either about itself.
-//! - The agent, a platform-signed system app, is trusted to pass those on unchanged. Apps cannot
-//!   reach the control channel: only the guest's control daemon holds the boot's secret.
+//!   the certificates it is signed with (`CallingAppInfo`). An app cannot set either about
+//!   itself. The origin the framework reports is not proof on its own: the permission that
+//!   lets an app set one (`CREDENTIAL_MANAGER_SET_ORIGIN`) is a normal permission any app may
+//!   hold.
+//! - The agent, a platform-signed system app, is trusted to pass those on, and to pass an
+//!   origin (and a browser's own client data hash) only for a browser it recognises by package
+//!   and signing certificate: one on the list of privileged browsers, or one the image carries.
+//!   For any other app it sends no origin, so the request is checked as an app's, against the
+//!   relying party's asset links. Apps cannot reach the control channel: only the guest's
+//!   control daemon holds the boot's secret.
 //! - The relying party's own HTTPS server is trusted to say which apps are its own, in its
 //!   Digital Asset Links. Nothing an app says about itself, nor anything in its request (such
 //!   as an origin it writes into its JSON), is trusted.
@@ -31,13 +36,13 @@
 //! The rules ([`PasskeyGate::check`]):
 //! 1. The relying party ID is a well-formed domain name of at least two labels, not an
 //!    address. It is the ID the authenticator signs for; nothing else is used.
-//! 2. An app (no origin from the framework) passes only when the relying party's
+//! 2. An app (no origin from the agent) passes only when the relying party's
 //!    `assetlinks.json`, fetched over HTTPS from that exact domain without redirects, lists the
 //!    app's package with the SHA-256 of every certificate it is signed with, under
 //!    `delegate_permission/common.get_login_creds` ([`asset_links`]). The client data then names
 //!    the app's own origin (`android:apk-key-hash:<hash of its certificate>`), so the relying
 //!    party sees it was an app, and which one.
-//! 3. A browser (an origin from the framework) passes only for an `https` origin whose host is
+//! 3. A browser (an origin from the agent) passes only for an `https` origin whose host is
 //!    the relying party ID or a name under it, as WebAuthn requires of a web page. Only a
 //!    browser may hand over a client data hash of its own; an app that does is refused,
 //!    because then nothing would show the relying party who asked.
