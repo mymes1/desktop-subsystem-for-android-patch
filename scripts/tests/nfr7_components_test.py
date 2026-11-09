@@ -114,6 +114,29 @@ class ListedPackages(unittest.TestCase):
             '<PackageReference Include="xunit" Version="2.9.2" />', encoding="utf-8")
         self.assertEqual(gl.check_components(root), [])
 
+    def test_nfr7_module_yaml_dependencies_are_checked_and_compile_only_or_test_left_out(self):
+        root = self.make('<PackageReference Include="WPF-UI" Version="3.0.5" />')
+        (root / "agent").mkdir()
+        (root / "agent/module.yaml").write_text(
+            "product: jvm/lib\n"
+            "dependencies:\n"
+            "  - ./hidden-api: compile-only\n"
+            "  - io.github.thisisthepy.dsa:android-sdk:36: compile-only\n"
+            "test-dependencies:\n"
+            "  - junit:junit:4.13.2\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(gl.check_components(root), [])
+        (root / "agent/module.yaml").write_text(
+            "product: jvm/lib\n"
+            "dependencies:\n"
+            "  - com.example:unlisted:1.0.0\n",
+            encoding="utf-8",
+        )
+        problems = gl.check_components(root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("com.example:unlisted 1.0.0 is not listed", problems[0])
+
 
 class RealManifest(unittest.TestCase):
     def test_nfr6_master_notice_carries_the_trademark_notice(self):

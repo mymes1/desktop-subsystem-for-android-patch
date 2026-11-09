@@ -755,7 +755,7 @@ def component_problems(component: dict, policy: dict) -> list:
 
 
 def declared_packages(workspace_dir: Path) -> list:
-    """The package references the .NET projects and the agent's Gradle build declare.
+    """The package references the .NET projects and the agent's build declare.
 
     Test projects are left out: nothing from them ships.
     """
@@ -772,6 +772,22 @@ def declared_packages(workspace_dir: Path) -> list:
         text = gradle.read_text(encoding="utf-8")
         for m in re.finditer(r'\b(?:implementation|api|runtimeOnly)\("([^":]+):([^":]+):([^"]+)"\)', text):
             found.append((gradle.relative_to(workspace_dir).as_posix(), f"{m.group(1)}:{m.group(2)}", m.group(3)))
+    for module_yaml in sorted(workspace_dir.rglob("module.yaml")):
+        if any(p in ("build", ".gradle", "target") for p in module_yaml.parts):
+            continue
+        text = module_yaml.read_text(encoding="utf-8")
+        in_deps = False
+        for line in text.splitlines():
+            stripped = line.split("#", 1)[0].rstrip()
+            if not stripped:
+                continue
+            if not line[0].isspace():
+                in_deps = stripped == "dependencies:"
+                continue
+            if in_deps:
+                m = re.match(r'^\s*-\s*([^\s:]+:[^\s:]+):([^\s:]+)(?:\s*:\s*(\S+))?\s*$', stripped)
+                if m and m.group(3) != "compile-only" and not m.group(1).startswith("."):
+                    found.append((module_yaml.relative_to(workspace_dir).as_posix(), m.group(1), m.group(2)))
     return found
 
 

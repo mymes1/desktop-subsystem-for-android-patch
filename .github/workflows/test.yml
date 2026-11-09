@@ -685,9 +685,11 @@ jobs:
           java-version: "17"
 
       # The unit tests, and the release build, which compiles the agent against the
-      # generated protocol and channel code.
+      # generated protocol and channel code and packages the APK with the SDK tools.
       - name: Run the tests and build the agent
-        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+        run: |
+          ./kotlin test
+          ./kotlin do assembleRelease
 
   protocol:
     name: Check the generated protocol code (ubuntu-latest)

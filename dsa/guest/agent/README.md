@@ -530,8 +530,14 @@ Needs a JDK (17 or later) and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in
 `local.properties`). From this folder:
 
 ```
-./gradlew testDebugUnitTest assembleRelease
+./kotlin test
+./kotlin do assembleRelease
 ```
+
+The project uses the Kotlin Toolchain (`project.yaml`, `module.yaml`) for dependency
+resolution, Kotlin/Java compilation and JVM unit testing, and a local build plugin
+(`build-plugin/`) that invokes the Android SDK tools (`aidl`, `aapt2`, `d8`, `zipalign`)
+directly to generate binder stubs and package the APK without Gradle.
 
 The unit tests run on the JVM against fakes of the framework, the channel and the
 scheduler, and check the frames with the generated codec. Everything that touches the

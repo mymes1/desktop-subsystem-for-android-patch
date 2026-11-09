@@ -1,0 +1,21 @@
+# Compile-only declarations of framework classes the SDK does not publish. Nothing here is
+# packaged: the app depends on this module with compile-only, and at run time the classes
+# come from the guest's framework. Each declaration mirrors the framework's own signature,
+# so a call compiled against it links to the real method.
+
+product: jvm/lib
+layout: maven-like
+
+repositories:
+  - mavenLocal
+
+dependencies:
+  - io.github.thisisthepy.dsa:android-sdk:36: compile-only
+
+settings:
+  jvm:
+    jdk:
+      version: 17
+    release: 17
+  kotlin:
+    version: 2.2.20

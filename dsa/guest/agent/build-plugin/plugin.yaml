@@ -1,0 +1,24 @@
+tasks:
+  generateSources:
+    action: !io.github.thisisthepy.dsa.agent.build.generateSources
+      aidlDir: ${module.rootDir}/../aidl
+      protocolJavaDir: ${module.rootDir}/../../protocol/java/src/main/java
+      resDir: ${module.rootDir}/src/main/res
+      manifestFile: ${module.rootDir}/src/main/AndroidManifest.xml
+      outputDir: ${taskOutputDir}
+
+  packageApk:
+    action: !io.github.thisisthepy.dsa.agent.build.packageApk
+      runtimeClasspath: ${module.runtimeClasspath}
+      resDir: ${module.rootDir}/src/main/res
+      manifestFile: ${module.rootDir}/src/main/AndroidManifest.xml
+      outputApk: ${module.rootDir}/build/outputs/apk/release/dsa-agent-release-unsigned.apk
+
+generated:
+  sources:
+    - language: java
+      directory: ${tasks.generateSources.action.outputDir}
+
+commands:
+  - name: assembleRelease
+    performedBy: packageApk

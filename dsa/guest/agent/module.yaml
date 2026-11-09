@@ -1,0 +1,35 @@
+# The guest agent app. Build and test it from this folder:
+#
+#   ./kotlin test
+#   ./kotlin do assembleRelease
+#
+# The release APK is unsigned: the image build signs it with the platform key, which is what
+# makes it a platform app.
+
+product: jvm/lib
+layout: maven-like
+
+repositories:
+  - mavenLocal
+
+dependencies:
+  # The runtime of the protoc release the checked-in Java codec was generated with.
+  - com.google.protobuf:protobuf-javalite:3.21.12
+  - ./hidden-api: compile-only
+  - io.github.thisisthepy.dsa:android-sdk:36: compile-only
+
+test-dependencies:
+  - ./hidden-api
+  - io.github.thisisthepy.dsa:android-sdk:36
+
+settings:
+  jvm:
+    jdk:
+      version: 17
+    release: 17
+  kotlin:
+    version: 2.2.20
+  junit: junit-4
+
+plugins:
+  build-plugin: enabled

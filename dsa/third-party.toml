@@ -5,7 +5,7 @@
 # here, with its licence (an SPDX expression), its source and how it is shipped.
 # installer/generate-licenses.py checks this file and writes the notices from it, and CI
 # fails when a component's licence is not allowed or a package reference in a .csproj or
-# the agent's build.gradle.kts is missing from this list.
+# the agent's module.yaml is missing from this list.
 #
 # The licence rule:
 # - A component that is linked into, or built into, a DSA program must carry only licences
