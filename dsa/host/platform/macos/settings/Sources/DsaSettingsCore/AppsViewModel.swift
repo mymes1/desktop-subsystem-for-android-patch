@@ -73,12 +73,13 @@ public struct InstalledAppInfo: Equatable, Sendable {
     public var totalBytes: UInt64 { appBytes + dataBytes + cacheBytes }
 }
 
-/// How an app's window follows a move to a monitor of another scale. No choice restarts the
-/// app.
+/// How an app's window follows a move to a monitor of another scale. `auto` and `system` never
+/// restart the app.
 public enum DpiScaling: String, CaseIterable, Equatable, Sendable {
     /// App for apps that say they handle a change of density themselves, System for the others.
     case auto
-    /// The app redraws at the new monitor's scale.
+    /// The app redraws at the new monitor's scale. Android recreates the screen of an app that
+    /// does not say it handles a change of density, and restores its state.
     case app
     /// The app keeps its scale and its window is scaled to the new monitor, at the same
     /// physical size.
@@ -584,7 +585,7 @@ public final class AppsViewModel: ObservableObject {
     }
 
     /// Has the app's windows follow a monitor of another scale the way at `index` of
-    /// `dpiScalingChoices`. Windows that move from now on follow it; no choice restarts the app.
+    /// `dpiScalingChoices`. Windows that move from now on follow it.
     public func setDpiScaling(_ package: String, _ index: Int) async {
         let all = DpiScaling.allCases
         guard all.indices.contains(index) else {

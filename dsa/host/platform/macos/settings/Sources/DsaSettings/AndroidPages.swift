@@ -94,7 +94,7 @@ struct AppRowView: View {
                 .frame(maxWidth: 260)
                 .disabled(vm.isBusy)
                 // How the app's windows follow a monitor of another scale: the app redraws, or
-                // its window is scaled. No choice restarts the app.
+                // its window is scaled. Auto and system never restart the app.
                 Picker(T("AppsDpiScaling.Name"), selection: Binding(
                     get: { row.dpiScalingIndex },
                     set: { index in Task { await vm.setDpiScaling(row.package, index) } })) {

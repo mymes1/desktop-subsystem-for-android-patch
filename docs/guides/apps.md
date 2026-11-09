@@ -48,15 +48,16 @@ dsa app-window <package> reset                  # back to the defaults
 ## Move an app to a monitor of another scale
 
 Android starts at the scale of your main monitor, so apps open at the right size there. When
-you move a window to a monitor of another scale, the app keeps its size on the screen and is
-never restarted. Each app does this one of these ways, which you pick under **Scaling on
+you move a window to a monitor of another scale, the app keeps its size on the screen, and
+with **Automatic** and **System** it is never restarted. Each app does this one of these ways, which you pick under **Scaling on
 another monitor** on the **Apps** page, or with `dsa app-window <package> --dpi-scaling`:
 
 - **Automatic** (`auto`, the default): **App** for an app that says it handles a change of
   scale itself, **System** for any other.
-- **App** (`app`): the app redraws at the new monitor's scale, and its text stays sharp. An app
-  that does not say it handles a change of scale would be restarted by Android, so it is
-  scaled as **System** instead.
+- **App** (`app`): the app redraws at the new monitor's scale, and its text stays sharp. For an
+  app that does not say it handles a change of scale, Android recreates its screen and
+  restores its state (scroll position, typed text), so it may redraw briefly when it moves,
+  as a Windows program does with "Application" scaling.
 - **System** (`system`): the app keeps its scale, and DSA scales its window to the new monitor.
   Scaled up, text can look a little soft.
 - **System (forced)** (`system-forced`): the app is given the new scale without a restart,
