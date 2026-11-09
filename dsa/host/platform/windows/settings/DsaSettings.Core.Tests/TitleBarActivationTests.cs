@@ -78,7 +78,7 @@ public class TitleBarActivationTests
         var merged = Xaml(app, "App.xaml").Descendants(Wpf + "ResourceDictionary")
             .Select(d => (string?)d.Attribute("Source"));
         Assert.Contains("/TitleBarStyle.xaml", merged);
-        Assert.Contains("TitleBarActivation.Attach(this);", File.ReadAllText(FilePath(app, window + ".xaml.cs")));
+        Assert.Contains("TitleBarActivation.Attach(this", File.ReadAllText(FilePath(app, window + ".xaml.cs")));
         var colours = File.ReadAllText(FilePath("DsaSettings", "TitleBarActivation.cs"));
         foreach (var key in new[] { "TitleBarActiveBackground", "TitleBarActiveForeground", "TitleBarInactiveBackground",
             "TitleBarInactiveForeground", "TitleBarInactiveIconOpacity" })
@@ -105,6 +105,66 @@ public class TitleBarActivationTests
         Assert.Equal("{StaticResource WindowTitleBarIcon}", (string?)icon.Attribute("Style"));
         Assert.Equal(new Dictionary<string, string?> { ["Opacity"] = "{DynamicResource TitleBarInactiveIconOpacity}" },
             Setters(InactiveTrigger(KeyedStyle("WindowTitleBarIcon"))));
+    }
+
+    [Fact]
+    public void Fr17_the_installer_icon_tile_follows_the_windows_activation_and_theme()
+    {
+        // The tile stayed the same flat grey whether the window had the focus or not, which
+        // looked dull while it was active.
+        var tile = Xaml("DsaApkInstaller", "InstallerWindow.xaml").Descendants()
+            .Single(e => (string?)e.Attribute(X + "Name") == "AppIconTile");
+        Assert.Equal("{StaticResource AppIconTile}", (string?)tile.Attribute("Style"));
+        // A colour on the tile itself would win over the style's trigger.
+        Assert.Null(tile.Attribute("Background"));
+        Assert.Null(tile.Attribute("BorderBrush"));
+
+        var app = Xaml("DsaApkInstaller", "App.xaml");
+        var style = app.Descendants(Wpf + "Style").Single(s => (string?)s.Attribute(X + "Key") == "AppIconTile");
+        Assert.Equal("Border", (string?)style.Attribute("TargetType"));
+        var active = Setters(style);
+        Assert.Equal("{DynamicResource AppIconTileActiveBackground}", active["Background"]);
+        Assert.Equal("{DynamicResource AppIconTileActiveBorder}", active["BorderBrush"]);
+        Assert.Equal(new Dictionary<string, string?>
+        {
+            ["Background"] = "{DynamicResource AppIconTileInactiveBackground}",
+            ["BorderBrush"] = "{DynamicResource AppIconTileInactiveBorder}",
+        }, Setters(InactiveTrigger(style)));
+
+        // Each colour is defined for the light, the dark and the high contrast theme, and the
+        // window has them copied in for the current one.
+        string[] keys = { "AppIconTileActiveBackground", "AppIconTileActiveBorder",
+            "AppIconTileInactiveBackground", "AppIconTileInactiveBorder" };
+        var brushes = app.Descendants(Wpf + "SolidColorBrush").Where(b => b.Attribute(X + "Key") is not null)
+            .ToDictionary(b => (string)b.Attribute(X + "Key")!, b => (string?)b.Attribute("Color"));
+        foreach (var key in keys)
+        {
+            foreach (var variant in new[] { ".Light", ".Dark", ".HighContrast" })
+            {
+                Assert.True(brushes.ContainsKey(key + variant), key + variant + " is not defined");
+            }
+            Assert.StartsWith("{DynamicResource {x:Static SystemColors.", brushes[key + ".HighContrast"]);
+        }
+        // One flat colour for both themes is what this replaces.
+        Assert.DoesNotContain(brushes.Keys, k => k == "AppIconTileBrush");
+        foreach (var theme in new[] { ".Light", ".Dark" })
+        {
+            // Active, the tile is lifted above its inactive grey and has an edge.
+            Assert.NotEqual(brushes["AppIconTileInactiveBackground" + theme], brushes["AppIconTileActiveBackground" + theme]);
+            Assert.NotEqual("Transparent", brushes["AppIconTileActiveBorder" + theme]);
+        }
+        Assert.Equal("#E6E6E6", brushes["AppIconTileInactiveBackground.Light"]);
+
+        var code = File.ReadAllText(FilePath("DsaApkInstaller", "InstallerWindow.xaml.cs"));
+        Assert.Contains("TitleBarActivation.Attach(this, AppIconTileColours);", code);
+        foreach (var key in keys)
+        {
+            Assert.Contains("\"" + key + "\"", code);
+        }
+        var activation = File.ReadAllText(FilePath("DsaSettings", "TitleBarActivation.cs"));
+        Assert.Contains("\".Light\"", activation);
+        Assert.Contains("\".Dark\"", activation);
+        Assert.Contains("\".HighContrast\"", activation);
     }
 
     private static TitleBarSystem Reported(bool highContrast = false, bool accentOn = false, uint? accent = null,
