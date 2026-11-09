@@ -2524,6 +2524,14 @@ message BackupRunResult {
   uint32 failed = 5;
 }
 
+// Host to guest, to the agent: whether the user turned backup to the host on. Sent each time
+// the agent connects and whenever the user changes it. Until the agent hears it is on, it keeps
+// Android's backup manager from backing up to the host (backup off, automatic restore off),
+// so a user who never turned backup on has nothing backed up and nothing scheduled.
+message BackupSetting {
+  bool enabled = 1;
+}
+
 // Which passkey ceremony an app asks for.
 enum PasskeyOperation {
   PASSKEY_OPERATION_UNSPECIFIED = 0;
@@ -2769,5 +2777,6 @@ message Envelope {
     PasskeyResponse passkey_response = 633;
     KeyMintRootKeyRequest keymint_root_key_request = 634;
     KeyMintRootKey keymint_root_key = 635;
+    BackupSetting backup_setting = 636;
   }
 }

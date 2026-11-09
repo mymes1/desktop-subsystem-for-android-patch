@@ -1686,6 +1686,44 @@ message BackupReport {
   uint32 installed = 10;
   // When the backup was last restored, in milliseconds since the Unix epoch; 0 for never.
   int64 last_restore_unix_ms = 11;
+  // Whether the user turned backup on. Off by default: until the user turns it on, no backup
+  // runs, and neither the backup folder nor its key is made. While it is off `available` is
+  // false with no problem, and what an earlier backup left in the folder is still counted.
+  bool enabled = 12;
+}
+
+// Turns the caller's backup on or off. On, Android's backup manager backs the apps' data up to
+// the host on its own schedule, and BackupNow and RestoreBackup work. Off, Android's backup
+// manager stops backing up to the host, and the host takes no more backups; with
+// `delete_backups` the backup folder's files and the backup key are removed as well, else
+// they stay for a later restore. Answered with BackupReport.
+message SetBackup {
+  bool enabled = 1;
+  bool delete_backups = 2;
+}
+
+// Asks how the root key of the caller's Android's KeyMint is protected on this computer.
+// Answered with KeyProtection. It reads only what the key's file records, so it never asks
+// for a password and answers while Android is stopped.
+message GetKeyProtection {}
+
+// How the root key of the guest's KeyMint is sealed on this computer.
+message KeyProtection {
+  // Whether a root key is kept yet: one is made the first time Android starts.
+  bool kept = 1;
+  // What sealed it: "tpm" (the computer's TPM), "secure-enclave" (the Mac's Secure Enclave),
+  // "dpapi" (Windows DPAPI under the user's account), "secret-service" (the user's Secret
+  // Service keyring) or "keychain" (the user's login keychain). Empty while none is kept.
+  string sealed_by = 2;
+  // Whether hardware of this computer (a TPM or the Secure Enclave) holds what seals it.
+  bool hardware = 3;
+  // What sealed it, in words, such as "the computer's TPM 2.0 and DPAPI under your account".
+  string description = 4;
+  // When it is not sealed by hardware: why this computer's hardware could not be used.
+  string fallback_reason = 5;
+  // Why the kept key could not be opened for the latest start of Android, and what to do;
+  // empty when it opened (or no start has asked for it yet).
+  string problem = 6;
 }
 
 // Turns the connection into a watch of the passkey ceremonies of the caller's Android: after
@@ -2391,6 +2429,8 @@ message Request {
     SetBackupRecoveryKey set_backup_recovery_key = 624;
     WatchPasskeys watch_passkeys = 625;
     ReportPasskeyCeremony report_passkey_ceremony = 626;
+    SetBackup set_backup = 627;
+    GetKeyProtection get_key_protection = 628;
   }
 }
 
@@ -2427,6 +2467,7 @@ message Response {
     AppRootResult app_root_result = 341;
     BackupReport backup_report = 620;
     BackupRecoveryKey backup_recovery_key = 621;
+    KeyProtection key_protection = 622;
   }
 }
 
