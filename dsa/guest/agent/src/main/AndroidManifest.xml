@@ -17,6 +17,7 @@
   permissions, which default-permissions-dsa-agent.xml grants instead.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.github.thisisthepy.dsa.agent"
     coreApp="true">
 
     <!-- Listening to task changes; moving and resizing tasks and setting their density. -->

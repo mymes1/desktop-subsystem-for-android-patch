@@ -1,0 +1,12 @@
+# The guest agent: a platform-signed system app that reports app tasks to the host and
+# acts on the host's requests. The root module is the app; hidden-api holds compile-only
+# declarations of the framework classes the app links against but the SDK does not publish;
+# build-plugin generates the AIDL binder stubs and packages the release APK with the
+# Android SDK's tools (aapt2, d8, zipalign) without Gradle.
+
+modules:
+  - ./build-plugin
+  - ./hidden-api
+
+plugins:
+  - ./build-plugin
