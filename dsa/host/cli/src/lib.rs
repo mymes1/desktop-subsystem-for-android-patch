@@ -1,7 +1,7 @@
 //! `dsa`, the command line client of the local API.
 //!
 //! ```text
-//! dsa status
+//! dsa status [--no-start]
 //! dsa start [--wait]
 //! dsa stop [--wait]
 //! dsa freeze
@@ -343,7 +343,7 @@ use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
 use serde_json::{json, Value};
 
-pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
+pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze | update | \
      launch <package> [--wait-first-frame] | tap <package> <x> <y> | stop-app <package> | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
@@ -781,6 +781,10 @@ pub struct Invocation {
     /// `dsa android use <major> --erase-data`: the user agreed that moving to an older Android
     /// erases its data.
     pub erase_data: bool,
+    /// `dsa status --no-start`: ask a running service only, and never start one. A settings
+    /// app follows an update this way while setup has stopped the service, so it does not
+    /// start the old service again under setup.
+    pub no_start: bool,
 }
 
 /// Whether `name` can be an Android package name: dot-separated parts of letters, digits
@@ -817,6 +821,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut yes = false;
     let mut android = None;
     let mut erase_data = false;
+    let mut no_start = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
     let mut tags = Vec::new();
@@ -1170,6 +1175,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             {
                 erase_data = true
             }
+            "--no-start" if command == Some(Command::Status) => no_start = true,
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
             "--progress" if matches!(command, Some(Command::Install | Command::GappsInstall)) => {
                 progress = true
@@ -1314,6 +1320,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         yes,
         android,
         erase_data,
+        no_start,
     })
 }
 
@@ -2072,6 +2079,11 @@ pub fn status_json(status: &Status) -> Value {
         "last_reason": status.last_reason,
         "update_notice": status.update_notice,
         "problem": status.problem,
+        "program_update": status.program_update.as_ref().map(|progress| json!({
+            "phase": progress.phase.as_str(),
+            "version": progress.version,
+            "in_progress": progress.phase.in_progress(),
+        })),
     })
 }
 
@@ -2777,6 +2789,14 @@ pub fn describe(status: &Status) -> String {
         .flat_map(|notice| notice.lines())
     {
         let _ = write!(line, "\nUpdate: {notice}");
+    }
+    // An update under way says what it is doing; one that has ended is already in the news.
+    if let Some(progress) = status
+        .program_update
+        .as_ref()
+        .filter(|progress| progress.phase.in_progress())
+    {
+        let _ = write!(line, "\nUpdating DSA: {progress}");
     }
     line
 }
@@ -4156,7 +4176,8 @@ pub fn run_with_starter(
         });
     }
     // Stopping or freezing needs an Android that runs, so neither starts the service.
-    let can_start = !matches!(invocation.command, Command::Stop | Command::Freeze);
+    let can_start =
+        !invocation.no_start && !matches!(invocation.command, Command::Stop | Command::Freeze);
     let mut client = connect(connector, starter, can_start, Duration::from_secs(10))?;
     let show = |status: &Status| {
         if invocation.json {
