@@ -30,7 +30,7 @@ class AndroidMemorySource(context: Context) : MemorySource {
         } catch (e: PackageManager.NameNotFoundException) {
             null
         }
-        val system = info != null && info.flags and ApplicationInfo.FLAG_SYSTEM != 0
+        val system = info != null && (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         // init mounts the Google apps image at GAPPS_IMAGE and lays it over the system's
         // folders, so an app it brought is at the same path under the image. An update moves
         // the APK to /data, and then the name decides.
