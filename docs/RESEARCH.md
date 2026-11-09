@@ -2101,3 +2101,29 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 스크립트가 실제 Play 서비스를 다시 컴파일하는지(`logcat -s DsaGappsCompile`, `pm art dump com.google.android.gms`의 reason=cmdline), 그 시간, 그 뒤 `dumpsys meminfo -d`의 `.App art`. toybox sed가 스크립트의 sed 식을 GNU sed와 같게 다루는지(단위 시험은 GNU sed로 돈다).
 - 절감과 시작 시간 비용의 숫자.
 - 유휴 refault(위 3)의 정책 쪽 처리, AiSeal의 1초 되풀이(`service.aiseal.enable`을 둘지, 첫 연결을 막을지), mDNS EPERM, 업데이트된 Google 앱의 기본 권한 상태.
+- 구성자가 된 Play 서비스는 이제 DeviceConfig에 실제로 쓴다. 그래서 아래 추가 조사의 `activity_manager/max_cached_processes`처럼 에이전트가 정해 두는 플래그를 Google의 값으로 바꿀 수 있고, 에이전트는 그때마다 다시 쓴다. 두 쪽이 얼마나 자주 번갈아 쓰는지는 실기에서 `dumpsys device_config`와 에이전트 로그로 본다.
+
+### 추가 조사 (2026-11-10): Google Play 서비스가 실제로 드는 메모리와 캐시 프로세스 상한
+
+**기준.** 소유자 PC, Android 17 게스트, Google Play 설치, 열린 창 없음, 부팅 뒤 58분. 읽기만 하는 조사였다(`dumpsys meminfo`, `/proc/meminfo`, zram의 `mm_stat`, `settings get global activity_manager_constants`, `dumpsys activity settings`). 빌드하거나 설치하지 않았다.
+
+**잰 것.**
+
+- Google Play 서비스의 PSS 약 140 MiB 가운데 92%가 이미 zram에 있는 SwapPss였다. `com.google.android.gms`는 PSS 81 MiB 중 SwapPss 74.6 MiB, `com.google.android.gms.unstable`은 54 MiB 중 49 MiB. zram 압축비는 3.14였다. 그래서 호스트가 실제로 내는 몫은 약 50 MiB다.
+- 안드로이드의 PSS(`Debug.MemoryInfo.getTotalPss`)는 SwapPss를 압축 전 크기로 더한다. DSA의 보고(`dsa memory`, 로컬 API, 세 설정 앱)가 이 값을 그대로 보여 주었으므로 유휴 게스트가 실제 비용의 약 2.7배로 보였다.
+- 깨울 때마다(`dumpsys` 한 번에도) gms의 RSS가 30 MiB에서 73 MiB로 돌아왔고, 다음 전역 유휴 회수(`dsa/guest/channeld/src/reclaim.rs`, cgroup `memory.reclaim`)까지 그대로 머물렀다.
+- `settings get global activity_manager_constants`는 `max_cached_processes=8`이었지만 `dumpsys activity settings`는 `max_cached_processes=1024`, `CUR_MAX_CACHED_PROCESSES=1024`였다. R8의 32에서 8로 낮춘 상한이 Android 17에서는 적용되지 않았다.
+
+**캐시 프로세스 상한을 읽는 곳 (AOSP `frameworks/base` main, `ActivityManagerConstants.java`).** 적용되는 값은 `CUR_MAX_CACHED_PROCESSES`다. `updateMaxCachedProcesses()`가 DeviceConfig의 `activity_manager` 네임스페이스 `max_cached_processes`를 읽고, 비어 있으면 프레임워크 리소스 `config_customizedMaxCachedProcesses`(기본 1024)를 쓴다. 전역 설정 `activity_manager_constants`의 파서는 이 키를 더 이상 읽지 않는다. `dumpsys`의 `max_cached_processes=` 줄은 상수 `MAX_CACHED_PROCESSES`(1024)로, 상한과 비교만 될 뿐 바뀌지 않는다.
+
+**바꾼 것.**
+
+1. 보고: 프로세스의 비용은 상주분(PSS에서 SwapPss를 뺀 것)과 zram 안의 압축된 몫(SwapPss에 zram이 잰 비율, `mm_stat`의 사용량 나누기 저장량을 곱한 것, 저장량이 없으면 `/proc/meminfo`의 사용 중인 스왑)의 합이다. 비율을 잴 수 없으면 압축 몫은 "알 수 없음"으로 두고, 압축 전 크기로 세지 않는다. 에이전트는 모든 프로세스의 SwapPss 합과 Google Play 서비스(gms, vending, gsf와 Google 앱 이미지가 들여온 시스템 앱) 전체를 따로 보낸다. `dsa memory`, 로컬 API, 세 설정 앱의 메모리 페이지가 Google Play 서비스를 따로 한 줄로 보여 준다.
+2. 깨어난 뒤의 회수: `dsa-channeld`가 2초마다 앱 프로세스를 보고, CPU를 쓴 뒤 6초 조용한 프로세스의 사적 익명 영역을 `process_madvise(MADV_PAGEOUT)`로 zram에 보낸다. 포그라운드 앱과 사용자가 보는 프로세스(`oom_score_adj` 100 미만), 태스크 창이 열린 패키지는 건드리지 않는다. 다른 앱은 perceptible(200)부터, Google Play 서비스는 visible(100)부터 대상이다. 한 번에 한 프로세스, 같은 프로세스는 30초에 한 번, 지난번 뒤로 2 MiB 넘게 늘었을 때만 한다. 줄마다 옮긴 양을 로그에 남긴다. init이 `SYS_NICE`와 `SYS_PTRACE`를 주고, 정책이 그 둘을 허용한다.
+3. 캐시 프로세스 상한: 프레임워크 오버레이가 `config_customizedMaxCachedProcesses`를 8로 두고(첫 부팅부터), 에이전트가 DeviceConfig `activity_manager/max_cached_processes`를 8로 쓰며 다른 쪽(Google Play 서비스의 플래그 동기화)이 바꾸면 다시 쓴다. 이전 에이전트가 전역 설정에 쓴 값은 지운다. 오버레이 부팅 확인이 두 부팅 모두에서 `dumpsys activity settings`의 `CUR_MAX_CACHED_PROCESSES=8`을 확인한다.
+
+**확인하지 못한 것.**
+
+- 실기에서의 효과. 같은 조건(Google Play, 창 없음, 깨우기 한 번)으로 `dsa memory`의 Google Play 서비스 줄과 channeld의 `paged out` 로그 줄, gms의 RSS를 앞뒤로 재야 한다.
+- 플랫폼 정책에는 `sys_ptrace`를 소수 도메인에만 허용하는 neverallow가 있다. 이미지는 `secilc -N`으로 정책을 컴파일하므로 부팅은 막히지 않지만, 호환성 시험(VTS)에서는 걸릴 수 있다.
+- Google Play 서비스가 DeviceConfig `activity_manager`를 실제로 바꾸는지, 바꾼다면 얼마나 자주인지.

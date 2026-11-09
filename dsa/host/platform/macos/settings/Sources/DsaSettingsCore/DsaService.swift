@@ -243,8 +243,14 @@ public final class DsaService {
         var guest: GuestMemoryInfo?
         let g = json["guest"]
         if g.isObject {
+            // What processes cost: resident_kb, and compressed_kb, null when zram's compression
+            // is unknown.
+            func share(_ s: Json) -> MemoryShare {
+                MemoryShare(residentKb: s.uint("resident_kb"), compressedKb: s.optionalUInt("compressed_kb"))
+            }
             let top = g["top_processes"].items.map {
-                GuestProcess(pid: $0.int("pid"), name: $0.string("name"), pssKb: $0.uint("pss_kb"), swapPssKb: $0.uint("swap_pss_kb"))
+                GuestProcess(pid: $0.int("pid"), name: $0.string("name"), pssKb: $0.uint("pss_kb"), swapPssKb: $0.uint("swap_pss_kb"),
+                             googlePlay: $0.bool("google_play"), cost: $0.has("resident_kb") ? share($0) : nil)
             }
             let k = g["kernel"]
             let kernel = k.isObject
@@ -261,7 +267,11 @@ public final class DsaService {
                 shmemKb: g.uint("shmem_kb"), slabReclaimableKb: g.uint("slab_reclaimable_kb"),
                 swapTotalKb: g.uint("swap_total_kb"), swapFreeKb: g.uint("swap_free_kb"),
                 zramOriginalKb: g.uint("zram_original_kb"), zramUsedKb: g.uint("zram_used_kb"),
-                totalPssKb: g.uint("total_pss_kb"), topProcesses: top, ageSeconds: g.uint("age_seconds"), kernel: kernel)
+                totalPssKb: g.uint("total_pss_kb"), topProcesses: top, ageSeconds: g.uint("age_seconds"), kernel: kernel,
+                apps: g["apps"].isObject ? share(g["apps"]) : nil,
+                googlePlay: g["google_play"].isObject
+                    ? GooglePlayMemory(processes: g["google_play"].uint("processes"), cost: share(g["google_play"]))
+                    : nil)
         }
         return MemoryReport(guest: guest, host: host, hostTotalKb: json.uint("host_total_kb"),
                             vmBeyondGuestKb: json.optionalUInt("vm_beyond_guest_kb"))

@@ -61,7 +61,11 @@
 //! mounts, no denial that names the translator or one of its places, no overlayfs failure, no
 //! program of any domain refused filesystem getattr on an image's superblock, and no service
 //! refused its domain change from a nosuid mount. A boot that never gets far enough to be
-//! checked fails with those refusals in its message.
+//! checked fails with those refusals in its message. Both boots must also keep at most 8 cached
+//! app processes, as `dumpsys activity settings` reports the limit the activity manager applies
+//! (`CUR_MAX_CACHED_PROCESSES`): Android 17 reads it from the device configuration and the
+//! framework's resource, not from the global setting it once read, and with the limit only in
+//! that setting it applied 1024. Google Play services must not change that.
 //!
 //! With the Google apps in place, the agent must keep Play services' desktop-irrelevant
 //! services off. The small build's Play services is not installed (it is not signed), so an app
@@ -1542,6 +1546,57 @@ fn fr32_pr3_a_device_without_opengles_or_a_feature_play_needs_is_found() {
     assert_eq!(play_feature_problems("", "").len(), 1 + PLAY_FEATURES.len());
 }
 
+/// The most cached app processes the image keeps, as the agent and the framework overlay set it.
+const MAX_CACHED_PROCESSES: u32 = 8;
+
+/// The cached process limit the activity manager applies, from `dumpsys activity settings`:
+/// `CUR_MAX_CACHED_PROCESSES`, not the `max_cached_processes` line, which shows a constant the
+/// limit is only compared with.
+fn applied_cached_limit(settings: &str) -> Option<u32> {
+    settings.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("CUR_MAX_CACHED_PROCESSES=")
+            .and_then(|value| value.trim().parse().ok())
+    })
+}
+
+/// What is wrong with the cached process limit of the running boot.
+fn cached_limit_problems(adb: &Adb, dir: &Path, boot: &str, problems: &mut Vec<String>) {
+    match adb.shell("dumpsys activity settings") {
+        Ok(settings) => {
+            let _ = std::fs::write(dir.join(format!("activity-settings-{boot}.txt")), &settings);
+            match applied_cached_limit(&settings) {
+                Some(MAX_CACHED_PROCESSES) => {}
+                Some(limit) => problems.push(format!(
+                    "{boot}: the activity manager keeps up to {limit} cached processes, not \
+                     {MAX_CACHED_PROCESSES} (CUR_MAX_CACHED_PROCESSES in dumpsys activity settings)"
+                )),
+                None => problems.push(format!(
+                    "{boot}: dumpsys activity settings shows no CUR_MAX_CACHED_PROCESSES line"
+                )),
+            }
+        }
+        Err(why) => problems.push(format!("{boot}: reading dumpsys activity settings: {why}")),
+    }
+}
+
+#[test]
+fn nfr2_the_cached_process_limit_is_read_as_the_activity_manager_applies_it() {
+    // Android 17 on the owner's PC: the setting said 8, the activity manager applied 1024.
+    let ignored =
+        "ACTIVITY MANAGER SETTINGS (dumpsys activity settings) activity_manager_constants:\n  \
+                   max_cached_processes=1024\n  background_settle_time=60000\n\n  \
+                   mCustomizedMaxCachedProcesses=1024\n  CUR_MAX_CACHED_PROCESSES=1024\n  \
+                   CUR_MAX_EMPTY_PROCESSES=512\n";
+    assert_eq!(applied_cached_limit(ignored), Some(1024));
+    let applied = ignored.replace(
+        "CUR_MAX_CACHED_PROCESSES=1024",
+        "CUR_MAX_CACHED_PROCESSES=8",
+    );
+    assert_eq!(applied_cached_limit(&applied), Some(MAX_CACHED_PROCESSES));
+    assert_eq!(applied_cached_limit("max_cached_processes=8\n"), None);
+}
+
 /// The services the Play services probe declares, by class name.
 fn probe_services(manifest: &str) -> Vec<&str> {
     manifest
@@ -2034,6 +2089,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
         Err(why) => problems.push(format!("reading where ARM translation stands: {why}")),
     }
     log_problems(&adb, &dir, "first boot", &mut problems);
+    cached_limit_problems(&adb, &dir, "first boot", &mut problems);
     // An ARM app, after the boot's log is read: the probe clears the log to read its own start.
     arm_app_run_problems(&adb, &probe, &dir, &mut problems);
     // What Google Play compares each app's manifest with, which the Google apps do not change.
@@ -2178,6 +2234,7 @@ fn fr25_fr32_the_translation_and_google_apps_images_are_laid_over_the_booted_sys
     translation_problems(&adb, &dir, &table, &mut problems);
     gapps_boot_problems(&adb, &dir, &mut problems);
     log_problems(&adb, &dir, "second boot", &mut problems);
+    cached_limit_problems(&adb, &dir, "second boot", &mut problems);
     play_services_problems(&adb, &gms_probe, &dir, &mut problems);
 
     // The service's own copy of the guest log, across both boots.

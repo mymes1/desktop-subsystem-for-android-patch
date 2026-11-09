@@ -245,6 +245,50 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(memory.guestAge, "Memory_ReportAge")
     }
 
+    func test_nfr2_memory_page_counts_zram_compressed_and_google_play_services_apart() async {
+        let (cli, service) = make()
+        cli.answer("memory --json", """
+        {"host":[],"host_total_kb":0,
+         "guest":{"mem_total_kb":4194304,"mem_free_kb":1048576,"total_pss_kb":512000,"swap_pss_kb":307200,
+                  "zram_original_kb":307200,"zram_used_kb":102400,"age_seconds":12,
+                  "apps":{"resident_kb":204800,"compressed_kb":102400,"swapped_out_kb":307200,"total_kb":307200},
+                  "google_play":{"processes":2,"pss_kb":138240,"swap_pss_kb":125952,"resident_kb":12288,
+                                 "compressed_kb":41984,"swapped_out_kb":125952,"total_kb":54272},
+                  "top_processes":[{"pid":700,"name":"com.google.android.gms","pss_kb":82944,"swap_pss_kb":76800,
+                                    "google_play":true,"resident_kb":6144,"compressed_kb":25600},
+                                   {"pid":42,"name":"system_server","pss_kb":153600,"swap_pss_kb":0,
+                                    "google_play":false,"resident_kb":153600,"compressed_kb":0}]}}
+        """)
+        let memory = MemoryViewModel(service: service, text: KeyText())
+        await memory.refresh()
+        let guest = memory.report?.guest
+        XCTAssertEqual(guest?.apps, MemoryShare(residentKb: 204800, compressedKb: 102400))
+        XCTAssertEqual(guest?.googlePlay?.processes, 2)
+        XCTAssertEqual(guest?.googlePlay?.cost.totalKb, 54272)
+        XCTAssertEqual(memory.guestRows.map(\.label).prefix(2), ["Memory_Apps", "Memory_GooglePlay"])
+        XCTAssertEqual(memory.guestRows[0].size, Format.size(307200))
+        XCTAssertEqual(memory.guestRows[1].size, Format.size(54272))
+        XCTAssertEqual(memory.guestProcessRows[0].size, Format.size(31744))
+        XCTAssertEqual(memory.guestProcessRows[0].detail, "Memory_GuestProcessGooglePlay")
+        XCTAssertEqual(memory.guestProcessRows[1].detail, "Memory_GuestProcessDetail")
+    }
+
+    func test_nfr2_memory_page_leaves_google_play_out_and_says_when_zram_is_unmeasured() async {
+        let (cli, service) = make()
+        cli.answer("memory --json", """
+        {"host":[],"host_total_kb":0,
+         "guest":{"mem_total_kb":4194304,"total_pss_kb":204800,"swap_pss_kb":102400,"age_seconds":1,
+                  "apps":{"resident_kb":102400,"compressed_kb":null,"swapped_out_kb":102400,"total_kb":102400},
+                  "google_play":null,"top_processes":[]}}
+        """)
+        let memory = MemoryViewModel(service: service, text: KeyText())
+        await memory.refresh()
+        XCTAssertEqual(memory.report?.guest?.apps, MemoryShare(residentKb: 102400, compressedKb: nil))
+        XCTAssertNil(memory.report?.guest?.googlePlay)
+        XCTAssertFalse(memory.guestRows.map(\.label).contains("Memory_GooglePlay"))
+        XCTAssertEqual(memory.guestRows[0].size, Format.size(102400))
+    }
+
     func test_fr17_sizes_follow_the_users_number_format() {
         XCTAssertEqual(Format.size(512, locale: Locale(identifier: "en_US")), "0.5 MB")
         XCTAssertEqual(Format.size(3 * 1024 * 1024 / 2, locale: Locale(identifier: "de_DE")), "1,50 GB")

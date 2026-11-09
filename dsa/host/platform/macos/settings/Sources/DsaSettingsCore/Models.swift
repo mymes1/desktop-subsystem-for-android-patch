@@ -281,11 +281,32 @@ public struct HostProcess: Equatable, Sendable {
     public var privateKb: UInt64
 }
 
+/// What some of Android's processes cost, in KiB: their pages in memory, and their share of
+/// compressed memory (zram) at the compression zram measures. PSS counts what is swapped out
+/// at its size before compression, two or three times this. `compressedKb` is nil when the
+/// compression could not be measured.
+public struct MemoryShare: Equatable, Sendable {
+    public var residentKb: UInt64
+    public var compressedKb: UInt64?
+
+    public var totalKb: UInt64 { residentKb + (compressedKb ?? 0) }
+}
+
 public struct GuestProcess: Equatable, Sendable {
     public var pid: Int
     public var name: String
     public var pssKb: UInt64
     public var swapPssKb: UInt64
+    /// It belongs to Google Play services.
+    public var googlePlay: Bool = false
+    /// What it costs; nil from a service that does not say.
+    public var cost: MemoryShare? = nil
+}
+
+/// Every process of Google Play services together: how many, and what they cost.
+public struct GooglePlayMemory: Equatable, Sendable {
+    public var processes: UInt64
+    public var cost: MemoryShare
 }
 
 /// What the guest kernel holds for itself, in KiB.
@@ -302,6 +323,10 @@ public struct GuestMemoryInfo: Equatable, Sendable {
     public var topProcesses: [GuestProcess]
     public var ageSeconds: UInt64
     public var kernel: GuestKernelInfo?
+    /// What the processes cost together; nil from a service that does not say.
+    public var apps: MemoryShare? = nil
+    /// Nil while none of Google Play services' processes runs.
+    public var googlePlay: GooglePlayMemory? = nil
 }
 
 /// The memory of the user's Android. `vmBeyondGuestKb` is what the VM holds on the host

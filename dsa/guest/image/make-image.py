@@ -3437,7 +3437,13 @@ AGENT_APKCERTS = (
 # that becomes a scroll shows the row pressed until it moves past the touch slop.
 FRAMEWORK_OVERLAY_APK = "VENDOR/overlay/DsaFrameworkOverlay.apk"
 FRAMEWORK_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.framework"
-FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
+# The activity manager's cached process limit when the device configuration sets none: 8, not
+# Android 17's 1024, so a phone's dozens of cached processes do not hold memory the host would
+# get back. Android 17 reads the limit from the device configuration
+# (activity_manager/max_cached_processes, which the agent sets to the same value) and else from
+# this resource; the global setting activity_manager_constants no longer carries it. The
+# resource holds from the first boot, before the agent runs.
+FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8}
 # The user's aspect ratio override of an app, which Settings offers on the app's aspect ratio
 # page and a task window's system menu opens. The window manager applies the override only
 # while this flag is on, and Android leaves it off unless a device turns it on, as large

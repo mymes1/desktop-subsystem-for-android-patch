@@ -26,6 +26,32 @@ SPEC.loader.exec_module(make_image)
 
 
 class ImageLayoutTests(unittest.TestCase):
+    def test_nfr2_the_cached_process_limit_applies_where_android_17_reads_it(self):
+        # Android 17 takes the limit from the device configuration, which the agent sets, and
+        # else from config_customizedMaxCachedProcesses (1024), never from the global setting.
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS["config_customizedMaxCachedProcesses"], 8)
+        self.assertIn("integer/config_customizedMaxCachedProcesses", make_image.framework_overlaid())
+        with tempfile.TemporaryDirectory() as tmp:
+            make_image.framework_overlay_sources(Path(tmp))
+            values = (Path(tmp) / "res/values/dsa.xml").read_text()
+        self.assertIn('<integer name="config_customizedMaxCachedProcesses">8</integer>', values)
+        agent = Path(__file__).parent.parent / "agent"
+        source = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/platform/AndroidAppProcesses.kt").read_text()
+        self.assertIn('NAMESPACE = "activity_manager"', source)
+        self.assertIn("DeviceConfig.setProperty(NAMESPACE, MAX_CACHED", source)
+        closed = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/memory/ClosedApps.kt").read_text()
+        self.assertIn("const val MAX_CACHED_PROCESSES = 8", closed)
+
+    def test_nfr2_channeld_may_page_a_woken_app_out_to_zram(self):
+        # process_madvise on another user's process asks CAP_SYS_NICE and CAP_SYS_PTRACE: init
+        # gives the daemon both, and the policy lets it use them, or every pageout is refused.
+        here = Path(__file__).parent
+        cil = (here / "sepolicy" / "channeld.cil").read_text()
+        self.assertRegex(cil, r"\(allow dsa_channeld self \(capability \([^)]*\bsys_nice\b[^)]*\bsys_ptrace\b")
+        rc = (here / "dsa-channeld.rc").read_text()
+        service = rc[rc.index("service dsa_channeld"):rc.index("on property:sys.boot_completed=1")]
+        self.assertIn("capabilities SYS_NICE SYS_PTRACE", service)
+
     def test_fr21_channeld_may_clear_the_pstore_records_the_host_collected(self):
         # init leaves /sys/fs/pstore read only to system; the daemon makes it writable to
         # itself and unlinks each collected record, which erases it from the pstore disk.
@@ -43,9 +69,14 @@ class ImageLayoutTests(unittest.TestCase):
         "/proc/meminfo": [("proc_meminfo", "file")],
         "/proc/pressure/memory": [("proc_pressure_mem", "file")],
         "/proc/vmstat": [("proc_vmstat", "file")],
-        # The process listing and each app process's /proc/<pid>/cmdline.
-        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
+        # The process listing, the owner of each process's entry (an app's or not), and each
+        # app process's /proc/<pid>/cmdline.
+        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "dir", "getattr"), ("appdomain", "file")],
         "/proc/{}/cmdline": [("appdomain", "file")],
+        # The pageout after an app wakes: its importance, its memory and its address space.
+        "/proc/{pid}/status": [("appdomain", "file")],
+        "/proc/{}/oom_score_adj": [("appdomain", "file")],
+        "/proc/{}/maps": [("appdomain", "file")],
         # The kernel's su guard on securityfs, which only the elevation helper writes.
         "/sys/kernel/security/dsa_su/control": [
             ("securityfs", "dir"),
@@ -3146,7 +3177,10 @@ class TouchLatencyTests(unittest.TestCase):
     def test_fr5_a_press_on_a_list_row_is_not_held_back_by_the_tap_timeout(self):
         # Settings' rows sit in a RecyclerView, so View.onTouchEvent posts setPressed after
         # config_tapTimeoutMillis (100 ms) instead of calling it on the press.
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS, {"config_tapTimeoutMillis": 0})
+        self.assertEqual(
+            make_image.FRAMEWORK_OVERLAY_INTEGERS,
+            {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8},
+        )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_image.framework_overlay_sources(root / "src")

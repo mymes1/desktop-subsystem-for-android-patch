@@ -818,6 +818,143 @@ public  final class GuestMemory extends
     memOnlineKb_ = 0L;
   }
 
+  public static final int SWAP_PSS_KB_FIELD_NUMBER = 23;
+  private long swapPssKb_;
+  /**
+   * <pre>
+   * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+   * were compressed, for every process total_pss_kb counts.
+   * </pre>
+   *
+   * <code>uint64 swap_pss_kb = 23;</code>
+   * @return The swapPssKb.
+   */
+  @java.lang.Override
+  public long getSwapPssKb() {
+    return swapPssKb_;
+  }
+  /**
+   * <pre>
+   * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+   * were compressed, for every process total_pss_kb counts.
+   * </pre>
+   *
+   * <code>uint64 swap_pss_kb = 23;</code>
+   * @param value The swapPssKb to set.
+   */
+  private void setSwapPssKb(long value) {
+    
+    swapPssKb_ = value;
+  }
+  /**
+   * <pre>
+   * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+   * were compressed, for every process total_pss_kb counts.
+   * </pre>
+   *
+   * <code>uint64 swap_pss_kb = 23;</code>
+   */
+  private void clearSwapPssKb() {
+    
+    swapPssKb_ = 0L;
+  }
+
+  public static final int GOOGLE_PLAY_PROCESSES_FIELD_NUMBER = 24;
+  private int googlePlayProcesses_;
+  /**
+   * <pre>
+   * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+   * only those among top_processes: how many run, their proportional set size, and how much
+   * of it is swapped out to zram, at the size before compression.
+   * </pre>
+   *
+   * <code>uint32 google_play_processes = 24;</code>
+   * @return The googlePlayProcesses.
+   */
+  @java.lang.Override
+  public int getGooglePlayProcesses() {
+    return googlePlayProcesses_;
+  }
+  /**
+   * <pre>
+   * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+   * only those among top_processes: how many run, their proportional set size, and how much
+   * of it is swapped out to zram, at the size before compression.
+   * </pre>
+   *
+   * <code>uint32 google_play_processes = 24;</code>
+   * @param value The googlePlayProcesses to set.
+   */
+  private void setGooglePlayProcesses(int value) {
+    
+    googlePlayProcesses_ = value;
+  }
+  /**
+   * <pre>
+   * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+   * only those among top_processes: how many run, their proportional set size, and how much
+   * of it is swapped out to zram, at the size before compression.
+   * </pre>
+   *
+   * <code>uint32 google_play_processes = 24;</code>
+   */
+  private void clearGooglePlayProcesses() {
+    
+    googlePlayProcesses_ = 0;
+  }
+
+  public static final int GOOGLE_PLAY_PSS_KB_FIELD_NUMBER = 25;
+  private long googlePlayPssKb_;
+  /**
+   * <code>uint64 google_play_pss_kb = 25;</code>
+   * @return The googlePlayPssKb.
+   */
+  @java.lang.Override
+  public long getGooglePlayPssKb() {
+    return googlePlayPssKb_;
+  }
+  /**
+   * <code>uint64 google_play_pss_kb = 25;</code>
+   * @param value The googlePlayPssKb to set.
+   */
+  private void setGooglePlayPssKb(long value) {
+    
+    googlePlayPssKb_ = value;
+  }
+  /**
+   * <code>uint64 google_play_pss_kb = 25;</code>
+   */
+  private void clearGooglePlayPssKb() {
+    
+    googlePlayPssKb_ = 0L;
+  }
+
+  public static final int GOOGLE_PLAY_SWAP_PSS_KB_FIELD_NUMBER = 26;
+  private long googlePlaySwapPssKb_;
+  /**
+   * <code>uint64 google_play_swap_pss_kb = 26;</code>
+   * @return The googlePlaySwapPssKb.
+   */
+  @java.lang.Override
+  public long getGooglePlaySwapPssKb() {
+    return googlePlaySwapPssKb_;
+  }
+  /**
+   * <code>uint64 google_play_swap_pss_kb = 26;</code>
+   * @param value The googlePlaySwapPssKb to set.
+   */
+  private void setGooglePlaySwapPssKb(long value) {
+    
+    googlePlaySwapPssKb_ = value;
+  }
+  /**
+   * <code>uint64 google_play_swap_pss_kb = 26;</code>
+   */
+  private void clearGooglePlaySwapPssKb() {
+    
+    googlePlaySwapPssKb_ = 0L;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.GuestMemory parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1771,6 +1908,151 @@ public  final class GuestMemory extends
       return this;
     }
 
+    /**
+     * <pre>
+     * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+     * were compressed, for every process total_pss_kb counts.
+     * </pre>
+     *
+     * <code>uint64 swap_pss_kb = 23;</code>
+     * @return The swapPssKb.
+     */
+    @java.lang.Override
+    public long getSwapPssKb() {
+      return instance.getSwapPssKb();
+    }
+    /**
+     * <pre>
+     * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+     * were compressed, for every process total_pss_kb counts.
+     * </pre>
+     *
+     * <code>uint64 swap_pss_kb = 23;</code>
+     * @param value The swapPssKb to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSwapPssKb(long value) {
+      copyOnWrite();
+      instance.setSwapPssKb(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+     * were compressed, for every process total_pss_kb counts.
+     * </pre>
+     *
+     * <code>uint64 swap_pss_kb = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSwapPssKb() {
+      copyOnWrite();
+      instance.clearSwapPssKb();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+     * only those among top_processes: how many run, their proportional set size, and how much
+     * of it is swapped out to zram, at the size before compression.
+     * </pre>
+     *
+     * <code>uint32 google_play_processes = 24;</code>
+     * @return The googlePlayProcesses.
+     */
+    @java.lang.Override
+    public int getGooglePlayProcesses() {
+      return instance.getGooglePlayProcesses();
+    }
+    /**
+     * <pre>
+     * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+     * only those among top_processes: how many run, their proportional set size, and how much
+     * of it is swapped out to zram, at the size before compression.
+     * </pre>
+     *
+     * <code>uint32 google_play_processes = 24;</code>
+     * @param value The googlePlayProcesses to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGooglePlayProcesses(int value) {
+      copyOnWrite();
+      instance.setGooglePlayProcesses(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The processes of Google Play services (ProcessMemory.google_play), all of them and not
+     * only those among top_processes: how many run, their proportional set size, and how much
+     * of it is swapped out to zram, at the size before compression.
+     * </pre>
+     *
+     * <code>uint32 google_play_processes = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGooglePlayProcesses() {
+      copyOnWrite();
+      instance.clearGooglePlayProcesses();
+      return this;
+    }
+
+    /**
+     * <code>uint64 google_play_pss_kb = 25;</code>
+     * @return The googlePlayPssKb.
+     */
+    @java.lang.Override
+    public long getGooglePlayPssKb() {
+      return instance.getGooglePlayPssKb();
+    }
+    /**
+     * <code>uint64 google_play_pss_kb = 25;</code>
+     * @param value The googlePlayPssKb to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGooglePlayPssKb(long value) {
+      copyOnWrite();
+      instance.setGooglePlayPssKb(value);
+      return this;
+    }
+    /**
+     * <code>uint64 google_play_pss_kb = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGooglePlayPssKb() {
+      copyOnWrite();
+      instance.clearGooglePlayPssKb();
+      return this;
+    }
+
+    /**
+     * <code>uint64 google_play_swap_pss_kb = 26;</code>
+     * @return The googlePlaySwapPssKb.
+     */
+    @java.lang.Override
+    public long getGooglePlaySwapPssKb() {
+      return instance.getGooglePlaySwapPssKb();
+    }
+    /**
+     * <code>uint64 google_play_swap_pss_kb = 26;</code>
+     * @param value The googlePlaySwapPssKb to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGooglePlaySwapPssKb(long value) {
+      copyOnWrite();
+      instance.setGooglePlaySwapPssKb(value);
+      return this;
+    }
+    /**
+     * <code>uint64 google_play_swap_pss_kb = 26;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGooglePlaySwapPssKb() {
+      copyOnWrite();
+      instance.clearGooglePlaySwapPssKb();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.GuestMemory)
   }
   @java.lang.Override
@@ -1810,12 +2092,17 @@ public  final class GuestMemory extends
             "cmaTotalKb_",
             "hugetlbKb_",
             "memOnlineKb_",
+            "swapPssKb_",
+            "googlePlayProcesses_",
+            "googlePlayPssKb_",
+            "googlePlaySwapPssKb_",
           };
           java.lang.String info =
-              "\u0000\u0016\u0000\u0000\u0001\u0016\u0016\u0000\u0001\u0000\u0001\u0003\u0002\u0003" +
+              "\u0000\u001a\u0000\u0000\u0001\u001a\u001a\u0000\u0001\u0000\u0001\u0003\u0002\u0003" +
               "\u0003\u0003\u0004\u0003\u0005\u0003\u0006\u0003\u0007\u0003\b\u0003\t\u0003\n\u0003" +
               "\u000b\u0003\f\u0003\r\u0003\u000e\u001b\u000f\u0003\u0010\u0003\u0011\u0003\u0012" +
-              "\u0003\u0013\u0003\u0014\u0003\u0015\u0003\u0016\u0003";
+              "\u0003\u0013\u0003\u0014\u0003\u0015\u0003\u0016\u0003\u0017\u0003\u0018\u000b\u0019" +
+              "\u0003\u001a\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
