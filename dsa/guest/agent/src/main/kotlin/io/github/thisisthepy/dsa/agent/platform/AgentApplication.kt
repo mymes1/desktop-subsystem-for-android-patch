@@ -100,6 +100,7 @@ class AgentApplication : Application() {
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
             dragCatcher = dragCatcher,
+            languageSetup = AndroidLanguageServicesSetup(this),
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }

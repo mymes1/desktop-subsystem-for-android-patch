@@ -12,7 +12,10 @@
   is enabled only while a host accessibility client watches a task. It is also the guest's
   widget host (platform/AndroidWidgets.kt), which draws the widgets the user placed on the
   host's desktop. Its print service (platform/HostPrintService.kt) sends what apps print to the
-  host's printers.
+  host's printers. Its text-to-speech engine (platform/HostTextToSpeechService.kt), speech
+  recognition service (platform/HostRecognitionService.kt) and spell checker
+  (platform/HostSpellCheckerService.kt) are the guest's defaults and answer with the host's
+  voices, speech recognition and spell checker.
   Every permission here is also in privapp-permissions-dsa-agent.xml, but for the runtime
   permissions, which default-permissions-dsa-agent.xml grants instead.
 -->
@@ -125,6 +128,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
+    <!--
+      Being the guest's speech recognition service: Android hands an app's recognition only to
+      a recognizer that may record, as it checks the app may. The sound is recorded on the
+      host. It is a runtime permission, which the image grants by default.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".platform.AgentApplication"
@@ -245,6 +254,76 @@
             <intent-filter>
                 <action android:name="android.printservice.PrintService" />
             </intent-filter>
+        </service>
+
+        <!--
+          The guest's text-to-speech engine: it lists the host's voices and speaks with them,
+          the host sending back each text's sound (platform/HostTextToSpeechService.kt). The
+          text to speech manager binds it for any app that speaks.
+        -->
+        <service
+            android:name=".platform.HostTextToSpeechService"
+            android:exported="true"
+            android:label="@string/tts_engine_name">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech.tts"
+                android:resource="@xml/host_tts_engine" />
+        </service>
+
+        <!--
+          Answers an app's or Settings' check of the engine's voice data: every language the
+          host speaks is installed. It shows nothing.
+        -->
+        <activity
+            android:name=".platform.HostTtsDataActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          The guest's speech recognition service: the host's speech recognition listens to the
+          host's microphone (platform/HostRecognitionService.kt). Any app may bind it, as any
+          recognizer; Android checks the app may record before the service is asked.
+        -->
+        <service
+            android:name=".platform.HostRecognitionService"
+            android:exported="true"
+            android:label="@string/recognition_service_name">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/host_recognition_service" />
+        </service>
+
+        <!--
+          The guest's spell checker: the host's spell checker checks what editors ask about
+          (platform/HostSpellCheckerService.kt). BIND_TEXT_SERVICE keeps every caller but the
+          text services manager out.
+        -->
+        <service
+            android:name=".platform.HostSpellCheckerService"
+            android:exported="true"
+            android:label="@string/spell_checker_name"
+            android:permission="android.permission.BIND_TEXT_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.textservice.SpellCheckerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.textservice.scs"
+                android:resource="@xml/host_spell_checker" />
         </service>
 
         <!--
