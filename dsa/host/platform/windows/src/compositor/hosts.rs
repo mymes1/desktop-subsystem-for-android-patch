@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::early_frames::EarlyFrames;
 use dsa_host_core::compositor::frame_buffers::texture_fits;
+use dsa_host_core::compositor::gpu_reset::{GpuResetWindows, Report};
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::{
@@ -270,6 +271,9 @@ struct RemoteState {
 /// rather than dropped, and the newest is shown as soon as the window is there.
 pub struct RemoteWindow {
     task_id: i32,
+    /// The guest task that draws into the window: its own, or the one that took it over
+    /// after a GPU reset.
+    drawing: std::sync::atomic::AtomicI32,
     gpu: Arc<Gpu>,
     state: Mutex<RemoteState>,
     logger: Option<Arc<CompositorLogger>>,
@@ -304,6 +308,7 @@ impl RemoteWindow {
     ) -> Arc<RemoteWindow> {
         Arc::new(RemoteWindow {
             task_id,
+            drawing: std::sync::atomic::AtomicI32::new(task_id),
             gpu,
             state: Mutex::new(RemoteState {
                 link,
@@ -378,6 +383,11 @@ impl RemoteWindow {
         }
     }
 
+    /// Task `task_id` draws into the window from now on.
+    fn drawn_by(&self, task_id: i32) {
+        self.drawing.store(task_id, Ordering::Relaxed);
+    }
+
     /// The window is gone: nothing more is sent for it.
     pub fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -415,8 +425,18 @@ impl FrameTarget for RemoteWindow {
         if state.closed || state.link.as_ref().is_some_and(|link| link.is_closed()) {
             return None;
         }
+        // A GPU reset removes the device the textures are made on, and every texture with it:
+        // the device is made again here, before the renderer copies into a lost texture, and
+        // the window gets a new texture on the new device.
+        // Until one can be made the frame is dropped; the window manager's tick says why.
+        if self.gpu.recover().is_err() {
+            return None;
+        }
+        let generation = self.gpu.generation();
         if let Some(texture) = &state.texture {
-            if texture_fits(texture.shared.size(), (width, height)) {
+            if texture.shared.generation() == generation
+                && texture_fits(texture.shared.size(), (width, height))
+            {
                 return Some(Arc::clone(texture));
             }
         }
@@ -509,7 +529,7 @@ impl FrameTarget for RemoteWindow {
             (link, state.sequence)
         };
         // The app has drawn this size: the next size of a drag may go to it.
-        super::tasks::frame_drawn(self.task_id, (width, height));
+        super::tasks::frame_drawn(self.drawing.load(Ordering::Relaxed), (width, height));
         let started = Instant::now();
         let sent = link.send(Body::Frame(Frame {
             task_id: self.task_id,
@@ -693,10 +713,19 @@ pub struct ManagerSetup {
     /// Told, on each change, whether a task window is the active window, for Windows' touch
     /// gestures. None when nothing follows that.
     pub fronts: Option<Sender<bool>>,
+    /// How many times the renderer has made its Vulkan device again after a GPU reset. None
+    /// when the renderer cannot say.
+    pub renderer_generation: Option<Box<dyn Fn() -> u64 + Send>>,
 }
 
 struct Manager {
     windows: TaskWindows,
+    /// The windows kept through a GPU reset, and which task each shows.
+    resets: GpuResetWindows,
+    /// The generations of the window manager's Direct3D device and of the renderer's Vulkan
+    /// device last seen: a change is a GPU reset.
+    gpu_generation: u64,
+    renderer_generation: u64,
     hosts: WindowHosts,
     links: HashMap<HostId, Arc<HostLink>>,
     remotes: HashMap<i32, Arc<RemoteWindow>>,
@@ -711,8 +740,13 @@ struct Manager {
 /// Runs the manager until the window manager stops, or every sender of its events is gone.
 /// Every window host is disconnected when it ends.
 pub fn manage(setup: ManagerSetup) {
+    let gpu_generation = setup.gpu.as_ref().map_or(0, |gpu| gpu.generation());
+    let renderer_generation = setup.renderer_generation.as_ref().map_or(0, |seen| seen());
     let mut manager = Manager {
         windows: TaskWindows::new(),
+        resets: GpuResetWindows::new(),
+        gpu_generation,
+        renderer_generation,
         hosts: WindowHosts::new(),
         links: HashMap::new(),
         remotes: HashMap::new(),
@@ -762,7 +796,7 @@ impl Manager {
                     }
                 }
                 let changes = self.windows.sync(&current);
-                self.change(changes, now);
+                self.guest_change(changes, now);
             }
             ManagerEvent::Task(event) => {
                 if let TaskEvent::App(app) = &*event {
@@ -770,7 +804,7 @@ impl Manager {
                     self.carry_out(actions);
                 }
                 let changes = self.windows.apply(&event);
-                self.change(changes, now);
+                self.guest_change(changes, now);
                 // A task that took a size its window gave it live outside a drag (a
                 // maximise, a snap) is reconfigured for it now, at a size it has.
                 let requests = self.windows.reconfigures(now);
@@ -779,6 +813,9 @@ impl Manager {
             ManagerEvent::Lost => {
                 let changes = self.windows.reset();
                 self.change(changes, now);
+                // A window kept for its app's next task waits for nothing now.
+                let kept = self.resets.close_all();
+                self.send_to_hosts(kept, now);
             }
             ManagerEvent::CloseFailed(task_id) => {
                 self.log(&format!(
@@ -816,13 +853,17 @@ impl Manager {
                          and Android ends their tasks"
                     ));
                 }
-                for task_id in tasks {
+                for window in tasks {
+                    self.drop_remote(window);
+                    // A window kept through a GPU reset has no task to end.
+                    let Some(task_id) = self.resets.window_gone(window) else {
+                        continue;
+                    };
                     // A window that went with its program is no longer the active window,
                     // though it never said so.
                     if self.focused.remove(&task_id) {
                         self.focus_changed();
                     }
-                    self.drop_remote(task_id);
                     // Ending an app's window program closes its windows, as ending any
                     // program does: Android ends their tasks.
                     self.user_closed(task_id, now);
@@ -832,6 +873,16 @@ impl Manager {
     }
 
     fn reported(&mut self, report: FromHost, now: Instant) {
+        // The window hosts name windows; the task rules, tasks.
+        let report = match self.resets.report(report) {
+            Report::Task(report) => report,
+            Report::CloseKept(close) => {
+                self.log("a window kept through a GPU reset was closed before its app came back");
+                self.send_to_hosts(vec![close], now);
+                return;
+            }
+            Report::Dropped => return,
+        };
         match report {
             FromHost::Closed { task_id } => self.user_closed(task_id, now),
             // The task takes its window's client size, and draws at its monitor's density.
@@ -877,7 +928,8 @@ impl Manager {
             }
             FromHost::Shown { task_id, shown } => self.shown.reported(task_id, shown),
             FromHost::MenuChosen { task_id, action } => {
-                match self.hosts.menu_chosen(task_id, action) {
+                let window = self.resets.window_of(task_id);
+                match self.hosts.menu_chosen(window, action) {
                     Some(MenuWork::Request(request)) => self.request(vec![request]),
                     Some(MenuWork::AppPage { package }) => {
                         if let Err(why) = open_app_page(&package) {
@@ -925,14 +977,112 @@ impl Manager {
         self.change(vec![WindowChange::Close { task_id }], now);
     }
 
+    /// The task rules' changes the guest did not cause by ending a task: to the window hosts,
+    /// with the IDs of the windows the tasks show.
     fn change(&mut self, changes: Vec<WindowChange>, now: Instant) {
+        self.closing(&changes);
+        let changes = self.resets.changes(changes);
+        self.send_to_hosts(changes, now);
+    }
+
+    /// The task rules' changes after the guest's tasks changed. A task that ended soon after a
+    /// GPU reset keeps its window and its app is started again; the app's new task takes the
+    /// window over.
+    fn guest_change(&mut self, changes: Vec<WindowChange>, now: Instant) {
+        self.closing(&changes);
+        let outcome = self.resets.guest_changes(changes, now);
+        for window in &outcome.kept {
+            self.log(&format!(
+                "task window {window}'s task ended right after a GPU reset; the window stays \
+                 open and its app is started again"
+            ));
+        }
+        for package in outcome.relaunch {
+            self.request(vec![TaskRequest::Launch {
+                package_name: package,
+            }]);
+        }
+        for (task_id, size) in outcome.adopted {
+            self.log(&format!(
+                "task {task_id} took over task window {} after the GPU reset",
+                self.resets.window_of(task_id)
+            ));
+            // The new task takes the size of the window it shows.
+            if let Some(size) = size {
+                let requests = self.windows.window_resized(task_id, size, now);
+                self.request(requests);
+            }
+        }
+        self.send_to_hosts(outcome.changes, now);
+    }
+
+    /// A window that closes is no longer the active window, though it may never say so.
+    fn closing(&mut self, changes: &[WindowChange]) {
+        let mut changed = false;
+        for change in changes {
+            if let WindowChange::Close { task_id } = change {
+                changed |= self.focused.remove(task_id);
+            }
+        }
+        if changed {
+            self.focus_changed();
+        }
+    }
+
+    /// Changes by window ID, to the window hosts.
+    fn send_to_hosts(&mut self, changes: Vec<WindowChange>, now: Instant) {
         for change in changes {
             let actions = self.hosts.change(&change, now);
             self.carry_out(actions);
         }
     }
 
+    /// Notes a GPU reset: the window manager's Direct3D device or the renderer's Vulkan device
+    /// was made again since the last look. The window manager's device is asked here too, so
+    /// a reset is seen while no frame comes.
+    fn follow_gpu_resets(&mut self, now: Instant) {
+        let mut reset = false;
+        if let Some(gpu) = self.setup.gpu.clone() {
+            match gpu.recover() {
+                Ok(Some((reason, generation))) => self.log(&format!(
+                    "the GPU was reset (0x{:08x}); made a new Direct3D device for the task \
+                     windows' textures (number {generation})",
+                    reason as u32
+                )),
+                Ok(None) => {}
+                Err(why) => self.log(&format!(
+                    "the GPU was reset, and a new Direct3D device cannot be made yet: {why}"
+                )),
+            }
+            let generation = gpu.generation();
+            if generation != self.gpu_generation {
+                self.gpu_generation = generation;
+                reset = true;
+            }
+        }
+        if let Some(seen) = &self.setup.renderer_generation {
+            let generation = seen();
+            if generation != self.renderer_generation {
+                self.renderer_generation = generation;
+                reset = true;
+            }
+        }
+        if reset {
+            self.resets.gpu_reset(now);
+        }
+    }
+
     fn tick(&mut self) {
+        self.follow_gpu_resets(Instant::now());
+        // A window kept through a GPU reset whose app did not come back closes.
+        let late = self.resets.tick(Instant::now());
+        if !late.is_empty() {
+            self.log(&format!(
+                "{} task window(s) kept through a GPU reset close: their app did not come back",
+                late.len()
+            ));
+        }
+        self.send_to_hosts(late, Instant::now());
         // A window whose task did not take the size it asked for takes the task's size.
         let changes = self.windows.tick(Instant::now());
         self.change(changes, Instant::now());
@@ -1053,7 +1203,13 @@ impl Manager {
             }
             self.request(vec![request]);
         }
-        let routed = self.windows.routes();
+        // Each display's frames go to the window its task shows: a task that took a window
+        // over after a GPU reset draws into that window.
+        let drawing = self.windows.routes();
+        let routed: Vec<(u32, i32)> = drawing
+            .iter()
+            .map(|(display_id, task_id)| (*display_id, self.resets.window_of(*task_id)))
+            .collect();
         // Every task with a window takes its frames from now on, whether or not its window
         // host has connected: the first ones are often its splash screen, drawn once.
         if let Some(gpu) = &self.setup.gpu {
@@ -1074,8 +1230,10 @@ impl Manager {
         });
         let routes: Vec<(u32, Arc<RemoteWindow>)> = routed
             .into_iter()
-            .filter_map(|(display_id, task_id)| {
-                let remote = self.remotes.get(&task_id)?;
+            .zip(drawing)
+            .filter_map(|((display_id, window), (_, task_id))| {
+                let remote = self.remotes.get(&window)?;
+                remote.drawn_by(task_id);
                 Some((display_id, Arc::clone(remote)))
             })
             .collect();

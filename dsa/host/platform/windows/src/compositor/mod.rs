@@ -29,6 +29,7 @@ pub mod audio;
 pub mod background;
 pub mod clipboard;
 pub mod committed;
+pub mod device_recovery;
 pub mod display_gpu;
 pub mod fluent;
 pub mod fluent_menu;
@@ -1075,7 +1076,7 @@ impl Compositor {
                 luid = presenter.adapter_luid();
                 match Gpu::new(luid, false) {
                     Ok(gpu) => {
-                        if luid.is_some() && !gpu.on_renderer_gpu {
+                        if luid.is_some() && !gpu.on_renderer_gpu() {
                             log("the renderer's GPU was not found; task windows may stay empty");
                         }
                         match presenter
@@ -1154,6 +1155,9 @@ impl Compositor {
             stop: Arc::clone(&manager_stop),
             idle: Arc::clone(&idle),
             fronts,
+            renderer_generation: self.presenter.clone().map(|presenter| {
+                Box::new(move || presenter.device_generation()) as Box<dyn Fn() -> u64 + Send>
+            }),
         };
         let manager = thread::Builder::new()
             .name("dsa-wm-manager".into())
