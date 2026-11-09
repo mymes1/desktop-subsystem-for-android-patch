@@ -3992,6 +3992,12 @@ def root_elevation_problems(names, read):
                  "write /sys/kernel/security/dsa_su/control enable"]:
         if f"    {line}" not in guard.splitlines():
             problems.append(f"{SU_GUARD_RC} lacks \"{line}\", so su is not hidden at boot")
+    if SYSTEM_FS_CONFIG in names:
+        fs_config = read(SYSTEM_FS_CONFIG).decode().splitlines()
+        xbin_rules = [line for line in fs_config if line.split()[:1] == ["system/xbin"]]
+        if xbin_rules != ["system/xbin 0 2000 755 capabilities=0x0"]:
+            problems.append(f"{SYSTEM_FS_CONFIG} does not make system/xbin mode 755, so looking up "
+                            "/system/xbin/su returns EACCES instead of ENOENT")
     contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
                 if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
     for _, context in SU_SOCKET_CONTEXTS:
@@ -4522,16 +4528,19 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     for overlay_name in design_payloads:
                         data += overlay_apkcerts(overlay_name).encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
-                    if su_payload is not None:
+                    dropped = (["system/xbin"] if channeld_payload is not None else []) + (
+                        ["system/bin/su"] if su_payload is not None else [])
+                    if dropped:
                         lines = [line for line in data.decode().splitlines()
-                                 if line.split()[:1] != ["system/bin/su"]]
+                                 if line.split()[:1] not in ([p] for p in dropped)]
                         data = ("\n".join(lines) + "\n").encode()
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG
-                                                 + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0"]
+                                                 + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
+                                                     "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
                                                     if su_payload is not None else [])
