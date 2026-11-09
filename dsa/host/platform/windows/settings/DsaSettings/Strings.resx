@@ -97,6 +97,39 @@
   <data name="UpdateNoticeBar.Title" xml:space="preserve">
     <value>Update</value>
   </data>
+  <data name="UpdateNotice_AndroidUpdated" xml:space="preserve">
+    <value>Android was updated to {0}.</value>
+  </data>
+  <data name="UpdateNotice_AndroidInstalled" xml:space="preserve">
+    <value>Android {0} is installed.</value>
+  </data>
+  <data name="UpdateNotice_AndroidChosen" xml:space="preserve">
+    <value>Android {0} is chosen. DSA downloads it now, and it is used the next time Android starts.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBack" xml:space="preserve">
+    <value>Android {0} did not start ({1}), so Android {2} is in use again. Android {0} is not tried again until a newer build of it or a new version of DSA is available.</value>
+  </data>
+  <data name="UpdateNotice_AndroidRolledBackNotReady" xml:space="preserve">
+    <value>Android {0} did not start ({1}), so Android {2} is in use again, but it has not finished starting yet ({3}). Start Android again to boot Android {2}.</value>
+  </data>
+  <data name="UpdateNotice_AndroidGaveUp" xml:space="preserve">
+    <value>Android {0} did not start ({1}), and no other image is installed. DSA downloads another image if there is one, and the next version of DSA tries this one again.</value>
+  </data>
+  <data name="UpdateNotice_AndroidOnTrial" xml:space="preserve">
+    <value>Android {0} is kept on trial and is not to blame: {1}</value>
+  </data>
+  <data name="UpdateNotice_DsaUpdated" xml:space="preserve">
+    <value>DSA was updated to {0}.</value>
+  </data>
+  <data name="UpdateNotice_DsaDownloaded" xml:space="preserve">
+    <value>DSA {0} is downloaded. It installs when Android is not running.</value>
+  </data>
+  <data name="UpdateNotice_DsaInstalling" xml:space="preserve">
+    <value>Installing DSA {0}. The service restarts when it is done.</value>
+  </data>
+  <data name="UpdateNotice_DsaFailed" xml:space="preserve">
+    <value>Updating DSA to {0} failed ({1}). DSA {2} is still installed.</value>
+  </data>
   <data name="GeneralMoreHeader.Text" xml:space="preserve">
     <value>More</value>
   </data>
