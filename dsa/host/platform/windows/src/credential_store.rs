@@ -1,160 +1,194 @@
-//! Each user's secrets in Windows' own credential store: the key their backup folder is
-//! encrypted with, and the root key of their Android's KeyMint.
+//! Each user's secrets on Windows: the key their backup folder is encrypted with, and the root
+//! key of their Android's KeyMint.
 //!
 //! Each secret is sealed in a file of the user's DSA folder (`%LOCALAPPDATA%\DSA\keys`),
-//! never on the guest's disk:
+//! never on the guest's disk, by [`SealedKeys`] with the sealers this computer has:
 //!
+//! - `tpm+dpapi` (a TPM 2.0) and `tpm12+dpapi` (a TPM 1.2): first encrypted (RSA-OAEP, with
+//!   SHA-256 on a TPM 2.0 and SHA-1, the only hash a TPM 1.2 takes, on a TPM 1.2) to a key the
+//!   computer's TPM keeps through the Microsoft Platform Crypto Provider (a persisted 2048-bit
+//!   RSA key named for DSA and the user's SID, which never leaves the TPM), then sealed by
+//!   DPAPI as below. It opens only for that user on this computer: a copy of the file and of
+//!   the user's credentials is not enough without this TPM.
 //! - `dpapi`: DPAPI under the user's own account (`CryptProtectData`, with what the secret is
 //!   for as its entropy). Only that user, on this computer or wherever their account's
 //!   credentials roam, opens it. The service runs as SYSTEM in session 0, so it seals and
 //!   opens while impersonating the user, with the token of a session they are signed in to;
 //!   when they are signed in nowhere there is no token, and the secret is unavailable.
-//! - `tpm+dpapi`: first encrypted (RSA-OAEP with SHA-256) to a key the computer's TPM keeps
-//!   (the Microsoft Platform Crypto Provider, a persisted 2048-bit RSA key named for DSA and
-//!   the user's SID, which never leaves the TPM), then sealed by DPAPI as above. It opens only
-//!   for that user on this computer: a copy of the file and of the user's credentials is not
-//!   enough without this TPM.
 //!
-//! The KeyMint root key is sealed `tpm+dpapi` when the computer has a TPM that works, else
-//! `dpapi`. The backup key is always `dpapi`: a backup is restored on another computer with
-//! the recovery key, and nothing about it is bound to this computer's TPM.
+//! The KeyMint root key is sealed by the TPM whenever the computer has one that works: one
+//! that is there, turned on, ready, not locked out, and seals and opens a test secret. Only
+//! where none works is it kept by DPAPI alone, and the reason is recorded in the log and shown
+//! in the settings app and `dsa status`. Once a TPM works, the next start of Android seals the
+//! same key with it, so nothing is lost. The backup key is always `dpapi`: a backup is restored
+//! on another computer with its recovery key.
 //!
-//! Each file names the sealer that made it ([`SealedFileStore`] writes the name), and a secret
-//! is opened with that sealer, whichever one a new secret would get now. So a computer whose
-//! TPM appears later goes on opening its `dpapi` key, and one whose TPM stops working (turned
-//! off in the firmware, cleared) says so, rather than making a new key: a new KeyMint root
-//! key would leave every key Android wrapped under the old one unreadable for good. A kept
-//! KeyMint root key is never replaced.
+//! A key the TPM sealed opens only with that TPM. One that is locked out says so and is tried
+//! again at the next start; one that was turned off says to turn it on again; one that was
+//! cleared (or a disk moved to another computer) says the key is gone with it. The key is never
+//! replaced, since Android's keys are wrapped under it; a data reset lets it go.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-use dsa_host_core::host_keys::{
-    HostKeyStore, KeyError, KeyPurpose, SealedFileStore, Sealer, Secret,
-};
+pub use dsa_host_core::host_keys::{sealer_of, SealedKeys};
+use dsa_host_core::host_keys::{Hardware, KeyError, KeyPurpose, Sealer, SealerSource};
 
 /// The name of the DPAPI sealer, as sealed files record it.
 pub const DPAPI: &str = "dpapi";
-/// The name of the TPM and DPAPI sealer, as sealed files record it.
+/// The name of the sealer of a TPM 2.0 and DPAPI, as sealed files record it.
 pub const TPM_DPAPI: &str = "tpm+dpapi";
+/// The name of the sealer of a TPM 1.2 and DPAPI, as sealed files record it.
+pub const TPM12_DPAPI: &str = "tpm12+dpapi";
 
-/// What a sealed file starts with, before the sealer's name: the format the platform-neutral
-/// [`SealedFileStore`] writes.
-const SEALED_MAGIC: &[u8] = b"DSA sealed key 1\n";
-
-/// The name of the sealer a sealed file records, if `data` is one.
-pub fn sealer_of(data: &[u8]) -> Option<&str> {
-    let rest = data.strip_prefix(SEALED_MAGIC)?;
-    let end = rest.iter().position(|&b| b == b'\n')?;
-    std::str::from_utf8(&rest[..end]).ok()
+/// Which TPM the computer has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TpmVersion {
+    V12,
+    V20,
 }
 
-/// The sealer a new secret for `purpose` gets, given whether the computer's TPM works
-/// (`Ok`) or why not.
-pub fn preferred_sealer(purpose: KeyPurpose, tpm: &Result<(), String>) -> &'static str {
-    match (purpose, tpm) {
-        (KeyPurpose::KeyMintRoot, Ok(())) => TPM_DPAPI,
-        _ => DPAPI,
-    }
-}
-
-/// The sealers a computer has.
-pub trait SealerSource: Send + Sync {
-    /// The sealer a new secret for `purpose` is sealed with.
-    fn preferred(&self, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError>;
-    /// The sealer named `name`, to open a secret it sealed; an error says why this computer
-    /// cannot open it.
-    fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError>;
-}
-
-/// A user's secrets, each in a sealed file of `dir`, opened with the sealer its file names
-/// and sealed anew with the one [`SealerSource::preferred`] gives.
-pub struct UserKeyStore {
-    dir: PathBuf,
-    sealers: Arc<dyn SealerSource>,
-}
-
-impl UserKeyStore {
-    pub fn new(dir: impl Into<PathBuf>, sealers: Arc<dyn SealerSource>) -> UserKeyStore {
-        UserKeyStore {
-            dir: dir.into(),
-            sealers,
+impl TpmVersion {
+    /// The name of the sealer of this TPM and DPAPI.
+    pub fn sealer(self) -> &'static str {
+        match self {
+            TpmVersion::V12 => TPM12_DPAPI,
+            TpmVersion::V20 => TPM_DPAPI,
         }
     }
 
-    pub fn dir(&self) -> &Path {
-        &self.dir
-    }
-
-    /// The file the secret for `purpose` is sealed in.
-    pub fn path(&self, purpose: KeyPurpose) -> PathBuf {
-        self.dir.join(format!("{}.sealed", purpose.name()))
-    }
-}
-
-impl HostKeyStore for UserKeyStore {
-    fn load(&self, purpose: KeyPurpose) -> Result<Option<Secret>, KeyError> {
-        let path = self.path(purpose);
-        let data = match std::fs::read(&path) {
-            Ok(data) => data,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => {
-                return Err(KeyError::Failed(format!(
-                    "the {} cannot be read from {}: {e}",
-                    purpose.description(),
-                    path.display()
-                )))
-            }
-        };
-        let Some(name) = sealer_of(&data) else {
-            return Err(KeyError::Unreadable(format!(
-                "{} is not a sealed key DSA made",
-                path.display()
-            )));
-        };
-        let sealer = self.sealers.named(name, purpose)?;
-        SealedFileStore::new(&self.dir, sealer).load(purpose)
-    }
-
-    fn store(&self, purpose: KeyPurpose, secret: &Secret) -> Result<(), KeyError> {
-        // The backup key is replaced when the user brings a recovery key; the KeyMint root key
-        // never is, since Android's keys are wrapped under the one kept.
-        if purpose == KeyPurpose::KeyMintRoot && self.path(purpose).exists() {
-            return Err(KeyError::Failed(format!(
-                "a {} is kept in {} already, and it is never replaced",
-                purpose.description(),
-                self.dir.display()
-            )));
+    /// The TPM a sealer's name names, if it names one.
+    pub fn of_sealer(name: &str) -> Option<TpmVersion> {
+        match name {
+            TPM_DPAPI => Some(TpmVersion::V20),
+            TPM12_DPAPI => Some(TpmVersion::V12),
+            _ => None,
         }
-        let sealer = self.sealers.preferred(purpose)?;
-        SealedFileStore::new(&self.dir, sealer).store(purpose, secret)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TpmVersion::V12 => "TPM 1.2",
+            TpmVersion::V20 => "TPM 2.0",
+        }
     }
 }
 
-/// Whether an NCrypt or TPM error `hr` means the computer has no TPM that can be used (none,
-/// turned off, not ready, too old for what is asked), rather than a failure of a TPM that works.
-pub fn tpm_unusable(hr: i32) -> bool {
-    const NTE_BAD_PROVIDER: u32 = 0x8009_0013;
-    const NTE_PROVIDER_DLL_FAIL: u32 = 0x8009_001D;
-    const NTE_PROV_DLL_NOT_FOUND: u32 = 0x8009_001E;
-    const NTE_NOT_SUPPORTED: u32 = 0x8009_0029;
-    const NTE_DEVICE_NOT_READY: u32 = 0x8009_0030;
-    const NTE_DEVICE_NOT_FOUND: u32 = 0x8009_0035;
-    const NTE_BAD_ALGID: u32 = 0x8009_0008;
+/// The TPM version the Platform Crypto Provider reports in `PCP_PLATFORM_TYPE`, such as
+/// `TPM-Version:2.0 -Level:0-Revision:1.38-VendorID:'INTC'-Firmware:...`.
+pub fn tpm_version(platform_type: &str) -> Option<TpmVersion> {
+    let rest = platform_type.split("TPM-Version:").nth(1)?;
+    let version: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    match version.as_str() {
+        "1.2" => Some(TpmVersion::V12),
+        v if v.starts_with("2.") => Some(TpmVersion::V20),
+        _ => None,
+    }
+}
+
+/// What an NCrypt or TPM error means for the TPM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TpmProblem {
+    /// There is no TPM that can be used: none, turned off in the firmware, not provisioned,
+    /// or one that cannot do what is asked.
+    Absent,
+    /// The TPM refuses for a while after too many wrong authorizations.
+    LockedOut,
+    /// The TPM is busy or testing itself; it works again soon.
+    NotReady,
+    /// The key the secret was sealed with is not in the TPM: the TPM was cleared, or this is
+    /// another computer.
+    KeyGone,
+    /// Anything else the provider or the TPM failed with.
+    Failed,
+}
+
+const NTE_BAD_KEYSET: u32 = 0x8009_0016;
+
+/// What `hr`, an error of NCrypt, the Platform Crypto Provider, TPM Base Services or the TPM,
+/// means for the TPM.
+pub fn tpm_problem(hr: i32) -> TpmProblem {
     let code = hr as u32;
-    matches!(
-        code,
-        NTE_BAD_PROVIDER
-            | NTE_PROVIDER_DLL_FAIL
-            | NTE_PROV_DLL_NOT_FOUND
-            | NTE_NOT_SUPPORTED
-            | NTE_DEVICE_NOT_READY
-            | NTE_DEVICE_NOT_FOUND
-            | NTE_BAD_ALGID
-    )
-        // TPM_E_* (the TPM's own errors) and TBS_E_* (TPM Base Services: no TPM, turned off).
-        || (code & 0xFFFF_0000) == 0x8028_0000
-        || (code & 0xFFFF_0000) == 0x8029_0000
+    match code {
+        NTE_BAD_KEYSET => TpmProblem::KeyGone,
+        // TPM 2.0 TPM_RC_LOCKOUT, TPM 1.2 TPM_DEFEND_LOCK_RUNNING.
+        0x8028_0921 | 0x8028_0803 => TpmProblem::LockedOut,
+        // TPM 2.0 TPM_RC_RETRY, TPM_RC_TESTING, TPM_RC_YIELDED; TPM 1.2 TPM_RETRY,
+        // TPM_NEEDS_SELFTEST, TPM_DOING_SELFTEST; the provider's device not ready; TBS busy.
+        0x8028_0922 | 0x8028_090A | 0x8028_0908 | 0x8028_0800 | 0x8028_0801 | 0x8028_0802
+        | 0x8029_0101 | 0x8028_4002 => TpmProblem::NotReady,
+        // NTE_BAD_PROVIDER, NTE_PROVIDER_DLL_FAIL, NTE_PROV_DLL_NOT_FOUND, NTE_NOT_SUPPORTED,
+        // NTE_DEVICE_NOT_READY (a TPM that is not provisioned), NTE_DEVICE_NOT_FOUND,
+        // NTE_BAD_ALGID (a TPM that cannot do the padding), the provider's not supported.
+        0x8009_0013 | 0x8009_001D | 0x8009_001E | 0x8009_0029 | 0x8009_0030 | 0x8009_0035
+        | 0x8009_0008 | 0x8029_0105 => TpmProblem::Absent,
+        // TPM Base Services: no TPM, its service turned off or not running, TPM deactivated.
+        code if (code & 0xFFFF_F000) == 0x8028_4000 => TpmProblem::Absent,
+        // TPM 1.2: deactivated, disabled, no owner (no storage root key).
+        0x8028_0006 | 0x8028_0007 | 0x8028_0012 => TpmProblem::Absent,
+        _ => TpmProblem::Failed,
+    }
+}
+
+/// Whether `hr` means the computer has no TPM that can be used now, rather than a TPM that
+/// works but failed this once.
+pub fn tpm_unusable(hr: i32) -> bool {
+    !matches!(tpm_problem(hr), TpmProblem::Failed | TpmProblem::KeyGone)
+}
+
+/// Why the TPM cannot seal for a user, after `step` failed with `hr`, in words a person can act
+/// on.
+pub fn unusable_reason(step: &str, hr: i32) -> String {
+    let code = hresult_text(hr);
+    match tpm_problem(hr) {
+        TpmProblem::Absent => format!(
+            "this computer has no TPM that DSA can use ({step}: {code}); turn the TPM on in the \
+             computer's firmware settings, and DSA seals the key with it at the next start"
+        ),
+        TpmProblem::LockedOut => format!(
+            "the TPM is locked out after too many wrong authorizations ({step}: {code}); \
+             Windows lifts the lockout after a while, and DSA seals the key with it at the next \
+             start"
+        ),
+        TpmProblem::NotReady => format!(
+            "the TPM was not ready ({step}: {code}); DSA seals the key with it at the next start"
+        ),
+        TpmProblem::KeyGone | TpmProblem::Failed => {
+            format!("the TPM failed ({step}: {code}); DSA tries it again at the next start")
+        }
+    }
+}
+
+/// Why a secret the TPM sealed cannot be opened, after `step` failed with `hr`. A TPM that is
+/// locked out or busy is a wait (`Unavailable`); one that is off or cleared is `Unreadable`.
+pub fn unseal_error(label: &str, step: &str, hr: i32) -> KeyError {
+    let code = hresult_text(hr);
+    match tpm_problem(hr) {
+        TpmProblem::LockedOut => KeyError::Unavailable(format!(
+            "the TPM that sealed the {label} is locked out after too many wrong authorizations \
+             ({step}: {code}); Windows lifts the lockout after a while (or clear it in the TPM \
+             management console, tpm.msc), and the key opens again at the next start"
+        )),
+        TpmProblem::NotReady => KeyError::Unavailable(format!(
+            "the TPM that sealed the {label} was not ready ({step}: {code}); it is tried again \
+             at the next start"
+        )),
+        TpmProblem::Absent => KeyError::Unreadable(format!(
+            "the {label} was sealed by this computer's TPM, which cannot be used now ({step}: \
+             {code}); turn the TPM on again in the computer's firmware settings"
+        )),
+        TpmProblem::KeyGone => KeyError::Unreadable(format!(
+            "the TPM key the {label} was sealed with is gone: the TPM was cleared, or this is \
+             not the computer it was sealed on ({step}: {code})"
+        )),
+        TpmProblem::Failed => KeyError::Unavailable(format!(
+            "the computer's TPM could not open the {label} ({step}: {code}); it is tried again \
+             at the next start"
+        )),
+    }
 }
 
 /// The TPM key's name for the user with SID `sid`.
@@ -174,6 +208,24 @@ pub fn hresult_text(hr: i32) -> String {
     format!("{message} (0x{:08X})", hr as u32)
 }
 
+/// The sealer to open a secret `name` sealed, from the sealers `dpapi` and `tpm` (of the TPM
+/// version given) make, or why this computer cannot.
+pub fn sealer_named(
+    name: &str,
+    purpose: KeyPurpose,
+    dpapi: impl FnOnce() -> Arc<dyn Sealer>,
+    tpm: impl FnOnce(TpmVersion) -> Arc<dyn Sealer>,
+) -> Result<Arc<dyn Sealer>, KeyError> {
+    match (name, TpmVersion::of_sealer(name)) {
+        (DPAPI, _) => Ok(dpapi()),
+        (_, Some(version)) => Ok(tpm(version)),
+        (other, None) => Err(KeyError::Unreadable(format!(
+            "the {} was sealed by {other}, which this version of DSA does not know",
+            purpose.description()
+        ))),
+    }
+}
+
 #[cfg(windows)]
 pub use self::sealers::{DpapiSealer, TpmDpapiSealer, WindowsSealers};
 
@@ -182,26 +234,27 @@ mod sealers {
     use std::io;
     use std::sync::Arc;
 
-    use dsa_host_core::host_keys::{KeyError, KeyPurpose, Sealer};
+    use dsa_host_core::host_keys::{Hardware, KeyError, KeyPurpose, Sealer, SealerSource};
     use windows_sys::Win32::Foundation::{LocalFree, HLOCAL};
     use windows_sys::Win32::Security::Cryptography::{
         CryptProtectData, CryptUnprotectData, NCryptCreatePersistedKey, NCryptDecrypt,
-        NCryptEncrypt, NCryptFinalizeKey, NCryptFreeObject, NCryptOpenKey,
+        NCryptEncrypt, NCryptFinalizeKey, NCryptFreeObject, NCryptGetProperty, NCryptOpenKey,
         NCryptOpenStorageProvider, NCryptSetProperty, BCRYPT_OAEP_PADDING_INFO,
-        BCRYPT_SHA256_ALGORITHM, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
-        MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_ALLOW_DECRYPT_FLAG, NCRYPT_KEY_USAGE_PROPERTY,
-        NCRYPT_LENGTH_PROPERTY, NCRYPT_MACHINE_KEY_FLAG, NCRYPT_PAD_OAEP_FLAG,
-        NCRYPT_RSA_ALGORITHM, NCRYPT_SILENT_FLAG,
+        BCRYPT_SHA1_ALGORITHM, BCRYPT_SHA256_ALGORITHM, CRYPTPROTECT_UI_FORBIDDEN,
+        CRYPT_INTEGER_BLOB, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_ALLOW_DECRYPT_FLAG,
+        NCRYPT_KEY_USAGE_PROPERTY, NCRYPT_LENGTH_PROPERTY, NCRYPT_MACHINE_KEY_FLAG,
+        NCRYPT_PAD_OAEP_FLAG, NCRYPT_PCP_PLATFORM_TYPE_PROPERTY, NCRYPT_RSA_ALGORITHM,
+        NCRYPT_SILENT_FLAG,
     };
     use windows_sys::Win32::Security::{ImpersonateLoggedOnUser, RevertToSelf};
 
     use super::{
-        dpapi_entropy, hresult_text, preferred_sealer, tpm_key_name, tpm_unusable, SealerSource,
-        DPAPI, TPM_DPAPI,
+        dpapi_entropy, sealer_named, tpm_key_name, tpm_version, unseal_error, unusable_reason,
+        TpmVersion, DPAPI,
     };
     use crate::pipe::current_user_sid;
 
-    const NTE_BAD_KEYSET: i32 = 0x8009_0016_u32 as i32;
+    const NTE_BAD_KEYSET: i32 = super::NTE_BAD_KEYSET as i32;
     const NTE_EXISTS: i32 = 0x8009_000F_u32 as i32;
 
     fn wide(text: &str) -> Vec<u16> {
@@ -347,6 +400,12 @@ mod sealers {
         fn unseal(&self, sealed: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
             dpapi_unprotect(&self.sid, sealed, &dpapi_entropy(DPAPI, label), label)
         }
+        fn kind(&self) -> &str {
+            "dpapi"
+        }
+        fn description(&self) -> String {
+            "Windows DPAPI under your account".into()
+        }
     }
 
     /// An NCrypt handle, freed when dropped.
@@ -365,6 +424,37 @@ mod sealers {
         } else {
             Err(hr)
         }
+    }
+
+    fn provider() -> Result<NcryptObject, i32> {
+        let mut provider = 0usize;
+        // SAFETY: an out handle and the provider's NUL-terminated name.
+        hr_ok(unsafe { NCryptOpenStorageProvider(&mut provider, MS_PLATFORM_CRYPTO_PROVIDER, 0) })?;
+        Ok(NcryptObject(provider))
+    }
+
+    /// The TPM version the provider reports; `None` when it reports none it knows.
+    fn platform_version(provider: &NcryptObject) -> Option<TpmVersion> {
+        let mut buffer = [0u16; 256];
+        let mut written = 0u32;
+        // SAFETY: a provider handle, a NUL-terminated property name, and a buffer of the size
+        // given, which the call fills with a NUL-terminated wide string.
+        let hr = unsafe {
+            NCryptGetProperty(
+                provider.0,
+                NCRYPT_PCP_PLATFORM_TYPE_PROPERTY,
+                buffer.as_mut_ptr().cast(),
+                (buffer.len() * 2) as u32,
+                &mut written,
+                0,
+            )
+        };
+        if hr < 0 {
+            return None;
+        }
+        let chars = (written as usize / 2).min(buffer.len());
+        let text = String::from_utf16_lossy(&buffer[..chars]);
+        tpm_version(text.trim_end_matches('\0'))
     }
 
     /// The TPM key of one user, through the Microsoft Platform Crypto Provider.
@@ -392,30 +482,20 @@ mod sealers {
                 }
         }
 
-        fn provider() -> Result<NcryptObject, i32> {
-            let mut provider = 0usize;
-            // SAFETY: an out handle and the provider's NUL-terminated name.
-            hr_ok(unsafe {
-                NCryptOpenStorageProvider(&mut provider, MS_PLATFORM_CRYPTO_PROVIDER, 0)
-            })?;
-            Ok(NcryptObject(provider))
-        }
-
-        /// The key, `None` when the TPM has none by that name.
-        fn open(&self, provider: &NcryptObject) -> Result<Option<NcryptObject>, i32> {
+        /// The key, `Err(NTE_BAD_KEYSET)` when the TPM has none by that name.
+        fn open(&self, provider: &NcryptObject) -> Result<NcryptObject, i32> {
             let mut key = 0usize;
             // SAFETY: a provider handle, a NUL-terminated name and an out handle.
-            let hr =
-                unsafe { NCryptOpenKey(provider.0, &mut key, self.name.as_ptr(), 0, self.flags()) };
-            match hr {
-                NTE_BAD_KEYSET => Ok(None),
-                hr => hr_ok(hr).map(|()| Some(NcryptObject(key))),
-            }
+            hr_ok(unsafe {
+                NCryptOpenKey(provider.0, &mut key, self.name.as_ptr(), 0, self.flags())
+            })?;
+            Ok(NcryptObject(key))
         }
 
         fn open_or_create(&self, provider: &NcryptObject) -> Result<NcryptObject, i32> {
-            if let Some(key) = self.open(provider)? {
-                return Ok(key);
+            match self.open(provider) {
+                Err(NTE_BAD_KEYSET) => {}
+                other => return other,
             }
             let mut key = 0usize;
             // SAFETY: a provider handle, the algorithm's and key's NUL-terminated names and an
@@ -436,7 +516,7 @@ mod sealers {
             };
             if hr == NTE_EXISTS {
                 // Made by another thread just now.
-                return self.open(provider)?.ok_or(NTE_BAD_KEYSET);
+                return self.open(provider);
             }
             hr_ok(hr)?;
             let key = NcryptObject(key);
@@ -463,17 +543,26 @@ mod sealers {
         }
     }
 
-    fn oaep() -> BCRYPT_OAEP_PADDING_INFO {
+    /// RSA-OAEP's padding: SHA-256 on a TPM 2.0, SHA-1 (the only hash a TPM 1.2 pads with).
+    fn oaep(version: TpmVersion) -> BCRYPT_OAEP_PADDING_INFO {
         BCRYPT_OAEP_PADDING_INFO {
-            pszAlgId: BCRYPT_SHA256_ALGORITHM,
+            pszAlgId: match version {
+                TpmVersion::V20 => BCRYPT_SHA256_ALGORITHM,
+                TpmVersion::V12 => BCRYPT_SHA1_ALGORITHM,
+            },
             pbLabel: std::ptr::null_mut(),
             cbLabel: 0,
         }
     }
 
-    /// Encrypts (`encrypt`) or decrypts `input` with `key`, RSA-OAEP with SHA-256.
-    fn rsa(key: &NcryptObject, input: &[u8], encrypt: bool) -> Result<Vec<u8>, i32> {
-        let padding = oaep();
+    /// Encrypts (`encrypt`) or decrypts `input` with `key`, RSA-OAEP.
+    fn rsa(
+        key: &NcryptObject,
+        version: TpmVersion,
+        input: &[u8],
+        encrypt: bool,
+    ) -> Result<Vec<u8>, i32> {
+        let padding = oaep(version);
         let call = |output: *mut u8, capacity: u32, written: &mut u32| -> i32 {
             // SAFETY: a key handle, the input, the padding info and an output buffer of
             // `capacity` bytes (or none, to ask for the size).
@@ -516,93 +605,93 @@ mod sealers {
     /// their account.
     pub struct TpmDpapiSealer {
         sid: String,
+        version: TpmVersion,
     }
 
     impl TpmDpapiSealer {
-        pub fn new(sid: &str) -> TpmDpapiSealer {
+        pub fn new(sid: &str, version: TpmVersion) -> TpmDpapiSealer {
             TpmDpapiSealer {
                 sid: sid.to_string(),
+                version,
             }
         }
 
-        /// Whether the computer's TPM can seal and open for this user now: its provider opens,
-        /// the user's key is there or can be made, and a test secret goes through it and back.
-        /// `Err` says why not, and whether that means there is no usable TPM (`true`).
-        pub fn check(&self) -> Result<(), (bool, String)> {
-            let key = TpmKey::of(&self.sid);
-            let fail =
-                |hr: i32, step: &str| (tpm_unusable(hr), format!("{step}: {}", hresult_text(hr)));
+        /// The sealer of the computer's TPM, if it can seal and open for this user now: its
+        /// provider opens, it reports a TPM version DSA knows, the user's key is there or can
+        /// be made, and a test secret goes through it and back. `Err` says why not.
+        pub fn check(sid: &str) -> Result<TpmDpapiSealer, String> {
             let provider =
-                TpmKey::provider().map_err(|hr| fail(hr, "opening the TPM's key provider"))?;
-            let key = key
+                provider().map_err(|hr| unusable_reason("opening the TPM's key provider", hr))?;
+            let version = platform_version(&provider).ok_or_else(|| {
+                "the TPM's key provider reports no TPM version DSA knows, so this computer has \
+                 no TPM that DSA can use"
+                    .to_string()
+            })?;
+            let key = TpmKey::of(sid)
                 .open_or_create(&provider)
-                .map_err(|hr| fail(hr, "making the TPM key"))?;
+                .map_err(|hr| unusable_reason("making the TPM key", hr))?;
             let probe = [0x5Au8; 32];
-            let sealed =
-                rsa(&key, &probe, true).map_err(|hr| fail(hr, "encrypting to the TPM key"))?;
-            let opened =
-                rsa(&key, &sealed, false).map_err(|hr| fail(hr, "decrypting with the TPM key"))?;
+            let sealed = rsa(&key, version, &probe, true)
+                .map_err(|hr| unusable_reason("encrypting to the TPM key", hr))?;
+            let opened = rsa(&key, version, &sealed, false)
+                .map_err(|hr| unusable_reason("decrypting with the TPM key", hr))?;
             if opened != probe {
-                return Err((
-                    true,
-                    "the TPM returned other bytes than it was given".into(),
+                return Err(format!(
+                    "the {} returned other bytes than it was given, so DSA does not use it",
+                    version.label()
                 ));
             }
-            Ok(())
+            Ok(TpmDpapiSealer::new(sid, version))
         }
     }
 
     impl Sealer for TpmDpapiSealer {
         fn name(&self) -> &str {
-            TPM_DPAPI
+            self.version.sealer()
         }
 
         fn seal(&self, plain: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
-            let tpm = TpmKey::of(&self.sid);
-            let failed = |hr: i32| {
+            let failed = |step: &str, hr: i32| {
                 KeyError::Failed(format!(
-                    "the computer's TPM could not seal the {label}: {}",
-                    hresult_text(hr)
+                    "the computer's {} could not seal the {label}: {}",
+                    self.version.label(),
+                    unusable_reason(step, hr)
                 ))
             };
-            let provider = TpmKey::provider().map_err(failed)?;
-            let key = tpm.open_or_create(&provider).map_err(failed)?;
-            let inner = rsa(&key, plain, true).map_err(failed)?;
-            dpapi_protect(&self.sid, &inner, &dpapi_entropy(TPM_DPAPI, label), label)
+            let provider = provider().map_err(|hr| failed("opening the TPM's key provider", hr))?;
+            let key = TpmKey::of(&self.sid)
+                .open_or_create(&provider)
+                .map_err(|hr| failed("making the TPM key", hr))?;
+            let inner = rsa(&key, self.version, plain, true)
+                .map_err(|hr| failed("encrypting to the TPM key", hr))?;
+            dpapi_protect(&self.sid, &inner, &dpapi_entropy(self.name(), label), label)
         }
 
         fn unseal(&self, sealed: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
             let inner =
-                dpapi_unprotect(&self.sid, sealed, &dpapi_entropy(TPM_DPAPI, label), label)?;
-            let tpm = TpmKey::of(&self.sid);
-            let provider = TpmKey::provider().map_err(|hr| {
-                KeyError::Unreadable(format!(
-                    "the {label} was sealed by this computer's TPM, which cannot be used now \
-                     ({}); turn the TPM on again in the computer's firmware settings",
-                    hresult_text(hr)
-                ))
-            })?;
-            let key = match tpm.open(&provider) {
-                Ok(Some(key)) => key,
-                Ok(None) => {
-                    return Err(KeyError::Unreadable(format!(
-                        "the TPM key the {label} was sealed with is gone: the TPM was cleared, \
-                         or this is not the computer it was sealed on"
-                    )))
-                }
-                Err(hr) => {
-                    return Err(KeyError::Unreadable(format!(
-                        "the TPM key the {label} was sealed with cannot be opened: {}",
-                        hresult_text(hr)
-                    )))
-                }
-            };
-            rsa(&key, &inner, false).map_err(|hr| {
-                KeyError::Unreadable(format!(
-                    "the computer's TPM cannot open the {label}: {}",
-                    hresult_text(hr)
-                ))
-            })
+                dpapi_unprotect(&self.sid, sealed, &dpapi_entropy(self.name(), label), label)?;
+            let provider = provider()
+                .map_err(|hr| unseal_error(label, "opening the TPM's key provider", hr))?;
+            let key = TpmKey::of(&self.sid)
+                .open(&provider)
+                .map_err(|hr| unseal_error(label, "opening the TPM key", hr))?;
+            rsa(&key, self.version, &inner, false)
+                .map_err(|hr| unseal_error(label, "decrypting with the TPM key", hr))
+        }
+
+        fn kind(&self) -> &str {
+            "tpm"
+        }
+
+        fn hardware(&self) -> bool {
+            true
+        }
+
+        fn description(&self) -> String {
+            format!(
+                "the computer's {} and Windows DPAPI under your account",
+                self.version.label()
+            )
         }
     }
 
@@ -620,104 +709,151 @@ mod sealers {
     }
 
     impl SealerSource for WindowsSealers {
-        fn preferred(&self, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
-            let tpm = match purpose {
-                KeyPurpose::KeyMintRoot => match TpmDpapiSealer::new(&self.sid).check() {
-                    Ok(()) => Ok(()),
-                    Err((true, why)) => {
-                        eprintln!(
-                            "{}: keys: this computer has no TPM that works ({why}), so the {} is \
-                             sealed by DPAPI alone",
-                            self.sid,
-                            purpose.description()
-                        );
-                        Err(why)
-                    }
-                    // A TPM that is there but failed: the key is not made weaker for it.
-                    Err((false, why)) => {
-                        return Err(KeyError::Failed(format!(
-                            "the computer's TPM could not seal the {}: {why}",
-                            purpose.description()
-                        )))
-                    }
-                },
-                KeyPurpose::Backup => Err("not used for the backup key".into()),
-            };
-            Ok(match preferred_sealer(purpose, &tpm) {
-                TPM_DPAPI => Arc::new(TpmDpapiSealer::new(&self.sid)),
-                _ => Arc::new(DpapiSealer::new(&self.sid)),
-            })
+        fn hardware(&self, _: KeyPurpose) -> Hardware {
+            match TpmDpapiSealer::check(&self.sid) {
+                Ok(sealer) => Hardware::Usable(Arc::new(sealer)),
+                Err(why) => Hardware::Unusable(why),
+            }
+        }
+
+        fn fallback(&self, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+            Ok(Arc::new(DpapiSealer::new(&self.sid)))
         }
 
         fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
-            match name {
-                DPAPI => Ok(Arc::new(DpapiSealer::new(&self.sid))),
-                TPM_DPAPI => Ok(Arc::new(TpmDpapiSealer::new(&self.sid))),
-                other => Err(KeyError::Unreadable(format!(
-                    "the {} was sealed by {other}, which this version of DSA does not know",
-                    purpose.description()
-                ))),
-            }
+            sealer_named(
+                name,
+                purpose,
+                || Arc::new(DpapiSealer::new(&self.sid)),
+                |version| Arc::new(TpmDpapiSealer::new(&self.sid, version)),
+            )
         }
     }
 }
 
 /// The store of the user with SID `sid`, whose sealed files live in `dir`.
 #[cfg(windows)]
-pub fn for_user(sid: &str, dir: &Path) -> UserKeyStore {
-    UserKeyStore::new(dir, Arc::new(WindowsSealers::new(sid)))
+pub fn for_user(sid: &str, dir: &Path) -> SealedKeys {
+    SealedKeys::new(dir, Arc::new(WindowsSealers::new(sid)))
+}
+
+/// A [`SealerSource`] of fixed sealers, for a computer whose TPM a test decides.
+pub struct FixedSealers {
+    pub tpm: Result<Arc<dyn Sealer>, String>,
+    pub dpapi: Arc<dyn Sealer>,
+}
+
+impl SealerSource for FixedSealers {
+    fn hardware(&self, _: KeyPurpose) -> Hardware {
+        match &self.tpm {
+            Ok(sealer) => Hardware::Usable(Arc::clone(sealer)),
+            Err(why) => Hardware::Unusable(why.clone()),
+        }
+    }
+    fn fallback(&self, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        Ok(Arc::clone(&self.dpapi))
+    }
+    fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+        let tpm = self.tpm.clone();
+        sealer_named(
+            name,
+            purpose,
+            || Arc::clone(&self.dpapi),
+            move |_| match tpm {
+                Ok(sealer) => sealer,
+                Err(why) => Arc::new(GoneTpm(why)),
+            },
+        )
+    }
+}
+
+/// A TPM that is not there any more: what it sealed does not open.
+struct GoneTpm(String);
+
+impl Sealer for GoneTpm {
+    fn name(&self) -> &str {
+        TPM_DPAPI
+    }
+    fn seal(&self, _: &[u8], _: &str) -> Result<Vec<u8>, KeyError> {
+        Err(KeyError::Unavailable(self.0.clone()))
+    }
+    fn unseal(&self, _: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
+        Err(unseal_error(
+            label,
+            "opening the TPM key",
+            NTE_BAD_KEYSET as i32,
+        ))
+    }
+    fn hardware(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dsa_host_core::host_keys::{load_or_create, HostKeyStore, Secret};
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     /// A sealer that records its name in what it seals, and opens only its own.
-    struct NamedSealer(&'static str);
+    struct NamedSealer {
+        name: &'static str,
+        hardware: bool,
+    }
 
     impl Sealer for NamedSealer {
         fn name(&self) -> &str {
-            self.0
+            self.name
         }
         fn seal(&self, plain: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
-            let mut out = format!("{}:{label}:", self.0).into_bytes();
+            let mut out = format!("{}:{label}:", self.name).into_bytes();
             out.extend_from_slice(plain);
             Ok(out)
         }
         fn unseal(&self, sealed: &[u8], label: &str) -> Result<Vec<u8>, KeyError> {
-            let head = format!("{}:{label}:", self.0).into_bytes();
+            let head = format!("{}:{label}:", self.name).into_bytes();
             sealed
                 .strip_prefix(head.as_slice())
                 .map(<[u8]>::to_vec)
                 .ok_or_else(|| KeyError::Unreadable("not sealed here".into()))
         }
+        fn hardware(&self) -> bool {
+            self.hardware
+        }
     }
 
-    /// A computer whose TPM can be turned on and off.
+    /// A computer whose TPM a test turns on, off, or clears.
     struct FakeComputer {
-        tpm: Mutex<bool>,
+        tpm: Mutex<Result<(), String>>,
+    }
+
+    impl FakeComputer {
+        fn sealers(&self) -> FixedSealers {
+            FixedSealers {
+                tpm: self.tpm.lock().unwrap().clone().map(|()| {
+                    Arc::new(NamedSealer {
+                        name: TPM_DPAPI,
+                        hardware: true,
+                    }) as Arc<dyn Sealer>
+                }),
+                dpapi: Arc::new(NamedSealer {
+                    name: DPAPI,
+                    hardware: false,
+                }),
+            }
+        }
     }
 
     impl SealerSource for FakeComputer {
-        fn preferred(&self, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
-            let tpm = if *self.tpm.lock().unwrap() {
-                Ok(())
-            } else {
-                Err("no TPM".to_string())
-            };
-            Ok(match preferred_sealer(purpose, &tpm) {
-                TPM_DPAPI => Arc::new(NamedSealer(TPM_DPAPI)),
-                _ => Arc::new(NamedSealer(DPAPI)),
-            })
+        fn hardware(&self, purpose: KeyPurpose) -> Hardware {
+            self.sealers().hardware(purpose)
         }
-        fn named(&self, name: &str, _: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
-            match name {
-                DPAPI => Ok(Arc::new(NamedSealer(DPAPI))),
-                TPM_DPAPI if *self.tpm.lock().unwrap() => Ok(Arc::new(NamedSealer(TPM_DPAPI))),
-                TPM_DPAPI => Err(KeyError::Unreadable("the TPM cannot be used now".into())),
-                other => Err(KeyError::Unreadable(format!("unknown sealer {other}"))),
-            }
+        fn fallback(&self, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+            self.sealers().fallback(purpose)
+        }
+        fn named(&self, name: &str, purpose: KeyPurpose) -> Result<Arc<dyn Sealer>, KeyError> {
+            self.sealers().named(name, purpose)
         }
     }
 
@@ -727,134 +863,137 @@ mod tests {
         dir
     }
 
-    fn store(dir: &Path, tpm: bool) -> (UserKeyStore, Arc<FakeComputer>) {
+    fn store(dir: &Path, tpm: Result<(), String>) -> (SealedKeys, Arc<FakeComputer>) {
         let computer = Arc::new(FakeComputer {
             tpm: Mutex::new(tpm),
         });
-        (UserKeyStore::new(dir, computer.clone()), computer)
+        (SealedKeys::new(dir, computer.clone()), computer)
+    }
+
+    fn sealer(keys: &SealedKeys, purpose: KeyPurpose) -> String {
+        let data = std::fs::read(keys.path(purpose)).unwrap();
+        sealer_of(&data).unwrap().to_string()
     }
 
     #[test]
-    fn fr36_the_file_format_is_the_one_the_sealed_file_store_writes() {
-        let dir = scratch("format");
-        let core = SealedFileStore::new(&dir, Arc::new(NamedSealer("tpm+dpapi")));
-        let secret = Secret::from_bytes([7; 32]);
-        core.store(KeyPurpose::KeyMintRoot, &secret).unwrap();
-        let data = std::fs::read(core.path(KeyPurpose::KeyMintRoot)).unwrap();
-        assert_eq!(sealer_of(&data), Some("tpm+dpapi"));
-        assert_eq!(sealer_of(b"something else"), None);
-        let (ours, _) = store(&dir, true);
-        assert_eq!(
-            ours.path(KeyPurpose::KeyMintRoot),
-            core.path(KeyPurpose::KeyMintRoot)
-        );
-        assert_eq!(ours.load(KeyPurpose::KeyMintRoot).unwrap(), Some(secret));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn fr36_the_keymint_root_key_is_sealed_by_the_tpm_when_there_is_one_and_the_backup_key_never() {
-        assert_eq!(
-            preferred_sealer(KeyPurpose::KeyMintRoot, &Ok(())),
-            TPM_DPAPI
-        );
-        assert_eq!(
-            preferred_sealer(KeyPurpose::KeyMintRoot, &Err("no TPM".into())),
-            DPAPI
-        );
-        assert_eq!(preferred_sealer(KeyPurpose::Backup, &Ok(())), DPAPI);
-
+    fn fr36_keymint_root_key_is_sealed_by_the_tpm_first_and_the_backup_key_by_dpapi() {
         let dir = scratch("choice");
-        let (keys, _) = store(&dir, true);
-        dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
-        dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::Backup).unwrap();
-        let sealer = |purpose| {
-            let data = std::fs::read(keys.path(purpose)).unwrap();
-            sealer_of(&data).unwrap().to_string()
-        };
-        assert_eq!(sealer(KeyPurpose::KeyMintRoot), TPM_DPAPI);
-        assert_eq!(sealer(KeyPurpose::Backup), DPAPI);
+        let (keys, _) = store(&dir, Ok(()));
+        load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
+        load_or_create(&keys, KeyPurpose::Backup).unwrap();
+        assert_eq!(sealer(&keys, KeyPurpose::KeyMintRoot), TPM_DPAPI);
+        assert_eq!(sealer(&keys, KeyPurpose::Backup), DPAPI);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn fr36_a_key_sealed_without_a_tpm_still_opens_once_a_tpm_appears() {
+    fn fr36_without_a_usable_tpm_dpapi_seals_and_the_tpm_takes_it_over_later() {
         let dir = scratch("appears");
-        let (keys, computer) = store(&dir, false);
-        let first =
-            dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
-        *computer.tpm.lock().unwrap() = true;
-        let again =
-            dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
-        assert_eq!(
-            first, again,
-            "the kept key is used, not a new one sealed by the TPM"
-        );
-        let data = std::fs::read(keys.path(KeyPurpose::KeyMintRoot)).unwrap();
-        assert_eq!(sealer_of(&data), Some(DPAPI));
+        let no_tpm = unusable_reason("opening the TPM's key provider", 0x8028_400F_u32 as i32);
+        let (keys, computer) = store(&dir, Err(no_tpm.clone()));
+        let first = load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
+        assert_eq!(sealer(&keys, KeyPurpose::KeyMintRoot), DPAPI);
+        let protection = keys.protection(KeyPurpose::KeyMintRoot).unwrap().unwrap();
+        assert!(!protection.hardware);
+        assert_eq!(protection.fallback_reason, no_tpm);
+        *computer.tpm.lock().unwrap() = Ok(());
+        let again = load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
+        assert_eq!(first, again, "the kept key, sealed by the TPM now");
+        assert_eq!(sealer(&keys, KeyPurpose::KeyMintRoot), TPM_DPAPI);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn fr36_a_key_sealed_by_a_tpm_that_is_gone_is_refused_and_never_replaced() {
+    fn fr36_a_locked_out_tpm_is_waited_for_and_a_cleared_one_is_told_never_replaced() {
         let dir = scratch("gone");
-        let (keys, computer) = store(&dir, true);
-        dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
+        let (keys, computer) = store(&dir, Ok(()));
+        load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap();
         let before = std::fs::read(keys.path(KeyPurpose::KeyMintRoot)).unwrap();
-        *computer.tpm.lock().unwrap() = false;
-        let error =
-            dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap_err();
-        assert!(matches!(error, KeyError::Unreadable(_)), "{error:?}");
-        assert!(
-            keys.store(KeyPurpose::KeyMintRoot, &Secret::from_bytes([1; 32]))
-                .is_err(),
-            "a kept KeyMint root key is never replaced"
-        );
+        *computer.tpm.lock().unwrap() = Err("cleared".into());
+        let error = load_or_create(&keys, KeyPurpose::KeyMintRoot).unwrap_err();
+        match &error {
+            KeyError::Unreadable(why) => assert!(why.contains("cleared"), "{why}"),
+            other => panic!("expected unreadable, got {other:?}"),
+        }
+        assert!(keys
+            .store(KeyPurpose::KeyMintRoot, &Secret::from_bytes([1; 32]))
+            .is_err());
         assert_eq!(
             std::fs::read(keys.path(KeyPurpose::KeyMintRoot)).unwrap(),
             before
         );
+        // What each TPM failure becomes when a sealed key is opened.
+        let locked = unseal_error("keymint-root-key", "decrypting", 0x8028_0921_u32 as i32);
+        assert!(matches!(&locked, KeyError::Unavailable(why) if why.contains("locked out")));
+        let locked12 = unseal_error("keymint-root-key", "decrypting", 0x8028_0803_u32 as i32);
+        assert!(matches!(locked12, KeyError::Unavailable(_)));
+        let off = unseal_error("keymint-root-key", "opening", 0x8028_400F_u32 as i32);
+        assert!(matches!(&off, KeyError::Unreadable(why) if why.contains("turn the TPM on")));
+        let busy = unseal_error("keymint-root-key", "decrypting", 0x8028_0922_u32 as i32);
+        assert!(matches!(busy, KeyError::Unavailable(_)));
+        let odd = unseal_error("keymint-root-key", "decrypting", 0x8007_0005_u32 as i32);
+        assert!(
+            matches!(odd, KeyError::Unavailable(_)),
+            "never taken for gone"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn fr36_the_backup_key_is_replaced_by_a_recovery_key() {
-        let dir = scratch("recovery");
-        let (keys, _) = store(&dir, true);
-        dsa_host_core::host_keys::load_or_create(&keys, KeyPurpose::Backup).unwrap();
-        let recovered = Secret::from_bytes([9; 32]);
-        keys.store(KeyPurpose::Backup, &recovered).unwrap();
-        assert_eq!(keys.load(KeyPurpose::Backup).unwrap(), Some(recovered));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn fr36_a_file_that_is_not_a_sealed_key_is_unreadable() {
-        let dir = scratch("garbage");
-        std::fs::create_dir_all(&dir).unwrap();
-        let (keys, _) = store(&dir, true);
-        std::fs::write(keys.path(KeyPurpose::Backup), b"not a key").unwrap();
-        assert!(matches!(
-            keys.load(KeyPurpose::Backup),
-            Err(KeyError::Unreadable(_))
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn fr36_no_usable_tpm_is_told_from_a_tpm_that_failed() {
+    fn fr36_tpm_errors_are_told_apart() {
         for code in [
             0x8009_0035u32,
             0x8009_0030,
             0x8009_001E,
             0x8028_400F,
-            0x8029_0102,
+            0x8028_4010,
         ] {
+            assert_eq!(tpm_problem(code as i32), TpmProblem::Absent, "{code:08X}");
             assert!(tpm_unusable(code as i32), "{code:08X}");
         }
-        for code in [0x8007_0005u32, 0x8009_0016, 0x8009_0036] {
+        assert_eq!(tpm_problem(0x8028_0921_u32 as i32), TpmProblem::LockedOut);
+        assert_eq!(tpm_problem(0x8028_0803_u32 as i32), TpmProblem::LockedOut);
+        assert_eq!(tpm_problem(0x8028_0922_u32 as i32), TpmProblem::NotReady);
+        assert_eq!(tpm_problem(0x8009_0016_u32 as i32), TpmProblem::KeyGone);
+        for code in [0x8007_0005u32, 0x8009_0036] {
+            assert_eq!(tpm_problem(code as i32), TpmProblem::Failed, "{code:08X}");
             assert!(!tpm_unusable(code as i32), "{code:08X}");
         }
+        assert!(unusable_reason("x", 0x8028_0921_u32 as i32).contains("locked out"));
+        assert!(unusable_reason("x", 0x8028_400F_u32 as i32).contains("no TPM"));
+    }
+
+    #[test]
+    fn fr36_a_tpm_12_is_used_with_its_own_padding_and_named_apart() {
+        assert_eq!(
+            tpm_version("TPM-Version:2.0 -Level:0-Revision:1.38-VendorID:'INTC'-Firmware:600.18"),
+            Some(TpmVersion::V20)
+        );
+        assert_eq!(
+            tpm_version("TPM-Version:1.2 -Level:2-Revision:116-VendorID:'IFX '"),
+            Some(TpmVersion::V12)
+        );
+        assert_eq!(tpm_version("something else"), None);
+        assert_eq!(TpmVersion::V12.sealer(), TPM12_DPAPI);
+        assert_eq!(TpmVersion::of_sealer(TPM12_DPAPI), Some(TpmVersion::V12));
+        assert_eq!(TpmVersion::of_sealer(TPM_DPAPI), Some(TpmVersion::V20));
+        assert_eq!(TpmVersion::of_sealer(DPAPI), None);
+        let dpapi = || -> Arc<dyn Sealer> {
+            Arc::new(NamedSealer {
+                name: DPAPI,
+                hardware: false,
+            })
+        };
+        let opened = sealer_named(TPM12_DPAPI, KeyPurpose::KeyMintRoot, dpapi, |version| {
+            assert_eq!(version, TpmVersion::V12);
+            Arc::new(NamedSealer {
+                name: TPM12_DPAPI,
+                hardware: true,
+            })
+        })
+        .unwrap();
+        assert_eq!(opened.name(), TPM12_DPAPI);
+        assert!(sealer_named("tpm3", KeyPurpose::KeyMintRoot, dpapi, |_| dpapi()).is_err());
     }
 
     #[test]
@@ -867,6 +1006,10 @@ mod tests {
         assert_ne!(
             dpapi_entropy(DPAPI, "backup-key"),
             dpapi_entropy(TPM_DPAPI, "backup-key")
+        );
+        assert_ne!(
+            dpapi_entropy(TPM_DPAPI, "keymint-root-key"),
+            dpapi_entropy(TPM12_DPAPI, "keymint-root-key")
         );
         assert_ne!(
             dpapi_entropy(DPAPI, "backup-key"),

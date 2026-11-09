@@ -3,9 +3,10 @@
 //! Android's KeyMint wraps every key it makes (the keys of apps' Keystore, and the keys that
 //! encrypt Android's own storage) under a root key. The image's KeyMint, a software one, has
 //! that root key built in: the same for every copy, so a copy of a guest's disk would give up
-//! every key on it. DSA's KeyMint takes its root key from the host instead. The host keeps it
-//! in the user's credential store, sealed (on Windows by the computer's TPM and DPAPI under the
-//! user's account), so it opens only for that user on that computer. The guest's disk never
+//! every key on it. DSA's KeyMint takes its root key from the host instead. The host seals it
+//! with the computer's own hardware where it has some that works (the TPM, the Secure
+//! Enclave), and with the user's credential store only where it has none
+//! ([`crate::host_keys`]), so it opens only for that user on that computer. The guest's disk never
 //! holds it, and neither does any file the host writes in the clear.
 //!
 //! Each boot, before Android unlocks its storage, the guest's control daemon connects to
@@ -20,8 +21,10 @@
 //! Android to upgrade each one as it is used, which wraps it again under the host's key; no
 //! key is lost on the way. When the host has no credential store (or it is off), the key comes
 //! empty with the reason, and KeyMint goes on with its built-in root key until it has one.
-//! A kept key that cannot be opened (the user's account or computer changed) is never
-//! replaced by a new one, which would make every key wrapped under it unreadable for good.
+//! A kept key that cannot be opened (the user's account or computer changed, the TPM was
+//! cleared) is never replaced by a new one, which would make every key wrapped under it
+//! unreadable for good; the reason is shown, and a data reset, which leaves nothing wrapped
+//! under it, lets it go.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,17 +46,24 @@ pub type RootKey = Result<Secret, String>;
 
 /// The root key the user's credential store keeps, made on first use.
 pub fn root_key(store: &Arc<dyn HostKeyStore>) -> RootKey {
-    load_or_create(store.as_ref(), KeyPurpose::KeyMintRoot).map_err(|e| match e {
+    load_or_create(store.as_ref(), KeyPurpose::KeyMintRoot).map_err(|e| root_key_problem(&e))
+}
+
+/// What a person reads when the KeyMint root key cannot be had, with what to do.
+pub fn root_key_problem(error: &KeyError) -> String {
+    match error {
         KeyError::Unavailable(why) => format!(
-            "this computer keeps no key for Android's KeyMint ({why}); its keys stay under \
-             KeyMint's built-in root key"
+            "the KeyMint root key cannot be had now ({why}); until it can, Android's keys made \
+             under it do not open, and new ones are made under KeyMint's built-in root key"
         ),
         KeyError::Unreadable(why) => format!(
-            "the KeyMint root key kept for this user cannot be opened here ({why}); Android's \
-             keys cannot be read on this computer"
+            "the KeyMint root key kept for this user cannot be opened here ({why}), so \
+             Android's keys and its encrypted storage cannot be read on this computer; if what \
+             sealed it cannot come back, reset Android's data (dsa reset-data) to start over \
+             with a new key, and restore the apps' data from a backup if backup was on"
         ),
         KeyError::Failed(why) => format!("the KeyMint root key cannot be had: {why}"),
-    })
+    }
 }
 
 /// Serves one connection on the KeyMint port, past the handshake: waits for the request and

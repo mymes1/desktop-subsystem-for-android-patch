@@ -1,10 +1,10 @@
-//! The backup and KeyMint root keys sealed by DPAPI and the computer's TPM, as the user this
+//! The backup and KeyMint root keys sealed by the computer's TPM and DPAPI, as the user this
 //! test runs as (Windows only).
 #![cfg(windows)]
 
 use dsa_host_core::host_keys::{load_or_create, HostKeyStore, KeyError, KeyPurpose, Sealer};
 use dsa_host_windows::credential_store::{
-    for_user, sealer_of, DpapiSealer, TpmDpapiSealer, DPAPI, TPM_DPAPI,
+    for_user, sealer_of, DpapiSealer, TpmDpapiSealer, DPAPI, TPM12_DPAPI, TPM_DPAPI,
 };
 use dsa_host_windows::pipe::current_user_sid;
 
@@ -41,9 +41,25 @@ fn fr36_keymint_root_key_is_sealed_by_the_host() {
         Some(key.clone())
     );
     let data = std::fs::read(keys.path(KeyPurpose::KeyMintRoot)).unwrap();
-    let tpm = TpmDpapiSealer::new(&sid).check();
-    let expected = if tpm.is_ok() { TPM_DPAPI } else { DPAPI };
-    assert_eq!(sealer_of(&data), Some(expected), "TPM check: {tpm:?}");
+    // The TPM seals it wherever the computer has one that works; DPAPI only where it has none,
+    // and then the reason is told.
+    let tpm = TpmDpapiSealer::check(&sid);
+    let protection = keys.protection(KeyPurpose::KeyMintRoot).unwrap().unwrap();
+    match &tpm {
+        Ok(sealer) => {
+            let name = sealer_of(&data).unwrap();
+            assert!(name == TPM_DPAPI || name == TPM12_DPAPI, "{name}");
+            assert_eq!(name, sealer.name());
+            assert!(protection.hardware);
+            assert_eq!(protection.sealed_by, "tpm");
+        }
+        Err(why) => {
+            assert_eq!(sealer_of(&data), Some(DPAPI), "TPM check: {why}");
+            assert!(!protection.hardware);
+            assert_eq!(protection.sealed_by, "dpapi");
+            assert!(!protection.fallback_reason.is_empty());
+        }
+    }
     assert!(
         !data.windows(32).any(|w| w == key.bytes()),
         "the key is on disk in the clear"
