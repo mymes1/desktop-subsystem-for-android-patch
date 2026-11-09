@@ -6,7 +6,7 @@ package io.github.thisisthepy.dsa.control.v1;
 /**
  * <pre>
  * Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
- * each of the messages above.
+ * GappsRemove and GappsQuery.
  * </pre>
  *
  * Protobuf type {@code dsa.control.v1.GappsState}
@@ -21,87 +21,11 @@ public  final class GappsState extends
     abi_ = "";
     abilist_ = "";
   }
-  public static final int TRANSFER_ID_FIELD_NUMBER = 1;
-  private int transferId_;
-  /**
-   * <pre>
-   * The transfer this answers, or 0.
-   * </pre>
-   *
-   * <code>uint32 transfer_id = 1;</code>
-   * @return The transferId.
-   */
-  @java.lang.Override
-  public int getTransferId() {
-    return transferId_;
-  }
-  /**
-   * <pre>
-   * The transfer this answers, or 0.
-   * </pre>
-   *
-   * <code>uint32 transfer_id = 1;</code>
-   * @param value The transferId to set.
-   */
-  private void setTransferId(int value) {
-    
-    transferId_ = value;
-  }
-  /**
-   * <pre>
-   * The transfer this answers, or 0.
-   * </pre>
-   *
-   * <code>uint32 transfer_id = 1;</code>
-   */
-  private void clearTransferId() {
-    
-    transferId_ = 0;
-  }
-
-  public static final int RECEIVED_FIELD_NUMBER = 2;
-  private long received_;
-  /**
-   * <pre>
-   * How many bytes of that transfer the daemon has written.
-   * </pre>
-   *
-   * <code>uint64 received = 2;</code>
-   * @return The received.
-   */
-  @java.lang.Override
-  public long getReceived() {
-    return received_;
-  }
-  /**
-   * <pre>
-   * How many bytes of that transfer the daemon has written.
-   * </pre>
-   *
-   * <code>uint64 received = 2;</code>
-   * @param value The received to set.
-   */
-  private void setReceived(long value) {
-    
-    received_ = value;
-  }
-  /**
-   * <pre>
-   * How many bytes of that transfer the daemon has written.
-   * </pre>
-   *
-   * <code>uint64 received = 2;</code>
-   */
-  private void clearReceived() {
-    
-    received_ = 0L;
-  }
-
   public static final int DONE_FIELD_NUMBER = 3;
   private boolean done_;
   /**
    * <pre>
-   * The transfer is complete and its image checked and in place.
+   * The removal this answers is done.
    * </pre>
    *
    * <code>bool done = 3;</code>
@@ -113,7 +37,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * The transfer is complete and its image checked and in place.
+   * The removal this answers is done.
    * </pre>
    *
    * <code>bool done = 3;</code>
@@ -125,7 +49,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * The transfer is complete and its image checked and in place.
+   * The removal this answers is done.
    * </pre>
    *
    * <code>bool done = 3;</code>
@@ -139,8 +63,7 @@ public  final class GappsState extends
   private java.lang.String error_;
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -152,8 +75,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -166,8 +88,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -181,8 +102,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -193,8 +113,7 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -211,7 +130,8 @@ public  final class GappsState extends
   private boolean installed_;
   /**
    * <pre>
-   * A Google apps image is on the user's disk.
+   * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+   * (/data), for the host to move onto the add-on disk and then remove.
    * </pre>
    *
    * <code>bool installed = 5;</code>
@@ -223,7 +143,8 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * A Google apps image is on the user's disk.
+   * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+   * (/data), for the host to move onto the add-on disk and then remove.
    * </pre>
    *
    * <code>bool installed = 5;</code>
@@ -235,7 +156,8 @@ public  final class GappsState extends
   }
   /**
    * <pre>
-   * A Google apps image is on the user's disk.
+   * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+   * (/data), for the host to move onto the add-on disk and then remove.
    * </pre>
    *
    * <code>bool installed = 5;</code>
@@ -544,7 +466,7 @@ public  final class GappsState extends
   /**
    * <pre>
    * Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
-   * each of the messages above.
+   * GappsRemove and GappsQuery.
    * </pre>
    *
    * Protobuf type {@code dsa.control.v1.GappsState}
@@ -562,87 +484,7 @@ public  final class GappsState extends
 
     /**
      * <pre>
-     * The transfer this answers, or 0.
-     * </pre>
-     *
-     * <code>uint32 transfer_id = 1;</code>
-     * @return The transferId.
-     */
-    @java.lang.Override
-    public int getTransferId() {
-      return instance.getTransferId();
-    }
-    /**
-     * <pre>
-     * The transfer this answers, or 0.
-     * </pre>
-     *
-     * <code>uint32 transfer_id = 1;</code>
-     * @param value The transferId to set.
-     * @return This builder for chaining.
-     */
-    public Builder setTransferId(int value) {
-      copyOnWrite();
-      instance.setTransferId(value);
-      return this;
-    }
-    /**
-     * <pre>
-     * The transfer this answers, or 0.
-     * </pre>
-     *
-     * <code>uint32 transfer_id = 1;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearTransferId() {
-      copyOnWrite();
-      instance.clearTransferId();
-      return this;
-    }
-
-    /**
-     * <pre>
-     * How many bytes of that transfer the daemon has written.
-     * </pre>
-     *
-     * <code>uint64 received = 2;</code>
-     * @return The received.
-     */
-    @java.lang.Override
-    public long getReceived() {
-      return instance.getReceived();
-    }
-    /**
-     * <pre>
-     * How many bytes of that transfer the daemon has written.
-     * </pre>
-     *
-     * <code>uint64 received = 2;</code>
-     * @param value The received to set.
-     * @return This builder for chaining.
-     */
-    public Builder setReceived(long value) {
-      copyOnWrite();
-      instance.setReceived(value);
-      return this;
-    }
-    /**
-     * <pre>
-     * How many bytes of that transfer the daemon has written.
-     * </pre>
-     *
-     * <code>uint64 received = 2;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearReceived() {
-      copyOnWrite();
-      instance.clearReceived();
-      return this;
-    }
-
-    /**
-     * <pre>
-     * The transfer is complete and its image checked and in place.
+     * The removal this answers is done.
      * </pre>
      *
      * <code>bool done = 3;</code>
@@ -654,7 +496,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * The transfer is complete and its image checked and in place.
+     * The removal this answers is done.
      * </pre>
      *
      * <code>bool done = 3;</code>
@@ -668,7 +510,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * The transfer is complete and its image checked and in place.
+     * The removal this answers is done.
      * </pre>
      *
      * <code>bool done = 3;</code>
@@ -682,8 +524,7 @@ public  final class GappsState extends
 
     /**
      * <pre>
-     * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-     * failed transfer leaves the image that was there before.
+     * Non-empty when the removal failed: why, in words a person can act on.
      * </pre>
      *
      * <code>string error = 4;</code>
@@ -695,8 +536,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-     * failed transfer leaves the image that was there before.
+     * Non-empty when the removal failed: why, in words a person can act on.
      * </pre>
      *
      * <code>string error = 4;</code>
@@ -709,8 +549,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-     * failed transfer leaves the image that was there before.
+     * Non-empty when the removal failed: why, in words a person can act on.
      * </pre>
      *
      * <code>string error = 4;</code>
@@ -725,8 +564,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-     * failed transfer leaves the image that was there before.
+     * Non-empty when the removal failed: why, in words a person can act on.
      * </pre>
      *
      * <code>string error = 4;</code>
@@ -739,8 +577,7 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-     * failed transfer leaves the image that was there before.
+     * Non-empty when the removal failed: why, in words a person can act on.
      * </pre>
      *
      * <code>string error = 4;</code>
@@ -756,7 +593,8 @@ public  final class GappsState extends
 
     /**
      * <pre>
-     * A Google apps image is on the user's disk.
+     * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+     * (/data), for the host to move onto the add-on disk and then remove.
      * </pre>
      *
      * <code>bool installed = 5;</code>
@@ -768,7 +606,8 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * A Google apps image is on the user's disk.
+     * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+     * (/data), for the host to move onto the add-on disk and then remove.
      * </pre>
      *
      * <code>bool installed = 5;</code>
@@ -782,7 +621,8 @@ public  final class GappsState extends
     }
     /**
      * <pre>
-     * A Google apps image is on the user's disk.
+     * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+     * (/data), for the host to move onto the add-on disk and then remove.
      * </pre>
      *
      * <code>bool installed = 5;</code>
@@ -1033,8 +873,6 @@ public  final class GappsState extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
-            "transferId_",
-            "received_",
             "done_",
             "error_",
             "installed_",
@@ -1044,8 +882,8 @@ public  final class GappsState extends
             "abilist_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0000\u0000\u0001\u000b\u0002\u0003\u0003\u0007" +
-              "\u0004\u0208\u0005\u0007\u0006\u0007\u0007\u000b\b\u0208\t\u0208";
+              "\u0000\u0007\u0000\u0000\u0003\t\u0007\u0000\u0000\u0000\u0003\u0007\u0004\u0208" +
+              "\u0005\u0007\u0006\u0007\u0007\u000b\b\u0208\t\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
