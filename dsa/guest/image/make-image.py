@@ -3341,6 +3341,12 @@ PLAT_FILE_CONTEXTS = "SYSTEM/etc/selinux/plat_file_contexts"
 SU_CLIENT_BINARY = "SYSTEM/bin/su"
 SU_CLIENT_PATH = "/system/bin/su"
 SU_CLIENT_CONTEXT = f"{SU_CLIENT_PATH} u:object_r:dsa_su_exec:s0"
+# The userdebug target_files build ships AOSP's own setuid su at /system/xbin/su (mode 04750,
+# root:shell). Even when the kernel's su guard hides its inode in LSM hooks, generic VFS
+# permission checks run DAC (generic_permission) before security_inode_permission, so an
+# unprivileged app calling access(X_OK) or execve() on that 04750 file gets EACCES from DAC
+# before the guard's hook can return ENOENT. It is dropped from the image.
+AOSP_XBIN_SU_BINARY = "SYSTEM/xbin/su"
 # The elevation helper: the daemon's program in a mode of its own, and the sockets init makes
 # in /dev/socket when it starts it. su connects on the first, dsa-channeld on the second.
 SU_HELPER_SERVICE = "service dsa_su /vendor/bin/dsa-channeld --su-relay"
@@ -3972,6 +3978,8 @@ def root_elevation_problems(names, read):
     problems = []
     if SU_CLIENT_BINARY not in names:
         problems.append(f"{SU_CLIENT_BINARY} is missing, so apps that may elevate find no su client")
+    if AOSP_XBIN_SU_BINARY in names:
+        problems.append(f"{AOSP_XBIN_SU_BINARY} is in the image, so /system/xbin/su is not an absent file")
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
         problems += root_elevation_policy_problems(read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
     if "META/file_contexts.bin" in names and b"dsa_su_exec" not in read("META/file_contexts.bin"):
@@ -4004,6 +4012,8 @@ def root_elevation_problems(names, read):
         if xbin_rules != ["system/xbin 0 2000 755 capabilities=0x0"]:
             problems.append(f"{SYSTEM_FS_CONFIG} does not make system/xbin mode 755, so looking up "
                             "/system/xbin/su returns EACCES instead of ENOENT")
+        if any(line.split()[:1] == ["system/xbin/su"] for line in fs_config):
+            problems.append(f"{SYSTEM_FS_CONFIG} still lists system/xbin/su")
     contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
                 if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
     for _, context in SU_SOCKET_CONTEXTS:
@@ -4449,6 +4459,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             name = info.filename
             if name == SU_CLIENT_BINARY and su_payload is not None:
                 continue
+            if name == AOSP_XBIN_SU_BINARY and channeld_payload is not None:
+                continue
             if (removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
                     or name in removed_variants):
                 if name.endswith((".apk", ".apex", ".capex")):
@@ -4534,7 +4546,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     for overlay_name in design_payloads:
                         data += overlay_apkcerts(overlay_name).encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
-                    dropped = (["system/xbin"] if channeld_payload is not None else []) + (
+                    dropped = (["system/xbin", "system/xbin/su"] if channeld_payload is not None else []) + (
                         ["system/bin/su"] if su_payload is not None else [])
                     if dropped:
                         lines = [line for line in data.decode().splitlines()
