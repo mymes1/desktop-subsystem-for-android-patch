@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <map>
@@ -32,6 +33,7 @@
 
 #include "decoder_interface.h"
 #include "host_link.h"
+#include "output_buffer.h"
 
 namespace dsa::codec2 {
 
@@ -110,6 +112,11 @@ class Component : public c2aidl::BnComponent {
     uint32_t mHeight = 0;
     std::map<int64_t, Pool> mPools;
     int64_t mNextPoolId = 0x100;
+    // Moves on at every flush, stop and reset, which ends a picture's wait for a buffer.
+    std::atomic<uint64_t> mAllocateEpoch{0};
+    // Allocation failures in a row, so one on every picture does not flood the log. Used on
+    // the host link's thread only.
+    FailureThrottle mAllocateFailures;
 };
 
 }  // namespace dsa::codec2

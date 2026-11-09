@@ -7,9 +7,11 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <thread>
 
 #include <android/hardware_buffer_aidl.h>
 
@@ -18,6 +20,7 @@
 #include <codec2/aidl/ParamTypes.h>
 
 #include "log.h"
+#include "output_buffer.h"
 #include "picture_copy.h"
 
 namespace dsa::codec2 {
@@ -61,12 +64,10 @@ typedef C2GlobalParam<C2Info, C2Hal_Rect, 1> C2Hal_RectInfo;
 // C2PlatformAllocatorStore::IGBA: the framework hands its surface's buffers through an
 // IGraphicBufferAllocator.
 constexpr int32_t kAllocatorIgba = 0x14;
-// AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420, HAL_PIXEL_FORMAT_YCBCR_420_888.
-constexpr uint32_t kFormatYuv420 = 0x23;
 // How long a picture waits for a buffer of the app's surface before it is dropped.
 constexpr auto kAllocateWait = std::chrono::seconds(2);
-// The status IGraphicBufferAllocator::allocate fails with while every buffer is in use.
-constexpr int32_t kBlocking = -9930;
+// How long one wait on the allocator's waitable lasts before a stop or flush is looked for.
+constexpr auto kAllocatePoll = std::chrono::milliseconds(50);
 
 ndk::ScopedAStatus status(c2_status_t error) { return ndk::ScopedAStatus::fromServiceSpecificError(error); }
 
@@ -336,41 +337,70 @@ AHardwareBuffer* Component::allocate(uint32_t width, uint32_t height) {
     }
     const uint64_t usage = mParams->outputUsage() | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN |
                            AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+    const uint64_t epoch = mAllocateEpoch.load();
+    uint32_t failures = 0;
     if (igba) {
         IGraphicBufferAllocator::Description desc;
         desc.width = static_cast<int32_t>(width);
         desc.height = static_cast<int32_t>(height);
-        desc.format = static_cast<int32_t>(kFormatYuv420);
+        desc.format = static_cast<int32_t>(kOutputFormat);
         desc.usage = static_cast<int64_t>(usage);
         const auto deadline = std::chrono::steady_clock::now() + kAllocateWait;
-        while (std::chrono::steady_clock::now() < deadline) {
+        while (true) {
             IGraphicBufferAllocator::Allocation allocation;
             const ndk::ScopedAStatus result = igba->allocate(desc, &allocation);
             if (result.isOk()) {
+                mAllocateFailures.reset();
                 waitFd(allocation.fence.get(), std::chrono::milliseconds(1000));
                 return allocation.buffer.release();
             }
-            if (result.getServiceSpecificError() != kBlocking) {
-                CODEC_LOGE("%s: the surface gave no buffer: %s", mInfo.name, result.getDescription().c_str());
-                return nullptr;
+            const int32_t error = result.getServiceSpecificError();
+            switch (classifyAllocateError(error)) {
+                case AllocateFailure::Wait:
+                    break;
+                case AllocateFailure::Stopped:
+                    return nullptr;
+                case AllocateFailure::Failed:
+                    if (mAllocateFailures.shouldLog(&failures)) {
+                        CODEC_LOGE("%s: the surface gave no %ux%u buffer (%u in a row): %s", mInfo.name, width,
+                                   height, failures, result.getDescription().c_str());
+                    }
+                    return nullptr;
             }
-            // Every buffer of the surface is shown or queued; one comes back soon.
-            waitFd(waitable, std::chrono::milliseconds(100));
+            // Every buffer of the surface is shown or queued. The waitable becomes readable
+            // once one comes back; a stop or a flush ends the wait sooner.
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline || mAllocateEpoch.load() != epoch) {
+                break;
+            }
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+            if (waitable >= 0) {
+                waitFd(waitable, std::min(left, kAllocatePoll));
+            } else {
+                std::this_thread::sleep_for(std::min(left, kAllocatePoll));
+            }
         }
-        CODEC_LOGW("%s: no buffer of the surface came back in time; a picture is dropped", mInfo.name);
+        if (mAllocateEpoch.load() == epoch && mAllocateFailures.shouldLog(&failures)) {
+            CODEC_LOGW("%s: no buffer of the surface came back in time; a picture is dropped (%u in a row)",
+                       mInfo.name, failures);
+        }
         return nullptr;
     }
     AHardwareBuffer_Desc desc{};
     desc.width = width;
     desc.height = height;
     desc.layers = 1;
-    desc.format = kFormatYuv420;
+    desc.format = kOutputFormat;
     desc.usage = usage | AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN;
     AHardwareBuffer* buffer = nullptr;
     if (AHardwareBuffer_allocate(&desc, &buffer) != 0) {
-        CODEC_LOGE("%s: cannot allocate a %ux%u picture buffer", mInfo.name, width, height);
+        if (mAllocateFailures.shouldLog(&failures)) {
+            CODEC_LOGE("%s: cannot allocate a %ux%u picture buffer (%u in a row)", mInfo.name, width, height,
+                       failures);
+        }
         return nullptr;
     }
+    mAllocateFailures.reset();
     return buffer;
 }
 
@@ -391,7 +421,8 @@ void Component::picture(const Frame& frame) {
         ordinal.timestampUs = frame.timestampUs;
         work = workFor(ordinal, 0);
     }
-    AHardwareBuffer* buffer = allocate(frame.width, frame.height);
+    const PictureSize bufferSize = bufferSizeFor(frame.width, frame.height);
+    AHardwareBuffer* buffer = allocate(bufferSize.width, bufferSize.height);
     if (buffer != nullptr) {
         AHardwareBuffer_Planes planes{};
         if (AHardwareBuffer_lockPlanes(buffer, AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, -1, nullptr, &planes) == 0) {
@@ -404,7 +435,7 @@ void Component::picture(const Frame& frame) {
                           planes.planes[2].rowStride};
             if (planes.planeCount < 3 ||
                 !copyNv12(reinterpret_cast<const uint8_t*>(frame.nv12.data()), frame.nv12.size(), frame.width,
-                          frame.height, frame.stride, yuv)) {
+                          frame.height, frame.stride, yuv, bufferSize.width, bufferSize.height)) {
                 CODEC_LOGE("%s: a %ux%u picture did not fit its buffer", mInfo.name, frame.width, frame.height);
             }
             AHardwareBuffer_unlock(buffer, nullptr);
@@ -491,11 +522,13 @@ void Component::finish(Work work, AHardwareBuffer* output, uint32_t width, uint3
         bundle.baseBlocks.push_back(BaseBlock::make<BaseBlock::hwbBlock>(std::move(hardwareBuffer)));
         Block block;
         block.index = 0;
+        // The picture's own rectangle of the buffer, which may be a sample larger.
+        const Crop visible = cropFor(width, height, bufferSizeFor(width, height));
         C2Hal_RectInfo crop;
-        crop.left = 0;
-        crop.top = 0;
-        crop.width = width;
-        crop.height = height;
+        crop.left = visible.left;
+        crop.top = visible.top;
+        crop.width = visible.width;
+        crop.height = visible.height;
         CreateParamsBlob(&block.meta, std::vector<C2Param*>{&crop});
         Buffer buffer;
         buffer.blocks.push_back(std::move(block));
@@ -514,6 +547,8 @@ void Component::finish(Work work, AHardwareBuffer* output, uint32_t width, uint3
 }
 
 ndk::ScopedAStatus Component::flush(WorkBundle* flushed) {
+    // A picture waiting for a buffer belongs to the stream before the flush.
+    mAllocateEpoch++;
     HostDecoder* host = nullptr;
     {
         std::unique_lock<std::mutex> lock(mLock);
@@ -559,6 +594,7 @@ ndk::ScopedAStatus Component::getInterface(std::shared_ptr<c2aidl::IComponentInt
 }
 
 ndk::ScopedAStatus Component::stop() {
+    mAllocateEpoch++;
     closeHost();
     std::lock_guard<std::mutex> lock(mLock);
     mPending.clear();
@@ -566,6 +602,7 @@ ndk::ScopedAStatus Component::stop() {
 }
 
 ndk::ScopedAStatus Component::reset() {
+    mAllocateEpoch++;
     closeHost();
     std::lock_guard<std::mutex> lock(mLock);
     mPending.clear();
