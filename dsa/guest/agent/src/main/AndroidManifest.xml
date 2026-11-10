@@ -160,6 +160,12 @@
       manager binds only in a package that holds this.
     -->
     <uses-permission android:name="android.permission.INSTALL_LOCATION_PROVIDER" />
+    <!--
+      Routing each app with a window to an output of its own (an audio policy), and setting
+      Android's media volume to the one the user set for the app on the host.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_ROUTING" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <application
         android:name=".platform.AgentApplication"

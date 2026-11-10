@@ -70,6 +70,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::app_audio::{self, AppStream, AppVolumes};
 use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::compositor::{
     GraphicsRenderer, GraphicsStreamKind, StreamTracker, GRAPHICS_COMMAND_PORT,
@@ -776,10 +777,13 @@ impl Compositor {
     /// Starts playing the sound of the user's Android on their default output device, on a
     /// thread of its own that ends with `stop`: it listens on the audio port of the user's
     /// VM, and plays each stream the guest opens there. A device that cannot play is logged
-    /// and the stream goes on unheard, so the guest is never held up.
+    /// and the stream goes on unheard, so the guest is never held up. Each app's output plays
+    /// as that app in Windows' volume mixer, at the volume Android gives it, and a volume the
+    /// user sets there goes back to Android; a second thread follows that over the local API.
     fn start_audio(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
         let bind = self.bind_audio.take()?;
         let mut listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let mut connector = (self.local_api_connector)();
         let stop = Arc::clone(stop);
         let logger = self.logger.clone();
         let failed = self.logger.clone();
@@ -788,10 +792,41 @@ impl Compositor {
             .spawn(move || {
                 let log: Arc<dyn Fn(&str) + Send + Sync> =
                     Arc::new(move |line: &str| note(logger.as_deref(), line));
-                let device: Arc<dyn AudioDevice> =
-                    Arc::new(audio::DefaultOutput::new(Arc::clone(&log)));
                 let build = format!("dsa-wm {}", crate::VERSION);
+                let volumes = AppVolumes::new();
+                let follower = {
+                    let (volumes, stop, log, build) = (
+                        Arc::clone(&volumes),
+                        Arc::clone(&stop),
+                        Arc::clone(&log),
+                        build.clone(),
+                    );
+                    thread::Builder::new()
+                        .name("dsa-wm-app-audio".into())
+                        .spawn(move || {
+                            app_audio::follow(
+                                &mut *connector,
+                                &build,
+                                &volumes,
+                                &stop,
+                                &*log,
+                                &|_: &[AppStream]| {},
+                            )
+                        })
+                };
+                if let Err(e) = &follower {
+                    log(&format!(
+                        "could not start the app volumes' thread; every app plays as one: {e}"
+                    ));
+                }
+                let device: Arc<dyn AudioDevice> = Arc::new(audio::DefaultOutput::new(
+                    Arc::clone(&log),
+                    Arc::clone(&volumes),
+                ));
                 serve_audio_port(&mut listener, device, &build, &stop, log);
+                if let Ok(follower) = follower {
+                    let _ = follower.join();
+                }
             })
             .map_err(|e| {
                 note(

@@ -766,6 +766,39 @@ message ControlMedia {
   MediaCommand command = 2;
 }
 
+// One output of the caller's Android's sound, and the app it plays. Android sends every
+// output at full scale; the host plays it at `volume`, under the app's name and icon.
+message AppAudioStream {
+  // The output, as the audio port names it ("app 0", "primary").
+  string stream = 1;
+  // Empty for the shared output, which every sound of an app without its own plays on.
+  string package_name = 2;
+  string app_label = 3;
+  // From 0 (silent) to 1 (full).
+  float volume = 4;
+  bool muted = 5;
+}
+
+// The outputs of the caller's Android's sound, the whole list.
+message AppAudio {
+  repeated AppAudioStream streams = 1;
+}
+
+// Watches which app each output of the caller's Android's sound plays, and its volume. The
+// answer is AppAudio, and the connection then carries an AppAudio each time it changes; an
+// Android that stops gives an empty one. The client sends nothing more on it. The watch lasts
+// across restarts of the Android.
+message WatchAppAudio {}
+
+// The user set an app's volume or mute in the host's volume mixer: it becomes the volume
+// Android gives the app. Empty `package_name` is the shared output. Answered with Done.
+message SetAppVolume {
+  string package_name = 1;
+  // From 0 to 1.
+  float volume = 2;
+  bool muted = 3;
+}
+
 // Asks for the widgets the apps in the caller's Android offer. The answer is WidgetProviders.
 // Needs the caller's Android to be running.
 message ListWidgetProviders {}
@@ -2563,6 +2596,8 @@ message Request {
     ReportPasskeyCeremony report_passkey_ceremony = 646;
     SetBackup set_backup = 647;
     GetKeyProtection get_key_protection = 648;
+    WatchAppAudio watch_app_audio = 660;
+    SetAppVolume set_app_volume = 661;
   }
 }
 
@@ -2600,6 +2635,7 @@ message Response {
     BackupReport backup_report = 620;
     BackupRecoveryKey backup_recovery_key = 621;
     KeyProtection key_protection = 622;
+    AppAudio app_audio = 660;
   }
 }
 
@@ -2645,5 +2681,6 @@ message Envelope {
     ShareOffer share_offer = 471;
     PasskeyCeremony passkey_ceremony = 640;
     PasskeyCeremonyWithdrawn passkey_ceremony_withdrawn = 641;
+    AppAudio app_audio = 660;
   }
 }

@@ -104,6 +104,8 @@ class AgentApplication : Application() {
             dragCatcher = dragCatcher,
             backupManager = AndroidBackupManager(this, log),
             languageSetup = AndroidLanguageServicesSetup(this),
+            appAudio = AndroidAppAudio(this, log),
+            appVolumes = AndroidAppVolumeStore(this),
             shareNotice = { reason ->
                 val main = android.os.Handler(mainLooper)
                 main.post {

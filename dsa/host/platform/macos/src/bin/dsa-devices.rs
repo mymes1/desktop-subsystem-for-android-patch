@@ -163,7 +163,7 @@ fn main() -> std::process::ExitCode {
     });
     let mut threads = Vec::new();
     if ports {
-        threads.extend(devices::start_guest_ports(&user, &stop, &log));
+        threads.extend(devices::start_guest_ports(&connect, &user, &stop, &log));
     }
     threads.extend(devices::start_followers(connect, which, &stop, &log));
     eprintln!(
