@@ -825,6 +825,9 @@ message WidgetProvider {
   bool needs_configuration = 12;
   // The name of the app that offers the widget, as a launcher shows it. Empty when unknown.
   string app_label = 13;
+  // Whether a placed widget can be set up again (ReconfigureWidget): its app says so and it
+  // has a setup. Its menu offers its settings only then.
+  bool reconfigurable = 14;
 }
 
 // The answer to ListWidgetProviders, in label order.
@@ -841,6 +844,15 @@ message AddWidget {
 
 // Removes a widget: Android forgets it, its window closes, and its place is forgotten.
 message RemoveWidget {
+  int32 widget_id = 1;
+}
+
+// Opens the setup of a placed widget whose app says it can be set up again, as the app's
+// window, for the same widget. The answer waits for the user: the Widget once they finish the
+// setup, which the widget then shows, or ERROR_CODE_WIDGET_REFUSED with the reason when they
+// cancel it, when it could not start, or when the widget cannot be set up again. The widget
+// stays where it is either way.
+message ReconfigureWidget {
   int32 widget_id = 1;
 }
 
@@ -2540,6 +2552,7 @@ message Request {
     ListWidgetProviders list_widget_providers = 29;
     AddWidget add_widget = 30;
     RemoveWidget remove_widget = 31;
+    ReconfigureWidget reconfigure_widget = 46;
     ListWidgets list_widgets = 32;
     WatchWidgets watch_widgets = 33;
     PlaceWidget place_widget = 34;

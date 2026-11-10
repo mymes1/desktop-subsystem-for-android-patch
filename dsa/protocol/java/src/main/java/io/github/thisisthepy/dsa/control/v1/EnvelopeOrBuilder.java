@@ -2053,5 +2053,27 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting();
 
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   * @return Whether the reconfigureWidget field is set.
+   */
+  boolean hasReconfigureWidget();
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   * @return The reconfigureWidget.
+   */
+  io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget();
+
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   * @return Whether the widgetReconfigured field is set.
+   */
+  boolean hasWidgetReconfigured();
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   * @return The widgetReconfigured.
+   */
+  io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

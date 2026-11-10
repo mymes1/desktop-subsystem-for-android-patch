@@ -762,6 +762,15 @@ std::map<std::string, v1::Envelope> Cases() {
     pointer->set_action(v1::POINTER_ACTION_DOWN);
     pointer->set_x(10.5f);
     pointer->set_y(20.25f);
+    v1::ReconfigureWidget* reconfigure =
+        cases["widget_reconfigure"].mutable_reconfigure_widget();
+    reconfigure->set_request_id(7);
+    reconfigure->set_widget_id(12);
+    v1::WidgetReconfigured* reconfigured =
+        cases["widget_reconfigured"].mutable_widget_reconfigured();
+    reconfigured->set_request_id(7);
+    reconfigured->set_widget_id(12);
+    reconfigured->set_finished(true);
   }
   {
     v1::SpeakText* speak = cases["speak_text"].mutable_speak_text();

@@ -498,6 +498,9 @@ extern QueryPackageDefaultTypeInternal _QueryPackage_default_instance_;
 class RecognitionEvent;
 struct RecognitionEventDefaultTypeInternal;
 extern RecognitionEventDefaultTypeInternal _RecognitionEvent_default_instance_;
+class ReconfigureWidget;
+struct ReconfigureWidgetDefaultTypeInternal;
+extern ReconfigureWidgetDefaultTypeInternal _ReconfigureWidget_default_instance_;
 class Rect;
 struct RectDefaultTypeInternal;
 extern RectDefaultTypeInternal _Rect_default_instance_;
@@ -666,6 +669,9 @@ extern WidgetProviderDefaultTypeInternal _WidgetProvider_default_instance_;
 class WidgetProviders;
 struct WidgetProvidersDefaultTypeInternal;
 extern WidgetProvidersDefaultTypeInternal _WidgetProviders_default_instance_;
+class WidgetReconfigured;
+struct WidgetReconfiguredDefaultTypeInternal;
+extern WidgetReconfiguredDefaultTypeInternal _WidgetReconfigured_default_instance_;
 class WidgetUpdated;
 struct WidgetUpdatedDefaultTypeInternal;
 extern WidgetUpdatedDefaultTypeInternal _WidgetUpdated_default_instance_;
@@ -824,6 +830,7 @@ template<> ::dsa::control::v1::PrintJobResult* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::ProcessMemory* Arena::CreateMaybeMessage<::dsa::control::v1::ProcessMemory>(Arena*);
 template<> ::dsa::control::v1::QueryPackage* Arena::CreateMaybeMessage<::dsa::control::v1::QueryPackage>(Arena*);
 template<> ::dsa::control::v1::RecognitionEvent* Arena::CreateMaybeMessage<::dsa::control::v1::RecognitionEvent>(Arena*);
+template<> ::dsa::control::v1::ReconfigureWidget* Arena::CreateMaybeMessage<::dsa::control::v1::ReconfigureWidget>(Arena*);
 template<> ::dsa::control::v1::Rect* Arena::CreateMaybeMessage<::dsa::control::v1::Rect>(Arena*);
 template<> ::dsa::control::v1::RefreshApps* Arena::CreateMaybeMessage<::dsa::control::v1::RefreshApps>(Arena*);
 template<> ::dsa::control::v1::ReinstallApp* Arena::CreateMaybeMessage<::dsa::control::v1::ReinstallApp>(Arena*);
@@ -880,6 +887,7 @@ template<> ::dsa::control::v1::WidgetList* Arena::CreateMaybeMessage<::dsa::cont
 template<> ::dsa::control::v1::WidgetPointer* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetPointer>(Arena*);
 template<> ::dsa::control::v1::WidgetProvider* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetProvider>(Arena*);
 template<> ::dsa::control::v1::WidgetProviders* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetProviders>(Arena*);
+template<> ::dsa::control::v1::WidgetReconfigured* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetReconfigured>(Arena*);
 template<> ::dsa::control::v1::WidgetUpdated* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetUpdated>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
 namespace dsa {
@@ -21954,6 +21962,7 @@ class WidgetProvider final :
     kMaxHeightDpFieldNumber = 10,
     kResizeModeFieldNumber = 11,
     kNeedsConfigurationFieldNumber = 12,
+    kReconfigurableFieldNumber = 14,
   };
   // string provider = 1;
   void clear_provider();
@@ -22097,6 +22106,15 @@ class WidgetProvider final :
   void _internal_set_needs_configuration(bool value);
   public:
 
+  // bool reconfigurable = 14;
+  void clear_reconfigurable();
+  bool reconfigurable() const;
+  void set_reconfigurable(bool value);
+  private:
+  bool _internal_reconfigurable() const;
+  void _internal_set_reconfigurable(bool value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.WidgetProvider)
  private:
   class _Internal;
@@ -22118,6 +22136,7 @@ class WidgetProvider final :
     uint32_t max_height_dp_;
     uint32_t resize_mode_;
     bool needs_configuration_;
+    bool reconfigurable_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -23013,6 +23032,315 @@ class RemoveWidget final :
 };
 // -------------------------------------------------------------------
 
+class ReconfigureWidget final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ReconfigureWidget) */ {
+ public:
+  inline ReconfigureWidget() : ReconfigureWidget(nullptr) {}
+  ~ReconfigureWidget() override;
+  explicit PROTOBUF_CONSTEXPR ReconfigureWidget(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ReconfigureWidget(const ReconfigureWidget& from);
+  ReconfigureWidget(ReconfigureWidget&& from) noexcept
+    : ReconfigureWidget() {
+    *this = ::std::move(from);
+  }
+
+  inline ReconfigureWidget& operator=(const ReconfigureWidget& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReconfigureWidget& operator=(ReconfigureWidget&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ReconfigureWidget& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ReconfigureWidget* internal_default_instance() {
+    return reinterpret_cast<const ReconfigureWidget*>(
+               &_ReconfigureWidget_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    129;
+
+  friend void swap(ReconfigureWidget& a, ReconfigureWidget& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ReconfigureWidget* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReconfigureWidget* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ReconfigureWidget* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ReconfigureWidget>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ReconfigureWidget& from);
+  void MergeFrom(const ReconfigureWidget& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ReconfigureWidget* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ReconfigureWidget";
+  }
+  protected:
+  explicit ReconfigureWidget(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+    kWidgetIdFieldNumber = 2,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // int32 widget_id = 2;
+  void clear_widget_id();
+  int32_t widget_id() const;
+  void set_widget_id(int32_t value);
+  private:
+  int32_t _internal_widget_id() const;
+  void _internal_set_widget_id(int32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ReconfigureWidget)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    int32_t widget_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class WidgetReconfigured final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.WidgetReconfigured) */ {
+ public:
+  inline WidgetReconfigured() : WidgetReconfigured(nullptr) {}
+  ~WidgetReconfigured() override;
+  explicit PROTOBUF_CONSTEXPR WidgetReconfigured(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  WidgetReconfigured(const WidgetReconfigured& from);
+  WidgetReconfigured(WidgetReconfigured&& from) noexcept
+    : WidgetReconfigured() {
+    *this = ::std::move(from);
+  }
+
+  inline WidgetReconfigured& operator=(const WidgetReconfigured& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WidgetReconfigured& operator=(WidgetReconfigured&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const WidgetReconfigured& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const WidgetReconfigured* internal_default_instance() {
+    return reinterpret_cast<const WidgetReconfigured*>(
+               &_WidgetReconfigured_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    130;
+
+  friend void swap(WidgetReconfigured& a, WidgetReconfigured& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(WidgetReconfigured* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WidgetReconfigured* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  WidgetReconfigured* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<WidgetReconfigured>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const WidgetReconfigured& from);
+  void MergeFrom(const WidgetReconfigured& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(WidgetReconfigured* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.WidgetReconfigured";
+  }
+  protected:
+  explicit WidgetReconfigured(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kErrorFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kWidgetIdFieldNumber = 2,
+    kFinishedFieldNumber = 3,
+  };
+  // string error = 4;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // int32 widget_id = 2;
+  void clear_widget_id();
+  int32_t widget_id() const;
+  void set_widget_id(int32_t value);
+  private:
+  int32_t _internal_widget_id() const;
+  void _internal_set_widget_id(int32_t value);
+  public:
+
+  // bool finished = 3;
+  void clear_finished();
+  bool finished() const;
+  void set_finished(bool value);
+  private:
+  bool _internal_finished() const;
+  void _internal_set_finished(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.WidgetReconfigured)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    uint32_t request_id_;
+    int32_t widget_id_;
+    bool finished_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ResizeWidget final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ResizeWidget) */ {
  public:
@@ -23052,7 +23380,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    131;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -23237,7 +23565,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    132;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -23405,7 +23733,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    133;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -23579,7 +23907,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    134;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -23720,7 +24048,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    135;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -23872,7 +24200,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    136;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -24315,7 +24643,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    137;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -24548,7 +24876,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    138;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -24738,7 +25066,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    139;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -24906,7 +25234,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    140;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -25085,7 +25413,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    141;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -25226,7 +25554,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    142;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -25372,7 +25700,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    143;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -25551,7 +25879,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    142;
+    144;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -25697,7 +26025,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    143;
+    145;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -25827,7 +26155,7 @@ class AppAudioStream final :
                &_AppAudioStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    146;
 
   friend void swap(AppAudioStream& a, AppAudioStream& b) {
     a.Swap(&b);
@@ -26016,7 +26344,7 @@ class AppAudio final :
                &_AppAudio_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    147;
 
   friend void swap(AppAudio& a, AppAudio& b) {
     a.Swap(&b);
@@ -26155,7 +26483,7 @@ class SetAppVolume final :
                &_SetAppVolume_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    148;
 
   friend void swap(SetAppVolume& a, SetAppVolume& b) {
     a.Swap(&b);
@@ -26312,7 +26640,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    149;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -26475,7 +26803,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    148;
+    150;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -26627,7 +26955,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    149;
+    151;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -26855,7 +27183,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    150;
+    152;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -27032,7 +27360,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    151;
+    153;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -27162,7 +27490,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    152;
+    154;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -27335,7 +27663,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    153;
+    155;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -27481,7 +27809,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    154;
+    156;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -27747,7 +28075,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    155;
+    157;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -27904,7 +28232,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    156;
+    158;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -28034,7 +28362,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    157;
+    159;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -28191,7 +28519,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    158;
+    160;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -28354,7 +28682,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    159;
+    161;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -28547,7 +28875,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    160;
+    162;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -28686,7 +29014,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    161;
+    163;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -28854,7 +29182,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    162;
+    164;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -29033,7 +29361,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    163;
+    165;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -29223,7 +29551,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    164;
+    166;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -29340,7 +29668,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    165;
+    167;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -29503,7 +29831,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    166;
+    168;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -29665,7 +29993,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    167;
+    169;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -29800,7 +30128,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    168;
+    170;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -30032,7 +30360,7 @@ class DeviceName final :
                &_DeviceName_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    169;
+    171;
 
   friend void swap(DeviceName& a, DeviceName& b) {
     a.Swap(&b);
@@ -30167,7 +30495,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    170;
+    172;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -30346,7 +30674,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    171;
+    173;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -30476,7 +30804,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    172;
+    174;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -30683,7 +31011,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    173;
+    175;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -30846,7 +31174,7 @@ class BackupUpload final :
                &_BackupUpload_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    174;
+    176;
 
   friend void swap(BackupUpload& a, BackupUpload& b) {
     a.Swap(&b);
@@ -31003,7 +31331,7 @@ class BackupCommit final :
                &_BackupCommit_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    175;
+    177;
 
   friend void swap(BackupCommit& a, BackupCommit& b) {
     a.Swap(&b);
@@ -31235,7 +31563,7 @@ class BackupDiscard final :
                &_BackupDiscard_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    176;
+    178;
 
   friend void swap(BackupDiscard& a, BackupDiscard& b) {
     a.Swap(&b);
@@ -31365,7 +31693,7 @@ class BackupClear final :
                &_BackupClear_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    177;
+    179;
 
   friend void swap(BackupClear& a, BackupClear& b) {
     a.Swap(&b);
@@ -31511,7 +31839,7 @@ class BackupAnswer final :
                &_BackupAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    178;
+    180;
 
   friend void swap(BackupAnswer& a, BackupAnswer& b) {
     a.Swap(&b);
@@ -31679,7 +32007,7 @@ class BackupQuery final :
                &_BackupQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    179;
+    181;
 
   friend void swap(BackupQuery& a, BackupQuery& b) {
     a.Swap(&b);
@@ -31809,7 +32137,7 @@ class BackupPackage final :
                &_BackupPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    180;
+    182;
 
   friend void swap(BackupPackage& a, BackupPackage& b) {
     a.Swap(&b);
@@ -32025,7 +32353,7 @@ class BackupContents final :
                &_BackupContents_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    181;
+    183;
 
   friend void swap(BackupContents& a, BackupContents& b) {
     a.Swap(&b);
@@ -32229,7 +32557,7 @@ class BackupFetch final :
                &_BackupFetch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    182;
+    184;
 
   friend void swap(BackupFetch& a, BackupFetch& b) {
     a.Swap(&b);
@@ -32424,7 +32752,7 @@ class BackupFetchData final :
                &_BackupFetchData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    183;
+    185;
 
   friend void swap(BackupFetchData& a, BackupFetchData& b) {
     a.Swap(&b);
@@ -32630,7 +32958,7 @@ class BackupRun final :
                &_BackupRun_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    184;
+    186;
 
   friend void swap(BackupRun& a, BackupRun& b) {
     a.Swap(&b);
@@ -32760,7 +33088,7 @@ class BackupRestore final :
                &_BackupRestore_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    185;
+    187;
 
   friend void swap(BackupRestore& a, BackupRestore& b) {
     a.Swap(&b);
@@ -32927,7 +33255,7 @@ class BackupRunResult final :
                &_BackupRunResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    186;
+    188;
 
   friend void swap(BackupRunResult& a, BackupRunResult& b) {
     a.Swap(&b);
@@ -33106,7 +33434,7 @@ class BackupSetting final :
                &_BackupSetting_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    187;
+    189;
 
   friend void swap(BackupSetting& a, BackupSetting& b) {
     a.Swap(&b);
@@ -33236,7 +33564,7 @@ class PasskeyRequest final :
                &_PasskeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    188;
+    190;
 
   friend void swap(PasskeyRequest& a, PasskeyRequest& b) {
     a.Swap(&b);
@@ -33483,7 +33811,7 @@ class PasskeyResponse final :
                &_PasskeyResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    189;
+    191;
 
   friend void swap(PasskeyResponse& a, PasskeyResponse& b) {
     a.Swap(&b);
@@ -33656,7 +33984,7 @@ class KeyMintRootKeyRequest final :
                &_KeyMintRootKeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    190;
+    192;
 
   friend void swap(KeyMintRootKeyRequest& a, KeyMintRootKeyRequest& b) {
     a.Swap(&b);
@@ -33773,7 +34101,7 @@ class KeyMintRootKey final :
                &_KeyMintRootKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    191;
+    193;
 
   friend void swap(KeyMintRootKey& a, KeyMintRootKey& b) {
     a.Swap(&b);
@@ -33924,7 +34252,7 @@ class ListSpeechVoices final :
                &_ListSpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    192;
+    194;
 
   friend void swap(ListSpeechVoices& a, ListSpeechVoices& b) {
     a.Swap(&b);
@@ -34041,7 +34369,7 @@ class SpeechVoice final :
                &_SpeechVoice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    193;
+    195;
 
   friend void swap(SpeechVoice& a, SpeechVoice& b) {
     a.Swap(&b);
@@ -34230,7 +34558,7 @@ class SpeechVoices final :
                &_SpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    194;
+    196;
 
   friend void swap(SpeechVoices& a, SpeechVoices& b) {
     a.Swap(&b);
@@ -34396,7 +34724,7 @@ class SpeakText final :
                &_SpeakText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    195;
+    197;
 
   friend void swap(SpeakText& a, SpeakText& b) {
     a.Swap(&b);
@@ -34596,7 +34924,7 @@ class SpeechAudio final :
                &_SpeechAudio_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    196;
+    198;
 
   friend void swap(SpeechAudio& a, SpeechAudio& b) {
     a.Swap(&b);
@@ -34764,7 +35092,7 @@ class SpeechDone final :
                &_SpeechDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    197;
+    199;
 
   friend void swap(SpeechDone& a, SpeechDone& b) {
     a.Swap(&b);
@@ -34921,7 +35249,7 @@ class StopSpeaking final :
                &_StopSpeaking_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    198;
+    200;
 
   friend void swap(StopSpeaking& a, StopSpeaking& b) {
     a.Swap(&b);
@@ -35051,7 +35379,7 @@ class StartRecognition final :
                &_StartRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    199;
+    201;
 
   friend void swap(StartRecognition& a, StartRecognition& b) {
     a.Swap(&b);
@@ -35230,7 +35558,7 @@ class StopRecognition final :
                &_StopRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    200;
+    202;
 
   friend void swap(StopRecognition& a, StopRecognition& b) {
     a.Swap(&b);
@@ -35360,7 +35688,7 @@ class CancelRecognition final :
                &_CancelRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    201;
+    203;
 
   friend void swap(CancelRecognition& a, CancelRecognition& b) {
     a.Swap(&b);
@@ -35490,7 +35818,7 @@ class RecognitionEvent final :
                &_RecognitionEvent_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    202;
+    204;
 
   friend void swap(RecognitionEvent& a, RecognitionEvent& b) {
     a.Swap(&b);
@@ -35708,7 +36036,7 @@ class CheckSpelling final :
                &_CheckSpelling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    203;
+    205;
 
   friend void swap(CheckSpelling& a, CheckSpelling& b) {
     a.Swap(&b);
@@ -35891,7 +36219,7 @@ class SpellingMistake final :
                &_SpellingMistake_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    204;
+    206;
 
   friend void swap(SpellingMistake& a, SpellingMistake& b) {
     a.Swap(&b);
@@ -36069,7 +36397,7 @@ class SpellingText final :
                &_SpellingText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    205;
+    207;
 
   friend void swap(SpellingText& a, SpellingText& b) {
     a.Swap(&b);
@@ -36208,7 +36536,7 @@ class SpellingResult final :
                &_SpellingResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    206;
+    208;
 
   friend void swap(SpellingResult& a, SpellingResult& b) {
     a.Swap(&b);
@@ -36551,6 +36879,8 @@ class Envelope final :
     kKeymintRootKeyRequest = 654,
     kKeymintRootKey = 655,
     kBackupSetting = 656,
+    kReconfigureWidget = 657,
+    kWidgetReconfigured = 658,
     BODY_NOT_SET = 0,
   };
 
@@ -36559,7 +36889,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    207;
+    209;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -36809,6 +37139,8 @@ class Envelope final :
     kKeymintRootKeyRequestFieldNumber = 654,
     kKeymintRootKeyFieldNumber = 655,
     kBackupSettingFieldNumber = 656,
+    kReconfigureWidgetFieldNumber = 657,
+    kWidgetReconfiguredFieldNumber = 658,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -40158,6 +40490,42 @@ class Envelope final :
       ::dsa::control::v1::BackupSetting* backup_setting);
   ::dsa::control::v1::BackupSetting* unsafe_arena_release_backup_setting();
 
+  // .dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;
+  bool has_reconfigure_widget() const;
+  private:
+  bool _internal_has_reconfigure_widget() const;
+  public:
+  void clear_reconfigure_widget();
+  const ::dsa::control::v1::ReconfigureWidget& reconfigure_widget() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ReconfigureWidget* release_reconfigure_widget();
+  ::dsa::control::v1::ReconfigureWidget* mutable_reconfigure_widget();
+  void set_allocated_reconfigure_widget(::dsa::control::v1::ReconfigureWidget* reconfigure_widget);
+  private:
+  const ::dsa::control::v1::ReconfigureWidget& _internal_reconfigure_widget() const;
+  ::dsa::control::v1::ReconfigureWidget* _internal_mutable_reconfigure_widget();
+  public:
+  void unsafe_arena_set_allocated_reconfigure_widget(
+      ::dsa::control::v1::ReconfigureWidget* reconfigure_widget);
+  ::dsa::control::v1::ReconfigureWidget* unsafe_arena_release_reconfigure_widget();
+
+  // .dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;
+  bool has_widget_reconfigured() const;
+  private:
+  bool _internal_has_widget_reconfigured() const;
+  public:
+  void clear_widget_reconfigured();
+  const ::dsa::control::v1::WidgetReconfigured& widget_reconfigured() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::WidgetReconfigured* release_widget_reconfigured();
+  ::dsa::control::v1::WidgetReconfigured* mutable_widget_reconfigured();
+  void set_allocated_widget_reconfigured(::dsa::control::v1::WidgetReconfigured* widget_reconfigured);
+  private:
+  const ::dsa::control::v1::WidgetReconfigured& _internal_widget_reconfigured() const;
+  ::dsa::control::v1::WidgetReconfigured* _internal_mutable_widget_reconfigured();
+  public:
+  void unsafe_arena_set_allocated_widget_reconfigured(
+      ::dsa::control::v1::WidgetReconfigured* widget_reconfigured);
+  ::dsa::control::v1::WidgetReconfigured* unsafe_arena_release_widget_reconfigured();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -40349,6 +40717,8 @@ class Envelope final :
   void set_has_keymint_root_key_request();
   void set_has_keymint_root_key();
   void set_has_backup_setting();
+  void set_has_reconfigure_widget();
+  void set_has_widget_reconfigured();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -40546,6 +40916,8 @@ class Envelope final :
       ::dsa::control::v1::KeyMintRootKeyRequest* keymint_root_key_request_;
       ::dsa::control::v1::KeyMintRootKey* keymint_root_key_;
       ::dsa::control::v1::BackupSetting* backup_setting_;
+      ::dsa::control::v1::ReconfigureWidget* reconfigure_widget_;
+      ::dsa::control::v1::WidgetReconfigured* widget_reconfigured_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -54335,6 +54707,26 @@ inline void WidgetProvider::set_allocated_app_label(std::string* app_label) {
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.WidgetProvider.app_label)
 }
 
+// bool reconfigurable = 14;
+inline void WidgetProvider::clear_reconfigurable() {
+  _impl_.reconfigurable_ = false;
+}
+inline bool WidgetProvider::_internal_reconfigurable() const {
+  return _impl_.reconfigurable_;
+}
+inline bool WidgetProvider::reconfigurable() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.WidgetProvider.reconfigurable)
+  return _internal_reconfigurable();
+}
+inline void WidgetProvider::_internal_set_reconfigurable(bool value) {
+  
+  _impl_.reconfigurable_ = value;
+}
+inline void WidgetProvider::set_reconfigurable(bool value) {
+  _internal_set_reconfigurable(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.WidgetProvider.reconfigurable)
+}
+
 // -------------------------------------------------------------------
 
 // WidgetProviders
@@ -54774,6 +55166,164 @@ inline void RemoveWidget::_internal_set_widget_id(int32_t value) {
 inline void RemoveWidget::set_widget_id(int32_t value) {
   _internal_set_widget_id(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.RemoveWidget.widget_id)
+}
+
+// -------------------------------------------------------------------
+
+// ReconfigureWidget
+
+// uint32 request_id = 1;
+inline void ReconfigureWidget::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t ReconfigureWidget::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t ReconfigureWidget::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ReconfigureWidget.request_id)
+  return _internal_request_id();
+}
+inline void ReconfigureWidget::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void ReconfigureWidget::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ReconfigureWidget.request_id)
+}
+
+// int32 widget_id = 2;
+inline void ReconfigureWidget::clear_widget_id() {
+  _impl_.widget_id_ = 0;
+}
+inline int32_t ReconfigureWidget::_internal_widget_id() const {
+  return _impl_.widget_id_;
+}
+inline int32_t ReconfigureWidget::widget_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.ReconfigureWidget.widget_id)
+  return _internal_widget_id();
+}
+inline void ReconfigureWidget::_internal_set_widget_id(int32_t value) {
+  
+  _impl_.widget_id_ = value;
+}
+inline void ReconfigureWidget::set_widget_id(int32_t value) {
+  _internal_set_widget_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.ReconfigureWidget.widget_id)
+}
+
+// -------------------------------------------------------------------
+
+// WidgetReconfigured
+
+// uint32 request_id = 1;
+inline void WidgetReconfigured::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t WidgetReconfigured::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t WidgetReconfigured::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.WidgetReconfigured.request_id)
+  return _internal_request_id();
+}
+inline void WidgetReconfigured::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void WidgetReconfigured::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.WidgetReconfigured.request_id)
+}
+
+// int32 widget_id = 2;
+inline void WidgetReconfigured::clear_widget_id() {
+  _impl_.widget_id_ = 0;
+}
+inline int32_t WidgetReconfigured::_internal_widget_id() const {
+  return _impl_.widget_id_;
+}
+inline int32_t WidgetReconfigured::widget_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.WidgetReconfigured.widget_id)
+  return _internal_widget_id();
+}
+inline void WidgetReconfigured::_internal_set_widget_id(int32_t value) {
+  
+  _impl_.widget_id_ = value;
+}
+inline void WidgetReconfigured::set_widget_id(int32_t value) {
+  _internal_set_widget_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.WidgetReconfigured.widget_id)
+}
+
+// bool finished = 3;
+inline void WidgetReconfigured::clear_finished() {
+  _impl_.finished_ = false;
+}
+inline bool WidgetReconfigured::_internal_finished() const {
+  return _impl_.finished_;
+}
+inline bool WidgetReconfigured::finished() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.WidgetReconfigured.finished)
+  return _internal_finished();
+}
+inline void WidgetReconfigured::_internal_set_finished(bool value) {
+  
+  _impl_.finished_ = value;
+}
+inline void WidgetReconfigured::set_finished(bool value) {
+  _internal_set_finished(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.WidgetReconfigured.finished)
+}
+
+// string error = 4;
+inline void WidgetReconfigured::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& WidgetReconfigured::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.WidgetReconfigured.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void WidgetReconfigured::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.WidgetReconfigured.error)
+}
+inline std::string* WidgetReconfigured::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.WidgetReconfigured.error)
+  return _s;
+}
+inline const std::string& WidgetReconfigured::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void WidgetReconfigured::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* WidgetReconfigured::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* WidgetReconfigured::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.WidgetReconfigured.error)
+  return _impl_.error_.Release();
+}
+inline void WidgetReconfigured::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.WidgetReconfigured.error)
 }
 
 // -------------------------------------------------------------------
@@ -78127,6 +78677,154 @@ inline ::dsa::control::v1::BackupSetting* Envelope::mutable_backup_setting() {
   return _msg;
 }
 
+// .dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;
+inline bool Envelope::_internal_has_reconfigure_widget() const {
+  return body_case() == kReconfigureWidget;
+}
+inline bool Envelope::has_reconfigure_widget() const {
+  return _internal_has_reconfigure_widget();
+}
+inline void Envelope::set_has_reconfigure_widget() {
+  _impl_._oneof_case_[0] = kReconfigureWidget;
+}
+inline void Envelope::clear_reconfigure_widget() {
+  if (_internal_has_reconfigure_widget()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.reconfigure_widget_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ReconfigureWidget* Envelope::release_reconfigure_widget() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.reconfigure_widget)
+  if (_internal_has_reconfigure_widget()) {
+    clear_has_body();
+    ::dsa::control::v1::ReconfigureWidget* temp = _impl_.body_.reconfigure_widget_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.reconfigure_widget_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ReconfigureWidget& Envelope::_internal_reconfigure_widget() const {
+  return _internal_has_reconfigure_widget()
+      ? *_impl_.body_.reconfigure_widget_
+      : reinterpret_cast< ::dsa::control::v1::ReconfigureWidget&>(::dsa::control::v1::_ReconfigureWidget_default_instance_);
+}
+inline const ::dsa::control::v1::ReconfigureWidget& Envelope::reconfigure_widget() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.reconfigure_widget)
+  return _internal_reconfigure_widget();
+}
+inline ::dsa::control::v1::ReconfigureWidget* Envelope::unsafe_arena_release_reconfigure_widget() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.reconfigure_widget)
+  if (_internal_has_reconfigure_widget()) {
+    clear_has_body();
+    ::dsa::control::v1::ReconfigureWidget* temp = _impl_.body_.reconfigure_widget_;
+    _impl_.body_.reconfigure_widget_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_reconfigure_widget(::dsa::control::v1::ReconfigureWidget* reconfigure_widget) {
+  clear_body();
+  if (reconfigure_widget) {
+    set_has_reconfigure_widget();
+    _impl_.body_.reconfigure_widget_ = reconfigure_widget;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.reconfigure_widget)
+}
+inline ::dsa::control::v1::ReconfigureWidget* Envelope::_internal_mutable_reconfigure_widget() {
+  if (!_internal_has_reconfigure_widget()) {
+    clear_body();
+    set_has_reconfigure_widget();
+    _impl_.body_.reconfigure_widget_ = CreateMaybeMessage< ::dsa::control::v1::ReconfigureWidget >(GetArenaForAllocation());
+  }
+  return _impl_.body_.reconfigure_widget_;
+}
+inline ::dsa::control::v1::ReconfigureWidget* Envelope::mutable_reconfigure_widget() {
+  ::dsa::control::v1::ReconfigureWidget* _msg = _internal_mutable_reconfigure_widget();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.reconfigure_widget)
+  return _msg;
+}
+
+// .dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;
+inline bool Envelope::_internal_has_widget_reconfigured() const {
+  return body_case() == kWidgetReconfigured;
+}
+inline bool Envelope::has_widget_reconfigured() const {
+  return _internal_has_widget_reconfigured();
+}
+inline void Envelope::set_has_widget_reconfigured() {
+  _impl_._oneof_case_[0] = kWidgetReconfigured;
+}
+inline void Envelope::clear_widget_reconfigured() {
+  if (_internal_has_widget_reconfigured()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.widget_reconfigured_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::WidgetReconfigured* Envelope::release_widget_reconfigured() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.widget_reconfigured)
+  if (_internal_has_widget_reconfigured()) {
+    clear_has_body();
+    ::dsa::control::v1::WidgetReconfigured* temp = _impl_.body_.widget_reconfigured_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.widget_reconfigured_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::WidgetReconfigured& Envelope::_internal_widget_reconfigured() const {
+  return _internal_has_widget_reconfigured()
+      ? *_impl_.body_.widget_reconfigured_
+      : reinterpret_cast< ::dsa::control::v1::WidgetReconfigured&>(::dsa::control::v1::_WidgetReconfigured_default_instance_);
+}
+inline const ::dsa::control::v1::WidgetReconfigured& Envelope::widget_reconfigured() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.widget_reconfigured)
+  return _internal_widget_reconfigured();
+}
+inline ::dsa::control::v1::WidgetReconfigured* Envelope::unsafe_arena_release_widget_reconfigured() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.widget_reconfigured)
+  if (_internal_has_widget_reconfigured()) {
+    clear_has_body();
+    ::dsa::control::v1::WidgetReconfigured* temp = _impl_.body_.widget_reconfigured_;
+    _impl_.body_.widget_reconfigured_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_widget_reconfigured(::dsa::control::v1::WidgetReconfigured* widget_reconfigured) {
+  clear_body();
+  if (widget_reconfigured) {
+    set_has_widget_reconfigured();
+    _impl_.body_.widget_reconfigured_ = widget_reconfigured;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.widget_reconfigured)
+}
+inline ::dsa::control::v1::WidgetReconfigured* Envelope::_internal_mutable_widget_reconfigured() {
+  if (!_internal_has_widget_reconfigured()) {
+    clear_body();
+    set_has_widget_reconfigured();
+    _impl_.body_.widget_reconfigured_ = CreateMaybeMessage< ::dsa::control::v1::WidgetReconfigured >(GetArenaForAllocation());
+  }
+  return _impl_.body_.widget_reconfigured_;
+}
+inline ::dsa::control::v1::WidgetReconfigured* Envelope::mutable_widget_reconfigured() {
+  ::dsa::control::v1::WidgetReconfigured* _msg = _internal_mutable_widget_reconfigured();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.widget_reconfigured)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -78139,6 +78837,10 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

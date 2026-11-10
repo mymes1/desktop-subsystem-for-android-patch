@@ -38,6 +38,8 @@ pub mod glyph {
     pub const RESIZE: char = '\u{E740}';
     /// "Unpin": taking something off where it was put.
     pub const UNPIN: char = '\u{E77A}';
+    /// "Setting": a gear, for an item's own settings.
+    pub const SETTINGS: char = '\u{E713}';
     /// "Play": a triangle pointing right.
     pub const PLAY: char = '\u{E768}';
     /// "Pause": two bars.
