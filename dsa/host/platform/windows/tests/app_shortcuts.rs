@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use dsa_host_core::tasks::{AppInfo, AppShortcut, PinShortcutRequest};
 use dsa_host_windows::compositor::pin_shortcuts::{
-    decide, question, Ask, Place, Question, Texts as PinTexts, ANSWER_WITHIN,
+    accepted, decide, dialog_request, dialog_text, question, Ask, Place, Question,
+    Texts as PinTexts, ACCESS_KEYS, ANSWER_WITHIN,
 };
 use dsa_host_windows::desktop_shortcuts::{entry_in, read_note, Desktop};
 use dsa_host_windows::jump_list::{sync_apps, Committed, JumpList, JumpLists, Texts};
@@ -391,4 +392,71 @@ fn fr7_uninstalling_dsa_removes_the_desktop_shortcuts_it_made() {
         dsa_host_windows::uninstall::remove_desktop_shortcuts(&desktop.note),
         Ok(0)
     );
+}
+
+#[test]
+fn fr7_the_pin_question_is_a_windows_11_dialog_with_add_as_its_accent_button() {
+    use dsa_host_windows::compositor::fluent_dialog::{
+        layout, Answer, Control, DialogState, Key, Outcome,
+    };
+    let request = PinShortcutRequest {
+        request_id: 4,
+        package_name: CHAT.into(),
+        app_label: "Chat".into(),
+        shortcut: shortcut("ana", "Ana", 1),
+    };
+    for (texts, add, cancel) in [
+        (PinTexts::english(), "Add to desktop", "Cancel"),
+        (PinTexts::korean(), "바탕 화면에 추가", "취소"),
+    ] {
+        let text = dialog_text(&question(&request, &texts));
+        // The heading names the shortcut, the body the app; no check box.
+        assert!(text.title.contains("Ana"), "{}", text.title);
+        assert!(text.body.contains("Chat"), "{}", text.body);
+        assert_eq!(text.check, None);
+        // Add is the primary button, which the dialog draws in the accent color.
+        assert_eq!(text.primary, add);
+        assert_eq!(text.secondary, cancel);
+        assert_eq!(text.keys, ACCESS_KEYS);
+        let laid = layout(&text, 96, &|line, _| line.chars().count() as i32 * 7);
+        assert!(laid.check_box.is_none());
+        assert!(laid.primary.x < laid.secondary.x, "Add comes first");
+        // The dialog closes as no once the three minutes are up.
+        let shown = dialog_request(&text, ANSWER_WITHIN);
+        assert_eq!(shown.timeout, Some(ANSWER_WITHIN));
+    }
+
+    // The keyboard: Add has the focus, so Enter adds; Escape declines; the access keys press
+    // their buttons; Tab moves between the two buttons only.
+    let keys = ACCESS_KEYS;
+    let mut state = DialogState::new(false);
+    assert_eq!(state.focus, Control::Primary);
+    assert_eq!(
+        state.key(Key::Enter, &keys),
+        Outcome::Done(Answer::Confirmed { checked: false })
+    );
+    let mut state = DialogState::new(false);
+    assert_eq!(
+        state.key(Key::Escape, &keys),
+        Outcome::Done(Answer::Cancelled)
+    );
+    let mut state = DialogState::new(false);
+    state.key(Key::Tab { shift: false }, &keys);
+    assert_eq!(state.focus, Control::Secondary);
+    state.key(Key::Tab { shift: false }, &keys);
+    assert_eq!(state.focus, Control::Primary);
+    let mut state = DialogState::new(false);
+    assert_eq!(
+        state.key(Key::Char('c'), &keys),
+        Outcome::Done(Answer::Cancelled)
+    );
+    let mut state = DialogState::new(false);
+    assert_eq!(
+        state.key(Key::Char('a'), &keys),
+        Outcome::Done(Answer::Confirmed { checked: false })
+    );
+
+    // Only Add is a yes.
+    assert!(accepted(Answer::Confirmed { checked: false }));
+    assert!(!accepted(Answer::Cancelled));
 }

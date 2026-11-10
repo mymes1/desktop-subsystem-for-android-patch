@@ -2,8 +2,8 @@
 //!
 //! The agent is Android's default launcher, so the request comes to it, and it passes the
 //! request to the host, as a phone's launcher would ask on its home screen. The window manager
-//! asks the user, in a Windows task dialog under the app's name with the shortcut's name and
-//! icon, [Add to desktop] or [Cancel]. On yes the shortcut goes on the desktop
+//! asks the user in a Windows 11 dialog ([`crate::compositor::fluent_dialog`]) with the
+//! shortcut's name and the app's: [Add to desktop], the accent button, or [Cancel]. On yes the shortcut goes on the desktop
 //! ([`crate::desktop_shortcuts`]), starting that shortcut of the app as its jump list task
 //! does, and Android is told to pin it; otherwise Android is told no. It goes when the app is
 //! uninstalled, as the app's own desktop shortcut does.
@@ -21,6 +21,7 @@ use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::tasks::PinShortcutRequest;
 use dsa_transport::Connector;
 
+use crate::compositor::fluent_dialog::{self, Answer, DialogText};
 use crate::compositor::log::{note, CompositorLogger};
 use crate::desktop_shortcuts::{entry_in, Desktop};
 use crate::start_menu::{ShellLinks, Shortcuts};
@@ -108,8 +109,6 @@ pub struct Question {
     pub content: String,
     pub add: String,
     pub cancel: String,
-    /// The shortcut's icon as a PNG image; empty for none.
-    pub icon_png: Vec<u8>,
 }
 
 /// The question about `request`.
@@ -124,7 +123,6 @@ pub fn question(request: &PinShortcutRequest, texts: &Texts) -> Question {
         content: texts.content(&app),
         add: texts.add().to_string(),
         cancel: texts.cancel().to_string(),
-        icon_png: request.shortcut.icon_png.clone(),
         title: app,
     }
 }
@@ -135,12 +133,44 @@ pub trait Ask {
     fn ask(&self, question: &Question, within: Duration) -> bool;
 }
 
-/// Asks in a Windows task dialog.
-pub struct TaskDialogAsk;
+/// The access keys of the dialog's controls: no check box, A for [Add to desktop] and C for
+/// [Cancel], in every language, as the stop dialog's keys are.
+pub const ACCESS_KEYS: [Option<char>; 3] = [None, Some('A'), Some('C')];
 
-impl Ask for TaskDialogAsk {
+/// The Windows 11 dialog's words for `question`: the heading as its title, the app's request as
+/// its body, no check box, and [Add to desktop] as the primary (accent) button.
+pub fn dialog_text(question: &Question) -> DialogText {
+    DialogText {
+        title: question.instruction.clone(),
+        body: question.content.clone(),
+        check: None,
+        primary: question.add.clone(),
+        secondary: question.cancel.clone(),
+        keys: ACCESS_KEYS,
+    }
+}
+
+/// Whether the dialog's answer is yes: only its primary button is. Cancel, Escape, closing it
+/// and the time running out are no.
+pub fn accepted(answer: Answer) -> bool {
+    matches!(answer, Answer::Confirmed { .. })
+}
+
+/// The dialog showing `text`, which closes as cancelled once `within` has passed.
+pub fn dialog_request(text: &DialogText, within: Duration) -> fluent_dialog::Request<'_> {
+    fluent_dialog::Request {
+        text,
+        timeout: Some(within),
+    }
+}
+
+/// Asks in the Windows 11 dialog, which closes as no once `within` has passed.
+pub struct FluentDialogAsk;
+
+impl Ask for FluentDialogAsk {
     fn ask(&self, question: &Question, within: Duration) -> bool {
-        dialog::ask(question, within)
+        let text = dialog_text(question);
+        accepted(fluent_dialog::show(dialog_request(&text, within)))
     }
 }
 
@@ -229,7 +259,7 @@ pub fn serve(
         let (accepted, said) = decide(
             &request,
             arrived.elapsed(),
-            &TaskDialogAsk,
+            &FluentDialogAsk,
             &texts,
             place.as_ref(),
             &ShellLinks,
@@ -246,206 +276,5 @@ pub fn serve(
                 ),
             );
         }
-    }
-}
-
-/// The task dialog, from version 6 of the common controls. This program carries no manifest
-/// that asks for that version, and the older one, which Windows loads without it, has no task
-/// dialog, so the dialog is called through an activation context made from a manifest of its
-/// own and looked up at run time: a program that named it at link time would not start.
-mod dialog {
-    use std::time::Duration;
-
-    use windows_sys::Win32::Foundation::{HWND, LPARAM, WPARAM};
-    use windows_sys::Win32::System::ApplicationInstallationAndServicing::{
-        ActivateActCtx, CreateActCtxW, DeactivateActCtx, ReleaseActCtx, ACTCTXW,
-    };
-    use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-    use windows_sys::Win32::UI::Controls::{
-        TASKDIALOGCONFIG, TASKDIALOG_BUTTON, TDF_ALLOW_DIALOG_CANCELLATION, TDF_CALLBACK_TIMER,
-        TDF_USE_HICON_MAIN, TDM_CLICK_BUTTON, TDN_CREATED, TDN_TIMER,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateIconFromResourceEx, DestroyIcon, MessageBoxW, SendMessageW, SetForegroundWindow,
-        IDCANCEL, IDOK, LR_DEFAULTCOLOR, MB_ICONQUESTION, MB_OKCANCEL, MB_SETFOREGROUND,
-    };
-
-    use super::Question;
-
-    /// The ID of the [Add to desktop] button.
-    const ADD: i32 = 100;
-
-    /// The manifest that asks for version 6 of the common controls.
-    const MANIFEST: &str = concat!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n",
-        "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">",
-        "<dependency><dependentAssembly><assemblyIdentity type=\"win32\" ",
-        "name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" ",
-        "processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\" language=\"*\"/>",
-        "</dependentAssembly></dependency></assembly>\n"
-    );
-
-    type TaskDialogIndirect = unsafe extern "system" fn(
-        config: *const TASKDIALOGCONFIG,
-        button: *mut i32,
-        radio: *mut i32,
-        verified: *mut i32,
-    ) -> i32;
-
-    fn wide(text: &str) -> Vec<u16> {
-        text.encode_utf16().chain(std::iter::once(0)).collect()
-    }
-
-    /// Clicks Cancel once the time the dialog was given has passed, and brings it to the
-    /// front when it opens.
-    unsafe extern "system" fn callback(
-        hwnd: HWND,
-        msg: u32,
-        wparam: WPARAM,
-        _lparam: LPARAM,
-        within_ms: isize,
-    ) -> i32 {
-        match msg as i32 {
-            TDN_CREATED => {
-                // SAFETY: the dialog's own window.
-                unsafe { SetForegroundWindow(hwnd) };
-            }
-            TDN_TIMER if wparam as isize >= within_ms => {
-                // SAFETY: the dialog's own window, which takes the click.
-                unsafe { SendMessageW(hwnd, TDM_CLICK_BUTTON as u32, IDCANCEL as usize, 0) };
-            }
-            _ => {}
-        }
-        0
-    }
-
-    /// The task dialog function of version 6 of the common controls, loaded under an
-    /// activation context that asks for it. `None` when it cannot be had.
-    fn task_dialog() -> Option<TaskDialogIndirect> {
-        let dir = crate::paths::UserRoot::current()?.tmp();
-        std::fs::create_dir_all(&dir).ok()?;
-        let manifest = dir.join("common-controls-6.manifest");
-        if std::fs::read_to_string(&manifest).ok().as_deref() != Some(MANIFEST) {
-            std::fs::write(&manifest, MANIFEST).ok()?;
-        }
-        let source = wide(&manifest.to_string_lossy());
-        let context = ACTCTXW {
-            cbSize: std::mem::size_of::<ACTCTXW>() as u32,
-            lpSource: source.as_ptr(),
-            ..Default::default()
-        };
-        // SAFETY: a context made from a manifest file, activated around the load only, then
-        // released; the library stays loaded for the life of the process.
-        unsafe {
-            let handle = CreateActCtxW(&context);
-            if handle.is_null() || handle as isize == -1 {
-                return None;
-            }
-            let mut cookie = 0usize;
-            let active = ActivateActCtx(handle, &mut cookie) != 0;
-            let library = wide("comctl32.dll");
-            let module = LoadLibraryW(library.as_ptr());
-            if active {
-                DeactivateActCtx(0, cookie);
-            }
-            ReleaseActCtx(handle);
-            if module.is_null() {
-                return None;
-            }
-            let found = GetProcAddress(module, c"TaskDialogIndirect".as_ptr().cast())?;
-            Some(std::mem::transmute::<
-                unsafe extern "system" fn() -> isize,
-                TaskDialogIndirect,
-            >(found))
-        }
-    }
-
-    pub fn ask(question: &Question, within: Duration) -> bool {
-        let Some(task_dialog) = task_dialog() else {
-            return message_box(question);
-        };
-        let title = wide(&question.title);
-        let instruction = wide(&question.instruction);
-        let content = wide(&question.content);
-        let add = wide(&question.add);
-        let cancel = wide(&question.cancel);
-        let buttons = [
-            TASKDIALOG_BUTTON {
-                nButtonID: ADD,
-                pszButtonText: add.as_ptr(),
-            },
-            TASKDIALOG_BUTTON {
-                nButtonID: IDCANCEL,
-                pszButtonText: cancel.as_ptr(),
-            },
-        ];
-        // SAFETY: PNG bytes the call reads; the icon is destroyed below.
-        let icon = if question.icon_png.is_empty() {
-            std::ptr::null_mut()
-        } else {
-            unsafe {
-                CreateIconFromResourceEx(
-                    question.icon_png.as_ptr(),
-                    question.icon_png.len() as u32,
-                    1,
-                    0x0003_0000,
-                    48,
-                    48,
-                    LR_DEFAULTCOLOR,
-                )
-            }
-        };
-        let mut config = TASKDIALOGCONFIG {
-            cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32,
-            dwFlags: TDF_ALLOW_DIALOG_CANCELLATION | TDF_CALLBACK_TIMER,
-            pszWindowTitle: title.as_ptr(),
-            pszMainInstruction: instruction.as_ptr(),
-            pszContent: content.as_ptr(),
-            cButtons: buttons.len() as u32,
-            pButtons: buttons.as_ptr(),
-            nDefaultButton: ADD,
-            pfCallback: Some(callback),
-            lpCallbackData: within.as_millis().min(i32::MAX as u128) as isize,
-            ..Default::default()
-        };
-        if !icon.is_null() {
-            config.dwFlags |= TDF_USE_HICON_MAIN;
-            config.Anonymous1.hMainIcon = icon;
-        }
-        let mut pressed = 0;
-        // SAFETY: a configuration whose strings and buttons outlive the call, which returns
-        // when the dialog closes.
-        let result = unsafe {
-            task_dialog(
-                &config,
-                &mut pressed,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            )
-        };
-        if !icon.is_null() {
-            // SAFETY: the icon made above, no longer shown.
-            unsafe { DestroyIcon(icon) };
-        }
-        if result < 0 {
-            return message_box(question);
-        }
-        pressed == ADD
-    }
-
-    /// The question in a message box, for a Windows whose task dialog could not be loaded.
-    fn message_box(question: &Question) -> bool {
-        let title = wide(&question.title);
-        let text = wide(&format!("{}\n\n{}", question.instruction, question.content));
-        // SAFETY: NUL-terminated strings that outlive the call.
-        let pressed = unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
-                text.as_ptr(),
-                title.as_ptr(),
-                MB_OKCANCEL | MB_ICONQUESTION | MB_SETFOREGROUND,
-            )
-        };
-        pressed == IDOK
     }
 }
