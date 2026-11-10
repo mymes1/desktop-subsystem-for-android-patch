@@ -427,6 +427,86 @@ pub struct InstalledApps {
     #[prost(string, repeated, tag = "1")]
     pub package_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+/// One of an app's launcher shortcuts, as Android's ShortcutManager keeps them: a static one
+/// from the app's manifest, a dynamic one the app published, or one pinned at the app's
+/// request. The host shows the static and dynamic ones as tasks of the app's jump list (or
+/// Dock menu, or desktop entry actions), and a pinned one as a desktop shortcut.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppShortcut {
+    /// The shortcut's ID, unique within its app.
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// The shortcut's name, as a launcher shows it.
+    #[prost(string, tag = "2")]
+    pub short_label: ::prost::alloc::string::String,
+    /// The longer name a launcher shows when it has room. Empty when the app gave none.
+    #[prost(string, tag = "3")]
+    pub long_label: ::prost::alloc::string::String,
+    /// The shortcut's icon, as a square PNG image of at most 256 pixels on a side. Empty when
+    /// the shortcut has none the agent could draw; the host shows the app's icon then.
+    #[prost(bytes = "vec", tag = "4")]
+    pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The shortcut's place among the app's shortcuts, lowest first, as the app ranks them.
+    #[prost(uint32, tag = "5")]
+    pub rank: u32,
+    /// From the app's manifest.
+    #[prost(bool, tag = "6")]
+    pub manifest: bool,
+    /// Published by the app while it runs.
+    #[prost(bool, tag = "7")]
+    pub dynamic: bool,
+    /// Pinned at the app's request (requestPinShortcut), after the user agreed.
+    #[prost(bool, tag = "8")]
+    pub pinned: bool,
+}
+/// Guest to host, from the agent: every launcher shortcut of one app, the static and dynamic
+/// ones in rank order and then the pinned ones. It replaces what the host had for the app.
+/// The agent sends it on each connection for every app InstalledApps names that has any, and
+/// again whenever an app's shortcuts change (LauncherApps.Callback.onShortcutsChanged), with
+/// an empty list once an app has none left.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppShortcuts {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub shortcuts: ::prost::alloc::vec::Vec<AppShortcut>,
+}
+/// Host to guest: start one of an app's shortcuts (LauncherApps.startShortcut) as a task in
+/// its own window, as a jump list task or a desktop shortcut does. The agent answers with
+/// TaskUpdated once the task is there; a shortcut that is gone or turned off starts the app
+/// instead.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LaunchShortcut {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub shortcut_id: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent, which as the guest's default launcher receives the app's
+/// requestPinShortcut (LauncherApps.PinItemRequest): an app asks for one of its shortcuts on
+/// the desktop. The host asks the user and answers with PinShortcutAnswer of the same
+/// `request_id`; on yes it makes a desktop shortcut that starts it.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PinShortcutRequest {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    /// The app's own name, for the question.
+    #[prost(string, tag = "3")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "4")]
+    pub shortcut: ::core::option::Option<AppShortcut>,
+}
+/// Host to guest: the user's answer to a PinShortcutRequest. The agent accepts the request
+/// when `accepted`, which pins the shortcut in Android, and lets it go otherwise.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PinShortcutAnswer {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(bool, tag = "2")]
+    pub accepted: bool,
+}
 /// Host to guest: pointer input in a task's window. One message per event, sent as it
 /// happens; the agent injects it into the task at once.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -3088,7 +3168,7 @@ pub struct SpellingResult {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656, 680, 681, 682, 683"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3464,6 +3544,14 @@ pub mod envelope {
         KeymintRootKey(super::KeyMintRootKey),
         #[prost(message, tag = "656")]
         BackupSetting(super::BackupSetting),
+        #[prost(message, tag = "680")]
+        AppShortcuts(super::AppShortcuts),
+        #[prost(message, tag = "681")]
+        LaunchShortcut(super::LaunchShortcut),
+        #[prost(message, tag = "682")]
+        PinShortcutRequest(super::PinShortcutRequest),
+        #[prost(message, tag = "683")]
+        PinShortcutAnswer(super::PinShortcutAnswer),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

@@ -382,6 +382,7 @@ fn with_task_id(report: FromHost, task_id: i32) -> FromHost {
         FromHost::Shown { shown, .. } => FromHost::Shown { task_id, shown },
         FromHost::Caption { band, .. } => FromHost::Caption { task_id, band },
         FromHost::MenuChosen { action, .. } => FromHost::MenuChosen { task_id, action },
+        FromHost::MediaButton { button, .. } => FromHost::MediaButton { task_id, button },
     }
 }
 

@@ -26,6 +26,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::background::MediaCommand;
 use dsa_host_core::compositor::early_frames::EarlyFrames;
 use dsa_host_core::compositor::frame_buffers::texture_fits;
 use dsa_host_core::compositor::gpu_reset::{GpuResetWindows, Report};
@@ -33,7 +34,7 @@ use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::{
     accept_window_host, answer_attached, report_from_wire, to_wire, FromHost, HostAction, HostId,
-    MenuWork, ToHost, WindowHosts,
+    MediaButtons, MenuWork, ToHost, WindowHosts,
 };
 use dsa_host_core::memory::IdleTrim;
 use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
@@ -115,6 +116,12 @@ pub enum ManagerEvent {
     Gone { host: HostId },
     /// The user's window settings for each app, as the service has them now.
     AppWindows(Vec<dsa_host_core::app_windows::AppWindowSettings>),
+    /// The app's media session changed, or ended (`None`): the media buttons in the taskbar
+    /// preview of its windows follow it.
+    Media {
+        package: String,
+        media: Option<MediaButtons>,
+    },
 }
 
 /// How many task windows are the active window now: the game controllers reach Android only
@@ -726,6 +733,10 @@ pub struct ManagerSetup {
     /// How many times the renderer has made its Vulkan device again after a GPU reset. None
     /// when the renderer cannot say.
     pub renderer_generation: Option<Box<dyn Fn() -> u64 + Send>>,
+    /// Where a media button clicked in a window's taskbar preview goes: to the media
+    /// controls' connection to the service, which sends it to the app's media session, as a
+    /// media key's press goes. None when the media sessions are not followed.
+    pub media_pressed: Option<Sender<(String, MediaCommand)>>,
 }
 
 struct Manager {
@@ -865,6 +876,10 @@ impl Manager {
                 let changes = self.windows.set_app_windows(&apps);
                 self.change(changes, now);
             }
+            ManagerEvent::Media { package, media } => {
+                let actions = self.hosts.media(&package, media);
+                self.carry_out(actions);
+            }
             ManagerEvent::Gone { host } => {
                 self.links.remove(&host);
                 let tasks = self.hosts.detached(host);
@@ -966,6 +981,22 @@ impl Manager {
                         }
                     }
                     None => {}
+                }
+            }
+            FromHost::MediaButton { task_id, button } => {
+                let window = self.resets.window_of(task_id);
+                let Some(pressed) = self.hosts.media_pressed(window, button) else {
+                    return;
+                };
+                let sent = self
+                    .setup
+                    .media_pressed
+                    .as_ref()
+                    .is_some_and(|media| media.send(pressed).is_ok());
+                if !sent {
+                    self.log(
+                        "the media controls have ended; a media button does not reach Android",
+                    );
                 }
             }
         }
@@ -1181,6 +1212,7 @@ impl Manager {
                         ToHost::Retitle { .. }
                         | ToHost::AppMenu { .. }
                         | ToHost::AppIcon { .. }
+                        | ToHost::AppMedia { .. }
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
                         | ToHost::ImeCursor { .. }

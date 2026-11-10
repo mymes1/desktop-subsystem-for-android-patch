@@ -82,7 +82,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetWindowPlacement, SetWindowPlacement, GWL_STYLE, HTBORDER, HTBOTTOMRIGHT,
     HTLEFT, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, SC_MAXIMIZE, SC_SIZE, SWP_FRAMECHANGED,
-    SWP_NOOWNERZORDER, SW_RESTORE, WINDOWPLACEMENT, WM_KEYDOWN, WM_KEYUP, WM_NCHITTEST,
+    SWP_NOOWNERZORDER, SW_RESTORE, WINDOWPLACEMENT, WM_COMMAND, WM_KEYDOWN, WM_KEYUP, WM_NCHITTEST,
     WM_SYSCOMMAND, WM_SYSKEYDOWN, WM_SYSKEYUP, WS_POPUP,
 };
 
@@ -315,6 +315,36 @@ struct WindowData {
     /// The icons the window shows in place of its program's, once the window manager sent
     /// the app's new icon; kept while the window shows them.
     icons: RefCell<Option<super::live_icon::WindowIcons>>,
+    /// The media buttons in the window's taskbar preview, while the app has a media session.
+    thumb_bar: super::thumb_bar::ThumbBar,
+}
+
+/// Shows the app's media session on the media buttons of `hwnd`'s taskbar preview, and logs
+/// why when the taskbar does not take them.
+///
+/// # Safety
+///
+/// `hwnd` is a live task window of the calling thread, and `data` its data.
+unsafe fn sync_thumb_bar(hwnd: HWND, data: &WindowData, step: ThumbBarStep) {
+    let result = match step {
+        ThumbBarStep::Created => data.thumb_bar.button_created(hwnd as isize),
+        ThumbBarStep::Changed => data.thumb_bar.update(hwnd as isize),
+        ThumbBarStep::Restyled => data.thumb_bar.restyle(hwnd as isize),
+    };
+    if let Err(why) = result {
+        note(data.logger.as_deref(), &why);
+    }
+}
+
+/// What the media buttons of a window's taskbar preview follow.
+#[derive(Clone, Copy)]
+enum ThumbBarStep {
+    /// The taskbar made the window's button.
+    Created,
+    /// The app's media session changed.
+    Changed,
+    /// The window's DPI or the theme changed.
+    Restyled,
 }
 
 /// Gives the window the app's icon the window manager sent, if it sent one, at the sizes of
@@ -562,6 +592,25 @@ unsafe extern "system" fn task_window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     if let Some(data) = window_data(hwnd) {
+        // The taskbar made the window's button: its preview gets the media buttons.
+        let created = super::thumb_bar::button_created_message();
+        if created != 0 && message == created {
+            sync_thumb_bar(hwnd, data, ThumbBarStep::Created);
+            return 0;
+        }
+        // A click on a media button of the preview goes to the app's media session.
+        if message == WM_COMMAND {
+            if let Some(id) = super::thumb_bar::clicked(wparam) {
+                let media = super::thumb_bar::current();
+                if let Some(button) = super::thumb_bar::pressed(id, media.as_ref()) {
+                    (data.report)(FromHost::MediaButton {
+                        task_id: data.task_id,
+                        button,
+                    });
+                }
+                return 0;
+            }
+        }
         // The Android items of the system menu; Windows' own commands go on below.
         if message == WM_SYSCOMMAND {
             if let Some(item) = system_menu::chosen(wparam) {
@@ -788,6 +837,8 @@ unsafe extern "system" fn task_window_proc(
                 if let Some(presenter) = data.presenter.borrow().as_deref() {
                     presenter.splash_dpi_changed(dpi.max(96));
                 }
+                // The preview's media buttons are drawn again at the new scale.
+                sync_thumb_bar(hwnd, data, ThumbBarStep::Restyled);
                 // The app's icon the window manager sent is drawn again at the new scale.
                 if data.icons.borrow().is_some() {
                     if let Some(icon) = super::live_icon::current() {
@@ -852,6 +903,11 @@ unsafe extern "system" fn task_window_proc(
             0
         }
         WM_SETTINGCHANGE | WM_THEMECHANGED | WM_SYSCOLORCHANGE => {
+            // The taskbar's theme or high contrast may have changed: the preview's media
+            // buttons take their colour.
+            if let Some(data) = window_data(hwnd) {
+                sync_thumb_bar(hwnd, data, ThumbBarStep::Restyled);
+            }
             // The caption's size, high contrast and the system colors may have changed.
             if let Some(data) = window_data(hwnd).filter(|data| titled(data)) {
                 data.caption.report_height(hwnd, &*data.report);
@@ -1523,6 +1579,17 @@ impl Ui {
                             self.log("the app's new icon is not an image; its windows keep theirs");
                         }
                     }
+                    ToHost::AppMedia { media } => {
+                        // Every window's preview follows the app's media session, and the next
+                        // windows' too.
+                        if super::thumb_bar::set(media) {
+                            for hwnd in self.open.values() {
+                                if let Some(data) = window_data(*hwnd) {
+                                    sync_thumb_bar(*hwnd, data, ThumbBarStep::Changed);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1627,6 +1694,7 @@ impl Ui {
             rescaling: Cell::new(false),
             logger: self.setup.logger.clone(),
             icons: RefCell::new(None),
+            thumb_bar: super::thumb_bar::ThumbBar::new(),
         }));
         let class = wide(TASK_CLASS);
         let hwnd = CreateWindowExW(

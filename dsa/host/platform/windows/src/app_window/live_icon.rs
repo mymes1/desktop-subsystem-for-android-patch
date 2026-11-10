@@ -170,8 +170,8 @@ pub unsafe fn apply(hwnd: HWND, png: &[u8]) -> Option<WindowIcons> {
 }
 
 /// An icon of `side` pixels square from rows of straight-alpha BGRA `pixels`; null when it
-/// cannot be made.
-fn icon(pixels: &[u8], side: u32) -> HICON {
+/// cannot be made. The caller destroys it.
+pub fn icon(pixels: &[u8], side: u32) -> HICON {
     if pixels.len() != (side * side * 4) as usize {
         return std::ptr::null_mut();
     }

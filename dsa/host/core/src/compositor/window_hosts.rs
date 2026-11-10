@@ -26,6 +26,7 @@ use dsa_transport::Connection;
 use super::caption::{CaptionBand, CaptionTone};
 use super::task_windows::WindowChange;
 use super::window_mode::WindowMode;
+use crate::background::{MediaCommand, MediaSession, Playback};
 use crate::tasks::{AppInfo, AppSettingsPage, Bounds, TaskRequest};
 
 /// Whether `name` is an Android package name: two or more dot-separated parts, each an ASCII
@@ -130,13 +131,79 @@ pub enum ToHost {
         icon_png: Vec<u8>,
         caption_icon_png: Vec<u8>,
     },
+    /// The app's media session, for the media buttons in the taskbar preview of each of its
+    /// windows; `None` once the app has none, which hides them. About the app, like `AppMenu`.
+    AppMedia {
+        media: Option<MediaButtons>,
+    },
+}
+
+/// What the media buttons in the taskbar preview of an app's windows show: whether the app
+/// plays now, and which of the buttons its media session allows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MediaButtons {
+    pub playing: bool,
+    pub previous: bool,
+    pub play: bool,
+    pub pause: bool,
+    pub next: bool,
+}
+
+impl MediaButtons {
+    /// The buttons of `session`. Play and pause follow the same rule as Windows' media keys:
+    /// the one the middle button shows is always offered, since a session that plays can
+    /// always be paused and a paused one played, even when it lists only the other.
+    pub fn of(session: &MediaSession) -> MediaButtons {
+        let playing = session.playback == Playback::Playing;
+        MediaButtons {
+            playing,
+            previous: session.can_previous,
+            play: session.can_play || !playing,
+            pause: session.can_pause || playing,
+            next: session.can_next,
+        }
+    }
+
+    /// Whether the session allows `button` now. The middle button is play or pause, as the
+    /// session plays or not, so the other of the two is never pressed.
+    pub fn allows(&self, button: MediaButton) -> bool {
+        match button {
+            MediaButton::Previous => self.previous,
+            MediaButton::Play => !self.playing && self.play,
+            MediaButton::Pause => self.playing && self.pause,
+            MediaButton::Next => self.next,
+        }
+    }
+}
+
+/// A media button in the taskbar preview of a task window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MediaButton {
+    Previous,
+    Play,
+    Pause,
+    Next,
+}
+
+impl MediaButton {
+    /// What the button asks of the app's media session.
+    pub fn command(self) -> MediaCommand {
+        match self {
+            MediaButton::Previous => MediaCommand::Previous,
+            MediaButton::Play => MediaCommand::Play,
+            MediaButton::Pause => MediaCommand::Pause,
+            MediaButton::Next => MediaCommand::Next,
+        }
+    }
 }
 
 impl ToHost {
     /// The task whose window the message is about; `None` for a message about the app.
     pub fn task_id(&self) -> Option<i32> {
         Some(match self {
-            ToHost::AppMenu { .. } | ToHost::AppIcon { .. } => return None,
+            ToHost::AppMenu { .. } | ToHost::AppIcon { .. } | ToHost::AppMedia { .. } => {
+                return None
+            }
             ToHost::Show { task_id, .. }
             | ToHost::Retitle { task_id, .. }
             | ToHost::Resize { task_id, .. }
@@ -200,12 +267,15 @@ pub enum FromHost {
     Caption { task_id: i32, band: CaptionBand },
     /// The user chose `action` in the window's system menu.
     MenuChosen { task_id: i32, action: MenuAction },
+    /// The user clicked `button` in the taskbar preview of the window.
+    MediaButton { task_id: i32, button: MediaButton },
 }
 
 impl FromHost {
     pub fn task_id(&self) -> i32 {
         match self {
-            FromHost::Closed { task_id }
+            FromHost::MediaButton { task_id, .. }
+            | FromHost::Closed { task_id }
             | FromHost::Resized { task_id, .. }
             | FromHost::Dpi { task_id, .. }
             | FromHost::Focus { task_id, .. }
@@ -303,11 +373,59 @@ pub struct WindowHosts {
     hosts: BTreeMap<String, AppHost>,
     /// The package of each task that has a window.
     packages: BTreeMap<i32, String>,
+    /// The media buttons of each app that has a media session, whether or not its windows
+    /// are open, so a window host that attaches later shows them at once.
+    media: BTreeMap<String, MediaButtons>,
 }
 
 impl WindowHosts {
     pub fn new() -> WindowHosts {
         WindowHosts::default()
+    }
+
+    /// Records the media session of `package`, or its end (`None`), and tells the app's
+    /// window host when it runs and the buttons it shows change.
+    pub fn media(&mut self, package: &str, media: Option<MediaButtons>) -> Vec<HostAction> {
+        let before = match media {
+            Some(buttons) => self.media.insert(package.to_string(), buttons),
+            None => self.media.remove(package),
+        };
+        if before == media {
+            return Vec::new();
+        }
+        match self.hosts.get(package).map(|app| &app.link) {
+            Some(Link::Attached { host, .. }) => vec![HostAction::Send {
+                host: *host,
+                message: ToHost::AppMedia { media },
+            }],
+            // A window host that has not attached hears of it when it does.
+            _ => Vec::new(),
+        }
+    }
+
+    /// The message that shows the media buttons of `package` on its window host's windows,
+    /// when the app has a media session.
+    fn media_message(&self, host: HostId, package: &str) -> Option<HostAction> {
+        let media = *self.media.get(package)?;
+        Some(HostAction::Send {
+            host,
+            message: ToHost::AppMedia { media: Some(media) },
+        })
+    }
+
+    /// What the media button `button`, clicked in the taskbar preview of `task_id`'s window,
+    /// asks of which app's media session. `None` for a window it does not know, an app with
+    /// no media session, and a button the session does not allow now.
+    pub fn media_pressed(
+        &self,
+        task_id: i32,
+        button: MediaButton,
+    ) -> Option<(String, MediaCommand)> {
+        let package = self.packages.get(&task_id)?;
+        let media = self.media.get(package)?;
+        media
+            .allows(button)
+            .then(|| (package.clone(), button.command()))
     }
 
     /// Records an app's name and icon, for the next time its window host is made. A window
@@ -676,6 +794,7 @@ impl WindowHosts {
                 // The menu goes first, so the windows open with it, and the app's icon when it
                 // changed after the program was made.
                 let menu = self.app_menu(host, package);
+                let media = self.media_message(host, package);
                 let latest = self.apps.get(package).and_then(icon_of);
                 let Some(app) = self.hosts.get_mut(package) else {
                     unreachable!("matched above");
@@ -695,6 +814,7 @@ impl WindowHosts {
                 };
                 let mut actions: Vec<HostAction> = std::iter::once(menu)
                     .chain(icon.map(|icon| icon_message(host, &icon)))
+                    .chain(media)
                     .chain(
                         pending
                             .into_iter()
@@ -735,6 +855,7 @@ impl WindowHosts {
                 );
                 std::iter::once(self.app_menu(host, package))
                     .chain(icon.map(|icon| icon_message(host, &icon)))
+                    .chain(self.media_message(host, package))
                     .chain(std::iter::once(launch_action()))
                     .collect()
             }
@@ -1005,6 +1126,17 @@ pub fn to_wire(message: &ToHost) -> Body {
             icon_png,
             caption_icon_png,
         }),
+        ToHost::AppMedia { media } => {
+            let buttons = media.unwrap_or_default();
+            Body::AppMedia(dsa_protocol::window_host::types::AppMedia {
+                active: media.is_some(),
+                playing: buttons.playing,
+                can_previous: buttons.previous,
+                can_play: buttons.play,
+                can_pause: buttons.pause,
+                can_next: buttons.next,
+            })
+        }
     }
 }
 
@@ -1121,6 +1253,15 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
             icon_png: icon.icon_png,
             caption_icon_png: icon.caption_icon_png,
         },
+        Body::AppMedia(media) => ToHost::AppMedia {
+            media: media.active.then_some(MediaButtons {
+                playing: media.playing,
+                previous: media.can_previous,
+                play: media.can_play,
+                pause: media.can_pause,
+                next: media.can_next,
+            }),
+        },
         _ => return None,
     })
 }
@@ -1166,6 +1307,19 @@ pub fn report_to_wire(report: &FromHost) -> Body {
             Body::MenuChosen(MenuChosen {
                 task_id,
                 action: action as i32,
+            })
+        }
+        FromHost::MediaButton { task_id, button } => {
+            use dsa_protocol::window_host::types::{MediaButton as WireButton, MediaButtonPressed};
+            let button = match button {
+                MediaButton::Previous => WireButton::Previous,
+                MediaButton::Play => WireButton::Play,
+                MediaButton::Pause => WireButton::Pause,
+                MediaButton::Next => WireButton::Next,
+            };
+            Body::MediaButtonPressed(MediaButtonPressed {
+                task_id,
+                button: button as i32,
             })
         }
     }
@@ -1217,6 +1371,20 @@ pub fn report_from_wire(body: &Body) -> Option<FromHost> {
                     WireAction::OpenByDefault => MenuAction::OpenByDefault,
                     WireAction::AppInfo => MenuAction::AppInfo,
                     WireAction::Unspecified => return None,
+                },
+            }
+        }
+        Body::MediaButtonPressed(ref pressed) => {
+            use dsa_protocol::window_host::types::MediaButton as WireButton;
+            FromHost::MediaButton {
+                task_id: pressed.task_id,
+                // A button this build does not know is no press at all.
+                button: match pressed.button() {
+                    WireButton::Previous => MediaButton::Previous,
+                    WireButton::Play => MediaButton::Play,
+                    WireButton::Pause => MediaButton::Pause,
+                    WireButton::Next => MediaButton::Next,
+                    WireButton::Unspecified => return None,
                 },
             }
         }
@@ -2041,5 +2209,127 @@ mod tests {
             caption_icon_png: vec![1],
         });
         assert_eq!(to_host_from_wire(&empty), None);
+    }
+
+    fn session(playback: Playback, previous: bool, next: bool) -> MediaSession {
+        MediaSession {
+            package_name: CLOCK.into(),
+            app_label: "Clock".into(),
+            playback,
+            can_play: true,
+            can_pause: true,
+            can_previous: previous,
+            can_next: next,
+            ..Default::default()
+        }
+    }
+
+    fn media_sent(host: HostId, media: Option<MediaButtons>) -> HostAction {
+        HostAction::Send {
+            host,
+            message: ToHost::AppMedia { media },
+        }
+    }
+
+    #[test]
+    fn fr24_the_taskbar_preview_has_media_buttons() {
+        let now = Instant::now();
+        let mut hosts = named_hosts(now);
+        let playing = MediaButtons::of(&session(Playback::Playing, true, false));
+        assert_eq!(
+            playing,
+            MediaButtons {
+                playing: true,
+                previous: true,
+                play: true,
+                pause: true,
+                next: false,
+            }
+        );
+        // A session that arrives before the app's window host attaches waits for it.
+        assert!(hosts.media(CLOCK, Some(playing)).is_empty());
+        hosts.change(&open(1, CLOCK), now);
+        let attached = hosts.attached(HostId(1), CLOCK, false, now);
+        assert_eq!(
+            attached,
+            vec![
+                menu(HostId(1), false),
+                media_sent(HostId(1), Some(playing)),
+                HostAction::Send {
+                    host: HostId(1),
+                    message: show(1)
+                },
+            ]
+        );
+        // The same state again tells nobody; a change of playback state does.
+        assert!(hosts.media(CLOCK, Some(playing)).is_empty());
+        let paused = MediaButtons::of(&session(Playback::Paused, true, true));
+        assert_eq!(
+            hosts.media(CLOCK, Some(paused)),
+            vec![media_sent(HostId(1), Some(paused))]
+        );
+        // A click on the middle button sends what it shows: play while paused.
+        assert_eq!(
+            hosts.media_pressed(1, MediaButton::Play),
+            Some((CLOCK.to_string(), MediaCommand::Play))
+        );
+        assert_eq!(hosts.media_pressed(1, MediaButton::Pause), None);
+        assert_eq!(
+            hosts.media_pressed(1, MediaButton::Next),
+            Some((CLOCK.to_string(), MediaCommand::Next))
+        );
+        assert_eq!(
+            hosts.media_pressed(1, MediaButton::Previous),
+            Some((CLOCK.to_string(), MediaCommand::Previous))
+        );
+        // A button the session does not allow, or a window that is not known, sends nothing.
+        hosts.media(CLOCK, Some(playing));
+        assert_eq!(hosts.media_pressed(1, MediaButton::Next), None);
+        assert_eq!(
+            hosts.media_pressed(1, MediaButton::Pause),
+            Some((CLOCK.to_string(), MediaCommand::Pause))
+        );
+        assert_eq!(hosts.media_pressed(9, MediaButton::Pause), None);
+        // The session's end hides the buttons, and a click after it sends nothing.
+        assert_eq!(hosts.media(CLOCK, None), vec![media_sent(HostId(1), None)]);
+        assert!(hosts.media(CLOCK, None).is_empty());
+        assert_eq!(hosts.media_pressed(1, MediaButton::Pause), None);
+        // Another app's session never reaches this app's window host.
+        assert!(hosts.media(MAPS, Some(playing)).is_empty());
+    }
+
+    #[test]
+    fn fr24_the_media_buttons_survive_the_wire() {
+        let buttons = MediaButtons {
+            playing: true,
+            previous: false,
+            play: true,
+            pause: true,
+            next: true,
+        };
+        for message in [
+            ToHost::AppMedia {
+                media: Some(buttons),
+            },
+            ToHost::AppMedia { media: None },
+        ] {
+            assert_eq!(to_host_from_wire(&to_wire(&message)), Some(message));
+        }
+        for button in [
+            MediaButton::Previous,
+            MediaButton::Play,
+            MediaButton::Pause,
+            MediaButton::Next,
+        ] {
+            let report = FromHost::MediaButton { task_id: 4, button };
+            assert_eq!(report_from_wire(&report_to_wire(&report)), Some(report));
+        }
+        // A button this build does not know is no press.
+        let unknown =
+            Body::MediaButtonPressed(dsa_protocol::window_host::types::MediaButtonPressed {
+                task_id: 4,
+                button: 99,
+            });
+        assert_eq!(report_from_wire(&unknown), None);
     }
 }
