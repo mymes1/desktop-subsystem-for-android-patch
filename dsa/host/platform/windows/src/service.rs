@@ -300,6 +300,10 @@ fn serve_host_services(
         }
         Err(why) => eprintln!("{sid}: backup: the user's backups cannot be kept: {why}"),
     }
+    // The root certificates added to the computer's and the user's trust stores.
+    session.serve_host_certificates(Arc::new(
+        crate::host_certificates::WindowsRootStore::for_user(sid),
+    ));
     session.serve_passkeys(Arc::new(PasskeyService::new(Arc::new(
         crate::https::WinHttpsGet::default(),
     ))));
@@ -1076,6 +1080,10 @@ where
                 // So is restarting into a downloaded Android image by itself; on unless they
                 // turned it off.
                 android.image_auto_restart(settings.as_ref().is_none_or(|s| s.image_auto_restart));
+                // So is trusting the root certificates added to the computer; on unless they
+                // turned it off.
+                android
+                    .trust_host_certificates(settings.as_ref().is_none_or(|s| s.host_certificates));
                 // So is file sharing, on with every folder unless they chose otherwise.
                 android.share_folders(
                     settings.as_ref().is_none_or(|s| s.file_sharing),
