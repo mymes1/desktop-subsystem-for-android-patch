@@ -187,6 +187,23 @@ public  final class Envelope extends
     GEOCODE_RESULT(471),
     SHARE_TO_HOST(472),
     SHARE_RESULT(473),
+    BACKUP_UPLOAD(640),
+    BACKUP_COMMIT(641),
+    BACKUP_DISCARD(642),
+    BACKUP_CLEAR(643),
+    BACKUP_ANSWER(644),
+    BACKUP_QUERY(645),
+    BACKUP_CONTENTS(646),
+    BACKUP_FETCH(647),
+    BACKUP_FETCH_DATA(648),
+    BACKUP_RUN(649),
+    BACKUP_RESTORE(650),
+    BACKUP_RUN_RESULT(651),
+    PASSKEY_REQUEST(652),
+    PASSKEY_RESPONSE(653),
+    KEYMINT_ROOT_KEY_REQUEST(654),
+    KEYMINT_ROOT_KEY(655),
+    BACKUP_SETTING(656),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -369,6 +386,23 @@ public  final class Envelope extends
         case 471: return GEOCODE_RESULT;
         case 472: return SHARE_TO_HOST;
         case 473: return SHARE_RESULT;
+        case 640: return BACKUP_UPLOAD;
+        case 641: return BACKUP_COMMIT;
+        case 642: return BACKUP_DISCARD;
+        case 643: return BACKUP_CLEAR;
+        case 644: return BACKUP_ANSWER;
+        case 645: return BACKUP_QUERY;
+        case 646: return BACKUP_CONTENTS;
+        case 647: return BACKUP_FETCH;
+        case 648: return BACKUP_FETCH_DATA;
+        case 649: return BACKUP_RUN;
+        case 650: return BACKUP_RESTORE;
+        case 651: return BACKUP_RUN_RESULT;
+        case 652: return PASSKEY_REQUEST;
+        case 653: return PASSKEY_RESPONSE;
+        case 654: return KEYMINT_ROOT_KEY_REQUEST;
+        case 655: return KEYMINT_ROOT_KEY;
+        case 656: return BACKUP_SETTING;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -8740,6 +8774,856 @@ public  final class Envelope extends
     }
   }
 
+  public static final int BACKUP_UPLOAD_FIELD_NUMBER = 640;
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupUpload() {
+    return bodyCase_ == 640;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupUpload getBackupUpload() {
+    if (bodyCase_ == 640) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupUpload) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupUpload.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   */
+  private void setBackupUpload(io.github.thisisthepy.dsa.control.v1.BackupUpload value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 640;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   */
+  private void mergeBackupUpload(io.github.thisisthepy.dsa.control.v1.BackupUpload value) {
+    value.getClass();
+  if (bodyCase_ == 640 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupUpload.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupUpload.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupUpload) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 640;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   */
+  private void clearBackupUpload() {
+    if (bodyCase_ == 640) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_COMMIT_FIELD_NUMBER = 641;
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupCommit() {
+    return bodyCase_ == 641;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupCommit getBackupCommit() {
+    if (bodyCase_ == 641) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupCommit) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupCommit.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   */
+  private void setBackupCommit(io.github.thisisthepy.dsa.control.v1.BackupCommit value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 641;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   */
+  private void mergeBackupCommit(io.github.thisisthepy.dsa.control.v1.BackupCommit value) {
+    value.getClass();
+  if (bodyCase_ == 641 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupCommit.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupCommit.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupCommit) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 641;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   */
+  private void clearBackupCommit() {
+    if (bodyCase_ == 641) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_DISCARD_FIELD_NUMBER = 642;
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupDiscard() {
+    return bodyCase_ == 642;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupDiscard getBackupDiscard() {
+    if (bodyCase_ == 642) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupDiscard) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupDiscard.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   */
+  private void setBackupDiscard(io.github.thisisthepy.dsa.control.v1.BackupDiscard value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 642;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   */
+  private void mergeBackupDiscard(io.github.thisisthepy.dsa.control.v1.BackupDiscard value) {
+    value.getClass();
+  if (bodyCase_ == 642 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupDiscard.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupDiscard.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupDiscard) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 642;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   */
+  private void clearBackupDiscard() {
+    if (bodyCase_ == 642) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_CLEAR_FIELD_NUMBER = 643;
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupClear() {
+    return bodyCase_ == 643;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupClear getBackupClear() {
+    if (bodyCase_ == 643) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupClear) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupClear.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   */
+  private void setBackupClear(io.github.thisisthepy.dsa.control.v1.BackupClear value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 643;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   */
+  private void mergeBackupClear(io.github.thisisthepy.dsa.control.v1.BackupClear value) {
+    value.getClass();
+  if (bodyCase_ == 643 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupClear.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupClear.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupClear) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 643;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   */
+  private void clearBackupClear() {
+    if (bodyCase_ == 643) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_ANSWER_FIELD_NUMBER = 644;
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupAnswer() {
+    return bodyCase_ == 644;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupAnswer getBackupAnswer() {
+    if (bodyCase_ == 644) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupAnswer) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupAnswer.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   */
+  private void setBackupAnswer(io.github.thisisthepy.dsa.control.v1.BackupAnswer value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 644;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   */
+  private void mergeBackupAnswer(io.github.thisisthepy.dsa.control.v1.BackupAnswer value) {
+    value.getClass();
+  if (bodyCase_ == 644 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupAnswer.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupAnswer.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupAnswer) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 644;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   */
+  private void clearBackupAnswer() {
+    if (bodyCase_ == 644) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_QUERY_FIELD_NUMBER = 645;
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupQuery() {
+    return bodyCase_ == 645;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupQuery getBackupQuery() {
+    if (bodyCase_ == 645) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupQuery) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupQuery.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   */
+  private void setBackupQuery(io.github.thisisthepy.dsa.control.v1.BackupQuery value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 645;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   */
+  private void mergeBackupQuery(io.github.thisisthepy.dsa.control.v1.BackupQuery value) {
+    value.getClass();
+  if (bodyCase_ == 645 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupQuery.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupQuery.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupQuery) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 645;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   */
+  private void clearBackupQuery() {
+    if (bodyCase_ == 645) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_CONTENTS_FIELD_NUMBER = 646;
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupContents() {
+    return bodyCase_ == 646;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupContents getBackupContents() {
+    if (bodyCase_ == 646) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupContents) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupContents.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   */
+  private void setBackupContents(io.github.thisisthepy.dsa.control.v1.BackupContents value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 646;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   */
+  private void mergeBackupContents(io.github.thisisthepy.dsa.control.v1.BackupContents value) {
+    value.getClass();
+  if (bodyCase_ == 646 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupContents.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupContents.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupContents) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 646;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   */
+  private void clearBackupContents() {
+    if (bodyCase_ == 646) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_FETCH_FIELD_NUMBER = 647;
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupFetch() {
+    return bodyCase_ == 647;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupFetch getBackupFetch() {
+    if (bodyCase_ == 647) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupFetch) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupFetch.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   */
+  private void setBackupFetch(io.github.thisisthepy.dsa.control.v1.BackupFetch value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 647;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   */
+  private void mergeBackupFetch(io.github.thisisthepy.dsa.control.v1.BackupFetch value) {
+    value.getClass();
+  if (bodyCase_ == 647 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupFetch.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupFetch.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupFetch) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 647;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   */
+  private void clearBackupFetch() {
+    if (bodyCase_ == 647) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_FETCH_DATA_FIELD_NUMBER = 648;
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupFetchData() {
+    return bodyCase_ == 648;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupFetchData getBackupFetchData() {
+    if (bodyCase_ == 648) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupFetchData) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupFetchData.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   */
+  private void setBackupFetchData(io.github.thisisthepy.dsa.control.v1.BackupFetchData value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 648;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   */
+  private void mergeBackupFetchData(io.github.thisisthepy.dsa.control.v1.BackupFetchData value) {
+    value.getClass();
+  if (bodyCase_ == 648 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupFetchData.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupFetchData.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupFetchData) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 648;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   */
+  private void clearBackupFetchData() {
+    if (bodyCase_ == 648) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_RUN_FIELD_NUMBER = 649;
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupRun() {
+    return bodyCase_ == 649;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupRun getBackupRun() {
+    if (bodyCase_ == 649) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupRun) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupRun.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   */
+  private void setBackupRun(io.github.thisisthepy.dsa.control.v1.BackupRun value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 649;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   */
+  private void mergeBackupRun(io.github.thisisthepy.dsa.control.v1.BackupRun value) {
+    value.getClass();
+  if (bodyCase_ == 649 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupRun.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupRun.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupRun) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 649;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   */
+  private void clearBackupRun() {
+    if (bodyCase_ == 649) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_RESTORE_FIELD_NUMBER = 650;
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupRestore() {
+    return bodyCase_ == 650;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupRestore getBackupRestore() {
+    if (bodyCase_ == 650) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupRestore) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupRestore.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   */
+  private void setBackupRestore(io.github.thisisthepy.dsa.control.v1.BackupRestore value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 650;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   */
+  private void mergeBackupRestore(io.github.thisisthepy.dsa.control.v1.BackupRestore value) {
+    value.getClass();
+  if (bodyCase_ == 650 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupRestore.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupRestore.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupRestore) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 650;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   */
+  private void clearBackupRestore() {
+    if (bodyCase_ == 650) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_RUN_RESULT_FIELD_NUMBER = 651;
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupRunResult() {
+    return bodyCase_ == 651;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupRunResult getBackupRunResult() {
+    if (bodyCase_ == 651) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupRunResult) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupRunResult.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   */
+  private void setBackupRunResult(io.github.thisisthepy.dsa.control.v1.BackupRunResult value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 651;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   */
+  private void mergeBackupRunResult(io.github.thisisthepy.dsa.control.v1.BackupRunResult value) {
+    value.getClass();
+  if (bodyCase_ == 651 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupRunResult.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupRunResult.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupRunResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 651;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   */
+  private void clearBackupRunResult() {
+    if (bodyCase_ == 651) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PASSKEY_REQUEST_FIELD_NUMBER = 652;
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   */
+  @java.lang.Override
+  public boolean hasPasskeyRequest() {
+    return bodyCase_ == 652;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PasskeyRequest getPasskeyRequest() {
+    if (bodyCase_ == 652) {
+       return (io.github.thisisthepy.dsa.control.v1.PasskeyRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PasskeyRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   */
+  private void setPasskeyRequest(io.github.thisisthepy.dsa.control.v1.PasskeyRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 652;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   */
+  private void mergePasskeyRequest(io.github.thisisthepy.dsa.control.v1.PasskeyRequest value) {
+    value.getClass();
+  if (bodyCase_ == 652 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PasskeyRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PasskeyRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.PasskeyRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 652;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   */
+  private void clearPasskeyRequest() {
+    if (bodyCase_ == 652) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PASSKEY_RESPONSE_FIELD_NUMBER = 653;
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   */
+  @java.lang.Override
+  public boolean hasPasskeyResponse() {
+    return bodyCase_ == 653;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PasskeyResponse getPasskeyResponse() {
+    if (bodyCase_ == 653) {
+       return (io.github.thisisthepy.dsa.control.v1.PasskeyResponse) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PasskeyResponse.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   */
+  private void setPasskeyResponse(io.github.thisisthepy.dsa.control.v1.PasskeyResponse value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 653;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   */
+  private void mergePasskeyResponse(io.github.thisisthepy.dsa.control.v1.PasskeyResponse value) {
+    value.getClass();
+  if (bodyCase_ == 653 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PasskeyResponse.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PasskeyResponse.newBuilder((io.github.thisisthepy.dsa.control.v1.PasskeyResponse) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 653;
+  }
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   */
+  private void clearPasskeyResponse() {
+    if (bodyCase_ == 653) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int KEYMINT_ROOT_KEY_REQUEST_FIELD_NUMBER = 654;
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   */
+  @java.lang.Override
+  public boolean hasKeymintRootKeyRequest() {
+    return bodyCase_ == 654;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest getKeymintRootKeyRequest() {
+    if (bodyCase_ == 654) {
+       return (io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   */
+  private void setKeymintRootKeyRequest(io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 654;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   */
+  private void mergeKeymintRootKeyRequest(io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest value) {
+    value.getClass();
+  if (bodyCase_ == 654 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 654;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   */
+  private void clearKeymintRootKeyRequest() {
+    if (bodyCase_ == 654) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int KEYMINT_ROOT_KEY_FIELD_NUMBER = 655;
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   */
+  @java.lang.Override
+  public boolean hasKeymintRootKey() {
+    return bodyCase_ == 655;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.KeyMintRootKey getKeymintRootKey() {
+    if (bodyCase_ == 655) {
+       return (io.github.thisisthepy.dsa.control.v1.KeyMintRootKey) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   */
+  private void setKeymintRootKey(io.github.thisisthepy.dsa.control.v1.KeyMintRootKey value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 655;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   */
+  private void mergeKeymintRootKey(io.github.thisisthepy.dsa.control.v1.KeyMintRootKey value) {
+    value.getClass();
+  if (bodyCase_ == 655 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.newBuilder((io.github.thisisthepy.dsa.control.v1.KeyMintRootKey) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 655;
+  }
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   */
+  private void clearKeymintRootKey() {
+    if (bodyCase_ == 655) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int BACKUP_SETTING_FIELD_NUMBER = 656;
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   */
+  @java.lang.Override
+  public boolean hasBackupSetting() {
+    return bodyCase_ == 656;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting() {
+    if (bodyCase_ == 656) {
+       return (io.github.thisisthepy.dsa.control.v1.BackupSetting) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.BackupSetting.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   */
+  private void setBackupSetting(io.github.thisisthepy.dsa.control.v1.BackupSetting value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 656;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   */
+  private void mergeBackupSetting(io.github.thisisthepy.dsa.control.v1.BackupSetting value) {
+    value.getClass();
+  if (bodyCase_ == 656 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.BackupSetting.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.BackupSetting.newBuilder((io.github.thisisthepy.dsa.control.v1.BackupSetting) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 656;
+  }
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   */
+  private void clearBackupSetting() {
+    if (bodyCase_ == 656) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -16867,6 +17751,822 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupUpload() {
+      return instance.hasBackupUpload();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupUpload getBackupUpload() {
+      return instance.getBackupUpload();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    public Builder setBackupUpload(io.github.thisisthepy.dsa.control.v1.BackupUpload value) {
+      copyOnWrite();
+      instance.setBackupUpload(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    public Builder setBackupUpload(
+        io.github.thisisthepy.dsa.control.v1.BackupUpload.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupUpload(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    public Builder mergeBackupUpload(io.github.thisisthepy.dsa.control.v1.BackupUpload value) {
+      copyOnWrite();
+      instance.mergeBackupUpload(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+     */
+    public Builder clearBackupUpload() {
+      copyOnWrite();
+      instance.clearBackupUpload();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupCommit() {
+      return instance.hasBackupCommit();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupCommit getBackupCommit() {
+      return instance.getBackupCommit();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    public Builder setBackupCommit(io.github.thisisthepy.dsa.control.v1.BackupCommit value) {
+      copyOnWrite();
+      instance.setBackupCommit(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    public Builder setBackupCommit(
+        io.github.thisisthepy.dsa.control.v1.BackupCommit.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupCommit(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    public Builder mergeBackupCommit(io.github.thisisthepy.dsa.control.v1.BackupCommit value) {
+      copyOnWrite();
+      instance.mergeBackupCommit(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+     */
+    public Builder clearBackupCommit() {
+      copyOnWrite();
+      instance.clearBackupCommit();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupDiscard() {
+      return instance.hasBackupDiscard();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupDiscard getBackupDiscard() {
+      return instance.getBackupDiscard();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    public Builder setBackupDiscard(io.github.thisisthepy.dsa.control.v1.BackupDiscard value) {
+      copyOnWrite();
+      instance.setBackupDiscard(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    public Builder setBackupDiscard(
+        io.github.thisisthepy.dsa.control.v1.BackupDiscard.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupDiscard(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    public Builder mergeBackupDiscard(io.github.thisisthepy.dsa.control.v1.BackupDiscard value) {
+      copyOnWrite();
+      instance.mergeBackupDiscard(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+     */
+    public Builder clearBackupDiscard() {
+      copyOnWrite();
+      instance.clearBackupDiscard();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupClear() {
+      return instance.hasBackupClear();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupClear getBackupClear() {
+      return instance.getBackupClear();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    public Builder setBackupClear(io.github.thisisthepy.dsa.control.v1.BackupClear value) {
+      copyOnWrite();
+      instance.setBackupClear(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    public Builder setBackupClear(
+        io.github.thisisthepy.dsa.control.v1.BackupClear.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupClear(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    public Builder mergeBackupClear(io.github.thisisthepy.dsa.control.v1.BackupClear value) {
+      copyOnWrite();
+      instance.mergeBackupClear(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+     */
+    public Builder clearBackupClear() {
+      copyOnWrite();
+      instance.clearBackupClear();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupAnswer() {
+      return instance.hasBackupAnswer();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupAnswer getBackupAnswer() {
+      return instance.getBackupAnswer();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    public Builder setBackupAnswer(io.github.thisisthepy.dsa.control.v1.BackupAnswer value) {
+      copyOnWrite();
+      instance.setBackupAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    public Builder setBackupAnswer(
+        io.github.thisisthepy.dsa.control.v1.BackupAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupAnswer(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    public Builder mergeBackupAnswer(io.github.thisisthepy.dsa.control.v1.BackupAnswer value) {
+      copyOnWrite();
+      instance.mergeBackupAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+     */
+    public Builder clearBackupAnswer() {
+      copyOnWrite();
+      instance.clearBackupAnswer();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupQuery() {
+      return instance.hasBackupQuery();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupQuery getBackupQuery() {
+      return instance.getBackupQuery();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    public Builder setBackupQuery(io.github.thisisthepy.dsa.control.v1.BackupQuery value) {
+      copyOnWrite();
+      instance.setBackupQuery(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    public Builder setBackupQuery(
+        io.github.thisisthepy.dsa.control.v1.BackupQuery.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupQuery(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    public Builder mergeBackupQuery(io.github.thisisthepy.dsa.control.v1.BackupQuery value) {
+      copyOnWrite();
+      instance.mergeBackupQuery(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+     */
+    public Builder clearBackupQuery() {
+      copyOnWrite();
+      instance.clearBackupQuery();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupContents() {
+      return instance.hasBackupContents();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupContents getBackupContents() {
+      return instance.getBackupContents();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    public Builder setBackupContents(io.github.thisisthepy.dsa.control.v1.BackupContents value) {
+      copyOnWrite();
+      instance.setBackupContents(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    public Builder setBackupContents(
+        io.github.thisisthepy.dsa.control.v1.BackupContents.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupContents(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    public Builder mergeBackupContents(io.github.thisisthepy.dsa.control.v1.BackupContents value) {
+      copyOnWrite();
+      instance.mergeBackupContents(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+     */
+    public Builder clearBackupContents() {
+      copyOnWrite();
+      instance.clearBackupContents();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupFetch() {
+      return instance.hasBackupFetch();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupFetch getBackupFetch() {
+      return instance.getBackupFetch();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    public Builder setBackupFetch(io.github.thisisthepy.dsa.control.v1.BackupFetch value) {
+      copyOnWrite();
+      instance.setBackupFetch(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    public Builder setBackupFetch(
+        io.github.thisisthepy.dsa.control.v1.BackupFetch.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupFetch(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    public Builder mergeBackupFetch(io.github.thisisthepy.dsa.control.v1.BackupFetch value) {
+      copyOnWrite();
+      instance.mergeBackupFetch(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+     */
+    public Builder clearBackupFetch() {
+      copyOnWrite();
+      instance.clearBackupFetch();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupFetchData() {
+      return instance.hasBackupFetchData();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupFetchData getBackupFetchData() {
+      return instance.getBackupFetchData();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    public Builder setBackupFetchData(io.github.thisisthepy.dsa.control.v1.BackupFetchData value) {
+      copyOnWrite();
+      instance.setBackupFetchData(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    public Builder setBackupFetchData(
+        io.github.thisisthepy.dsa.control.v1.BackupFetchData.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupFetchData(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    public Builder mergeBackupFetchData(io.github.thisisthepy.dsa.control.v1.BackupFetchData value) {
+      copyOnWrite();
+      instance.mergeBackupFetchData(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+     */
+    public Builder clearBackupFetchData() {
+      copyOnWrite();
+      instance.clearBackupFetchData();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupRun() {
+      return instance.hasBackupRun();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupRun getBackupRun() {
+      return instance.getBackupRun();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    public Builder setBackupRun(io.github.thisisthepy.dsa.control.v1.BackupRun value) {
+      copyOnWrite();
+      instance.setBackupRun(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    public Builder setBackupRun(
+        io.github.thisisthepy.dsa.control.v1.BackupRun.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupRun(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    public Builder mergeBackupRun(io.github.thisisthepy.dsa.control.v1.BackupRun value) {
+      copyOnWrite();
+      instance.mergeBackupRun(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+     */
+    public Builder clearBackupRun() {
+      copyOnWrite();
+      instance.clearBackupRun();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupRestore() {
+      return instance.hasBackupRestore();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupRestore getBackupRestore() {
+      return instance.getBackupRestore();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    public Builder setBackupRestore(io.github.thisisthepy.dsa.control.v1.BackupRestore value) {
+      copyOnWrite();
+      instance.setBackupRestore(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    public Builder setBackupRestore(
+        io.github.thisisthepy.dsa.control.v1.BackupRestore.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupRestore(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    public Builder mergeBackupRestore(io.github.thisisthepy.dsa.control.v1.BackupRestore value) {
+      copyOnWrite();
+      instance.mergeBackupRestore(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+     */
+    public Builder clearBackupRestore() {
+      copyOnWrite();
+      instance.clearBackupRestore();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupRunResult() {
+      return instance.hasBackupRunResult();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupRunResult getBackupRunResult() {
+      return instance.getBackupRunResult();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    public Builder setBackupRunResult(io.github.thisisthepy.dsa.control.v1.BackupRunResult value) {
+      copyOnWrite();
+      instance.setBackupRunResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    public Builder setBackupRunResult(
+        io.github.thisisthepy.dsa.control.v1.BackupRunResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupRunResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    public Builder mergeBackupRunResult(io.github.thisisthepy.dsa.control.v1.BackupRunResult value) {
+      copyOnWrite();
+      instance.mergeBackupRunResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+     */
+    public Builder clearBackupRunResult() {
+      copyOnWrite();
+      instance.clearBackupRunResult();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    @java.lang.Override
+    public boolean hasPasskeyRequest() {
+      return instance.hasPasskeyRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PasskeyRequest getPasskeyRequest() {
+      return instance.getPasskeyRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    public Builder setPasskeyRequest(io.github.thisisthepy.dsa.control.v1.PasskeyRequest value) {
+      copyOnWrite();
+      instance.setPasskeyRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    public Builder setPasskeyRequest(
+        io.github.thisisthepy.dsa.control.v1.PasskeyRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPasskeyRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    public Builder mergePasskeyRequest(io.github.thisisthepy.dsa.control.v1.PasskeyRequest value) {
+      copyOnWrite();
+      instance.mergePasskeyRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+     */
+    public Builder clearPasskeyRequest() {
+      copyOnWrite();
+      instance.clearPasskeyRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    @java.lang.Override
+    public boolean hasPasskeyResponse() {
+      return instance.hasPasskeyResponse();
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PasskeyResponse getPasskeyResponse() {
+      return instance.getPasskeyResponse();
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    public Builder setPasskeyResponse(io.github.thisisthepy.dsa.control.v1.PasskeyResponse value) {
+      copyOnWrite();
+      instance.setPasskeyResponse(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    public Builder setPasskeyResponse(
+        io.github.thisisthepy.dsa.control.v1.PasskeyResponse.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPasskeyResponse(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    public Builder mergePasskeyResponse(io.github.thisisthepy.dsa.control.v1.PasskeyResponse value) {
+      copyOnWrite();
+      instance.mergePasskeyResponse(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+     */
+    public Builder clearPasskeyResponse() {
+      copyOnWrite();
+      instance.clearPasskeyResponse();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    @java.lang.Override
+    public boolean hasKeymintRootKeyRequest() {
+      return instance.hasKeymintRootKeyRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest getKeymintRootKeyRequest() {
+      return instance.getKeymintRootKeyRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    public Builder setKeymintRootKeyRequest(io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest value) {
+      copyOnWrite();
+      instance.setKeymintRootKeyRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    public Builder setKeymintRootKeyRequest(
+        io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setKeymintRootKeyRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    public Builder mergeKeymintRootKeyRequest(io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest value) {
+      copyOnWrite();
+      instance.mergeKeymintRootKeyRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+     */
+    public Builder clearKeymintRootKeyRequest() {
+      copyOnWrite();
+      instance.clearKeymintRootKeyRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    @java.lang.Override
+    public boolean hasKeymintRootKey() {
+      return instance.hasKeymintRootKey();
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.KeyMintRootKey getKeymintRootKey() {
+      return instance.getKeymintRootKey();
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    public Builder setKeymintRootKey(io.github.thisisthepy.dsa.control.v1.KeyMintRootKey value) {
+      copyOnWrite();
+      instance.setKeymintRootKey(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    public Builder setKeymintRootKey(
+        io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.Builder builderForValue) {
+      copyOnWrite();
+      instance.setKeymintRootKey(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    public Builder mergeKeymintRootKey(io.github.thisisthepy.dsa.control.v1.KeyMintRootKey value) {
+      copyOnWrite();
+      instance.mergeKeymintRootKey(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+     */
+    public Builder clearKeymintRootKey() {
+      copyOnWrite();
+      instance.clearKeymintRootKey();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    @java.lang.Override
+    public boolean hasBackupSetting() {
+      return instance.hasBackupSetting();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting() {
+      return instance.getBackupSetting();
+    }
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    public Builder setBackupSetting(io.github.thisisthepy.dsa.control.v1.BackupSetting value) {
+      copyOnWrite();
+      instance.setBackupSetting(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    public Builder setBackupSetting(
+        io.github.thisisthepy.dsa.control.v1.BackupSetting.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBackupSetting(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    public Builder mergeBackupSetting(io.github.thisisthepy.dsa.control.v1.BackupSetting value) {
+      copyOnWrite();
+      instance.mergeBackupSetting(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+     */
+    public Builder clearBackupSetting() {
+      copyOnWrite();
+      instance.clearBackupSetting();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -17052,9 +18752,26 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.RecognitionEvent.class,
             io.github.thisisthepy.dsa.control.v1.CheckSpelling.class,
             io.github.thisisthepy.dsa.control.v1.SpellingResult.class,
+            io.github.thisisthepy.dsa.control.v1.BackupUpload.class,
+            io.github.thisisthepy.dsa.control.v1.BackupCommit.class,
+            io.github.thisisthepy.dsa.control.v1.BackupDiscard.class,
+            io.github.thisisthepy.dsa.control.v1.BackupClear.class,
+            io.github.thisisthepy.dsa.control.v1.BackupAnswer.class,
+            io.github.thisisthepy.dsa.control.v1.BackupQuery.class,
+            io.github.thisisthepy.dsa.control.v1.BackupContents.class,
+            io.github.thisisthepy.dsa.control.v1.BackupFetch.class,
+            io.github.thisisthepy.dsa.control.v1.BackupFetchData.class,
+            io.github.thisisthepy.dsa.control.v1.BackupRun.class,
+            io.github.thisisthepy.dsa.control.v1.BackupRestore.class,
+            io.github.thisisthepy.dsa.control.v1.BackupRunResult.class,
+            io.github.thisisthepy.dsa.control.v1.PasskeyRequest.class,
+            io.github.thisisthepy.dsa.control.v1.PasskeyResponse.class,
+            io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.class,
+            io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.class,
+            io.github.thisisthepy.dsa.control.v1.BackupSetting.class,
           };
           java.lang.String info =
-              "\u0000\u00a7\u0001\u0000\u0001\u0277\u00a7\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00b8\u0001\u0000\u0001\u0290\u00b8\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -17077,7 +18794,9 @@ public  final class Envelope extends
               "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000\u01d7<\u0000" +
               "\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f<\u0000\u0270" +
               "<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000" +
-              "\u0277<\u0000";
+              "\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284<\u0000\u0285" +
+              "<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000\u028b<\u0000" +
+              "\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

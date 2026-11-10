@@ -2632,6 +2632,265 @@ pub struct GamepadRumble {
     #[prost(uint32, tag = "4")]
     pub duration_ms: u32,
 }
+/// Guest to host, from the agent's backup transport: one piece of an upload, at most 256 KiB,
+/// in order from offset 0. Each piece is answered with BackupAnswer before the next is sent.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupUpload {
+    /// The upload's number, the agent's own, unique while the agent runs.
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Guest to host: the upload `request_id` is whole. The host keeps it as the package's data of
+/// that kind, encrypted, and answers BackupAnswer. An upload of size 0 needs no BackupUpload.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupCommit {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(string, tag = "2")]
+    pub package: ::prost::alloc::string::String,
+    #[prost(enumeration = "BackupDataKind", tag = "3")]
+    pub kind: i32,
+    #[prost(uint64, tag = "4")]
+    pub size: u64,
+    /// KEY_VALUE only: the records change what the host keeps for the package, rather than
+    /// replace it.
+    #[prost(bool, tag = "5")]
+    pub incremental: bool,
+    /// The package's version code when it was backed up.
+    #[prost(int64, tag = "6")]
+    pub version_code: i64,
+    /// APK only: the file's name in the package's install, such as base.apk or
+    /// split_config.en.apk.
+    #[prost(string, tag = "7")]
+    pub apk_name: ::prost::alloc::string::String,
+    /// APK only: every APK name of the package at this version, so the host drops the files of
+    /// an older version that this one no longer has.
+    #[prost(string, repeated, tag = "8")]
+    pub apk_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Guest to host: drops the upload or the read `request_id` under way, and keeps nothing of it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupDiscard {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+}
+/// Guest to host: removes everything the backup holds for a package (the backup manager's
+/// clearBackupData). Answered with BackupAnswer.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupClear {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(string, tag = "2")]
+    pub package: ::prost::alloc::string::String,
+}
+/// Host to guest: the answer to BackupUpload, BackupCommit and BackupClear.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupAnswer {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "BackupStatus", tag = "2")]
+    pub status: i32,
+    /// Why it failed, in words a person can act on; empty when it did not.
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// BackupCommit of KEY_VALUE or FULL only: the host holds no APKs of the package at this
+    /// version, so the agent sends them.
+    #[prost(bool, tag = "4")]
+    pub apks_wanted: bool,
+}
+/// Guest to host: what the backup holds, for a restore. Answered with BackupContents.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupQuery {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+}
+/// One package in the backup.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupPackage {
+    #[prost(string, tag = "1")]
+    pub package: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub key_value: bool,
+    #[prost(bool, tag = "3")]
+    pub full: bool,
+    #[prost(int64, tag = "4")]
+    pub version_code: i64,
+    /// The APK files the backup holds for the package at version_code; empty when it holds none.
+    #[prost(string, repeated, tag = "5")]
+    pub apk_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// When its data was last backed up, in milliseconds since the Unix epoch.
+    #[prost(int64, tag = "6")]
+    pub backed_up_unix_ms: i64,
+    /// The bytes its data and APKs take, before encryption.
+    #[prost(uint64, tag = "7")]
+    pub size: u64,
+}
+/// Host to guest: what the backup holds. There is one restore set, the user's backup folder.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BackupContents {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "BackupStatus", tag = "2")]
+    pub status: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// The restore set's token: the same for the folder wherever it is moved.
+    #[prost(uint64, tag = "4")]
+    pub token: u64,
+    /// The restore set's name, as Android shows it: the computer it was made on.
+    #[prost(string, tag = "5")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "6")]
+    pub packages: ::prost::alloc::vec::Vec<BackupPackage>,
+}
+/// Guest to host: the next piece of a package's data, from `offset`. Answered with
+/// BackupFetchData. The agent asks for each piece after the last one came, so the host never
+/// sends faster than the agent reads.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupFetch {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(uint64, tag = "2")]
+    pub token: u64,
+    #[prost(string, tag = "3")]
+    pub package: ::prost::alloc::string::String,
+    #[prost(enumeration = "BackupDataKind", tag = "4")]
+    pub kind: i32,
+    /// APK only: which file.
+    #[prost(string, tag = "5")]
+    pub apk_name: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub offset: u64,
+}
+/// Host to guest: one piece of the data asked for, at most 256 KiB, or why there is none.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupFetchData {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "BackupStatus", tag = "2")]
+    pub status: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// The whole data's size.
+    #[prost(uint64, tag = "4")]
+    pub size: u64,
+    #[prost(uint64, tag = "5")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "6")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+    /// This piece reaches the end of the data.
+    #[prost(bool, tag = "7")]
+    pub last: bool,
+}
+/// Host to guest, to the agent: back up every app now, as `bmgr backupnow --all` does.
+/// Answered with BackupRunResult once the backup manager has finished.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupRun {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+}
+/// Host to guest, to the agent: restore the packages from the restore set `token`. The host
+/// has installed the apps the backup holds APKs of first. Answered with BackupRunResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupRestore {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(uint64, tag = "2")]
+    pub token: u64,
+    #[prost(string, repeated, tag = "3")]
+    pub packages: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Guest to host: how a BackupRun or a BackupRestore ended.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupRunResult {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "BackupStatus", tag = "2")]
+    pub status: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// The packages backed up or restored, and those that failed.
+    #[prost(uint32, tag = "4")]
+    pub succeeded: u32,
+    #[prost(uint32, tag = "5")]
+    pub failed: u32,
+}
+/// Host to guest, to the agent: whether the user turned backup to the host on. Sent each time
+/// the agent connects and whenever the user changes it. Until the agent hears it is on, it keeps
+/// Android's backup manager from backing up to the host (backup off, automatic restore off),
+/// so a user who never turned backup on has nothing backed up and nothing scheduled.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackupSetting {
+    #[prost(bool, tag = "1")]
+    pub enabled: bool,
+}
+/// Guest to host, from the agent's credential provider: an app asks to make or use a passkey.
+/// What names the app comes from Android's credential manager (CallingAppInfo), never from the
+/// app itself. Answered with PasskeyResponse.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PasskeyRequest {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "PasskeyOperation", tag = "2")]
+    pub operation: i32,
+    /// The app's request: WebAuthn's PublicKeyCredentialCreationOptionsJSON or
+    /// PublicKeyCredentialRequestOptionsJSON, as Android's credential manager passes it.
+    #[prost(string, tag = "3")]
+    pub request_json: ::prost::alloc::string::String,
+    /// The calling app's package.
+    #[prost(string, tag = "4")]
+    pub package: ::prost::alloc::string::String,
+    /// The SHA-256 of each certificate the calling app is signed with now (its signing
+    /// certificate, or every signer of an app with several).
+    #[prost(bytes = "vec", repeated, tag = "5")]
+    pub signer_sha256: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    /// The web origin the credential manager reports, only for a browser the agent recognises
+    /// by its package and signing certificate (a privileged browser, or one the image
+    /// carries); empty for any other app, whose request is checked as an app's.
+    #[prost(string, tag = "6")]
+    pub origin: ::prost::alloc::string::String,
+    /// The hash of the client data a browser made itself; empty when it gave none.
+    #[prost(bytes = "vec", tag = "7")]
+    pub client_data_hash: ::prost::alloc::vec::Vec<u8>,
+    /// The app's name, for the host's prompt.
+    #[prost(string, tag = "8")]
+    pub app_label: ::prost::alloc::string::String,
+}
+/// Host to guest: what became of a PasskeyRequest.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PasskeyResponse {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(enumeration = "PasskeyStatus", tag = "2")]
+    pub status: i32,
+    /// OK only: WebAuthn's RegistrationResponseJSON or AuthenticationResponseJSON.
+    #[prost(string, tag = "3")]
+    pub response_json: ::prost::alloc::string::String,
+    /// Why it did not succeed, in words a person can act on.
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host, on the KeyMint port, from the control daemon after the handshake: the root
+/// key the guest's KeyMint wraps its keys with. Asked once each boot, before Android's storage
+/// is unlocked. Answered with KeyMintRootKey.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KeyMintRootKeyRequest {}
+/// Host to guest: the KeyMint root key, which the host keeps sealed by the user's credential
+/// store (and the computer's TPM where it has one), so the guest's disk alone never holds it.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KeyMintRootKey {
+    /// 32 bytes; empty when the host has no root key to give, and KeyMint then keeps the keys
+    /// it made without one.
+    #[prost(bytes = "vec", tag = "1")]
+    pub key: ::prost::alloc::vec::Vec<u8>,
+    /// Why it is empty.
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+}
 /// Guest to host: asks for the host's voices. The host answers with SpeechVoices.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ListSpeechVoices {}
@@ -2829,7 +3088,7 @@ pub struct SpellingResult {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3171,6 +3430,40 @@ pub mod envelope {
         ShareToHost(super::ShareToHost),
         #[prost(message, tag = "473")]
         ShareResult(super::ShareResult),
+        #[prost(message, tag = "640")]
+        BackupUpload(super::BackupUpload),
+        #[prost(message, tag = "641")]
+        BackupCommit(super::BackupCommit),
+        #[prost(message, tag = "642")]
+        BackupDiscard(super::BackupDiscard),
+        #[prost(message, tag = "643")]
+        BackupClear(super::BackupClear),
+        #[prost(message, tag = "644")]
+        BackupAnswer(super::BackupAnswer),
+        #[prost(message, tag = "645")]
+        BackupQuery(super::BackupQuery),
+        #[prost(message, tag = "646")]
+        BackupContents(super::BackupContents),
+        #[prost(message, tag = "647")]
+        BackupFetch(super::BackupFetch),
+        #[prost(message, tag = "648")]
+        BackupFetchData(super::BackupFetchData),
+        #[prost(message, tag = "649")]
+        BackupRun(super::BackupRun),
+        #[prost(message, tag = "650")]
+        BackupRestore(super::BackupRestore),
+        #[prost(message, tag = "651")]
+        BackupRunResult(super::BackupRunResult),
+        #[prost(message, tag = "652")]
+        PasskeyRequest(super::PasskeyRequest),
+        #[prost(message, tag = "653")]
+        PasskeyResponse(super::PasskeyResponse),
+        #[prost(message, tag = "654")]
+        KeymintRootKeyRequest(super::KeyMintRootKeyRequest),
+        #[prost(message, tag = "655")]
+        KeymintRootKey(super::KeyMintRootKey),
+        #[prost(message, tag = "656")]
+        BackupSetting(super::BackupSetting),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -4485,6 +4778,168 @@ impl GamepadButton {
             "GAMEPAD_BUTTON_DPAD_DOWN" => Some(Self::DpadDown),
             "GAMEPAD_BUTTON_DPAD_LEFT" => Some(Self::DpadLeft),
             "GAMEPAD_BUTTON_DPAD_RIGHT" => Some(Self::DpadRight),
+            _ => None,
+        }
+    }
+}
+/// What the host says of a request of the agent's backup transport.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum BackupStatus {
+    Unspecified = 0,
+    Ok = 1,
+    /// The host could not store or read it; the message says why.
+    Error = 2,
+    /// The package's data is larger than the host keeps for one app.
+    QuotaExceeded = 3,
+    /// The host keeps no backup now: it has no credential store for the key, or the folder was
+    /// made with another key. The message says which, and what to do.
+    NotAvailable = 4,
+    /// The backup holds nothing of that kind for the package.
+    NotFound = 5,
+}
+impl BackupStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "BACKUP_STATUS_UNSPECIFIED",
+            Self::Ok => "BACKUP_STATUS_OK",
+            Self::Error => "BACKUP_STATUS_ERROR",
+            Self::QuotaExceeded => "BACKUP_STATUS_QUOTA_EXCEEDED",
+            Self::NotAvailable => "BACKUP_STATUS_NOT_AVAILABLE",
+            Self::NotFound => "BACKUP_STATUS_NOT_FOUND",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "BACKUP_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "BACKUP_STATUS_OK" => Some(Self::Ok),
+            "BACKUP_STATUS_ERROR" => Some(Self::Error),
+            "BACKUP_STATUS_QUOTA_EXCEEDED" => Some(Self::QuotaExceeded),
+            "BACKUP_STATUS_NOT_AVAILABLE" => Some(Self::NotAvailable),
+            "BACKUP_STATUS_NOT_FOUND" => Some(Self::NotFound),
+            _ => None,
+        }
+    }
+}
+/// The kinds of data a package's backup holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum BackupDataKind {
+    Unspecified = 0,
+    /// A key-value backup: records, each a key and its value or its deletion. A record is a
+    /// 32-bit big-endian key length, the key in UTF-8, a 32-bit big-endian value length (-1 for
+    /// a deleted key) and the value.
+    KeyValue = 1,
+    /// A full backup: the tar stream Android's backup manager writes for the package.
+    Full = 2,
+    /// One APK file of the package, so a restore after a data reset can install the app first.
+    Apk = 3,
+}
+impl BackupDataKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "BACKUP_DATA_KIND_UNSPECIFIED",
+            Self::KeyValue => "BACKUP_DATA_KIND_KEY_VALUE",
+            Self::Full => "BACKUP_DATA_KIND_FULL",
+            Self::Apk => "BACKUP_DATA_KIND_APK",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "BACKUP_DATA_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "BACKUP_DATA_KIND_KEY_VALUE" => Some(Self::KeyValue),
+            "BACKUP_DATA_KIND_FULL" => Some(Self::Full),
+            "BACKUP_DATA_KIND_APK" => Some(Self::Apk),
+            _ => None,
+        }
+    }
+}
+/// Which passkey ceremony an app asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PasskeyOperation {
+    Unspecified = 0,
+    /// Make a new passkey (navigator.credentials.create).
+    Create = 1,
+    /// Sign in with a passkey (navigator.credentials.get).
+    Get = 2,
+}
+impl PasskeyOperation {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PASSKEY_OPERATION_UNSPECIFIED",
+            Self::Create => "PASSKEY_OPERATION_CREATE",
+            Self::Get => "PASSKEY_OPERATION_GET",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PASSKEY_OPERATION_UNSPECIFIED" => Some(Self::Unspecified),
+            "PASSKEY_OPERATION_CREATE" => Some(Self::Create),
+            "PASSKEY_OPERATION_GET" => Some(Self::Get),
+            _ => None,
+        }
+    }
+}
+/// How a passkey request ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PasskeyStatus {
+    Unspecified = 0,
+    Ok = 1,
+    /// The app may not use passkeys of that relying party: its signature is not in the
+    /// relying party's Digital Asset Links, or the origin a browser gave does not belong to it.
+    Rejected = 2,
+    /// The person canceled the host's prompt.
+    Canceled = 3,
+    /// This computer has no passkeys, or they are turned off.
+    Unavailable = 4,
+    /// The host's authenticator failed; the message says why.
+    Error = 5,
+    /// The authenticator holds no passkey the request allows, or already holds one it excludes.
+    NotAllowed = 6,
+}
+impl PasskeyStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PASSKEY_STATUS_UNSPECIFIED",
+            Self::Ok => "PASSKEY_STATUS_OK",
+            Self::Rejected => "PASSKEY_STATUS_REJECTED",
+            Self::Canceled => "PASSKEY_STATUS_CANCELED",
+            Self::Unavailable => "PASSKEY_STATUS_UNAVAILABLE",
+            Self::Error => "PASSKEY_STATUS_ERROR",
+            Self::NotAllowed => "PASSKEY_STATUS_NOT_ALLOWED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PASSKEY_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "PASSKEY_STATUS_OK" => Some(Self::Ok),
+            "PASSKEY_STATUS_REJECTED" => Some(Self::Rejected),
+            "PASSKEY_STATUS_CANCELED" => Some(Self::Canceled),
+            "PASSKEY_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "PASSKEY_STATUS_ERROR" => Some(Self::Error),
+            "PASSKEY_STATUS_NOT_ALLOWED" => Some(Self::NotAllowed),
             _ => None,
         }
     }
