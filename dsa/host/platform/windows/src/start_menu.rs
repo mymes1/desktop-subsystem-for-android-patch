@@ -528,7 +528,12 @@ pub fn keep(
     // What was logged at the last sync, so a retry says only what is new.
     let mut told: BTreeSet<String> = BTreeSet::new();
     // Each app's jump list follows its shortcuts, and its desktop shortcuts go with it.
-    let mut jump_lists = crate::jump_list::Committed::new();
+    // Kept in a note, so a restart neither commits an unchanged list again nor forgets the
+    // list of an app uninstalled while the window manager was not running.
+    let mut jump_lists = match crate::jump_list::default_note() {
+        Some(note) => crate::jump_list::Committed::in_note(note),
+        None => crate::jump_list::Committed::new(),
+    };
     let texts = crate::jump_list::Texts::for_user();
     let desktop = crate::desktop_shortcuts::Desktop::default_for_user();
     loop {

@@ -321,6 +321,53 @@ fn fr7_an_app_whose_program_is_not_made_has_no_jump_list_or_desktop_shortcut_yet
 }
 
 #[test]
+fn fr7_jump_lists_are_remembered_across_restarts_of_the_window_manager() {
+    let dir = fresh_dir("restart");
+    let apps_dir = dir.join("apps");
+    make_program(&apps_dir);
+    let note = dir.join("jump-lists.json");
+    let lists = FakeJumpLists::default();
+    let apps = vec![chat(vec![shortcut("new-chat", "New chat", 0)])];
+    let mut first = Committed::in_note(note.clone());
+    sync_apps(&apps, &apps_dir, &Texts::english(), &mut first, &lists);
+    assert_eq!(lists.committed.lock().unwrap().len(), 1);
+    assert!(note.exists());
+
+    // Restarted: the unchanged list is not committed again; a changed one is.
+    let mut second = Committed::in_note(note.clone());
+    assert_eq!(
+        second.get(CHAT).map(|list| list.app_user_model_id.clone()),
+        Some(app_user_model_id(CHAT))
+    );
+    sync_apps(&apps, &apps_dir, &Texts::english(), &mut second, &lists);
+    assert_eq!(lists.committed.lock().unwrap().len(), 1);
+    let changed = vec![chat(vec![shortcut("ana", "Ana", 0)])];
+    sync_apps(&changed, &apps_dir, &Texts::english(), &mut second, &lists);
+    assert_eq!(lists.committed.lock().unwrap().len(), 2);
+
+    // The app went while the window manager was off: the next start deletes its list.
+    let mut third = Committed::in_note(note.clone());
+    sync_apps(&[], &apps_dir, &Texts::english(), &mut third, &lists);
+    assert_eq!(
+        *lists.deleted.lock().unwrap(),
+        vec![app_user_model_id(CHAT)]
+    );
+    assert!(Committed::in_note(note.clone()).get(CHAT).is_none());
+
+    // A note that does not read records nothing, and the lists are made again.
+    std::fs::write(&note, b"not json").unwrap();
+    let mut damaged = Committed::in_note(note.clone());
+    sync_apps(&apps, &apps_dir, &Texts::english(), &mut damaged, &lists);
+    assert_eq!(lists.committed.lock().unwrap().len(), 3);
+
+    // Uninstalling DSA removes the note with the user's other files.
+    let root = dsa_host_windows::paths::UserRoot::from_dir(&dir);
+    assert_eq!(root.jump_lists_note(), note);
+    dsa_host_windows::uninstall::remove_user_files(&root, &dir.join("Programs"));
+    assert!(!note.exists());
+}
+
+#[test]
 fn fr7_uninstalling_dsa_removes_the_desktop_shortcuts_it_made() {
     let dir = fresh_dir("uninstall");
     let desktop = Desktop {
