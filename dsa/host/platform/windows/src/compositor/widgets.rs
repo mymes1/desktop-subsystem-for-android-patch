@@ -556,9 +556,9 @@ pub fn draw_edit(
             };
             let to = (y as usize * width + x as usize) * 4;
             let keep = 255 - u32::from(source[3]);
-            for channel in 0..4 {
-                let under = u32::from(canvas.pixels[to + channel]) * keep / 255;
-                canvas.pixels[to + channel] = (u32::from(source[channel]) + under).min(255) as u8;
+            for (out, over) in canvas.pixels[to..to + 4].iter_mut().zip(source) {
+                let under = u32::from(*out) * keep / 255;
+                *out = (u32::from(*over) + under).min(255) as u8;
             }
             if canvas.pixels[to + 3] == 0 {
                 canvas.pixels[to + 3] = 1;
