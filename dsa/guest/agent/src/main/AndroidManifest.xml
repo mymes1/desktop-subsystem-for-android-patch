@@ -237,14 +237,21 @@
 
         <!--
           Runs a widget's setup when the user places it: it shows nothing, starts the setup of
-          the widget's app, which shows as a task window, and finishes with its answer. It is
-          not exported: only the agent starts it.
+          the widget's app above it, and finishes with its answer. It opens a freeform task of
+          its own, never the agent's home task, which has no window on the host: an affinity
+          of its own, and the agent starts it with NEW_TASK and MULTIPLE_TASK. The host shows
+          that task as the app's window. It handles its own configuration changes, so a
+          window moved or resized during the setup keeps it. It is not exported: only the
+          agent starts it.
         -->
         <activity
             android:name=".platform.WidgetConfigureActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode|fontScale|locale|layoutDirection"
             android:excludeFromRecents="true"
             android:exported="false"
             android:noHistory="false"
+            android:resizeableActivity="true"
+            android:taskAffinity="io.github.thisisthepy.dsa.agent.widgetsetup"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!--

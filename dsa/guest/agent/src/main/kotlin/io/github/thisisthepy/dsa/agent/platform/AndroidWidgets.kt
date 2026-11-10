@@ -48,6 +48,7 @@ import io.github.thisisthepy.dsa.agent.widgets.FrameGate
 import io.github.thisisthepy.dsa.agent.widgets.WidgetInfo
 import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
+import io.github.thisisthepy.dsa.agent.widgets.WidgetSetup
 import io.github.thisisthepy.dsa.agent.widgets.WidgetSize
 import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
 import io.github.thisisthepy.dsa.agent.widgets.allClear
@@ -190,7 +191,7 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         host.deleteAppWidgetId(widgetId)
     }
 
-    override fun configure(widgetId: Int, done: (Boolean) -> Unit) {
+    override fun configure(widgetId: Int, done: (WidgetSetup) -> Unit) {
         WidgetConfigureActivity.start(context, widgetId, done)
     }
 
@@ -261,7 +262,6 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         // A launcher cell is about 74 dp with 16 dp between cells.
         val defaultWidth = if (info.targetCellWidth > 0) info.targetCellWidth * CELL_DP - GAP_DP else dp(info.minWidth)
         val defaultHeight = if (info.targetCellHeight > 0) info.targetCellHeight * CELL_DP - GAP_DP else dp(info.minHeight)
-        val optional = info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
         return WidgetInfo(
             provider = info.provider.flattenToString(),
             packageName = info.provider.packageName,
@@ -274,7 +274,7 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             maxWidthDp = dp(info.maxResizeWidth),
             maxHeightDp = dp(info.maxResizeHeight),
             resizeMode = info.resizeMode and (AppWidgetProviderInfo.RESIZE_HORIZONTAL or AppWidgetProviderInfo.RESIZE_VERTICAL),
-            needsConfiguration = info.configure != null && !optional,
+            needsConfiguration = WidgetInfo.needsSetup(info.configure != null, info.widgetFeatures),
             appLabel = appLabel(info.provider.packageName),
         )
     }

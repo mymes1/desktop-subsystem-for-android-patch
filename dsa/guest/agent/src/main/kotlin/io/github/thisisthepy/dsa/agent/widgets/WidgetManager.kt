@@ -43,6 +43,27 @@ data class WidgetInfo(
 
     override fun hashCode(): Int = provider.hashCode()
 
+    companion object {
+        /** AppWidgetProviderInfo.WIDGET_FEATURE_RECONFIGURABLE. */
+        const val FEATURE_RECONFIGURABLE = 1
+
+        /** AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL. */
+        const val FEATURE_CONFIGURATION_OPTIONAL = 4
+
+        /**
+         * Whether placing a widget runs its setup first: it has a configuration activity, and
+         * its app does not say the setup may be skipped. An app says so with both the
+         * reconfigurable and the configuration optional features, as Android's own launcher
+         * reads them: the optional feature means nothing without the other, since it says the
+         * widget can be set up later instead.
+         */
+        fun needsSetup(hasConfigureActivity: Boolean, widgetFeatures: Int): Boolean {
+            if (!hasConfigureActivity) return false
+            val skippable = FEATURE_RECONFIGURABLE or FEATURE_CONFIGURATION_OPTIONAL
+            return (widgetFeatures and skippable) != skippable
+        }
+    }
+
     fun toProto(): WidgetProvider = WidgetProvider.newBuilder()
         .setProvider(provider)
         .setPackageName(packageName)
@@ -60,6 +81,26 @@ data class WidgetInfo(
         .setNeedsConfiguration(needsConfiguration)
         .setAppLabel(appLabel)
         .build()
+}
+
+/** How a widget's setup ended. */
+sealed interface WidgetSetup {
+    /** The user finished it: the setup answered RESULT_OK. */
+    object Finished : WidgetSetup
+
+    /** The user canceled it: the setup answered anything else, or its window was closed. */
+    object Canceled : WidgetSetup
+
+    /** The setup could not run at all, for the reason [why]; the user canceled nothing. */
+    data class Failed(val why: String) : WidgetSetup
+
+    companion object {
+        /** Activity.RESULT_OK. */
+        const val RESULT_OK = -1
+
+        /** The ending an activity's result code means. */
+        fun ofResult(resultCode: Int): WidgetSetup = if (resultCode == RESULT_OK) Finished else Canceled
+    }
 }
 
 /** The size a widget is drawn at: pixels at a density, and the same size in dp. */
@@ -95,10 +136,11 @@ interface WidgetPlatform {
     fun delete(widgetId: Int)
 
     /**
-     * Runs the provider's configuration activity for [widgetId]. [done] is called once, on any
-     * thread, with whether the user finished it.
+     * Runs the provider's configuration activity for [widgetId] in a task window of its own,
+     * which the host shows as the app's window and focuses. [done] is called once, on any
+     * thread, with how the setup ended.
      */
-    fun configure(widgetId: Int, done: (Boolean) -> Unit)
+    fun configure(widgetId: Int, done: (WidgetSetup) -> Unit)
 
     /**
      * Draws the widget at [size] from now on, and tells its app the size. Before anything else
@@ -142,7 +184,8 @@ interface WidgetPlatform {
             override fun allocate() = error("this agent hosts no widgets")
             override fun bind(widgetId: Int, provider: String) = false
             override fun delete(widgetId: Int) = Unit
-            override fun configure(widgetId: Int, done: (Boolean) -> Unit) = done(false)
+            override fun configure(widgetId: Int, done: (WidgetSetup) -> Unit) =
+                done(WidgetSetup.Failed("this agent hosts no widgets"))
             override fun show(widgetId: Int, size: WidgetSize) = Unit
             override fun pointer(widgetId: Int, action: PointerAction, pointerId: Int, x: Float, y: Float) = Unit
             override fun dozing(dozing: Boolean) = Unit
@@ -553,20 +596,26 @@ class WidgetManager(
         log.info("widget $id: running its setup")
         var answered = false
         try {
-            platform.configure(id) { finished ->
+            platform.configure(id) { setup ->
                 post {
                     if (answered) return@post
                     answered = true
-                    if (finished) {
-                        placedNow()
-                    } else {
-                        forget(id)
-                        refuse("the user canceled the widget's setup")
+                    when (setup) {
+                        WidgetSetup.Finished -> placedNow()
+                        WidgetSetup.Canceled -> {
+                            forget(id)
+                            refuse("the user canceled the widget's setup")
+                        }
+                        is WidgetSetup.Failed -> {
+                            forget(id)
+                            refuse("the widget's setup did not start: ${setup.why}")
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
             log.warn("starting the setup of widget $id failed", e)
+            if (answered) return
             answered = true
             forget(id)
             refuse("the widget's setup did not start")
