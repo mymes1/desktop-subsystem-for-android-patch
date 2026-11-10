@@ -1425,6 +1425,9 @@ impl UserAndroid for WithProgramStatus {
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         UserAndroid::remove_widget(&*self.android, widget_id)
     }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        UserAndroid::reconfigure_widget(&*self.android, widget_id)
+    }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         UserAndroid::resize_widget(&*self.android, widget_id, size)
     }

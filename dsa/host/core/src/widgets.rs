@@ -83,6 +83,9 @@ pub struct WidgetProvider {
     pub needs_configuration: bool,
     /// The name of the app that offers the widget; empty when the guest did not say.
     pub app_label: String,
+    /// Whether a placed widget can be set up again: its app says so and it has a setup. Its
+    /// menu offers "Widget settings" only then.
+    pub reconfigurable: bool,
 }
 
 /// Where a widget's window is: its top left corner in the host's physical screen pixels,
@@ -274,6 +277,7 @@ pub fn checked_provider(message: control::WidgetProvider) -> Result<WidgetProvid
         resize_mode: message.resize_mode & (RESIZE_HORIZONTAL | RESIZE_VERTICAL),
         needs_configuration: message.needs_configuration,
         app_label: cut(message.app_label),
+        reconfigurable: message.reconfigurable,
     })
 }
 
@@ -392,6 +396,7 @@ impl WidgetProvider {
             resize_mode: self.resize_mode,
             needs_configuration: self.needs_configuration,
             app_label: self.app_label.clone(),
+            reconfigurable: self.reconfigurable,
         }
     }
 }
@@ -536,6 +541,7 @@ mod tests {
             resize_mode: 3,
             needs_configuration: false,
             app_label: "Clock App".into(),
+            reconfigurable: false,
         }
     }
 
@@ -583,6 +589,20 @@ mod tests {
         })
         .unwrap();
         assert!(gif.preview_png.is_empty());
+    }
+
+    #[test]
+    fn fr12_a_widget_says_whether_it_can_be_set_up_again() {
+        let plain = checked_provider(clock()).unwrap();
+        assert!(!plain.reconfigurable);
+        assert!(!plain.to_control().reconfigurable);
+        let settable = checked_provider(control::WidgetProvider {
+            reconfigurable: true,
+            ..clock()
+        })
+        .unwrap();
+        assert!(settable.reconfigurable);
+        assert!(settable.to_control().reconfigurable);
     }
 
     #[test]

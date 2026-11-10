@@ -4286,7 +4286,111 @@ fn clock_widget() -> dsa_protocol::control::WidgetProvider {
         resize_mode: 3,
         needs_configuration: false,
         app_label: "Clock App".into(),
+        reconfigurable: false,
     }
+}
+
+/// The agent's side of a widget's settings opened again: the long press's menu asks for
+/// them, the agent runs the setup again for the same widget, and the caller hears how it
+/// ended. Only a widget that says it can be set up again is asked of the agent.
+#[test]
+fn fr12_long_pressing_a_widget_edits_it_like_a_home_screen() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let weather = dsa_protocol::control::WidgetProvider {
+        provider: "com.example.weather/.WeatherWidget".into(),
+        needs_configuration: true,
+        reconfigurable: true,
+        ..clock_widget()
+    };
+    send_body(
+        &mut agent,
+        Body::WidgetUpdated(dsa_protocol::control::WidgetUpdated {
+            widget_id: 21,
+            provider: Some(weather.clone()),
+        }),
+    );
+    send_body(&mut agent, widget_updated(12));
+    let deadline = std::time::Instant::now() + WAIT;
+    while session.widgets().len() < 2 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the widgets never came"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    let settable = session
+        .widgets()
+        .into_iter()
+        .find(|(id, _)| *id == 21)
+        .map(|(_, provider)| provider)
+        .unwrap();
+    assert!(settable.reconfigurable, "the flag reaches the host");
+
+    // The user finishes the setup.
+    let asking = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.reconfigure_widget(21, WAIT))
+    };
+    let request_id = match next_body(&mut agent) {
+        Body::ReconfigureWidget(asked) => {
+            assert_eq!(asked.widget_id, 21);
+            asked.request_id
+        }
+        other => panic!("expected the widget's settings to be asked for, got {other:?}"),
+    };
+    send_body(
+        &mut agent,
+        Body::WidgetReconfigured(dsa_protocol::control::WidgetReconfigured {
+            request_id,
+            widget_id: 21,
+            finished: true,
+            error: String::new(),
+        }),
+    );
+    assert_eq!(asking.join().unwrap(), Ok(()));
+
+    // The user leaves it: the reason reaches the caller, and the widget stays.
+    let leaving = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.reconfigure_widget(21, WAIT))
+    };
+    let request_id = match next_body(&mut agent) {
+        Body::ReconfigureWidget(asked) => asked.request_id,
+        other => panic!("expected the widget's settings to be asked for, got {other:?}"),
+    };
+    send_body(
+        &mut agent,
+        Body::WidgetReconfigured(dsa_protocol::control::WidgetReconfigured {
+            request_id,
+            widget_id: 21,
+            finished: false,
+            error: "the user canceled the widget's settings".into(),
+        }),
+    );
+    assert_eq!(
+        leaving.join().unwrap(),
+        Err(SessionError::WidgetRefused(
+            "the user canceled the widget's settings".into()
+        ))
+    );
+    assert_eq!(session.widgets().len(), 2);
+
+    // The clock offers no settings, and an unknown widget has none: neither reaches the agent.
+    assert!(matches!(
+        session.reconfigure_widget(12, WAIT),
+        Err(SessionError::WidgetRefused(_))
+    ));
+    assert!(matches!(
+        session.reconfigure_widget(99, WAIT),
+        Err(SessionError::WidgetRefused(_))
+    ));
+    session.remove_widget(12).unwrap();
+    assert_eq!(
+        next_body(&mut agent),
+        Body::RemoveWidget(dsa_protocol::control::RemoveWidget { widget_id: 12 }),
+        "nothing was sent for the widgets that have no settings"
+    );
 }
 
 fn widget_updated(widget_id: i32) -> Body {

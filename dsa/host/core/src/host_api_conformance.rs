@@ -134,6 +134,11 @@ pub struct FakeAndroid {
     pub widget_sizes: Mutex<Vec<(i32, WidgetSize)>>,
     /// The pointer input its widgets were given, in order.
     pub widget_pointers: Mutex<Vec<dsa_protocol::control::WidgetPointer>>,
+    /// The widgets whose setup it was asked to open again, in order.
+    pub widget_reconfigures: Mutex<Vec<i32>>,
+    /// How the user leaves the next setups opened again: None finishes them, Some says why
+    /// they did not.
+    pub widget_reconfigure_answer: Mutex<Option<String>>,
     /// Each start (`true`) and end (`false`) of a watch of a task's accessibility tree, in
     /// order.
     pub accessibility_watches: Arc<Mutex<Vec<(i32, bool)>>>,
@@ -269,6 +274,8 @@ impl FakeAndroid {
             widgets: Mutex::new((std::collections::BTreeMap::new(), Vec::new())),
             widget_sizes: Mutex::new(Vec::new()),
             widget_pointers: Mutex::new(Vec::new()),
+            widget_reconfigures: Mutex::new(Vec::new()),
+            widget_reconfigure_answer: Mutex::new(None),
             accessibility_watches: Arc::new(Mutex::new(Vec::new())),
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
@@ -657,6 +664,14 @@ impl UserAndroid for FakeAndroid {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
         self.widget_event(WidgetEvent::Removed { widget_id });
         Ok(())
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        self.running_or().map_err(WidgetError::NotRunning)?;
+        self.widget_reconfigures.lock().unwrap().push(widget_id);
+        match self.widget_reconfigure_answer.lock().unwrap().clone() {
+            None => Ok(()),
+            Some(why) => Err(WidgetError::Refused(why)),
+        }
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
@@ -1441,6 +1456,10 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr12_the_gallery_lists_the_widgets_the_callers_android_offers() {
             $crate::host_api_conformance::widget_gallery_lists_the_offer(&mut || $make);
+        }
+        #[test]
+        fn fr12_long_pressing_a_widget_edits_it_like_a_home_screen() {
+            $crate::host_api_conformance::widget_reconfigure_round_trip(&mut || $make);
         }
         #[test]
         fn fr12_adding_a_widget_places_it_and_the_service_keeps_its_place() {
@@ -4682,7 +4701,68 @@ pub fn sample_widget_provider() -> WidgetProvider {
         resize_mode: 3,
         needs_configuration: false,
         app_label: "Clock App".into(),
+        reconfigurable: false,
     }
+}
+
+/// A widget whose app lets the user set it up again from its menu.
+pub fn sample_reconfigurable_widget_provider() -> WidgetProvider {
+    WidgetProvider {
+        provider: "com.example.weather/.WeatherWidget".into(),
+        package_name: "com.example.weather".into(),
+        label: "Weather".into(),
+        needs_configuration: true,
+        reconfigurable: true,
+        ..sample_widget_provider()
+    }
+}
+
+/// Opening a placed widget's settings again reaches its Android for that widget and answers
+/// with the widget once the user finishes; a setup the user leaves and a widget that cannot be
+/// set up again are refused with the reason, and the widget stays placed.
+pub fn widget_reconfigure_round_trip(make: MakeLocal<'_>) {
+    let (_service, androids, _connector, user, mut client) = widget_android(make);
+    let android = androids.of(&user).unwrap();
+    android
+        .widget_offer
+        .lock()
+        .unwrap()
+        .push(sample_reconfigurable_widget_provider());
+    let weather = client
+        .add_widget("com.example.weather/.WeatherWidget", WAIT)
+        .unwrap();
+    assert!(weather.provider.reconfigurable);
+    let again = client.reconfigure_widget(weather.widget_id, WAIT).unwrap();
+    assert_eq!(again, weather, "the widget stays where it was");
+    assert_eq!(
+        *android.widget_reconfigures.lock().unwrap(),
+        vec![weather.widget_id]
+    );
+    // The user leaves the setup: the caller hears why, and the widget stays.
+    *android.widget_reconfigure_answer.lock().unwrap() =
+        Some("the user canceled the widget's settings".into());
+    match client.reconfigure_widget(weather.widget_id, WAIT) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::WidgetRefused);
+            assert!(detail.contains("canceled"), "{detail}");
+        }
+        other => panic!("expected the setup to be left, got {other:?}"),
+    }
+    let (placed, _) = client.widgets().unwrap();
+    assert!(placed.iter().any(|w| w.widget_id == weather.widget_id));
+    // A widget whose app offers no settings is never asked of Android.
+    let clock = client
+        .add_widget("com.example.clock/.ClockWidget", WAIT)
+        .unwrap();
+    match client.reconfigure_widget(clock.widget_id, WAIT) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::WidgetRefused),
+        other => panic!("expected the clock to have no settings, got {other:?}"),
+    }
+    match client.reconfigure_widget(9999, WAIT) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::UnknownRequest),
+        other => panic!("expected an unknown widget, got {other:?}"),
+    }
+    assert_eq!(android.widget_reconfigures.lock().unwrap().len(), 2);
 }
 
 /// A started Android that offers the clock widget, and a client of it.

@@ -2378,6 +2378,13 @@ fn fr12_dsa_widgets_is_parsed() {
     assert!(parse(&args("widgets add clock")).is_err());
     assert!(parse(&args("widgets remove twelve")).is_err());
     assert!(parse(&args("widgets remove -1")).is_err());
+    assert_eq!(
+        parse(&args("widgets settings 12")).unwrap().widgets,
+        Some(WidgetAction::Settings(12))
+    );
+    assert!(parse(&args("widgets settings")).is_err());
+    assert!(parse(&args("widgets settings 0")).is_err());
+    assert!(dsa_cli::USAGE.contains("settings <id>"));
     assert_eq!(parse(&args("status")).unwrap().widgets, None);
 }
 
