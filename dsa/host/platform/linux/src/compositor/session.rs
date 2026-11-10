@@ -761,6 +761,8 @@ impl Main {
                     self.requests(requests);
                 }
                 FromHost::MenuChosen { task_id, action } => self.menu_chosen(task_id, action),
+                // Only a Windows taskbar preview has media buttons; these windows send none.
+                FromHost::MediaButton { .. } => {}
             },
         }
     }
