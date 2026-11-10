@@ -22,12 +22,9 @@ use dsa_protocol::control::{
     ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames, TaskRemoved, TaskUpdated,
 };
 use dsa_protocol::control::{
-    RecognitionEvent, RecognitionEventKind, SpeakText, SpeechAudio, SpellingMistake,
-    SpellingResult, SpellingText,
-};
-use dsa_protocol::control::{
-    AddWidget, ListWidgetProviders, RemoveWidget, ResizeWidget, WidgetAdded, WidgetFrame,
-    WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
+    AddWidget, ListWidgetProviders, ReconfigureWidget, RemoveWidget, ResizeWidget, WidgetAdded,
+    WidgetFrame, WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetReconfigured,
+    WidgetUpdated,
 };
 use dsa_protocol::control::{
     CameraDevice, CameraFacing, CameraFrame, CameraList, CameraMode, CameraOpen, CameraStill,
@@ -40,6 +37,10 @@ use dsa_protocol::control::{
 };
 use dsa_protocol::control::{
     PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome,
+};
+use dsa_protocol::control::{
+    RecognitionEvent, RecognitionEventKind, SpeakText, SpeechAudio, SpellingMistake,
+    SpellingResult, SpellingText,
 };
 use dsa_protocol::control::{
     SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
@@ -89,6 +90,7 @@ fn clock_provider() -> WidgetProvider {
         resize_mode: 3,
         needs_configuration: false,
         app_label: String::new(),
+        reconfigurable: false,
     }
 }
 
@@ -902,6 +904,22 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 pointer_id: 0,
                 x: 10.5,
                 y: 20.25,
+            })),
+        ),
+        (
+            "widget_reconfigure",
+            wrap(Body::ReconfigureWidget(ReconfigureWidget {
+                request_id: 7,
+                widget_id: 12,
+            })),
+        ),
+        (
+            "widget_reconfigured",
+            wrap(Body::WidgetReconfigured(WidgetReconfigured {
+                request_id: 7,
+                widget_id: 12,
+                finished: true,
+                error: String::new(),
             })),
         ),
         (

@@ -798,6 +798,17 @@ public final class VectorsTest {
                         .setX(10.5f)
                         .setY(20.25f))
                 .build());
+        cases.put("widget_reconfigure", Envelope.newBuilder()
+                .setReconfigureWidget(ReconfigureWidget.newBuilder()
+                        .setRequestId(7)
+                        .setWidgetId(12))
+                .build());
+        cases.put("widget_reconfigured", Envelope.newBuilder()
+                .setWidgetReconfigured(WidgetReconfigured.newBuilder()
+                        .setRequestId(7)
+                        .setWidgetId(12)
+                        .setFinished(true))
+                .build());
         return cases;
     }
 
