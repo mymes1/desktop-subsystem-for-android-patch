@@ -24,6 +24,7 @@ use crate::accessibility::{
 use crate::adb_discovery::AutoConnectState;
 use crate::addon_disk::{Addon, AddonDisk, Format};
 use crate::apk::{self, InstallOutcome, InstallPart, InstallStatus, InstalledPackage};
+use crate::app_audio::{AppAudioHub, AppAudioWatch, AppStream, VolumeChange};
 use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::background::{
     BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
@@ -116,6 +117,10 @@ pub struct FakeAndroid {
     background: Mutex<BackgroundHub>,
     /// What the user did with its apps that run in the background, in order.
     pub background_requests: Mutex<Vec<BackgroundRequest>>,
+    /// Which app each output of its sound plays, and who watches it.
+    app_audio: Mutex<AppAudioHub>,
+    /// The app volumes the host set, in order.
+    pub app_volumes: Mutex<Vec<VolumeChange>>,
     /// The APKs it installed or refused, by name, with their whole content, in order.
     pub installs: Mutex<Vec<(String, Vec<u8>)>>,
     /// The installs of several files it took, in order: the bundle's name, the parts, the ABI
@@ -134,6 +139,11 @@ pub struct FakeAndroid {
     pub widget_sizes: Mutex<Vec<(i32, WidgetSize)>>,
     /// The pointer input its widgets were given, in order.
     pub widget_pointers: Mutex<Vec<dsa_protocol::control::WidgetPointer>>,
+    /// The widgets whose setup it was asked to open again, in order.
+    pub widget_reconfigures: Mutex<Vec<i32>>,
+    /// How the user leaves the next setups opened again: None finishes them, Some says why
+    /// they did not.
+    pub widget_reconfigure_answer: Mutex<Option<String>>,
     /// Each start (`true`) and end (`false`) of a watch of a task's accessibility tree, in
     /// order.
     pub accessibility_watches: Arc<Mutex<Vec<(i32, bool)>>>,
@@ -260,6 +270,8 @@ impl FakeAndroid {
             print_watchers: Mutex::new(Vec::new()),
             background: Mutex::new(BackgroundHub::default()),
             background_requests: Mutex::new(Vec::new()),
+            app_audio: Mutex::new(AppAudioHub::default()),
+            app_volumes: Mutex::new(Vec::new()),
             installs: Mutex::new(Vec::new()),
             part_installs: Mutex::new(Vec::new()),
             install_steps: Mutex::new(Vec::new()),
@@ -269,6 +281,8 @@ impl FakeAndroid {
             widgets: Mutex::new((std::collections::BTreeMap::new(), Vec::new())),
             widget_sizes: Mutex::new(Vec::new()),
             widget_pointers: Mutex::new(Vec::new()),
+            widget_reconfigures: Mutex::new(Vec::new()),
+            widget_reconfigure_answer: Mutex::new(None),
             accessibility_watches: Arc::new(Mutex::new(Vec::new())),
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
@@ -316,6 +330,12 @@ impl FakeAndroid {
     /// Changes its apps that run in the background as its agent would, and tells the watchers.
     pub fn background_event(&self, event: BackgroundEvent) {
         self.background.lock().unwrap().apply(event);
+    }
+
+    /// Lists which app each output of its sound plays, as its agent would, and tells the
+    /// watchers.
+    pub fn list_app_audio(&self, streams: Vec<AppStream>) {
+        self.app_audio.lock().unwrap().apply(streams);
     }
 
     /// Changes its notifications as an app in this Android would, and tells the watchers.
@@ -598,6 +618,14 @@ impl UserAndroid for FakeAndroid {
         self.background_requests.lock().unwrap().push(request);
         Ok(())
     }
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        Some(self.app_audio.lock().unwrap().watch())
+    }
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.app_volumes.lock().unwrap().push(change.clone());
+        Ok(())
+    }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         let (tx, events) = mpsc::channel();
         let mut widgets = self.widgets.lock().unwrap();
@@ -657,6 +685,14 @@ impl UserAndroid for FakeAndroid {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
         self.widget_event(WidgetEvent::Removed { widget_id });
         Ok(())
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        self.running_or().map_err(WidgetError::NotRunning)?;
+        self.widget_reconfigures.lock().unwrap().push(widget_id);
+        match self.widget_reconfigure_answer.lock().unwrap().clone() {
+            None => Ok(()),
+            Some(why) => Err(WidgetError::Refused(why)),
+        }
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
@@ -1427,6 +1463,14 @@ macro_rules! host_api_conformance {
             );
         }
         #[test]
+        fn fr26_app_outputs_reach_a_watcher_and_a_hosts_volume_reaches_the_callers_android() {
+            $crate::host_api_conformance::app_audio_reaches_a_watcher(&mut || $make);
+        }
+        #[test]
+        fn nfr5_a_malformed_app_volume_is_refused() {
+            $crate::host_api_conformance::malformed_app_volume_is_refused(&mut || $make);
+        }
+        #[test]
         fn fr24_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
             $crate::host_api_conformance::background_apps_reach_a_watcher(&mut || $make);
         }
@@ -1445,6 +1489,10 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr12_the_gallery_lists_the_widgets_the_callers_android_offers() {
             $crate::host_api_conformance::widget_gallery_lists_the_offer(&mut || $make);
+        }
+        #[test]
+        fn fr12_long_pressing_a_widget_edits_it_like_a_home_screen() {
+            $crate::host_api_conformance::widget_reconfigure_round_trip(&mut || $make);
         }
         #[test]
         fn fr12_adding_a_widget_places_it_and_the_service_keeps_its_place() {
@@ -4258,6 +4306,81 @@ pub fn background_apps_reach_a_watcher(make: MakeLocal<'_>) {
     );
 }
 
+/// An output of sound that plays `package` at `volume`.
+pub fn sample_app_stream(stream: &str, package: &str, volume: f32) -> AppStream {
+    AppStream {
+        stream: stream.into(),
+        package_name: package.into(),
+        app_label: if package.is_empty() {
+            String::new()
+        } else {
+            "Music".into()
+        },
+        volume,
+        muted: false,
+    }
+}
+
+pub fn app_audio_reaches_a_watcher(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let android = androids.of(&user).expect("the caller's Android");
+    let first = vec![
+        sample_app_stream("primary", "", 1.0),
+        sample_app_stream("app 0", "com.example.music", 0.5),
+    ];
+    android.list_app_audio(first.clone());
+
+    let mut watch = connect(&mut *connector)
+        .watch_app_audio()
+        .expect("watching the outputs of Android's sound");
+    assert_eq!(watch.streams, first, "starts from the outputs now");
+    assert_eq!(watch.next(Duration::from_millis(50)).unwrap(), None);
+    let louder = vec![
+        sample_app_stream("primary", "", 1.0),
+        sample_app_stream("app 0", "com.example.music", 0.75),
+    ];
+    android.list_app_audio(louder.clone());
+    assert_eq!(watch.next(WAIT).unwrap(), Some(louder));
+
+    let change = VolumeChange {
+        package_name: "com.example.music".into(),
+        volume: 0.25,
+        muted: true,
+    };
+    connect(&mut *connector)
+        .set_app_volume(&change)
+        .expect("the host's volume reaches Android");
+    assert_eq!(*android.app_volumes.lock().unwrap(), vec![change.clone()]);
+    // A stopped Android has no app to set it for, and that is no failure.
+    connect(&mut *connector).stop().unwrap();
+    connect(&mut *connector)
+        .set_app_volume(&change)
+        .expect("nothing to set is no failure");
+    assert_eq!(android.app_volumes.lock().unwrap().len(), 1);
+}
+
+pub fn malformed_app_volume_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, _user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let refused = client.set_app_volume(&VolumeChange {
+        package_name: "not a package".into(),
+        volume: 0.5,
+        muted: false,
+    });
+    assert!(
+        refused.is_err(),
+        "a package name that is not one is refused"
+    );
+    // The service goes on.
+    assert!(connect(&mut *connector).status().is_ok());
+}
+
 pub fn background_actions_reach_the_caller(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let androids = Arc::new(FakeAndroids::default());
@@ -4743,7 +4866,68 @@ pub fn sample_widget_provider() -> WidgetProvider {
         resize_mode: 3,
         needs_configuration: false,
         app_label: "Clock App".into(),
+        reconfigurable: false,
     }
+}
+
+/// A widget whose app lets the user set it up again from its menu.
+pub fn sample_reconfigurable_widget_provider() -> WidgetProvider {
+    WidgetProvider {
+        provider: "com.example.weather/.WeatherWidget".into(),
+        package_name: "com.example.weather".into(),
+        label: "Weather".into(),
+        needs_configuration: true,
+        reconfigurable: true,
+        ..sample_widget_provider()
+    }
+}
+
+/// Opening a placed widget's settings again reaches its Android for that widget and answers
+/// with the widget once the user finishes; a setup the user leaves and a widget that cannot be
+/// set up again are refused with the reason, and the widget stays placed.
+pub fn widget_reconfigure_round_trip(make: MakeLocal<'_>) {
+    let (_service, androids, _connector, user, mut client) = widget_android(make);
+    let android = androids.of(&user).unwrap();
+    android
+        .widget_offer
+        .lock()
+        .unwrap()
+        .push(sample_reconfigurable_widget_provider());
+    let weather = client
+        .add_widget("com.example.weather/.WeatherWidget", WAIT)
+        .unwrap();
+    assert!(weather.provider.reconfigurable);
+    let again = client.reconfigure_widget(weather.widget_id, WAIT).unwrap();
+    assert_eq!(again, weather, "the widget stays where it was");
+    assert_eq!(
+        *android.widget_reconfigures.lock().unwrap(),
+        vec![weather.widget_id]
+    );
+    // The user leaves the setup: the caller hears why, and the widget stays.
+    *android.widget_reconfigure_answer.lock().unwrap() =
+        Some("the user canceled the widget's settings".into());
+    match client.reconfigure_widget(weather.widget_id, WAIT) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::WidgetRefused);
+            assert!(detail.contains("canceled"), "{detail}");
+        }
+        other => panic!("expected the setup to be left, got {other:?}"),
+    }
+    let (placed, _) = client.widgets().unwrap();
+    assert!(placed.iter().any(|w| w.widget_id == weather.widget_id));
+    // A widget whose app offers no settings is never asked of Android.
+    let clock = client
+        .add_widget("com.example.clock/.ClockWidget", WAIT)
+        .unwrap();
+    match client.reconfigure_widget(clock.widget_id, WAIT) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::WidgetRefused),
+        other => panic!("expected the clock to have no settings, got {other:?}"),
+    }
+    match client.reconfigure_widget(9999, WAIT) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::UnknownRequest),
+        other => panic!("expected an unknown widget, got {other:?}"),
+    }
+    assert_eq!(android.widget_reconfigures.lock().unwrap().len(), 2);
 }
 
 /// A started Android that offers the clock widget, and a client of it.

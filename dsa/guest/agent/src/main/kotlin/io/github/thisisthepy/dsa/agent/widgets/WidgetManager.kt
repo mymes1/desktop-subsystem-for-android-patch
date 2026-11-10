@@ -9,6 +9,7 @@ import io.github.thisisthepy.dsa.control.v1.WidgetFrame
 import io.github.thisisthepy.dsa.control.v1.WidgetList
 import io.github.thisisthepy.dsa.control.v1.WidgetProvider
 import io.github.thisisthepy.dsa.control.v1.WidgetProviders
+import io.github.thisisthepy.dsa.control.v1.WidgetReconfigured
 import io.github.thisisthepy.dsa.control.v1.WidgetUpdated
 
 /** A widget an app offers, as the agent reads it. Sizes are in dp. */
@@ -31,6 +32,8 @@ data class WidgetInfo(
     val needsConfiguration: Boolean,
     /** The name of the app that offers the widget, as the launcher shows it. */
     val appLabel: String = "",
+    /** Whether a placed widget can be set up again from its menu ([canSetUpAgain]). */
+    val reconfigurable: Boolean = false,
 ) {
     override fun equals(other: Any?): Boolean =
         other is WidgetInfo && provider == other.provider && packageName == other.packageName &&
@@ -39,7 +42,7 @@ data class WidgetInfo(
             defaultWidthDp == other.defaultWidthDp && defaultHeightDp == other.defaultHeightDp &&
             maxWidthDp == other.maxWidthDp && maxHeightDp == other.maxHeightDp &&
             resizeMode == other.resizeMode && needsConfiguration == other.needsConfiguration &&
-            appLabel == other.appLabel
+            appLabel == other.appLabel && reconfigurable == other.reconfigurable
 
     override fun hashCode(): Int = provider.hashCode()
 
@@ -62,6 +65,14 @@ data class WidgetInfo(
             val skippable = FEATURE_RECONFIGURABLE or FEATURE_CONFIGURATION_OPTIONAL
             return (widgetFeatures and skippable) != skippable
         }
+
+        /**
+         * Whether a placed widget can be set up again, as Android's launcher offers "Widget
+         * settings" for it: it has a configuration activity, and its app says it is
+         * reconfigurable.
+         */
+        fun canSetUpAgain(hasConfigureActivity: Boolean, widgetFeatures: Int): Boolean =
+            hasConfigureActivity && (widgetFeatures and FEATURE_RECONFIGURABLE) != 0
     }
 
     fun toProto(): WidgetProvider = WidgetProvider.newBuilder()
@@ -80,6 +91,7 @@ data class WidgetInfo(
         .setResizeMode(resizeMode and 3)
         .setNeedsConfiguration(needsConfiguration)
         .setAppLabel(appLabel)
+        .setReconfigurable(reconfigurable)
         .build()
 }
 
@@ -150,6 +162,12 @@ interface WidgetPlatform {
      * widget cannot be drawn, the platform calls the `failed` callback given to [start].
      */
     fun show(widgetId: Int, size: WidgetSize)
+
+    /**
+     * Draws the widget at [size] anew even when it is drawn at that size already, as after
+     * the user set it up again: its next image goes to the host whatever it drew before.
+     */
+    fun redraw(widgetId: Int, size: WidgetSize) = show(widgetId, size)
 
     /** Hands pointer input to the widget's view. */
     fun pointer(widgetId: Int, action: PointerAction, pointerId: Int, x: Float, y: Float)
@@ -511,6 +529,9 @@ class WidgetManager(
             Envelope.BodyCase.ADD_WIDGET ->
                 whenStarted { add(envelope.addWidget.requestId, envelope.addWidget.provider) }
             Envelope.BodyCase.REMOVE_WIDGET -> whenStarted { remove(envelope.removeWidget.widgetId) }
+            Envelope.BodyCase.RECONFIGURE_WIDGET -> whenStarted {
+                reconfigure(envelope.reconfigureWidget.requestId, envelope.reconfigureWidget.widgetId)
+            }
             Envelope.BodyCase.RESIZE_WIDGET -> whenStarted { resize(envelope.resizeWidget) }
             Envelope.BodyCase.WIDGET_POINTER -> pointer(envelope.widgetPointer)
             else -> return false
@@ -619,6 +640,74 @@ class WidgetManager(
             answered = true
             forget(id)
             refuse("the widget's setup did not start")
+        }
+    }
+
+    /**
+     * The user chose the settings of placed widget [id]: its setup runs again for the same
+     * widget ID, in a task window of its own as when it was placed, and the host hears how it
+     * ended. A finished setup describes the widget to the host again and draws it anew, so
+     * the widget shows what the user chose; a canceled one leaves it as it was. Either way
+     * the widget stays placed.
+     */
+    private fun reconfigure(requestId: Int, id: Int) {
+        val answer = { finished: Boolean, why: String ->
+            send(
+                Envelope.newBuilder()
+                    .setWidgetReconfigured(
+                        WidgetReconfigured.newBuilder().setRequestId(requestId).setWidgetId(id)
+                            .setFinished(finished).setError(why),
+                    )
+                    .build().toByteArray(),
+            )
+            Unit
+        }
+        val info = if (id in placed()) {
+            try {
+                platform.info(id)
+            } catch (e: Exception) {
+                log.warn("reading widget $id failed", e)
+                null
+            }
+        } else {
+            null
+        }
+        if (info == null) {
+            log.warn("the host asked for the settings of widget $id, which is not placed")
+            return answer(false, "the widget $id is not placed")
+        }
+        if (!info.reconfigurable) {
+            log.warn("the host asked for the settings of widget $id, whose app offers none")
+            return answer(false, "the app of the widget offers no settings for it")
+        }
+        log.info("widget $id: running its setup again")
+        var answered = false
+        try {
+            platform.configure(id) { setup ->
+                post {
+                    if (answered) return@post
+                    answered = true
+                    when (setup) {
+                        WidgetSetup.Finished -> {
+                            val now = platform.info(id) ?: info
+                            send(updated(id, now))
+                            val size = shown[id] ?: store.sizes()[id] ?: WidgetSize.defaultOf(now)
+                            shown[id] = size
+                            lastFrame.remove(id)
+                            attempt("drawing widget $id again") { platform.redraw(id, size) }
+                            answer(true, "")
+                            log.info("widget $id: set up again")
+                        }
+                        WidgetSetup.Canceled -> answer(false, "the user closed the widget's settings without a change")
+                        is WidgetSetup.Failed -> answer(false, "the widget's settings did not open: ${setup.why}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn("opening the settings of widget $id failed", e)
+            if (answered) return
+            answered = true
+            answer(false, "the widget's settings did not open")
         }
     }
 

@@ -1401,6 +1401,52 @@ impl UserAndroid for WithProgramStatus {
     ) -> Result<(), TaskRequestError> {
         UserAndroid::passkey_result(&*self.android, id, result)
     }
+    fn watch_geocoding(&self) -> Option<Receiver<crate::geocode::GeocodeQuery>> {
+        UserAndroid::watch_geocoding(&*self.android)
+    }
+    fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &crate::geocode::GeocodeOutcome,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::geocode_result(&*self.android, query_id, outcome)
+    }
+    fn watch_shares(&self) -> Option<Receiver<crate::share::ShareRequest>> {
+        UserAndroid::watch_shares(&*self.android)
+    }
+    fn share_result(
+        &self,
+        share_id: u32,
+        outcome: &crate::share::ShareOutcome,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::share_result(&*self.android, share_id, outcome)
+    }
+    fn set_backup(
+        &self,
+        on: bool,
+        delete_backups: bool,
+    ) -> Result<crate::backup::BackupReport, TaskRequestError> {
+        UserAndroid::set_backup(&*self.android, on, delete_backups)
+    }
+    fn keymint_key_state(&self) -> Option<crate::session::KeyMintKeyState> {
+        UserAndroid::keymint_key_state(&*self.android)
+    }
+    fn forget_keymint_root_key(&self) {
+        UserAndroid::forget_keymint_root_key(&*self.android)
+    }
+    fn serve_language(&self) -> Option<crate::language::relay::Served> {
+        UserAndroid::serve_language(&*self.android)
+    }
+    fn language_answer(
+        &self,
+        server: u64,
+        envelope: dsa_protocol::control::Envelope,
+    ) -> Result<(), String> {
+        UserAndroid::language_answer(&*self.android, server, envelope)
+    }
+    fn language_server_gone(&self, server: u64) {
+        UserAndroid::language_server_gone(&*self.android, server)
+    }
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.android)
     }
@@ -1424,6 +1470,9 @@ impl UserAndroid for WithProgramStatus {
     }
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         UserAndroid::remove_widget(&*self.android, widget_id)
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        UserAndroid::reconfigure_widget(&*self.android, widget_id)
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         UserAndroid::resize_widget(&*self.android, widget_id, size)

@@ -1,12 +1,15 @@
-//! The menu of a widget window, which the user opens by right-clicking the widget or with its
-//! "More" button: Resize, with the sizes the widget allows, and Remove. It is a Windows 11
-//! menu ([`crate::compositor::fluent_menu`]), with an icon for each item and a check mark on
-//! the widget's current size.
+//! The menu of a widget window, which the user opens by long-pressing the widget, by
+//! right-clicking it or with its "More" button: Widget settings, for a widget whose app lets it
+//! be set up again, Resize, with the sizes the widget allows, and Remove, as Android's home
+//! screen offers them. It is a Windows 11 menu ([`crate::compositor::fluent_menu`]), with an
+//! icon for each item and a check mark on the widget's current size.
 //!
-//! Choosing a size resizes the window, which tells the service and Android the new size as a
-//! drag of its edges does. Choosing Remove asks the service to remove the widget; its window
-//! closes when the service says the widget is gone, so the settings app and every other
-//! watcher learn of it the same way.
+//! Choosing Widget settings asks the service to open the widget's setup again, which shows as
+//! the app's window; once the user finishes it, the widget shows what they chose. Choosing a
+//! size resizes the window, which tells the service and Android the new size as a drag of its
+//! edges does. Choosing Remove asks the service to remove the widget; its window closes when
+//! the service says the widget is gone, so the settings app and every other watcher learn of
+//! it the same way.
 //!
 //! The menu speaks the user's display language when DSA has it (Korean), else English.
 
@@ -43,12 +46,16 @@ pub enum MenuChoice {
     Resize { width_dp: u32, height_dp: u32 },
     /// Remove the widget.
     Remove,
+    /// Open the widget's setup again.
+    Settings,
 }
 
 /// The menu item of Remove. A size is [`FIRST_SIZE`] plus its place in the list.
 pub const REMOVE: u32 = 1;
 /// The menu item that opens the sizes.
 pub const RESIZE: u32 = 2;
+/// The menu item of Widget settings.
+pub const SETTINGS: u32 = 3;
 /// The menu item of the first size.
 pub const FIRST_SIZE: u32 = 100;
 
@@ -89,6 +96,9 @@ pub fn choice_of(command: u32, sizes: &[SizeChoice]) -> Option<MenuChoice> {
     if command == REMOVE {
         return Some(MenuChoice::Remove);
     }
+    if command == SETTINGS {
+        return Some(MenuChoice::Settings);
+    }
     let size = sizes.get(command.checked_sub(FIRST_SIZE)? as usize)?;
     Some(MenuChoice::Resize {
         width_dp: size.width_dp,
@@ -104,6 +114,7 @@ pub fn is_current(choice: &SizeChoice, placement: &Placement) -> bool {
 /// The words of the menu in one language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MenuText {
+    pub settings: &'static str,
     pub resize: &'static str,
     pub remove: &'static str,
     small: &'static str,
@@ -120,6 +131,7 @@ pub struct MenuText {
 pub fn menu_text(korean: bool) -> MenuText {
     if korean {
         MenuText {
+            settings: "위젯 설정",
             resize: "크기 조정",
             remove: "제거",
             small: "작게",
@@ -131,6 +143,7 @@ pub fn menu_text(korean: bool) -> MenuText {
         }
     } else {
         MenuText {
+            settings: "Widget settings",
             resize: "Resize",
             remove: "Remove",
             small: "Small",
@@ -165,9 +178,16 @@ fn size_key(name: SizeName) -> char {
     }
 }
 
-/// The menu's entries: Resize, which opens the sizes with the current one checked, a
-/// separator, and Remove. Resize opens with R and Remove is chosen with M (Resize has R).
-pub fn entries(text: &MenuText, sizes: &[SizeChoice], placement: &Placement) -> Vec<MenuEntry> {
+/// The menu's entries: Widget settings when `settings` (the widget can be set up again),
+/// Resize, which opens the sizes with the current one checked, a separator, and Remove.
+/// Widget settings is chosen with W, Resize opens with R and Remove is chosen with M (Resize
+/// has R).
+pub fn entries(
+    text: &MenuText,
+    sizes: &[SizeChoice],
+    placement: &Placement,
+    settings: bool,
+) -> Vec<MenuEntry> {
     let sizes: Vec<MenuEntry> = sizes
         .iter()
         .zip(FIRST_SIZE..)
@@ -178,7 +198,11 @@ pub fn entries(text: &MenuText, sizes: &[SizeChoice], placement: &Placement) -> 
         })
         .collect();
     let remove = MenuItem::new(REMOVE, text.remove).with_glyph(glyph::UNPIN);
-    let mut out = Vec::with_capacity(3);
+    let mut out = Vec::with_capacity(4);
+    if settings {
+        let item = MenuItem::new(SETTINGS, text.settings).with_glyph(glyph::SETTINGS);
+        out.push(MenuEntry::Item(item.with_access_key('W')));
+    }
     if !sizes.is_empty() {
         let resize = MenuItem::new(RESIZE, text.resize).with_glyph(glyph::RESIZE);
         out.push(MenuEntry::Item(
@@ -225,7 +249,7 @@ pub fn show(
 ) -> Option<MenuChoice> {
     let text = display_text();
     let sizes = size_choices(provider);
-    let entries = entries(&text, &sizes, placement);
+    let entries = entries(&text, &sizes, placement, provider.reconfigurable);
     let name = menu_name(&text, provider);
     let chosen = super::fluent_menu::show(super::fluent_menu::Request {
         owner: window,
@@ -328,6 +352,36 @@ mod tests {
         assert_eq!(menu_text(true).resize, "크기 조정");
         assert_eq!(menu_text(false).more, "More options");
         assert_eq!(menu_text(true).more, "옵션 더 보기");
+        assert_eq!(menu_text(false).settings, "Widget settings");
+        assert_eq!(menu_text(true).settings, "위젯 설정");
+    }
+
+    /// A widget whose app lets it be set up again has Widget settings first, in the long
+    /// press's menu and the right click's alike; any other widget has no such item.
+    #[test]
+    fn fr12_the_widget_menu_offers_settings_only_for_a_widget_that_can_be_set_up_again() {
+        let sizes = size_choices(&clock());
+        for korean in [false, true] {
+            let text = menu_text(korean);
+            let menu = entries(&text, &sizes, &at(180, 110), true);
+            assert_eq!(menu.len(), 4);
+            let settings = menu[0].item().unwrap();
+            assert_eq!(
+                (settings.id, settings.label.as_str()),
+                (SETTINGS, text.settings)
+            );
+            assert_eq!(settings.glyph, Some(glyph::SETTINGS));
+            assert_eq!(settings.access_key, Some('W'));
+            assert!(settings.submenu.is_empty());
+            assert_eq!(menu[1].item().unwrap().id, RESIZE);
+            assert_eq!(menu[3].item().unwrap().id, REMOVE);
+            let without = entries(&text, &sizes, &at(180, 110), false);
+            assert!(without
+                .iter()
+                .filter_map(MenuEntry::item)
+                .all(|item| item.id != SETTINGS));
+        }
+        assert_eq!(choice_of(SETTINGS, &sizes), Some(MenuChoice::Settings));
     }
 
     #[test]
@@ -335,7 +389,7 @@ mod tests {
         let sizes = size_choices(&clock());
         for korean in [false, true] {
             let text = menu_text(korean);
-            let menu = entries(&text, &sizes, &at(270, 165));
+            let menu = entries(&text, &sizes, &at(270, 165), false);
             assert_eq!(menu.len(), 3);
             let resize = menu[0].item().unwrap();
             assert_eq!(resize.label, text.resize);

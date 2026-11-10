@@ -993,6 +993,52 @@ impl UserAndroid for UpdatingAndroid {
     ) -> Result<(), TaskRequestError> {
         UserAndroid::passkey_result(&*self.session, id, result)
     }
+    fn watch_geocoding(&self) -> Option<Receiver<crate::geocode::GeocodeQuery>> {
+        UserAndroid::watch_geocoding(&*self.session)
+    }
+    fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &crate::geocode::GeocodeOutcome,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::geocode_result(&*self.session, query_id, outcome)
+    }
+    fn watch_shares(&self) -> Option<Receiver<crate::share::ShareRequest>> {
+        UserAndroid::watch_shares(&*self.session)
+    }
+    fn share_result(
+        &self,
+        share_id: u32,
+        outcome: &crate::share::ShareOutcome,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::share_result(&*self.session, share_id, outcome)
+    }
+    fn set_backup(
+        &self,
+        on: bool,
+        delete_backups: bool,
+    ) -> Result<crate::backup::BackupReport, TaskRequestError> {
+        UserAndroid::set_backup(&*self.session, on, delete_backups)
+    }
+    fn keymint_key_state(&self) -> Option<crate::session::KeyMintKeyState> {
+        UserAndroid::keymint_key_state(&*self.session)
+    }
+    fn forget_keymint_root_key(&self) {
+        UserAndroid::forget_keymint_root_key(&*self.session)
+    }
+    fn serve_language(&self) -> Option<crate::language::relay::Served> {
+        UserAndroid::serve_language(&*self.session)
+    }
+    fn language_answer(
+        &self,
+        server: u64,
+        envelope: dsa_protocol::control::Envelope,
+    ) -> Result<(), String> {
+        UserAndroid::language_answer(&*self.session, server, envelope)
+    }
+    fn language_server_gone(&self, server: u64) {
+        UserAndroid::language_server_gone(&*self.session, server)
+    }
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.session)
     }
@@ -1016,6 +1062,9 @@ impl UserAndroid for UpdatingAndroid {
     }
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         UserAndroid::remove_widget(&*self.session, widget_id)
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        UserAndroid::reconfigure_widget(&*self.session, widget_id)
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         UserAndroid::resize_widget(&*self.session, widget_id, size)

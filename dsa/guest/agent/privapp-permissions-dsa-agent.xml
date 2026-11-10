@@ -45,5 +45,6 @@
         <permission name="android.permission.INSTALL_LOCATION_PROVIDER" />
         <permission name="android.permission.BACKUP" />
         <permission name="android.permission.PROVIDE_DEFAULT_ENABLED_CREDENTIAL_SERVICE" />
+        <permission name="android.permission.MODIFY_AUDIO_ROUTING" />
     </privapp-permissions>
 </permissions>

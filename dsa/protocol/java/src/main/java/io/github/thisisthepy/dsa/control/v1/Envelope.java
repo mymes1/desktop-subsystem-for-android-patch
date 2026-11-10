@@ -120,6 +120,8 @@ public  final class Envelope extends
     AUDIO_OUTPUT_CONTROL(103),
     AUDIO_INPUT_OPEN(104),
     AUDIO_INPUT_OPENED(105),
+    APP_AUDIO(106),
+    SET_APP_VOLUME(107),
     VIDEO_CAPABILITIES(120),
     VIDEO_DECODER_OPEN(121),
     VIDEO_DECODER_OPENED(122),
@@ -204,10 +206,8 @@ public  final class Envelope extends
     KEYMINT_ROOT_KEY_REQUEST(654),
     KEYMINT_ROOT_KEY(655),
     BACKUP_SETTING(656),
-    APP_SHORTCUTS(680),
-    LAUNCH_SHORTCUT(681),
-    PIN_SHORTCUT_REQUEST(682),
-    PIN_SHORTCUT_ANSWER(683),
+    RECONFIGURE_WIDGET(657),
+    WIDGET_RECONFIGURED(658),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -323,6 +323,8 @@ public  final class Envelope extends
         case 103: return AUDIO_OUTPUT_CONTROL;
         case 104: return AUDIO_INPUT_OPEN;
         case 105: return AUDIO_INPUT_OPENED;
+        case 106: return APP_AUDIO;
+        case 107: return SET_APP_VOLUME;
         case 120: return VIDEO_CAPABILITIES;
         case 121: return VIDEO_DECODER_OPEN;
         case 122: return VIDEO_DECODER_OPENED;
@@ -407,10 +409,8 @@ public  final class Envelope extends
         case 654: return KEYMINT_ROOT_KEY_REQUEST;
         case 655: return KEYMINT_ROOT_KEY;
         case 656: return BACKUP_SETTING;
-        case 680: return APP_SHORTCUTS;
-        case 681: return LAUNCH_SHORTCUT;
-        case 682: return PIN_SHORTCUT_REQUEST;
-        case 683: return PIN_SHORTCUT_ANSWER;
+        case 657: return RECONFIGURE_WIDGET;
+        case 658: return WIDGET_RECONFIGURED;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -5432,6 +5432,106 @@ public  final class Envelope extends
     }
   }
 
+  public static final int APP_AUDIO_FIELD_NUMBER = 106;
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  @java.lang.Override
+  public boolean hasAppAudio() {
+    return bodyCase_ == 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AppAudio getAppAudio() {
+    if (bodyCase_ == 106) {
+       return (io.github.thisisthepy.dsa.control.v1.AppAudio) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AppAudio.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void setAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void mergeAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+    value.getClass();
+  if (bodyCase_ == 106 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AppAudio.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AppAudio.newBuilder((io.github.thisisthepy.dsa.control.v1.AppAudio) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void clearAppAudio() {
+    if (bodyCase_ == 106) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SET_APP_VOLUME_FIELD_NUMBER = 107;
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  @java.lang.Override
+  public boolean hasSetAppVolume() {
+    return bodyCase_ == 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SetAppVolume getSetAppVolume() {
+    if (bodyCase_ == 107) {
+       return (io.github.thisisthepy.dsa.control.v1.SetAppVolume) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SetAppVolume.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void setSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void mergeSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+    value.getClass();
+  if (bodyCase_ == 107 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SetAppVolume.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SetAppVolume.newBuilder((io.github.thisisthepy.dsa.control.v1.SetAppVolume) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void clearSetAppVolume() {
+    if (bodyCase_ == 107) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static final int VIDEO_CAPABILITIES_FIELD_NUMBER = 120;
   /**
    * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
@@ -9632,201 +9732,101 @@ public  final class Envelope extends
     }
   }
 
-  public static final int APP_SHORTCUTS_FIELD_NUMBER = 680;
+  public static final int RECONFIGURE_WIDGET_FIELD_NUMBER = 657;
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
    */
   @java.lang.Override
-  public boolean hasAppShortcuts() {
-    return bodyCase_ == 680;
+  public boolean hasReconfigureWidget() {
+    return bodyCase_ == 657;
   }
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts() {
-    if (bodyCase_ == 680) {
-       return (io.github.thisisthepy.dsa.control.v1.AppShortcuts) body_;
+  public io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget() {
+    if (bodyCase_ == 657) {
+       return (io.github.thisisthepy.dsa.control.v1.ReconfigureWidget) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.AppShortcuts.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
    */
-  private void setAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+  private void setReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 680;
+    bodyCase_ = 657;
   }
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
    */
-  private void mergeAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+  private void mergeReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
     value.getClass();
-  if (bodyCase_ == 680 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AppShortcuts.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AppShortcuts.newBuilder((io.github.thisisthepy.dsa.control.v1.AppShortcuts) body_)
+  if (bodyCase_ == 657 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.newBuilder((io.github.thisisthepy.dsa.control.v1.ReconfigureWidget) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 680;
+    bodyCase_ = 657;
   }
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
    */
-  private void clearAppShortcuts() {
-    if (bodyCase_ == 680) {
+  private void clearReconfigureWidget() {
+    if (bodyCase_ == 657) {
       bodyCase_ = 0;
       body_ = null;
     }
   }
 
-  public static final int LAUNCH_SHORTCUT_FIELD_NUMBER = 681;
+  public static final int WIDGET_RECONFIGURED_FIELD_NUMBER = 658;
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
    */
   @java.lang.Override
-  public boolean hasLaunchShortcut() {
-    return bodyCase_ == 681;
+  public boolean hasWidgetReconfigured() {
+    return bodyCase_ == 658;
   }
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut() {
-    if (bodyCase_ == 681) {
-       return (io.github.thisisthepy.dsa.control.v1.LaunchShortcut) body_;
+  public io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured() {
+    if (bodyCase_ == 658) {
+       return (io.github.thisisthepy.dsa.control.v1.WidgetReconfigured) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.LaunchShortcut.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
    */
-  private void setLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+  private void setWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 681;
+    bodyCase_ = 658;
   }
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
    */
-  private void mergeLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+  private void mergeWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
     value.getClass();
-  if (bodyCase_ == 681 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.LaunchShortcut.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.LaunchShortcut.newBuilder((io.github.thisisthepy.dsa.control.v1.LaunchShortcut) body_)
+  if (bodyCase_ == 658 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.newBuilder((io.github.thisisthepy.dsa.control.v1.WidgetReconfigured) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 681;
+    bodyCase_ = 658;
   }
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
    */
-  private void clearLaunchShortcut() {
-    if (bodyCase_ == 681) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int PIN_SHORTCUT_REQUEST_FIELD_NUMBER = 682;
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   */
-  @java.lang.Override
-  public boolean hasPinShortcutRequest() {
-    return bodyCase_ == 682;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest() {
-    if (bodyCase_ == 682) {
-       return (io.github.thisisthepy.dsa.control.v1.PinShortcutRequest) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   */
-  private void setPinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 682;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   */
-  private void mergePinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
-    value.getClass();
-  if (bodyCase_ == 682 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.PinShortcutRequest) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 682;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   */
-  private void clearPinShortcutRequest() {
-    if (bodyCase_ == 682) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int PIN_SHORTCUT_ANSWER_FIELD_NUMBER = 683;
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   */
-  @java.lang.Override
-  public boolean hasPinShortcutAnswer() {
-    return bodyCase_ == 683;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer() {
-    if (bodyCase_ == 683) {
-       return (io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   */
-  private void setPinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 683;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   */
-  private void mergePinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
-    value.getClass();
-  if (bodyCase_ == 683 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.newBuilder((io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 683;
-  }
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   */
-  private void clearPinShortcutAnswer() {
-    if (bodyCase_ == 683) {
+  private void clearWidgetReconfigured() {
+    if (bodyCase_ == 658) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -14744,6 +14744,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    @java.lang.Override
+    public boolean hasAppAudio() {
+      return instance.hasAppAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AppAudio getAppAudio() {
+      return instance.getAppAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder setAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+      copyOnWrite();
+      instance.setAppAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder setAppAudio(
+        io.github.thisisthepy.dsa.control.v1.AppAudio.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAppAudio(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder mergeAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+      copyOnWrite();
+      instance.mergeAppAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder clearAppAudio() {
+      copyOnWrite();
+      instance.clearAppAudio();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    @java.lang.Override
+    public boolean hasSetAppVolume() {
+      return instance.hasSetAppVolume();
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SetAppVolume getSetAppVolume() {
+      return instance.getSetAppVolume();
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder setSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+      copyOnWrite();
+      instance.setSetAppVolume(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder setSetAppVolume(
+        io.github.thisisthepy.dsa.control.v1.SetAppVolume.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSetAppVolume(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder mergeSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+      copyOnWrite();
+      instance.mergeSetAppVolume(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder clearSetAppVolume() {
+      copyOnWrite();
+      instance.clearSetAppVolume();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
     @java.lang.Override
@@ -18776,194 +18872,98 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
     @java.lang.Override
-    public boolean hasAppShortcuts() {
-      return instance.hasAppShortcuts();
+    public boolean hasReconfigureWidget() {
+      return instance.hasReconfigureWidget();
     }
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts() {
-      return instance.getAppShortcuts();
+    public io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget() {
+      return instance.getReconfigureWidget();
     }
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
-    public Builder setAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+    public Builder setReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
       copyOnWrite();
-      instance.setAppShortcuts(value);
+      instance.setReconfigureWidget(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
-    public Builder setAppShortcuts(
-        io.github.thisisthepy.dsa.control.v1.AppShortcuts.Builder builderForValue) {
+    public Builder setReconfigureWidget(
+        io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.Builder builderForValue) {
       copyOnWrite();
-      instance.setAppShortcuts(builderForValue.build());
+      instance.setReconfigureWidget(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
-    public Builder mergeAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+    public Builder mergeReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
       copyOnWrite();
-      instance.mergeAppShortcuts(value);
+      instance.mergeReconfigureWidget(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
      */
-    public Builder clearAppShortcuts() {
+    public Builder clearReconfigureWidget() {
       copyOnWrite();
-      instance.clearAppShortcuts();
+      instance.clearReconfigureWidget();
       return this;
     }
 
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
     @java.lang.Override
-    public boolean hasLaunchShortcut() {
-      return instance.hasLaunchShortcut();
+    public boolean hasWidgetReconfigured() {
+      return instance.hasWidgetReconfigured();
     }
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut() {
-      return instance.getLaunchShortcut();
+    public io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured() {
+      return instance.getWidgetReconfigured();
     }
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
-    public Builder setLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+    public Builder setWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
       copyOnWrite();
-      instance.setLaunchShortcut(value);
+      instance.setWidgetReconfigured(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
-    public Builder setLaunchShortcut(
-        io.github.thisisthepy.dsa.control.v1.LaunchShortcut.Builder builderForValue) {
+    public Builder setWidgetReconfigured(
+        io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.Builder builderForValue) {
       copyOnWrite();
-      instance.setLaunchShortcut(builderForValue.build());
+      instance.setWidgetReconfigured(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
-    public Builder mergeLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+    public Builder mergeWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
       copyOnWrite();
-      instance.mergeLaunchShortcut(value);
+      instance.mergeWidgetReconfigured(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
      */
-    public Builder clearLaunchShortcut() {
+    public Builder clearWidgetReconfigured() {
       copyOnWrite();
-      instance.clearLaunchShortcut();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    @java.lang.Override
-    public boolean hasPinShortcutRequest() {
-      return instance.hasPinShortcutRequest();
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest() {
-      return instance.getPinShortcutRequest();
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    public Builder setPinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
-      copyOnWrite();
-      instance.setPinShortcutRequest(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    public Builder setPinShortcutRequest(
-        io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.Builder builderForValue) {
-      copyOnWrite();
-      instance.setPinShortcutRequest(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    public Builder mergePinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
-      copyOnWrite();
-      instance.mergePinShortcutRequest(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-     */
-    public Builder clearPinShortcutRequest() {
-      copyOnWrite();
-      instance.clearPinShortcutRequest();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    @java.lang.Override
-    public boolean hasPinShortcutAnswer() {
-      return instance.hasPinShortcutAnswer();
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer() {
-      return instance.getPinShortcutAnswer();
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    public Builder setPinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
-      copyOnWrite();
-      instance.setPinShortcutAnswer(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    public Builder setPinShortcutAnswer(
-        io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.Builder builderForValue) {
-      copyOnWrite();
-      instance.setPinShortcutAnswer(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    public Builder mergePinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
-      copyOnWrite();
-      instance.mergePinShortcutAnswer(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-     */
-    public Builder clearPinShortcutAnswer() {
-      copyOnWrite();
-      instance.clearPinShortcutAnswer();
+      instance.clearWidgetReconfigured();
       return this;
     }
 
@@ -19065,6 +19065,8 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.AudioOutputControl.class,
             io.github.thisisthepy.dsa.control.v1.AudioInputOpen.class,
             io.github.thisisthepy.dsa.control.v1.AudioInputOpened.class,
+            io.github.thisisthepy.dsa.control.v1.AppAudio.class,
+            io.github.thisisthepy.dsa.control.v1.SetAppVolume.class,
             io.github.thisisthepy.dsa.control.v1.PowerHint.class,
             io.github.thisisthepy.dsa.control.v1.VideoCapabilities.class,
             io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.class,
@@ -19169,13 +19171,11 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.class,
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.class,
             io.github.thisisthepy.dsa.control.v1.BackupSetting.class,
-            io.github.thisisthepy.dsa.control.v1.AppShortcuts.class,
-            io.github.thisisthepy.dsa.control.v1.LaunchShortcut.class,
-            io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.class,
-            io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.class,
+            io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.class,
+            io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.class,
           };
           java.lang.String info =
-              "\u0000\u00bc\u0001\u0000\u0001\u02ab\u00bc\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00bc\u0001\u0000\u0001\u0292\u00bc\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -19185,23 +19185,23 @@ public  final class Envelope extends
               "<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N" +
               "<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000" +
               "^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000" +
-              "h<\u0000i<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000" +
-              "<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<" +
-              "\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000" +
-              "\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd<\u0000\u00de" +
-              "<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000\u0105<\u0000" +
-              "\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000\u0122" +
-              "<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000\u0157<\u0000\u0158<\u0000" +
-              "\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179<\u0000\u017c" +
-              "<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
-              "\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b" +
-              "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000\u01d7<\u0000" +
-              "\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f<\u0000\u0270" +
-              "<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000" +
-              "\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284<\u0000\u0285" +
-              "<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000\u028b<\u0000" +
-              "\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000\u02a8<\u0000\u02a9" +
-              "<\u0000\u02aa<\u0000\u02ab<\u0000";
+              "h<\u0000i<\u0000j<\u0000k<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
+              "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0098<\u0000\u0099<\u0000" +
+              "\u009a<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd" +
+              "<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000" +
+              "\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b" +
+              "<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000\u0157<\u0000" +
+              "\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179" +
+              "<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000" +
+              "\u0194<\u0000\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a" +
+              "<\u0000\u019b<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000" +
+              "\u01d7<\u0000\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f" +
+              "<\u0000\u0270<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000" +
+              "\u0276<\u0000\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284" +
+              "<\u0000\u0285<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000" +
+              "\u028b<\u0000\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000\u0291" +
+              "<\u0000\u0292<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

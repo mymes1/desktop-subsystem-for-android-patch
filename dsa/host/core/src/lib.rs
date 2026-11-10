@@ -10,7 +10,8 @@
 //!   (auto-connect to the user's adb server, and the port's mDNS advertisement).
 //! - [`accessibility`]: the accessibility tree of a task window, for host accessibility
 //!   clients such as screen readers.
-//! - [`audio`]: the guest's sound, played on the host's default output device.
+//! - [`audio`]: the guest's sound, played on the host's default output device, and
+//!   [`app_audio`], each app's sound under its own name and volume in the host's mixer.
 //! - [`bootconfig`]: the kernel bootconfig that carries each boot's secret to the guest.
 //! - [`handshake`]: the control channel's handshake as a session uses it.
 //! - [`host_api`]: the local API service, which acts on each caller's own Android, and its
@@ -72,6 +73,7 @@ pub mod addon_disk;
 pub mod apk;
 pub mod apk_bundle;
 pub mod apk_info;
+pub mod app_audio;
 pub mod app_windows;
 pub mod apps;
 pub mod arm_translation;

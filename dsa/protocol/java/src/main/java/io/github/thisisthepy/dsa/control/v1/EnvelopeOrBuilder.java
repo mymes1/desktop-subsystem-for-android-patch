@@ -1108,6 +1108,28 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.AudioInputOpened getAudioInputOpened();
 
   /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   * @return Whether the appAudio field is set.
+   */
+  boolean hasAppAudio();
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   * @return The appAudio.
+   */
+  io.github.thisisthepy.dsa.control.v1.AppAudio getAppAudio();
+
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   * @return Whether the setAppVolume field is set.
+   */
+  boolean hasSetAppVolume();
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   * @return The setAppVolume.
+   */
+  io.github.thisisthepy.dsa.control.v1.SetAppVolume getSetAppVolume();
+
+  /**
    * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    * @return Whether the videoCapabilities field is set.
    */
@@ -2032,48 +2054,26 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting();
 
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
-   * @return Whether the appShortcuts field is set.
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   * @return Whether the reconfigureWidget field is set.
    */
-  boolean hasAppShortcuts();
+  boolean hasReconfigureWidget();
   /**
-   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
-   * @return The appShortcuts.
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   * @return The reconfigureWidget.
    */
-  io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts();
+  io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget();
 
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
-   * @return Whether the launchShortcut field is set.
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   * @return Whether the widgetReconfigured field is set.
    */
-  boolean hasLaunchShortcut();
+  boolean hasWidgetReconfigured();
   /**
-   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
-   * @return The launchShortcut.
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   * @return The widgetReconfigured.
    */
-  io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut();
-
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   * @return Whether the pinShortcutRequest field is set.
-   */
-  boolean hasPinShortcutRequest();
-  /**
-   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
-   * @return The pinShortcutRequest.
-   */
-  io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest();
-
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   * @return Whether the pinShortcutAnswer field is set.
-   */
-  boolean hasPinShortcutAnswer();
-  /**
-   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
-   * @return The pinShortcutAnswer.
-   */
-  io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer();
+  io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured();
 
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

@@ -72,6 +72,7 @@ use crate::accessibility::{
 use crate::adb_discovery::AutoConnectState;
 use crate::addon_disk::{Addon, AddonDisk};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
+use crate::app_audio::{self as app_audio, AppAudioStream, AppAudioWatch, VolumeChange};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package, Source, Translator};
@@ -450,6 +451,18 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not report the apps that run in the background".into(),
         ))
     }
+    /// Which app each output of this Android's sound plays and its volume, now and every list
+    /// after it. `None` when it says nothing of its outputs.
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        None
+    }
+    /// Gives this Android the volume the user set for one of its apps on the host.
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        let _ = change;
+        Err(TaskRequestError::Failed(
+            "this Android takes no app volumes from the host".into(),
+        ))
+    }
     /// The widgets this Android hosts now and every change to them. `None` when it hosts none.
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         None
@@ -475,6 +488,14 @@ pub trait UserAndroid: Send + Sync {
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         let _ = widget_id;
         Err(TaskRequestError::Failed(
+            "this Android does not host widgets".into(),
+        ))
+    }
+    /// Opens a placed widget's setup again and waits for the user to finish it (Ok) or leave
+    /// it (Refused, with the reason).
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        let _ = widget_id;
+        Err(WidgetError::Refused(
             "this Android does not host widgets".into(),
         ))
     }
@@ -977,6 +998,13 @@ impl UserAndroid for Session {
     fn watch_background(&self) -> Option<BackgroundWatch> {
         Some(Session::watch_background(self))
     }
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        Some(Session::watch_app_audio(self))
+    }
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        Session::set_app_volume(self, change);
+        Ok(())
+    }
     fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
         Session::background_apps(self)
     }
@@ -994,6 +1022,9 @@ impl UserAndroid for Session {
     }
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         Session::remove_widget(self, widget_id).map_err(request_error)
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        Session::reconfigure_widget(self, widget_id, WIDGET_ADD_WAIT).map_err(widget_error)
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         Session::resize_widget(self, widget_id, size).map_err(request_error)
@@ -2563,6 +2594,9 @@ impl HostApiService {
             }
             if let Some(request::Body::WatchBackgroundApps(_)) = request.body {
                 return self.watch_background(connection, &peer, request.id);
+            }
+            if let Some(request::Body::WatchAppAudio(_)) = request.body {
+                return self.watch_app_audio(connection, &peer, request.id);
             }
             if let Some(request::Body::InstallApk(install)) = &request.body {
                 return self.install_apk(connection, &peer, request.id, install.clone());
@@ -4308,6 +4342,53 @@ impl HostApiService {
         }
     }
 
+    fn reconfigure_widget(&self, peer: &Peer, widget_id: i32) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        let Some(provider) = android
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider)
+        else {
+            return error(
+                ErrorCode::UnknownRequest,
+                format!("there is no widget {widget_id}"),
+            );
+        };
+        if !provider.reconfigurable {
+            return error(
+                ErrorCode::WidgetRefused,
+                format!(
+                    "the widget {widget_id} ({}) cannot be set up again; its app offers no settings for it",
+                    provider.provider
+                ),
+            );
+        }
+        eprintln!(
+            "widgets: {} opens the settings of widget {widget_id} ({})",
+            peer.user, provider.provider
+        );
+        if let Err(why) = android.reconfigure_widget(widget_id) {
+            return match why {
+                WidgetError::NotRunning(why) => error(ErrorCode::NotRunning, why),
+                WidgetError::Refused(why) => error(ErrorCode::WidgetRefused, why),
+            };
+        }
+        let provider = android
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider)
+            .unwrap_or(provider);
+        let mut kept = self.placements_of(&peer.user);
+        response::Body::Widget(widget_to_wire(
+            self.placed(&peer.user, widget_id, provider, &mut kept),
+        ))
+    }
+
     fn place_widget(&self, peer: &Peer, place: types::PlaceWidget) -> response::Body {
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -4522,6 +4603,82 @@ impl HostApiService {
                     );
                 }
             }
+        }
+    }
+
+    /// Answers a WatchAppAudio request with the outputs of the caller's Android's sound now,
+    /// then passes every new list until the client goes away. The client sends nothing more:
+    /// anything it sends closes the connection, except a frame that cannot be read, which is
+    /// dropped.
+    fn watch_app_audio(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => android.watch_app_audio().ok_or_else(|| {
+                error(
+                    ErrorCode::Unavailable,
+                    "this Android says nothing of its apps' sound".into(),
+                )
+            }),
+        };
+        let watch = match watched {
+            Ok(watch) => watch,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::AppAudio(app_audio::streams_to_host_api(
+                &watch.streams,
+            ))),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.events.try_recv() {
+                    Ok(streams) => {
+                        let list = Body::AppAudio(app_audio::streams_to_host_api(&streams));
+                        if send(&mut *connection, list).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            if !self.one_way_watch_continues(&mut *connection, peer, "watches its apps' sound") {
+                return;
+            }
+        }
+    }
+
+    /// Gives the caller's Android the volume the user set for one of its apps on the host.
+    fn set_app_volume(&self, peer: &Peer, set: types::SetAppVolume) -> response::Body {
+        let change = match VolumeChange::from_host_api(set) {
+            Ok(change) => change,
+            Err(why) => return error(ErrorCode::UnknownRequest, why),
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.set_app_volume(&change) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            // The app went with its Android; there is nothing to set.
+            Err(TaskRequestError::NotRunning(_)) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
         }
     }
 
@@ -4902,6 +5059,7 @@ impl HostApiService {
             Some(request::Body::ReportPrintJob(report)) => self.report_print_job(peer, report),
             Some(request::Body::ReportGeocode(report)) => self.report_geocode(peer, report),
             Some(request::Body::ReportShare(report)) => self.report_share(peer, report),
+            Some(request::Body::SetAppVolume(set)) => self.set_app_volume(peer, set),
             Some(request::Body::ListBackgroundApps(_)) => self.list_background(peer),
             Some(request::Body::ActOnBackgroundApp(act)) => self.act_on_background(peer, act),
             Some(request::Body::ControlMedia(control)) => self.control_media(peer, control),
@@ -4916,6 +5074,9 @@ impl HostApiService {
             Some(request::Body::EndDrag(end)) => self.end_drag(peer, end),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
             Some(request::Body::RemoveWidget(remove)) => self.remove_widget(peer, remove.widget_id),
+            Some(request::Body::ReconfigureWidget(reconfigure)) => {
+                self.reconfigure_widget(peer, reconfigure.widget_id)
+            }
             Some(request::Body::ListWidgets(_)) => self.list_widgets(peer),
             Some(request::Body::PlaceWidget(place)) => self.place_widget(peer, place),
             Some(request::Body::WidgetPointer(pointer)) => self.widget_pointer(peer, pointer),
@@ -4984,6 +5145,7 @@ impl HostApiService {
                         | request::Body::EndDrag(_)
                         | request::Body::AddWidget(_)
                         | request::Body::RemoveWidget(_)
+                        | request::Body::ReconfigureWidget(_)
                         | request::Body::ListWidgets(_)
                         | request::Body::WatchWidgets(_)
                         | request::Body::PlaceWidget(_)
@@ -5019,7 +5181,9 @@ impl HostApiService {
                         | request::Body::WatchGeocoding(_)
                         | request::Body::ReportGeocode(_)
                         | request::Body::WatchShares(_)
-                        | request::Body::ReportShare(_) => unreachable!("answered above"),
+                        | request::Body::ReportShare(_)
+                        | request::Body::WatchAppAudio(_)
+                        | request::Body::SetAppVolume(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -7683,6 +7847,28 @@ impl HostApiClient {
         self.done(request::Body::ReportShare(outcome.to_host_api(share_id)))
     }
 
+    /// Watches which app each output of the caller's Android's sound plays and its volume. The
+    /// connection carries nothing else from here on, so the client is used up.
+    pub fn watch_app_audio(mut self) -> Result<AppAudioStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchAppAudio(types::WatchAppAudio {}),
+            self.timeout,
+        )? {
+            response::Body::AppAudio(list) => Ok(AppAudioStream {
+                streams: app_audio::streams_from_host_api(list),
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the outputs of Android's sound".into(),
+            )),
+        }
+    }
+
+    /// Gives the caller's Android the volume the user set for one of its apps on the host.
+    pub fn set_app_volume(&mut self, change: &VolumeChange) -> Result<(), ClientError> {
+        self.done(request::Body::SetAppVolume(change.to_host_api()))
+    }
+
     /// Watches the apps that run in the background in the caller's Android. The connection
     /// carries nothing else from here on, so the client is used up.
     pub fn watch_background(mut self) -> Result<BackgroundStream, ClientError> {
@@ -7863,6 +8049,25 @@ impl HostApiClient {
         self.done(request::Body::RemoveWidget(types::RemoveWidget {
             widget_id,
         }))
+    }
+
+    /// Opens the setup of a placed widget again, as its app's window, and returns the widget
+    /// once the user finishes it, waiting at most `timeout`. A setup the user leaves, or a
+    /// widget that cannot be set up again, is an error with the reason.
+    pub fn reconfigure_widget(
+        &mut self,
+        widget_id: i32,
+        timeout: Duration,
+    ) -> Result<Widget, ClientError> {
+        match self.exchange(
+            request::Body::ReconfigureWidget(types::ReconfigureWidget { widget_id }),
+            timeout,
+        )? {
+            response::Body::Widget(widget) => Ok(widget_from_wire(widget)),
+            _ => Err(ClientError::Malformed(
+                "expected the widget set up again".into(),
+            )),
+        }
     }
 
     /// The widgets placed on the caller's desktop, and how many places the service keeps.
@@ -8552,6 +8757,7 @@ fn provider_to_wire(provider: &WidgetProvider) -> types::WidgetProvider {
         resize_mode: provider.resize_mode,
         needs_configuration: provider.needs_configuration,
         app_label: provider.app_label.clone(),
+        reconfigurable: provider.reconfigurable,
     }
 }
 
@@ -8570,6 +8776,7 @@ fn provider_from_wire(provider: types::WidgetProvider) -> WidgetProvider {
         resize_mode: provider.resize_mode,
         needs_configuration: provider.needs_configuration,
         app_label: provider.app_label,
+        reconfigurable: provider.reconfigurable,
     }
 }
 

@@ -143,13 +143,15 @@
 //! `dsa widgets list` (or `dsa widgets`) lists the widgets the apps in Android offer, each by
 //! its provider (`package/class`), and the widgets placed on the desktop, each by its ID.
 //! `dsa widgets add <provider>` places one; when its app asks the user to set it up first, its
-//! setup shows in a window and the command waits for the user. `dsa widgets remove <id>`
-//! removes one, with its window. Android is started first when it is not running. With
-//! `--json`, `list` prints `providers` (each with `provider`, `package`, `label`,
-//! `preview_png` in base64, its sizes in dp, `resize_mode`, `needs_configuration` and `app`,
-//! the name of the app that offers it) and `widgets` (each with `id`, `provider`, `label`,
-//! `app` and its `placement`), `add` prints the placed widget, and `remove` prints `removed`
-//! with the widget's ID.
+//! setup shows in a window and the command waits for the user. `dsa widgets settings <id>`
+//! opens the setup of a placed widget again, for a widget whose app offers one, and waits for
+//! the user in the same way. `dsa widgets remove <id>` removes one, with its window. Android
+//! is started first when it is not running. With `--json`, `list` prints `providers` (each
+//! with `provider`, `package`, `label`, `preview_png` in base64, its sizes in dp,
+//! `resize_mode`, `needs_configuration`, `reconfigurable` and `app`, the name of the app that
+//! offers it) and `widgets` (each with `id`, `provider`, `label`, `app` and its
+//! `placement`), `add` and `settings` print the widget, and `remove` prints `removed` with
+//! the widget's ID.
 //!
 //! `dsa widgets watch` prints the placed widgets, then a line each time one is placed or
 //! removed, until it is stopped or Android stops. With `--json` each line is one JSON
@@ -400,7 +402,7 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
      network | gpus | \
-     widgets [list | add <provider> | remove <id> | watch] | \
+     widgets [list | add <provider> | settings <id> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>] | \
      run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember | \
      shortcut <package> <id> | desktop-shortcut <package>] | \
@@ -586,6 +588,8 @@ pub enum WidgetAction {
     Add(String),
     /// Remove the widget with this ID.
     Remove(i32),
+    /// Open the settings of the widget with this ID again.
+    Settings(i32),
     /// Print the placed widgets, then each change, until stopped.
     Watch,
 }
@@ -1265,16 +1269,22 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 }
                 widgets = Some(WidgetAction::Add(provider.clone()));
             }
-            "remove" if command == Some(Command::Widgets) && widgets.is_none() => {
-                let id = args.next().ok_or(
-                    "dsa widgets remove needs the widget's ID; dsa widgets list shows them",
-                )?;
+            verb @ ("remove" | "settings")
+                if command == Some(Command::Widgets) && widgets.is_none() =>
+            {
+                let id = args.next().ok_or_else(|| {
+                    format!("dsa widgets {verb} needs the widget's ID; dsa widgets list shows them")
+                })?;
                 let id: i32 = id
                     .parse()
                     .ok()
                     .filter(|id: &i32| *id > 0)
                     .ok_or_else(|| format!("a widget's ID is a number above 0, not {id:?}"))?;
-                widgets = Some(WidgetAction::Remove(id));
+                widgets = Some(if verb == "remove" {
+                    WidgetAction::Remove(id)
+                } else {
+                    WidgetAction::Settings(id)
+                });
             }
             "list" if command == Some(Command::Background) && background.is_none() => {
                 background = Some(BackgroundAction::List);
@@ -1526,6 +1536,7 @@ pub fn provider_json(provider: &WidgetProvider) -> Value {
         "max_height_dp": provider.max_height_dp,
         "resize_mode": provider.resize_mode,
         "needs_configuration": provider.needs_configuration,
+        "reconfigurable": provider.reconfigurable,
         "app": provider.app_label,
     })
 }
@@ -1562,10 +1573,11 @@ pub fn describe_widgets(providers: &[WidgetProvider], placed: &[Widget]) -> Stri
                 provider.label,
                 provider.default_width_dp,
                 provider.default_height_dp,
-                if provider.needs_configuration {
-                    ", set up when placed"
-                } else {
-                    ""
+                match (provider.needs_configuration, provider.reconfigurable) {
+                    (true, true) => ", set up when placed and again from its menu",
+                    (true, false) => ", set up when placed",
+                    (false, true) => ", set up from its menu",
+                    (false, false) => "",
                 }
             );
         }
@@ -1601,7 +1613,10 @@ fn widgets(
     let action = invocation.widgets.clone().unwrap_or(WidgetAction::List);
     #[cfg(windows)]
     if invocation.endpoint.is_none()
-        && matches!(action, WidgetAction::Add(_) | WidgetAction::Remove(_))
+        && matches!(
+            action,
+            WidgetAction::Add(_) | WidgetAction::Remove(_) | WidgetAction::Settings(_)
+        )
     {
         ensure_window_manager()?;
     }
@@ -1636,6 +1651,27 @@ fn widgets(
             } else {
                 format!(
                     "Placed {} (widget {})",
+                    if widget.provider.label.is_empty() {
+                        &widget.provider.provider
+                    } else {
+                        &widget.provider.label
+                    },
+                    widget.widget_id
+                )
+            })
+        }
+        WidgetAction::Settings(id) => {
+            let widget = client
+                .reconfigure_widget(
+                    id,
+                    dsa_host_core::host_api::WIDGET_ADD_WAIT + Duration::from_secs(10),
+                )
+                .map_err(|e| format!("the widget's settings did not change it: {e}"))?;
+            Ok(if invocation.json {
+                widget_json(&widget).to_string()
+            } else {
+                format!(
+                    "Set up {} again (widget {})",
                     if widget.provider.label.is_empty() {
                         &widget.provider.provider
                     } else {

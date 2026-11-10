@@ -125,6 +125,7 @@ use crate::accessibility::{
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::adb_discovery::{AdbAdvertise, AdbServerLink, AutoConnectState, AutoConnectWatcher};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
+use crate::app_audio::{self, AppAudioHub, AppAudioWatch, AppStream, VolumeChange};
 use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
 use crate::background::{
@@ -680,6 +681,8 @@ struct Shared {
     open_shares: Mutex<HashSet<u32>>,
     /// The apps that run in the background, their media sessions, and who watches them.
     background: Mutex<BackgroundHub>,
+    /// Which app each output of the guest's sound plays and its volume, and who watches it.
+    app_audio: Mutex<AppAudioHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
     installs: Mutex<HashMap<u32, Sender<InstallEvent>>>,
     /// The transfer ID of the last install.
@@ -843,6 +846,8 @@ pub enum BackgroundRequest {
 enum WidgetAnswer {
     Providers(Vec<WidgetProvider>, bool),
     Added(Result<i32, String>),
+    /// How a widget's setup, opened again, ended: Ok when the user finished it.
+    Reconfigured(Result<(), String>),
 }
 
 /// The widgets the agent hosts, each with what it last showed, and who is watching them,
@@ -1367,6 +1372,7 @@ impl Session {
             share_watchers: Mutex::new(Vec::new()),
             open_shares: Mutex::new(HashSet::new()),
             background: Mutex::new(BackgroundHub::default()),
+            app_audio: Mutex::new(AppAudioHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
             install_turn: Mutex::new(()),
@@ -2758,6 +2764,35 @@ impl Session {
         reply_rx.recv().map_err(|_| SessionError::Gone)?
     }
 
+    /// Which app each output of the guest's sound plays and its volume now, and every list
+    /// after it. The watch lasts across restarts of the guest; a guest that stops has none.
+    pub fn watch_app_audio(&self) -> AppAudioWatch {
+        self.shared
+            .app_audio
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// Which app each output of the guest's sound plays and its volume now.
+    pub fn app_audio(&self) -> Vec<AppStream> {
+        self.shared
+            .app_audio
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .streams()
+    }
+
+    /// Gives the guest the volume the user set for an app on the host. A change for a guest
+    /// that is not running is dropped: its apps are gone with it.
+    pub fn set_app_volume(&self, change: &VolumeChange) {
+        send_quietly(
+            &self.shared,
+            &self.commands,
+            Body::SetAppVolume(change.to_control()),
+        );
+    }
+
     /// Freezes the guest now, as when the user chooses it. It stays frozen until a task
     /// window is shown or it is stopped. Needs a running guest.
     pub fn freeze(&self) -> Result<(), SessionError> {
@@ -3437,7 +3472,7 @@ impl Session {
                             break;
                         }
                     }
-                    Ok(WidgetAnswer::Added(_)) => {}
+                    Ok(WidgetAnswer::Added(_)) | Ok(WidgetAnswer::Reconfigured(_)) => {}
                     Err(_) => {
                         return Err(SessionError::WidgetRefused(format!(
                             "Android did not list its widgets within {} seconds",
@@ -3488,10 +3523,78 @@ impl Session {
                     Ok(WidgetAnswer::Added(Err(why))) => {
                         return Err(SessionError::WidgetRefused(why))
                     }
-                    Ok(WidgetAnswer::Providers(..)) => {}
+                    Ok(WidgetAnswer::Providers(..)) | Ok(WidgetAnswer::Reconfigured(_)) => {}
                     Err(_) => {
                         return Err(SessionError::WidgetRefused(format!(
                             "Android did not place the widget within {} seconds",
+                            timeout.as_secs()
+                        )))
+                    }
+                }
+            }
+        })();
+        self.forget_widget_request(request_id);
+        result
+    }
+
+    /// Opens the setup of a placed widget again, as its app's window, and waits up to
+    /// `timeout` for the user to finish it (Ok) or leave it (WidgetRefused with the reason).
+    /// Only a widget whose app says it can be set up again is asked for; the widget stays
+    /// placed either way, and once the user finishes, the agent describes and draws it anew.
+    /// A press wakes a guest in Doze first, as the setup is a window the user works in.
+    /// Needs an active session.
+    pub fn reconfigure_widget(
+        &self,
+        widget_id: i32,
+        timeout: Duration,
+    ) -> Result<(), SessionError> {
+        let provider = self
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider);
+        match provider {
+            None => {
+                return Err(SessionError::WidgetRefused(format!(
+                    "there is no widget {widget_id}"
+                )))
+            }
+            Some(provider) if !provider.reconfigurable => {
+                return Err(SessionError::WidgetRefused(format!(
+                    "the widget {} cannot be set up again; its app offers no settings for it",
+                    if provider.label.is_empty() {
+                        provider.provider
+                    } else {
+                        provider.label
+                    }
+                )))
+            }
+            Some(_) => {}
+        }
+        let (reply_tx, reply_rx) = mpsc::channel();
+        if self.commands.send(Command::WidgetPressed(reply_tx)).is_ok() {
+            let _ = reply_rx.recv();
+        }
+        let (request_id, answers) = self.widget_request();
+        let result = (|| {
+            self.send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::ReconfigureWidget(control::ReconfigureWidget {
+                    request_id,
+                    widget_id,
+                })),
+            }))?;
+            let deadline = Instant::now() + timeout;
+            loop {
+                let left = deadline.saturating_duration_since(Instant::now());
+                match answers.recv_timeout(left) {
+                    Ok(WidgetAnswer::Reconfigured(Ok(()))) => return Ok(()),
+                    Ok(WidgetAnswer::Reconfigured(Err(why))) => {
+                        return Err(SessionError::WidgetRefused(why))
+                    }
+                    Ok(WidgetAnswer::Providers(..)) | Ok(WidgetAnswer::Added(_)) => {}
+                    Err(_) => {
+                        return Err(SessionError::WidgetRefused(format!(
+                            "the widget's settings did not close within {} seconds",
                             timeout.as_secs()
                         )))
                     }
@@ -6219,6 +6322,12 @@ impl Worker {
                     package_name: gone.package_name,
                 })
             }
+            Some(Body::AppAudio(list)) => self
+                .shared
+                .app_audio
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .apply(app_audio::checked_streams(list)),
             Some(Body::InstallProgress(progress)) => self.shared.install_event(
                 progress.transfer_id,
                 InstallEvent::Progress(progress.received),
@@ -6240,6 +6349,16 @@ impl Worker {
                     Err("Android did not place the widget".into())
                 } else {
                     Err(added.error.chars().take(512).collect())
+                }),
+            ),
+            Some(Body::WidgetReconfigured(answer)) => self.shared.widget_answer(
+                answer.request_id,
+                WidgetAnswer::Reconfigured(if answer.finished {
+                    Ok(())
+                } else if answer.error.trim().is_empty() {
+                    Err("the widget's settings were closed without a change".into())
+                } else {
+                    Err(answer.error.chars().take(512).collect())
                 }),
             ),
             Some(Body::WidgetUpdated(updated)) => self.guest_widget(updated),
@@ -6445,6 +6564,7 @@ impl Worker {
             | Some(Body::ListWidgetProviders(_))
             | Some(Body::AddWidget(_))
             | Some(Body::RemoveWidget(_))
+            | Some(Body::ReconfigureWidget(_))
             | Some(Body::ResizeWidget(_))
             | Some(Body::WidgetPointer(_))
             | Some(Body::AccessibilityWatch(_))
@@ -6483,7 +6603,8 @@ impl Worker {
             | Some(Body::BackupRestore(_))
             | Some(Body::PasskeyResponse(_))
             | Some(Body::KeymintRootKey(_))
-            | Some(Body::BackupSetting(_)) => {
+            | Some(Body::BackupSetting(_))
+            | Some(Body::SetAppVolume(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))
@@ -6556,6 +6677,12 @@ impl Worker {
         // And its background apps and media sessions.
         self.shared
             .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        // And its outputs of sound.
+        self.shared
+            .app_audio
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();

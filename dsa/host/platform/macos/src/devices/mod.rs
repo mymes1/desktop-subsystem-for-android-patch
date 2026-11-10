@@ -5,6 +5,7 @@
 //!
 //! ```text
 //! sound out and in   Audio Queue Services             [`audio`]
+//! sound volume       the Mac's volume                 [`system_volume`]
 //! video decoding     VideoToolbox                     [`video`]
 //! cameras            AVFoundation                     [`camera`]
 //! sensors            none a program may read          [`sensors`]
@@ -48,6 +49,7 @@ pub mod sensors;
 pub mod settings;
 pub mod share;
 pub mod shared_folders;
+pub mod system_volume;
 pub mod video;
 
 #[cfg(target_os = "macos")]
@@ -161,8 +163,11 @@ mod lender {
 
     /// Serves the guest's device ports (sound, video, cameras, sensors) on the sockets in
     /// `user`'s folder until `stop`, each on a thread of its own. A port that cannot be
-    /// opened is logged and left out.
+    /// opened is logged and left out. The guest's sound has the Mac's volume and nothing
+    /// else: a thread follows the apps' volumes over the local API through `connect`, and
+    /// another the Mac's volume ([`super::system_volume`]).
     pub fn start_guest_ports(
+        connect: &ConnectorFactory,
         user: &UserFolders,
         stop: &Arc<AtomicBool>,
         log: &Log,
@@ -170,6 +175,39 @@ mod lender {
         let mut threads = Vec::new();
 
         if let Some(mut listener) = listen(user, dsa_host_core::audio::AUDIO_PORT, "sound", log) {
+            let volumes = dsa_host_core::app_audio::AppVolumes::new();
+            let one = Arc::new(std::sync::Mutex::new(
+                super::system_volume::OneVolume::default(),
+            ));
+            {
+                let (mut connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+                let (volumes, one) = (Arc::clone(&volumes), Arc::clone(&one));
+                threads.extend(spawn("dsa-app-audio", &Arc::clone(&log), move || {
+                    dsa_host_core::app_audio::follow(
+                        &mut *connector,
+                        &build("app audio"),
+                        &volumes,
+                        &stop,
+                        &*log,
+                        &|changed: &[dsa_host_core::app_audio::AppStream]| {
+                            let set = one
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .guest_changed(changed);
+                            if let Some((volume, muted)) = set {
+                                super::system_volume::set(volume, muted);
+                            }
+                        },
+                    )
+                }));
+            }
+            {
+                let stop = Arc::clone(stop);
+                let (volumes, one) = (Arc::clone(&volumes), Arc::clone(&one));
+                threads.extend(spawn("dsa-mac-volume", &Arc::clone(log), move || {
+                    super::system_volume::follow(&volumes, &one, &stop)
+                }));
+            }
             let (stop, log) = (Arc::clone(stop), Arc::clone(log));
             let device: Arc<dyn dsa_host_core::audio::AudioDevice> =
                 Arc::new(super::audio::CoreAudio);
