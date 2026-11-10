@@ -66,6 +66,7 @@ class AgentApplication : Application() {
                 android.util.Log.isLoggable("DsaResizeTrace", android.util.Log.DEBUG)
             }),
             launcherApps = AndroidLauncherApps(this, log),
+            shortcuts = AndroidShortcuts(this, log),
             memory = AndroidMemorySource(this),
             inputScheduler = HandlerScheduler(input.looper),
             inputTrace = InputTrace(log, enabled = traced),

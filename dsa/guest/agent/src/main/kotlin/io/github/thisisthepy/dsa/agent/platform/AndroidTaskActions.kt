@@ -56,6 +56,30 @@ class AndroidTaskActions(
     override fun launchNewWindow(packageName: String): Boolean =
         launch(packageName, Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
 
+    /**
+     * Starts the shortcut through LauncherApps, as the default launcher, in a freeform window
+     * on the guest display like any app the host launches. Android throws when the app has no
+     * such shortcut or it is turned off.
+     */
+    override fun launchShortcut(packageName: String, shortcutId: String): Boolean {
+        val launcher = context.getSystemService(android.content.pm.LauncherApps::class.java) ?: return false
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        freeform(options)
+        return try {
+            launcher.startShortcut(packageName, shortcutId, null, options.toBundle(), android.os.Process.myUserHandle())
+            true
+        } catch (e: ActivityNotFoundException) {
+            log.warn("$packageName has no shortcut $shortcutId to start, or it is turned off", e)
+            false
+        } catch (e: IllegalStateException) {
+            log.warn("the shortcut $shortcutId of $packageName cannot start before the user's storage is unlocked", e)
+            false
+        } catch (e: SecurityException) {
+            log.warn("the framework refused to start the shortcut $shortcutId of $packageName", e)
+            false
+        }
+    }
+
     private fun launch(packageName: String, flags: Int): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         intent.addFlags(flags)

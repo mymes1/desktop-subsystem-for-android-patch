@@ -194,6 +194,58 @@ class AgentTest {
     }
 
     @Test
+    fun fr7_app_shortcuts_are_jump_list_tasks_and_desktop_shortcuts() {
+        val apps = FakeLauncherApps().apply { installed = listOf(launcherApp("org.example.chat")) }
+        val newChat = io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut("new-chat", "New chat", dynamic = true)
+        val shortcuts = FakeShortcuts().apply { byPackage = mapOf("org.example.chat" to listOf(newChat)) }
+        locator.up = daemon
+        val agent = Agent(
+            AGENT, tasks, actions, locator, windowing, injector, scheduler, log,
+            launcherApps = apps,
+            shortcuts = shortcuts,
+        )
+        agent.start()
+        scheduler.runDue()
+
+        // The app's shortcuts follow the list of apps, so the host builds its jump list.
+        val bodies = daemon.sentMessages().map { it.bodyCase }
+        assertTrue(bodies.indexOf(Envelope.BodyCase.APP_SHORTCUTS) > bodies.indexOf(Envelope.BodyCase.INSTALLED_APPS))
+        val reported = daemon.sentMessages().single { it.hasAppShortcuts() }.appShortcuts
+        assertEquals("org.example.chat", reported.packageName)
+        assertEquals(listOf("New chat"), reported.shortcutsList.map { it.shortLabel })
+
+        // The app publishes another; the host hears of it.
+        shortcuts.change("org.example.chat", listOf(newChat, io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut("ana", "Ana", dynamic = true, rank = 1)))
+        scheduler.runDue()
+        assertEquals(listOf("new-chat", "ana"), daemon.sentMessages().last { it.hasAppShortcuts() }.appShortcuts.shortcutsList.map { it.id })
+
+        // A jump list task starts its shortcut.
+        actions.startableShortcuts = setOf("org.example.chat" to "ana")
+        daemon.deliver(
+            Envelope.newBuilder()
+                .setLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut.newBuilder().setPackageName("org.example.chat").setShortcutId("ana"))
+                .build().toByteArray(),
+        )
+        scheduler.runDue()
+        assertEquals(listOf("org.example.chat" to "ana"), actions.shortcutsLaunched)
+
+        // The app asks to pin a shortcut: the host asks the user, and yes pins it.
+        val pin = FakePinRequest("org.example.chat", io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut("ana", "Ana", pinned = true), appLabel = "Chat")
+        agent.pinRequested(pin)
+        scheduler.runDue()
+        val asked = daemon.sentMessages().single { it.hasPinShortcutRequest() }.pinShortcutRequest
+        assertEquals("Chat", asked.appLabel)
+        assertEquals("ana", asked.shortcut.id)
+        daemon.deliver(
+            Envelope.newBuilder()
+                .setPinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.newBuilder().setRequestId(asked.requestId).setAccepted(true))
+                .build().toByteArray(),
+        )
+        scheduler.runDue()
+        assertEquals(1, pin.accepted)
+    }
+
+    @Test
     fun fr3_two_apps_launched_at_the_same_place_get_places_of_their_own() {
         tasks.running = listOf(appTask(4, bounds = defaultPlace))
         started()

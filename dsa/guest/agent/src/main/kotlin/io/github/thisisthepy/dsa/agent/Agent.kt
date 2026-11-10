@@ -76,6 +76,10 @@ import io.github.thisisthepy.dsa.agent.settings.SystemSettingsSync
 import io.github.thisisthepy.dsa.agent.tasks.AppInfoSource
 import io.github.thisisthepy.dsa.agent.tasks.InstalledAppReporter
 import io.github.thisisthepy.dsa.agent.tasks.LauncherApps
+import io.github.thisisthepy.dsa.agent.tasks.PinRequest
+import io.github.thisisthepy.dsa.agent.tasks.PinRequests
+import io.github.thisisthepy.dsa.agent.tasks.ShortcutReporter
+import io.github.thisisthepy.dsa.agent.tasks.ShortcutSource
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskReporter
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
@@ -165,6 +169,8 @@ class Agent(
     private val trace: ResizeTrace = ResizeTrace(log),
     power: DevicePower = DevicePower.NONE,
     private val launcherApps: LauncherApps = LauncherApps.NONE,
+    /** The apps' launcher shortcuts, which the host shows in each app's jump list. */
+    private val shortcuts: ShortcutSource = ShortcutSource.NONE,
     memory: MemorySource? = null,
     private val inputScheduler: Scheduler = scheduler,
     private val inputTrace: InputTrace = InputTrace(log),
@@ -387,6 +393,17 @@ class Agent(
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
     private val captions = CaptionInsets(actions, log)
     private val installed = InstalledAppReporter(ownPackage) { frame -> channel.send(frame) }
+    private val shortcutReporter = ShortcutReporter(ownPackage) { frame -> channel.send(frame) }
+    private val pinRequests = PinRequests(
+        { frame -> channel.send(frame) },
+        log,
+        later = { delay, work -> scheduler.postDelayed(delay, work) },
+    )
+
+    /** The apps a launcher lists, as last read, whose shortcuts the host is told. */
+    private var listedPackages: List<String> = emptyList()
+    private var shortcutsPending = false
+    private val changedShortcuts = HashSet<String>()
     private val links = Links(browserRole, guestBrowser, { frame -> channel.send(frame) }, log)
     private val files = FileReceiver(fileStore, fileOpener, { frame -> channel.send(frame) }, log)
     private val sharedFolders = SharedFolders(sharedStorage, mediaScan, scheduler, log)
@@ -473,6 +490,7 @@ class Agent(
                 scheduler.post(work)
             }
             listenToApps()
+            listenToShortcuts()
             listenToCrashes()
             listenToExclusion()
             listenToUnhandledKeys()
@@ -526,6 +544,58 @@ class Agent(
         }
     }
 
+    private fun listenToShortcuts() {
+        try {
+            shortcuts.listen { packageName -> scheduler.post { shortcutsChanged(packageName) } }
+        } catch (e: Exception) {
+            log.warn("listening to the apps' shortcuts failed; trying again", e)
+            scheduler.postDelayed(RETRY_MILLIS, ::listenToShortcuts)
+        }
+    }
+
+    /**
+     * An app's shortcuts changed: they are read again once the changes that come together
+     * have arrived, so an app that publishes several at once is reported once.
+     */
+    private fun shortcutsChanged(packageName: String) {
+        changedShortcuts += packageName
+        if (shortcutsPending) return
+        shortcutsPending = true
+        scheduler.post {
+            shortcutsPending = false
+            val changed = changedShortcuts.toSet()
+            changedShortcuts.clear()
+            if (channel.connected) shortcutReporter.changed(changed.filter { it in listedPackages }, ::readShortcuts)
+        }
+    }
+
+    /** Tells the host the shortcuts of each listed app that changed, after the list itself. */
+    private fun refreshShortcuts() {
+        if (!channel.connected) return
+        shortcutReporter.update(listedPackages, ::readShortcuts)
+    }
+
+    private fun readShortcuts(packageName: String): List<io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut>? = try {
+        shortcuts.shortcuts(packageName)
+    } catch (e: Exception) {
+        log.warn("reading the shortcuts of $packageName failed", e)
+        null
+    }
+
+    /**
+     * An app asks to pin one of its shortcuts, as the agent's pin activity received it: the
+     * host asks the user. Called from any thread.
+     */
+    fun pinRequested(request: PinRequest) {
+        scheduler.post {
+            if (!channel.connected) {
+                log.warn("an app asked to pin a shortcut while the host is not connected; the request lapses")
+            } else {
+                pinRequests.requested(request)
+            }
+        }
+    }
+
     private fun requestAppsRefresh(force: Boolean = false) {
         if (force) appsForced = true
         if (appsPending) return
@@ -551,6 +621,8 @@ class Agent(
             return
         } ?: return
         installed.update(apps, force)
+        listedPackages = apps.map { it.packageName }
+        refreshShortcuts()
     }
 
     private fun listen() {
@@ -599,6 +671,8 @@ class Agent(
         language.connected()
         networkLocation.connected()
         installed.resend()
+        shortcutReporter.resend()
+        pinRequests.disconnected()
         memoryReporter?.connected()
         links.connected()
         files.connected()
@@ -625,6 +699,13 @@ class Agent(
             is RequestResult.Launched ->
                 log.info(if (result.newWindow) "opened a new window of ${result.packageName}" else "launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
+            is RequestResult.ShortcutLaunched -> log.info(
+                if (result.appInstead) {
+                    "the shortcut ${result.shortcutId} of ${result.packageName} did not start; launched the app instead"
+                } else {
+                    "started the shortcut ${result.shortcutId} of ${result.packageName}"
+                },
+            )
             is RequestResult.SettingsOpened ->
                 log.info("opened the ${result.page.name.lowercase()} settings of ${result.packageName ?: "every app"}")
             is RequestResult.SettingsFailed ->
@@ -700,6 +781,10 @@ class Agent(
         if (appReinstaller.handle(envelope)) return true
         if (hostCalls.handle(envelope)) return true
         if (backupRuns.handle(envelope)) return true
+        if (envelope.bodyCase == Envelope.BodyCase.PIN_SHORTCUT_ANSWER) {
+            pinRequests.answered(envelope.pinShortcutAnswer.requestId, envelope.pinShortcutAnswer.accepted)
+            return true
+        }
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
