@@ -17,7 +17,7 @@ use dsa_host_core::compositor::window_hosts::{to_wire, HostId, ToHost};
 use dsa_host_core::compositor::GraphicsStreamKind;
 use dsa_host_core::guest_display::display_or_smallest;
 use dsa_host_core::host_api::HostApiClient;
-use dsa_host_core::tasks::{AppInfo, TaskRequest};
+use dsa_host_core::tasks::{AppInfo, PinShortcutRequest, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 
 use super::hosts::{self, Links, BUILD};
@@ -126,6 +126,8 @@ struct MacPlatform {
     launcher: Arc<AppLauncher>,
     /// Held while the app bundles are being brought up to date.
     syncing: Arc<Mutex<()>>,
+    /// Where the apps' requests to pin a shortcut go to be asked about.
+    pins: Sender<PinShortcutRequest>,
 }
 
 impl MacPlatform {
@@ -177,6 +179,16 @@ impl Platform for MacPlatform {
                     log(&why);
                 }
             });
+    }
+
+    fn pin_requested(&mut self, request: &PinShortcutRequest) {
+        if self.pins.send(request.clone()).is_err() {
+            // Nobody asks the user: the app hears no at once.
+            self.request(TaskRequest::AnswerPinShortcut {
+                request_id: request.request_id,
+                accepted: false,
+            });
+        }
     }
 
     fn open_app_page(&mut self, package: &str) -> Result<(), String> {
@@ -374,24 +386,29 @@ pub fn run(places: Places, stop: Arc<AtomicBool>) -> Result<(), String> {
     watch_tasks(places.host_api.clone(), events.clone());
     watch_app_windows(places.host_api.clone(), events.clone(), Arc::clone(&stop));
     drop(events);
-    super::notifications::show(
-        places.host_api.clone(),
-        places.user.root.join("notifications"),
-        Arc::clone(&stop),
-    );
-
-    let launcher = AppLauncher {
+    let launcher = Arc::new(AppLauncher {
         folder: places.apps.clone(),
         window_host: std::env::current_exe()
             .ok()
             .and_then(|exe| installed_window_host(&exe)),
-    };
+        desktop: std::env::var_os("HOME")
+            .map(|home| crate::shell::app_stubs::default_desktop(Path::new(&home))),
+    });
+    let (pins, pin_requests) = channel();
+    super::notifications::show(
+        places.host_api.clone(),
+        places.user.root.join("notifications"),
+        Arc::clone(&stop),
+        pin_requests,
+        Arc::clone(&launcher),
+    );
     let platform = MacPlatform {
         links: Arc::clone(&links),
         presenter: Arc::clone(&presenter),
         requests,
-        launcher: Arc::new(launcher),
+        launcher,
         syncing: Arc::default(),
+        pins,
     };
     let mut manager = Manager::new(platform);
     let mut last_tick = Instant::now();

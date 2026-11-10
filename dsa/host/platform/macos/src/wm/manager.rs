@@ -20,7 +20,7 @@ use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::{
     is_valid_package, FromHost, HostAction, HostId, MenuWork, ToHost, WindowHosts,
 };
-use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
+use dsa_host_core::tasks::{AppInfo, PinShortcutRequest, TaskEvent, TaskRequest};
 
 /// The URL scheme DSA's settings app (DSA.app) opens, which a running copy receives too.
 pub const SETTINGS_SCHEME: &str = "dsa-settings";
@@ -83,6 +83,14 @@ pub trait Platform {
     fn installed(&mut self, _apps: &[AppInfo]) {}
     /// Whether a task window is the active window now.
     fn focused(&mut self, _any: bool) {}
+    /// An app asks for one of its shortcuts on the Desktop: the user is asked, and the
+    /// answer goes to Android. Without a way to ask, the app hears no.
+    fn pin_requested(&mut self, request: &PinShortcutRequest) {
+        self.request(TaskRequest::AnswerPinShortcut {
+            request_id: request.request_id,
+            accepted: false,
+        });
+    }
     /// Opens DSA's settings on the Apps page at `package`, as a window's App Info does.
     fn open_app_page(&mut self, package: &str) -> Result<(), String>;
     /// Writes a line to the log.
@@ -235,6 +243,7 @@ impl<P: Platform> Manager<P> {
                 self.carry_out(actions);
             }
             TaskEvent::Installed(apps) => self.platform.installed(apps),
+            TaskEvent::PinShortcut(request) => self.platform.pin_requested(request),
             _ => {}
         }
     }

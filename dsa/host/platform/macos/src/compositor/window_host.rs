@@ -39,7 +39,7 @@ use super::window_menu::{self, WindowMenuItem};
 use super::{menu_bar, screenshot};
 use crate::input::view::InputSink;
 use crate::objc::{class, on_main, string_of};
-use crate::shell::app_stubs::PACKAGE_KEY;
+use crate::shell::app_stubs::{PACKAGE_KEY, SHORTCUT_KEY};
 
 /// The build named in the handshake.
 pub const BUILD: &str = concat!("dsa-app-window ", env!("CARGO_PKG_VERSION"));
@@ -78,6 +78,46 @@ pub fn package_of(args: &[String]) -> Option<String> {
         let package = string_of(value);
         (!package.is_empty()).then_some(package)
     }
+}
+
+/// The shortcut this program starts: the `--shortcut` argument, which starts one of the
+/// app's shortcuts in its window. `None` starts the app.
+pub fn shortcut_argument(args: &[String]) -> Option<String> {
+    let at = args.iter().position(|a| a == "--shortcut")?;
+    args.get(at + 1)
+        .filter(|id| dsa_host_core::tasks::is_valid_shortcut_id(id))
+        .cloned()
+}
+
+/// The shortcut the bundle this program runs from starts, when it is the bundle of a pinned
+/// shortcut on the Desktop (its `DSAShortcut` key).
+pub fn pinned_shortcut() -> Option<String> {
+    unsafe {
+        let bundle: *mut AnyObject = msg_send![class(c"NSBundle").ok()?, mainBundle];
+        let value: *mut AnyObject = msg_send![
+            bundle,
+            objectForInfoDictionaryKey: &*crate::objc::ns_string(SHORTCUT_KEY)
+        ];
+        let id = string_of(value);
+        (!id.is_empty()).then_some(id)
+    }
+}
+
+/// A pinned shortcut's bundle opened from the Desktop: starts Android when it is off, then
+/// the shortcut `id` of `package`, whose task opens in the app's own window host; this
+/// program shows nothing and ends.
+pub fn start_pinned(host_api: &Path, package: &str, id: &str) -> Result<(), String> {
+    let mut connector = UnixLocalConnector {
+        path: host_api.to_path_buf(),
+    };
+    let mut client = HostApiClient::connect(&mut connector, BUILD, CONNECT_TIMEOUT)
+        .map_err(|e| format!("the DSA service is not running: {e}"))?;
+    client
+        .ensure_running(Duration::from_secs(120), Duration::from_millis(500), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))?;
+    client
+        .launch_shortcut(package, id)
+        .map_err(|e| e.to_string())
 }
 
 type Reports = Arc<Mutex<Box<dyn FrameSender>>>;
@@ -676,6 +716,8 @@ pub struct HostSetup {
     pub host_api: PathBuf,
     /// The user started the program (from Launchpad or the Dock), not the window manager.
     pub launch: bool,
+    /// With `launch`, the app's shortcut to start rather than the app.
+    pub shortcut: Option<String>,
 }
 
 /// Runs the window host until the window manager lets it go. Must be called on the main
@@ -696,7 +738,7 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
             package_name: setup.package.clone(),
             process_id: std::process::id(),
             launch: setup.launch,
-            shortcut_id: String::new(),
+            shortcut_id: setup.shortcut.clone().unwrap_or_default(),
         },
         CONNECT_TIMEOUT,
     )?;
@@ -818,6 +860,10 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
     // shows once the window manager says the app supports several windows.
     if let Err(why) = menu_bar::install(false, menu_chosen, has_front_task) {
         eprintln!("dsa-app-window: the menu bar is incomplete: {why}");
+    }
+    // The Dock menu, with the app's shortcuts.
+    if let Err(why) = super::dock_menu::install(&setup.package, setup.host_api.clone()) {
+        eprintln!("dsa-app-window: the Dock menu has no shortcuts: {why}");
     }
 
     unsafe {
