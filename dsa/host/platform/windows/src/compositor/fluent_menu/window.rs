@@ -506,7 +506,7 @@ unsafe fn style(hwnd: HWND, theme: &Theme) -> Vec<(u32, i32)> {
 }
 
 /// The work area of the monitor `hwnd` is on.
-fn work_area(hwnd: HWND) -> Option<ScreenRect> {
+pub(crate) fn work_area(hwnd: HWND) -> Option<ScreenRect> {
     // SAFETY: a window of this thread, and a structure of the right size to fill.
     unsafe {
         let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -844,7 +844,7 @@ unsafe fn paint(hwnd: HWND) {
 
 /// Copies premultiplied BGRA `pixels` of `width` by `height` to `dc`, alpha and all, which
 /// the DWM frame under the client area blends with the backdrop.
-unsafe fn blit(dc: HDC, pixels: &[u8], width: i32, height: i32) {
+pub(crate) unsafe fn blit(dc: HDC, pixels: &[u8], width: i32, height: i32) {
     let memory = CreateCompatibleDC(dc);
     if memory.is_null() {
         return;

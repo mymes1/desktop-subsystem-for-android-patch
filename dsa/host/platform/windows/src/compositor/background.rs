@@ -12,7 +12,9 @@
 //! ([`crate::compositor::fluent_menu`]): rounded, with the system's shadow and acrylic, the
 //! user's theme or high contrast colours, Segoe UI Variable text and a Segoe Fluent Icons glyph
 //! for each item that has one, hover and keyboard navigation, and it closes when it loses the
-//! foreground. It is never Windows' plain popup menu.
+//! foreground. It is never Windows' plain popup menu. The question before a stop is a
+//! Windows 11 dialog in the same look ([`crate::compositor::fluent_dialog`]), never a Win32
+//! dialog box.
 //!
 //! While an app with a media session has a window open, the window's taskbar preview has
 //! previous, play or pause and next buttons ([`WithWindowMedia`] carries the session to the
@@ -47,6 +49,7 @@ use dsa_transport::Connector;
 use sha2::{Digest, Sha256};
 
 use crate::compositor::fluent::glyph;
+use crate::compositor::fluent_dialog::{Answer, DialogText};
 use crate::compositor::fluent_menu::{Anchor, MenuEntry, MenuItem};
 use crate::compositor::log::{note, CompositorLogger};
 
@@ -148,19 +151,80 @@ impl Texts {
         }
     }
 
-    /// The question asked before `name` is stopped.
-    pub fn stop_question(&self, name: &str) -> String {
+    /// The question asked before `name` is stopped: the dialog's title.
+    pub fn stop_title(&self, name: &str) -> String {
         if self.korean {
-            format!(
-                "{name}을(를) 중지할까요?\n\n백그라운드에서 하던 일(음악 재생 등)을 모두 \
-                 멈추고, 앱이 쓰던 메모리를 돌려받습니다."
-            )
+            format!("{name}을(를) 중지할까요?")
         } else {
-            format!(
-                "Stop {name}?\n\nIt stops everything it does in the background, such as playing \
-                 music, and the memory it used is freed."
-            )
+            format!("Stop {name}?")
         }
+    }
+
+    /// What stopping does, under the question.
+    pub fn stop_detail(&self) -> &'static str {
+        if self.korean {
+            "백그라운드에서 하던 일(음악 재생 등)을 모두 멈추고, 앱이 쓰던 메모리를 돌려받습니다."
+        } else {
+            "It stops everything it does in the background, such as playing music, and the \
+             memory it used is freed."
+        }
+    }
+
+    /// The question asked before `name` is stopped, as a Windows 11 dialog shows it: the
+    /// question as its title, what stopping does, the "do not ask again" check box, and Stop
+    /// (the accent, default button) and Cancel. The access keys are D, S and C.
+    pub fn stop_dialog(&self, name: &str) -> DialogText {
+        DialogText {
+            title: self.stop_title(name),
+            body: self.stop_detail().to_string(),
+            check: Some(self.do_not_ask.to_string()),
+            primary: self.stop.to_string(),
+            secondary: self.cancel.to_string(),
+            keys: [Some('D'), Some('S'), Some('C')],
+        }
+    }
+}
+
+/// What the user answered to the question asked before a stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopAnswer {
+    /// Stop, and keep asking next time.
+    Stop,
+    /// Stop, and never ask again.
+    StopAndNeverAsk,
+    Cancel,
+}
+
+/// The answer of the stop dialog as the tray takes it.
+pub fn stop_answer(answer: Answer) -> StopAnswer {
+    match answer {
+        Answer::Confirmed { checked: true } => StopAnswer::StopAndNeverAsk,
+        Answer::Confirmed { checked: false } => StopAnswer::Stop,
+        Answer::Cancelled => StopAnswer::Cancel,
+    }
+}
+
+/// What a Stop chosen in an icon's menu does: asks first when `ask` says so (`ask` answers the
+/// question), and returns the reports for the service. A stop confirmed with "do not ask again"
+/// also turns the question off, for this run (`ask_before_stop`) and in the user's settings.
+pub fn stop_chosen(
+    package: &str,
+    ask_before_stop: &mut bool,
+    ask: impl FnOnce() -> StopAnswer,
+) -> Vec<TrayReport> {
+    let answer = if *ask_before_stop {
+        ask()
+    } else {
+        StopAnswer::Stop
+    };
+    let stop = TrayReport::Command(package.to_string(), BackgroundCommand::Stop);
+    match answer {
+        StopAnswer::Stop => vec![stop],
+        StopAnswer::StopAndNeverAsk => {
+            *ask_before_stop = false;
+            vec![TrayReport::NeverAskBeforeStop, stop]
+        }
+        StopAnswer::Cancel => Vec::new(),
     }
 }
 
@@ -456,107 +520,6 @@ fn handle_reports(
     }
 }
 
-/// The dialog template of the question asked before a stop, as `DialogBoxIndirectParamW`
-/// takes it: a `DLGTEMPLATE` with its font, then a static text, the "do not ask again" check
-/// box, and the Stop and Cancel buttons, each a `DLGITEMTEMPLATE` on a 4-byte boundary.
-pub fn stop_dialog_template(question: &str, texts: &Texts, title: &str) -> Vec<u32> {
-    fn word(out: &mut Vec<u8>, value: u16) {
-        out.extend_from_slice(&value.to_le_bytes());
-    }
-    fn dword(out: &mut Vec<u8>, value: u32) {
-        out.extend_from_slice(&value.to_le_bytes());
-    }
-    fn text(out: &mut Vec<u8>, value: &str) {
-        for unit in value.encode_utf16() {
-            word(out, unit);
-        }
-        word(out, 0);
-    }
-    fn align(out: &mut Vec<u8>) {
-        while out.len() % 4 != 0 {
-            out.push(0);
-        }
-    }
-    const DS_SETFONT: u32 = 0x40;
-    const DS_MODALFRAME: u32 = 0x80;
-    const DS_CENTER: u32 = 0x0800;
-    const WS_POPUP: u32 = 0x8000_0000;
-    const WS_CAPTION: u32 = 0x00C0_0000;
-    const WS_SYSMENU: u32 = 0x0008_0000;
-    const WS_CHILD: u32 = 0x4000_0000;
-    const WS_VISIBLE: u32 = 0x1000_0000;
-    const WS_TABSTOP: u32 = 0x0001_0000;
-    const WS_EX_TOPMOST: u32 = 0x0000_0008;
-    const BS_DEFPUSHBUTTON: u32 = 0x1;
-    const BS_AUTOCHECKBOX: u32 = 0x3;
-    const BUTTON: u16 = 0x0080;
-    const STATIC: u16 = 0x0082;
-    type Item<'a> = (u32, [i16; 4], u16, u16, &'a str);
-    let items: [Item<'_>; 4] = [
-        (0, [10, 10, 240, 52], STATIC_ID, STATIC, question),
-        (
-            BS_AUTOCHECKBOX | WS_TABSTOP,
-            [10, 68, 240, 12],
-            DO_NOT_ASK_ID,
-            BUTTON,
-            texts.do_not_ask,
-        ),
-        (
-            BS_DEFPUSHBUTTON | WS_TABSTOP,
-            [146, 88, 50, 14],
-            STOP_ID,
-            BUTTON,
-            texts.stop,
-        ),
-        (
-            WS_TABSTOP,
-            [200, 88, 50, 14],
-            CANCEL_ID,
-            BUTTON,
-            texts.cancel,
-        ),
-    ];
-    let mut out = Vec::new();
-    dword(
-        &mut out,
-        DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU,
-    );
-    dword(&mut out, WS_EX_TOPMOST);
-    word(&mut out, items.len() as u16);
-    for value in [0i16, 0, 260, 110] {
-        word(&mut out, value as u16);
-    }
-    word(&mut out, 0); // no menu
-    word(&mut out, 0); // the standard dialog class
-    text(&mut out, title);
-    word(&mut out, 9); // points
-    text(&mut out, "Segoe UI");
-    for (style, place, id, class, caption) in items {
-        align(&mut out);
-        dword(&mut out, WS_CHILD | WS_VISIBLE | style);
-        dword(&mut out, 0);
-        for value in place {
-            word(&mut out, value as u16);
-        }
-        word(&mut out, id);
-        word(&mut out, 0xFFFF);
-        word(&mut out, class);
-        text(&mut out, caption);
-        word(&mut out, 0); // no creation data
-    }
-    align(&mut out);
-    out.chunks(4)
-        .map(|chunk| u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect()
-}
-
-/// The controls of the question asked before a stop.
-pub const STATIC_ID: u16 = 100;
-pub const DO_NOT_ASK_ID: u16 = 101;
-/// `IDOK` and `IDCANCEL`, so Enter stops and Escape cancels.
-pub const STOP_ID: u16 = 1;
-pub const CANCEL_ID: u16 = 2;
-
 /// The notification area icons and media controls of the window manager: Win32 windows on a
 /// thread of their own, which the watch drives through a channel.
 #[cfg(windows)]
@@ -640,7 +603,6 @@ mod win {
         DIB_RGB_COLORS,
     };
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-    use windows_sys::Win32::UI::Controls::{IsDlgButtonChecked, BST_CHECKED};
     use windows_sys::Win32::UI::HiDpi::{
         GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext,
         DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
@@ -651,16 +613,15 @@ mod win {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateIconIndirect, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyWindow,
-        DialogBoxIndirectParamW, DispatchMessageW, EndDialog, GetCursorPos, GetMessageW, LoadIconW,
-        PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
-        SetForegroundWindow, TranslateMessage, HICON, ICONINFO, IDI_APPLICATION, MSG, SM_CXSMICON,
-        WM_APP, WM_CLOSE, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_INITDIALOG, WM_SETTINGCHANGE,
-        WNDCLASSEXW, WS_POPUP,
+        DispatchMessageW, GetCursorPos, GetMessageW, LoadIconW, PostMessageW, PostQuitMessage,
+        RegisterClassExW, RegisterWindowMessageW, TranslateMessage, HICON, ICONINFO,
+        IDI_APPLICATION, MSG, SM_CXSMICON, WM_APP, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY,
+        WM_SETTINGCHANGE, WNDCLASSEXW, WS_POPUP,
     };
 
     use super::{
-        app_name, chosen, menu_entries, opened_by_keyboard, stop_dialog_template, tooltip,
-        tray_anchor, tray_guid, Texts, TrayCommand, TrayReport, CANCEL_ID, DO_NOT_ASK_ID, STOP_ID,
+        app_name, chosen, menu_entries, opened_by_keyboard, stop_answer, stop_chosen, tooltip,
+        tray_anchor, tray_guid, Texts, TrayCommand, TrayReport,
     };
     use crate::compositor::log::{note, CompositorLogger};
 
@@ -1275,82 +1236,24 @@ mod win {
         };
         match chosen(picked) {
             Some(BackgroundCommand::Stop) => {
-                if confirm_stop(hwnd, app_name(&app), &texts) {
-                    report(TrayReport::Command(
-                        package.to_string(),
-                        BackgroundCommand::Stop,
-                    ));
+                // The question is asked with nothing of the tray's state borrowed: the dialog
+                // runs this thread's messages while it is open.
+                let mut ask = with_state(|s| s.ask_before_stop).unwrap_or(true);
+                let reports = stop_chosen(package, &mut ask, || {
+                    let text = texts.stop_dialog(app_name(&app));
+                    stop_answer(crate::compositor::fluent_dialog::show(
+                        crate::compositor::fluent_dialog::Request { text: &text },
+                    ))
+                });
+                with_state(|s| s.ask_before_stop = ask);
+                for each in reports {
+                    report(each);
                 }
             }
             Some(command) => report(TrayReport::Command(package.to_string(), command)),
             None => {}
         }
     }
-
-    /// Asks before a stop, unless the user chose not to be asked. True to stop.
-    fn confirm_stop(hwnd: HWND, name: &str, texts: &Texts) -> bool {
-        if !with_state(|s| s.ask_before_stop).unwrap_or(true) {
-            return true;
-        }
-        let template = stop_dialog_template(
-            &texts.stop_question(name),
-            texts,
-            "Desktop Subsystem for Android",
-        );
-        // SAFETY: a modal dialog from a template that outlives it.
-        let answer = unsafe {
-            DialogBoxIndirectParamW(
-                GetModuleHandleW(null()),
-                template.as_ptr() as *const _,
-                hwnd,
-                Some(stop_dialog_proc),
-                0,
-            )
-        };
-        match answer {
-            2 => {
-                with_state(|s| s.ask_before_stop = false);
-                report(TrayReport::NeverAskBeforeStop);
-                true
-            }
-            1 => true,
-            _ => false,
-        }
-    }
-
-    unsafe extern "system" fn stop_dialog_proc(
-        hwnd: HWND,
-        msg: u32,
-        wparam: WPARAM,
-        _lparam: LPARAM,
-    ) -> isize {
-        match msg {
-            WM_INITDIALOG => {
-                // SAFETY: brings the question in front of the window that asked it.
-                unsafe { SetForegroundWindow(hwnd) };
-                1
-            }
-            WM_COMMAND => {
-                let id = (wparam & 0xffff) as u16;
-                if id == STOP_ID {
-                    // SAFETY: a control of this dialog.
-                    let never =
-                        unsafe { IsDlgButtonChecked(hwnd, DO_NOT_ASK_ID as i32) } == BST_CHECKED;
-                    // SAFETY: ends this modal dialog.
-                    unsafe { EndDialog(hwnd, if never { 2 } else { 1 }) };
-                    1
-                } else if id == CANCEL_ID {
-                    // SAFETY: as above.
-                    unsafe { EndDialog(hwnd, 0) };
-                    1
-                } else {
-                    0
-                }
-            }
-            _ => 0,
-        }
-    }
-
     /// Shows a media session in Windows' media controls, or changes it.
     fn media(session: MediaSession) {
         let package = session.package_name.clone();
@@ -1796,34 +1699,82 @@ mod tests {
 
     #[test]
     fn fr24_the_stop_question_names_the_app_in_the_users_language() {
-        assert!(Texts::english()
-            .stop_question("Music")
-            .starts_with("Stop Music?"));
-        assert!(Texts::korean().stop_question("Music").starts_with("Music"));
+        assert_eq!(Texts::english().stop_title("Music"), "Stop Music?");
+        assert!(Texts::korean().stop_title("Music").starts_with("Music"));
         assert_ne!(Texts::korean().stop, Texts::english().stop);
+        assert_ne!(
+            Texts::korean().stop_detail(),
+            Texts::english().stop_detail()
+        );
     }
 
     #[test]
-    fn fr24_the_stop_question_is_a_dialog_with_a_do_not_ask_again_box() {
-        let texts = Texts::english();
-        let template = stop_dialog_template("Stop Music?", &texts, "DSA");
-        let bytes: Vec<u8> = template.iter().flat_map(|d| d.to_le_bytes()).collect();
-        // Four controls.
-        assert_eq!(u16::from_le_bytes([bytes[8], bytes[9]]), 4);
-        let utf16: Vec<u16> = bytes
-            .chunks(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
-        let contains = |text: &str| {
-            let needle: Vec<u16> = text.encode_utf16().collect();
-            utf16.windows(needle.len()).any(|w| w == needle.as_slice())
-        };
-        assert!(contains("Stop Music?"));
-        assert!(contains("Do not ask again"));
-        assert!(contains("Cancel"));
-        assert!(contains("Segoe UI"));
+    fn fr24_the_stop_question_is_a_windows_11_dialog_with_a_do_not_ask_again_box() {
+        for texts in [Texts::english(), Texts::korean()] {
+            let dialog = texts.stop_dialog("Music");
+            assert_eq!(dialog.title, texts.stop_title("Music"));
+            assert_eq!(dialog.body, texts.stop_detail());
+            assert_eq!(dialog.check.as_deref(), Some(texts.do_not_ask));
+            // Stop is the accent, default button; Cancel the other.
+            assert_eq!(dialog.primary, texts.stop);
+            assert_eq!(dialog.secondary, texts.cancel);
+            assert_eq!(dialog.keys, [Some('D'), Some('S'), Some('C')]);
+        }
+        assert_eq!(
+            stop_answer(Answer::Confirmed { checked: false }),
+            StopAnswer::Stop
+        );
+        assert_eq!(
+            stop_answer(Answer::Confirmed { checked: true }),
+            StopAnswer::StopAndNeverAsk
+        );
+        assert_eq!(stop_answer(Answer::Cancelled), StopAnswer::Cancel);
+        // The tray never shows a Win32 dialog for it.
+        let calls = [
+            ["DialogBox", "IndirectParamW"].concat(),
+            ["End", "Dialog"].concat(),
+            ["IsDlg", "ButtonChecked"].concat(),
+        ];
+        let source = include_str!("background.rs");
+        for call in &calls {
+            assert!(!source.contains(call.as_str()), "the tray calls {call}");
+        }
     }
 
+    #[test]
+    fn fr24_stop_asks_first_until_the_user_says_not_to() {
+        use dsa_host_core::background::BackgroundCommand::Stop;
+        let stop = TrayReport::Command("com.example.music".into(), Stop);
+        // Asked, and cancelled: nothing is stopped, and it asks again next time.
+        let mut ask = true;
+        let mut asked = 0;
+        let reports = stop_chosen("com.example.music", &mut ask, || {
+            asked += 1;
+            StopAnswer::Cancel
+        });
+        assert!(reports.is_empty());
+        assert!(ask);
+        // Asked, and confirmed: the app stops, and it still asks.
+        let reports = stop_chosen("com.example.music", &mut ask, || {
+            asked += 1;
+            StopAnswer::Stop
+        });
+        assert_eq!(reports, vec![stop.clone()]);
+        assert!(ask);
+        // Confirmed with "do not ask again": the setting is saved and the app stops.
+        let reports = stop_chosen("com.example.music", &mut ask, || {
+            asked += 1;
+            StopAnswer::StopAndNeverAsk
+        });
+        assert_eq!(reports, vec![TrayReport::NeverAskBeforeStop, stop.clone()]);
+        assert!(!ask);
+        assert_eq!(asked, 3);
+        // From then on it stops without asking.
+        let reports = stop_chosen("com.example.music", &mut ask, || {
+            panic!("asked although the user said not to")
+        });
+        assert_eq!(reports, vec![stop]);
+    }
     #[derive(Default)]
     struct Recorded {
         commands: Vec<TrayCommand>,

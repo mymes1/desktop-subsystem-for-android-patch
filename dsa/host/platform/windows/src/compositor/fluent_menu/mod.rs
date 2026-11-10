@@ -21,6 +21,8 @@ mod automation;
 mod window;
 
 #[cfg(windows)]
+pub(crate) use window::{blit, work_area};
+#[cfg(windows)]
 pub use window::{row_art, show, Request};
 
 use super::fluent::{Argb, Canvas, MenuPalette};
