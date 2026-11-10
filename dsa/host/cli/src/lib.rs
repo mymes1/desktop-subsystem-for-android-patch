@@ -1928,7 +1928,11 @@ fn apps(
             json!({ "package": package, "created": true, "path": path.display().to_string() })
                 .to_string()
         } else {
-            format!("Put a shortcut to {} on the desktop: {}", app.label, path.display())
+            format!(
+                "Put a shortcut to {} on the desktop: {}",
+                app.label,
+                path.display()
+            )
         });
     }
     #[cfg(windows)]

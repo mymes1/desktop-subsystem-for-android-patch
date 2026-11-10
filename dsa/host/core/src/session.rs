@@ -6121,8 +6121,7 @@ impl Worker {
                     .into_iter()
                     .map(shortcut_from_control)
                     .collect();
-                self.shared
-                    .publish_shortcuts(&shortcuts.package_name, list);
+                self.shared.publish_shortcuts(&shortcuts.package_name, list);
             }
             Some(Body::PinShortcutRequest(request)) => {
                 let Some(shortcut) = request.shortcut else {

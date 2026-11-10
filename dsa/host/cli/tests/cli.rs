@@ -2836,7 +2836,11 @@ fn fr7_dsa_apps_shortcut_starts_the_shortcut_in_the_users_android() {
     let _service = RunningService::start(listener, androids.clone());
     let output = dsa(&endpoint, "apps shortcut com.example.chat new-chat --json");
     assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stdout(&output).contains("\"started\":true"), "{}", stdout(&output));
+    assert!(
+        stdout(&output).contains("\"started\":true"),
+        "{}",
+        stdout(&output)
+    );
     assert!(androids
         .of(&user)
         .unwrap()

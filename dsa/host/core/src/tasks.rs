@@ -689,11 +689,11 @@ impl TaskTable {
         if shortcuts.is_empty() {
             self.shortcuts.remove(package);
         } else {
-            if !self.shortcuts.contains_key(package) && self.shortcuts.len() >= MAX_INSTALLED_APPS
-            {
+            if !self.shortcuts.contains_key(package) && self.shortcuts.len() >= MAX_INSTALLED_APPS {
                 return None;
             }
-            self.shortcuts.insert(package.to_string(), shortcuts.clone());
+            self.shortcuts
+                .insert(package.to_string(), shortcuts.clone());
         }
         if let Some(app) = self.described.get_mut(package) {
             app.shortcuts = shortcuts.clone();

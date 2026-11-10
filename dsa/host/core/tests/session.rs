@@ -3610,9 +3610,7 @@ fn shortcut(id: &str, label: &str, rank: u32) -> dsa_protocol::control::AppShort
 }
 
 /// The installed apps the watcher hears of next.
-fn next_installed(
-    watch: &dsa_host_core::tasks::TaskWatch,
-) -> Vec<dsa_host_core::tasks::AppInfo> {
+fn next_installed(watch: &dsa_host_core::tasks::TaskWatch) -> Vec<dsa_host_core::tasks::AppInfo> {
     loop {
         if let TaskEvent::Installed(apps) = watch.events.recv_timeout(WAIT).expect("the apps") {
             return apps;
@@ -3646,13 +3644,19 @@ fn fr7_app_shortcuts_are_jump_list_tasks_and_desktop_shortcuts() {
         &mut agent,
         Body::AppShortcuts(dsa_protocol::control::AppShortcuts {
             package_name: "com.example.chat".into(),
-            shortcuts: vec![shortcut("new-chat", "New chat", 0), shortcut("ana", "Ana", 1)],
+            shortcuts: vec![
+                shortcut("new-chat", "New chat", 0),
+                shortcut("ana", "Ana", 1),
+            ],
         }),
     );
     let apps = next_installed(&watch);
     let tasks = dsa_host_core::tasks::jump_list_shortcuts(&apps[0].shortcuts);
     assert_eq!(
-        tasks.iter().map(|s| (s.id.as_str(), s.label())).collect::<Vec<_>>(),
+        tasks
+            .iter()
+            .map(|s| (s.id.as_str(), s.label()))
+            .collect::<Vec<_>>(),
         vec![("new-chat", "New chat"), ("ana", "Ana")]
     );
     assert_eq!(tasks[0].icon_png, vec![0x89, b'P', b'N', b'G', 0]);
