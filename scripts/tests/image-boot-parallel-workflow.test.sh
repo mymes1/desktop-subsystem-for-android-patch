@@ -18,7 +18,7 @@ check() { # test, timeout, artifact, check name
   grep -Fq "timeout: $2" <<<"$block" || { echo "$4 lost its $2 minute limit"; exit 1; }
   grep -Fq "artifact: $3" <<<"$block" || { echo "$4 no longer keeps $3"; exit 1; }
 }
-check widgets 12 widget-boot-logs "Place a widget on the booted image"
+check widgets 15 widget-boot-logs "Place a widget on the booted image"
 check system_screens 14 system-screens-captures "Check Android's system screens on the booted image"
 check media 18 media-check-logs "Play sound and run codecs in an app on the booted image"
 check media 23 root-check-logs "Approve and refuse root for an app on the booted image"
