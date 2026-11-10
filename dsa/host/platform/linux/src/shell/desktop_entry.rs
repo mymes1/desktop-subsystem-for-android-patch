@@ -737,6 +737,7 @@ mod tests {
             shortcut("new-chat", "New chat", 0),
             AppShortcut {
                 pinned: true,
+                dynamic: false,
                 ..shortcut("pinned-only", "Pinned", 0)
             },
         ];

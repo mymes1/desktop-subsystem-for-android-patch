@@ -816,7 +816,7 @@ mod tests {
             "no DPI counts as 100%"
         );
         // A guest that draws less than that decides.
-        assert_eq!(min_client_size(192, Some((300, 1080)), None), (300, 264));
+        assert_eq!(min_client_size(192, Some((200, 1080)), None), (200, 264));
     }
 
     #[test]
@@ -824,7 +824,7 @@ mod tests {
         assert_eq!(min_client_size(96, None, Some((700, 500))), (700, 500));
         // Each direction on its own: the default still holds where the app asks for less.
         assert_eq!(min_client_size(96, None, Some((700, 100))), (700, 132));
-        assert_eq!(min_client_size(192, None, Some((300, 500))), (264, 500));
+        assert_eq!(min_client_size(192, None, Some((200, 500))), (264, 500));
         // Never more than the guest can draw.
         assert_eq!(
             min_client_size(96, Some((600, 1080)), Some((700, 500))),
