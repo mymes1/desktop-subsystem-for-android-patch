@@ -140,6 +140,76 @@ pub fn facts(der: &[u8]) -> Result<CertificateFacts, String> {
     })
 }
 
+/// The certificates in a certificate file as the systems keep them: DER, or PEM with any number
+/// of `CERTIFICATE` blocks (`TRUSTED CERTIFICATE` blocks too, whose trust settings after the
+/// certificate are dropped). Text around the blocks is ignored; a block that does not decode is
+/// skipped.
+pub fn certificates_in_file(bytes: &[u8]) -> Vec<Vec<u8>> {
+    if bytes.first() == Some(&SEQUENCE) {
+        return vec![bytes.to_vec()];
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let mut found = Vec::new();
+    let mut rest = text.as_ref();
+    while let Some(start) = rest.find("-----BEGIN ") {
+        rest = &rest[start + "-----BEGIN ".len()..];
+        let Some(label_end) = rest.find("-----") else {
+            break;
+        };
+        let label = rest[..label_end].to_string();
+        rest = &rest[label_end + 5..];
+        let end_marker = format!("-----END {label}-----");
+        let Some(end) = rest.find(&end_marker) else {
+            break;
+        };
+        let body = &rest[..end];
+        rest = &rest[end + end_marker.len()..];
+        if label != "CERTIFICATE" && label != "TRUSTED CERTIFICATE" {
+            continue;
+        }
+        let Some(mut der) = base64_decode(body) else {
+            continue;
+        };
+        if label == "TRUSTED CERTIFICATE" {
+            // The certificate, then OpenSSL's trust settings: keep the first element.
+            let mut element = Der::new(&der);
+            match element.next_with_der("the certificate") {
+                Ok((_, _, whole)) => der = whole.to_vec(),
+                Err(_) => continue,
+            }
+        }
+        found.push(der);
+    }
+    found
+}
+
+/// Standard base64, with whitespace ignored. `None` when it is not base64.
+fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len() * 3 / 4);
+    let mut buffer = 0u32;
+    let mut bits = 0;
+    for byte in text.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            b' ' | b'\t' | b'\r' | b'\n' => continue,
+            _ => return None,
+        };
+        buffer = (buffer << 6) | u32::from(value);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
 /// The SHA-256 fingerprint of `der`, in lower-case hexadecimal.
 pub fn sha256_hex(der: &[u8]) -> String {
     hex(&Sha256::digest(der))
@@ -485,6 +555,23 @@ mod tests {
         assert_eq!(time(0x17, b"300101000000Z"), Some(1_893_456_000));
         assert_eq!(time(0x18, b"20300101000000Z"), Some(1_893_456_000));
         assert_eq!(time(0x17, b"not a time"), None);
+    }
+
+    #[test]
+    fn fr28_pem_and_der_certificate_files_are_read() {
+        assert_eq!(base64_decode("aGVs bG8=").unwrap(), b"hello");
+        assert_eq!(base64_decode("aGVsbG8gd29ybGQ").unwrap(), b"hello world");
+        assert!(base64_decode("not*base64").is_none());
+        let der = [0x30, 0x03, 0x02, 0x01, 0x05];
+        assert_eq!(certificates_in_file(&der), vec![der.to_vec()]);
+        let pem = "comment\n-----BEGIN CERTIFICATE-----\nMAMCAQU=\n-----END CERTIFICATE-----\n\
+                   -----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n\
+                   -----BEGIN TRUSTED CERTIFICATE-----\nMAMCAQUwAA==\n-----END TRUSTED CERTIFICATE-----\n";
+        assert_eq!(
+            certificates_in_file(pem.as_bytes()),
+            vec![der.to_vec(), der.to_vec()],
+            "the private key is skipped and the trust settings dropped"
+        );
     }
 
     #[test]
