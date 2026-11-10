@@ -1,6 +1,57 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "AppsDesktopShortcutButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create desktop shortcut"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바탕 화면 바로 가기 만들기"
+          }
+        }
+      }
+    },
+    "AppsDesktopShortcutButton.ToolTip": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A shortcut on the Desktop that opens the app"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱을 여는 바탕 화면의 바로 가기"
+          }
+        }
+      }
+    },
+    "Apps_DesktopShortcutMade": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} is on the Desktop."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}을(를) 바탕 화면에 두었습니다."
+          }
+        }
+      }
+    },
     "ProgramUpdateCard.Header": {
       "extractionState": "manual",
       "localizations": {

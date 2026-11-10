@@ -402,6 +402,14 @@ public sealed class AppsService
         return new RunAsArmReport(String(json, "status") == "done", String(json, "status"), String(json, "message"), Bool(json, "on"));
     }
 
+    /// <summary>Puts a shortcut to <paramref name="package"/> on the desktop, as the app's
+    /// Start menu entry opens it; returns where it is.</summary>
+    public async Task<string> CreateDesktopShortcutAsync(string package)
+    {
+        var json = await RunJsonAsync("apps", "desktop-shortcut", package).ConfigureAwait(true);
+        return String(json, "path");
+    }
+
     /// <summary>Uninstalls <paramref name="package"/>. A refusal by Android is a report with its
     /// reason; anything else that kept the request from Android is a
     /// <see cref="DsaException"/>.</summary>
@@ -870,6 +878,14 @@ public sealed class AppsViewModel : ObservableObject
     {
         await _service.OpenSettingsAsync(package).ConfigureAwait(true);
         return null;
+    }, reload: false);
+
+    /// <summary>Puts a shortcut to the app on the desktop, which opens it as its Start menu
+    /// entry does and goes when the app is uninstalled.</summary>
+    public Task CreateDesktopShortcutAsync(string package) => Run(async () =>
+    {
+        await _service.CreateDesktopShortcutAsync(package).ConfigureAwait(true);
+        return string.Format(CultureInfo.CurrentCulture, _text.Get("Apps_DesktopShortcutMade"), LabelOf(package));
     }, reload: false);
 
     /// <summary>Opens Android's own list of every app.</summary>

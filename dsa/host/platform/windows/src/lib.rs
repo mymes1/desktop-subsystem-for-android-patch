@@ -85,6 +85,8 @@ pub mod credential_store;
 #[cfg(windows)]
 pub mod data_reset;
 #[cfg(windows)]
+pub mod desktop_shortcuts;
+#[cfg(windows)]
 pub mod file_share;
 pub mod gpt;
 #[cfg(windows)]
@@ -104,6 +106,8 @@ pub mod hvsocket;
 #[cfg(windows)]
 pub mod installed_apps;
 pub mod installer_actions;
+#[cfg(windows)]
+pub mod jump_list;
 pub mod monitors;
 pub mod network;
 pub mod paths;

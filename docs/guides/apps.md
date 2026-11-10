@@ -16,6 +16,24 @@ When another program's Start menu entry already has the app's name, DSA adds the
 the name, such as `Clock (com.example.clock)`. DSA changes or removes only the entries it
 made.
 
+## Desktop shortcuts and jump lists
+
+App icons work the way Windows apps' do, not the way an Android home screen does.
+
+- **Desktop shortcut.** On the **Apps** page of DSA Settings, select **Create desktop
+  shortcut** next to the app. You can also right-click the app's taskbar button and select
+  **Create desktop shortcut**. From the command line: `dsa apps desktop-shortcut <package>`.
+  The shortcut opens the app as its Start menu entry does.
+- **App shortcuts.** The shortcuts an Android app offers, such as a messenger's new chat,
+  show when you right-click the app's taskbar button or its Start menu entry. Selecting one
+  opens that screen of the app in a window, starting Android first when it is not running.
+  When the app changes its shortcuts, the list follows. From the command line:
+  `dsa apps shortcut <package> <id>`; `dsa apps info <package> --json` lists the IDs.
+- **Shortcuts an app asks for.** When an app asks to add one of its shortcuts to your
+  desktop, DSA asks you first and adds it only if you agree.
+
+Uninstalling an app removes its desktop shortcuts too.
+
 ## Work with app windows
 
 - Each task has its own window, taskbar button and Alt+Tab entry, with the app's name and

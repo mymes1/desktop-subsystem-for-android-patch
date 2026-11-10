@@ -121,6 +121,9 @@
                                         <ui:Button Content="{l:Text AppsInfoButton.Content}" Tag="{Binding Package}" Click="OnInfo"
                                                    Icon="{ui:SymbolIcon Info24}" Margin="8,4,0,0"
                                                    AutomationProperties.HelpText="{Binding Label}" />
+                                        <ui:Button Content="{l:Text AppsDesktopShortcutButton.Content}" Tag="{Binding Package}" Click="OnDesktopShortcut"
+                                                   Icon="{ui:SymbolIcon Desktop24}" Margin="8,4,0,0"
+                                                   AutomationProperties.HelpText="{Binding Label}" />
                                         <ui:Button Content="{l:Text AppsUninstallButton.Content}" Tag="{Binding Package}" Click="OnUninstall"
                                                    Icon="{ui:SymbolIcon Delete24}" IsEnabled="{Binding CanUninstall}" Margin="8,4,0,0"
                                                    ToolTipService.ShowOnDisabled="True"

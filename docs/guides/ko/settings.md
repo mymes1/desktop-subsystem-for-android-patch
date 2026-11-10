@@ -20,7 +20,7 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 |---|---|---|
 | **일반** | Android 상태, **시작**, **종료**, **지금 안드로이드 일시 정지**, 마지막 문제, **내 로그 폴더 열기** | `dsa status`, `dsa start`, `dsa stop`, `dsa freeze` |
 | **메모리** | **메모리 한도**, Android 가상 머신의 크기, 부분별 사용량 | `memory-limit`, `dsa memory` |
-| **앱** | 설치된 앱: **열기**, **앱 정보**, **제거**, **크기 조절**, 창이 열리는 크기 | `dsa apps`, `dsa app-window` |
+| **앱** | 설치된 앱: **열기**, **앱 정보**, **제거**, **바탕 화면 바로 가기 만들기**, **크기 조절**, 창이 열리는 크기 | `dsa apps`, `dsa app-window` |
 | **백그라운드에서 실행 중** | 창 없이 실행 중인 앱: **열기**, **중지**, 중지 전에 물을지 여부 | `dsa background`, `stop-without-asking` |
 | **위젯** | 바탕 화면의 위젯, **바탕 화면에 추가** | `dsa widgets` |
 | **디스플레이 및 GPU** | **렌더링 GPU**, **창 관리자 다시 시작**, **DSA 앱 창에서 Windows 터치 제스처 끄기**(Windows 11만, 기본값은 켬) | `render-gpu`, `dsa gpus`, `touch-gestures-off` |

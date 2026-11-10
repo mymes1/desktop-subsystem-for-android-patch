@@ -235,6 +235,34 @@ fn app_row(
         });
     }
 
+    let (desktop_row, desktop) = button_row(
+        &tr("Desktop shortcut"),
+        &tr("A shortcut on the desktop that opens the app"),
+        &tr("Create desktop shortcut"),
+    );
+    row.add_row(&desktop_row);
+    {
+        let (ctx, page, package) = (ctx.clone(), page.clone(), app.package.clone());
+        let label = app.label.clone();
+        desktop.connect_clicked(move |_| {
+            let (page, package, ctx2) = (page.clone(), package.clone(), ctx.clone());
+            let label = label.clone();
+            request(
+                &ctx,
+                move |c| c.desktop_shortcut(&package),
+                move |r| {
+                    page.show_failure(
+                        &tr("The desktop shortcut could not be made"),
+                        r.as_ref().err(),
+                    );
+                    if r.is_ok() {
+                        ctx2.toast(&trf("{0} is on the desktop.", &[&label]));
+                    }
+                },
+            );
+        });
+    }
+
     // The window settings: whether the windows can be resized, their start size, and how they
     // follow a monitor of another scale.
     let fixed = window.as_ref().is_some_and(|w| w.fixed_size);

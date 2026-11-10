@@ -166,6 +166,38 @@ class FakeLauncherApps : io.github.thisisthepy.dsa.agent.tasks.LauncherApps {
     }
 }
 
+/** The apps' shortcuts, by package; an app missing from [byPackage] has none. */
+class FakeShortcuts : io.github.thisisthepy.dsa.agent.tasks.ShortcutSource {
+    var byPackage = mapOf<String, List<io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut>>()
+    private var onChange: ((String) -> Unit)? = null
+
+    override fun shortcuts(packageName: String) = byPackage[packageName].orEmpty()
+
+    override fun listen(onChange: (String) -> Unit) {
+        this.onChange = onChange
+    }
+
+    fun change(packageName: String, shortcuts: List<io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut>) {
+        byPackage = byPackage + (packageName to shortcuts)
+        onChange!!.invoke(packageName)
+    }
+}
+
+/** An app's pin request; [accepted] counts the times it was accepted. */
+class FakePinRequest(
+    override val packageName: String,
+    override val shortcut: io.github.thisisthepy.dsa.agent.tasks.LauncherShortcut,
+    override val appLabel: String = packageName.substringAfterLast('.'),
+    var valid: Boolean = true,
+) : io.github.thisisthepy.dsa.agent.tasks.PinRequest {
+    var accepted = 0
+
+    override fun accept(): Boolean {
+        accepted++
+        return valid
+    }
+}
+
 class FakeActions : TaskActions {
     val launched = mutableListOf<String>()
     val closed = mutableListOf<Int>()
@@ -196,6 +228,15 @@ class FakeActions : TaskActions {
     override fun launchNewWindow(packageName: String): Boolean {
         newWindows += packageName
         return packageName in launchable
+    }
+
+    /** Each shortcut started, as package and ID, and the ones that can start. */
+    val shortcutsLaunched = mutableListOf<Pair<String, String>>()
+    var startableShortcuts = setOf<Pair<String, String>>()
+
+    override fun launchShortcut(packageName: String, shortcutId: String): Boolean {
+        shortcutsLaunched += packageName to shortcutId
+        return (packageName to shortcutId) in startableShortcuts
     }
 
     /** Each app whose settings were opened; null for the list of every app. */

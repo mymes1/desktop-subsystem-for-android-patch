@@ -38,6 +38,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WindowsWebServices",
     "Win32_Storage_FileSystem",
     "Win32_Storage_Vhd",
+    # The question whether an app may put a shortcut on the desktop: a task dialog, which only
+    # version 6 of the common controls has, loaded under an activation context of its own.
+    "Win32_System_ApplicationInstallationAndServicing",
     # Freeing the path of a known folder the shell gives (the shared folders).
     "Win32_System_Com",
     "Win32_System_HostComputeSystem",

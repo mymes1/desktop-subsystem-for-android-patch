@@ -196,6 +196,16 @@
 //! visibility from the next start of Android.
 //! Use `adb` in place of the package to set the adb shell level while developer mode is on.
 //!
+//! Each app of `list` and `info` also lists its launcher `shortcuts`, each with `id`, `label`,
+//! `long_label`, `in_jump_list` (a static or dynamic shortcut, which the app's jump list shows)
+//! and `pinned`, with `icon_png` in base64 under `--json`. `dsa apps shortcut <package> <id>`
+//! starts one in a window of its own, starting Android first, as its jump list task does.
+//! `dsa apps desktop-shortcut <package>` puts a shortcut to the app on the desktop, the
+//! settings apps' "Create desktop shortcut": a `.lnk` on Windows, a launcher entry in the
+//! desktop folder on Linux, an alias on macOS. It starts the app as its Start menu entry does
+//! and goes when the app is uninstalled. With `--json` it prints `package`, `created` and
+//! `path`.
+//!
 //! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
 //! with no window because they run a foreground service (music playback, a download, a VPN),
 //! each with the notification the service keeps shown, and the active media sessions. It does
@@ -394,7 +404,8 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      network | gpus | \
      widgets [list | add <provider> | settings <id> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>] | \
-     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember] | \
+     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember | \
+     shortcut <package> <id> | desktop-shortcut <package>] | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] \
      [--dpi-scaling app|system|system-forced|auto] | <package> reset] | \
@@ -406,6 +417,7 @@ pub const USAGE: &str = "usage: dsa <status [--no-start] | start | stop | freeze
      android [version | use <major>|latest [--erase-data] | restart]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
+pub mod desktop;
 pub mod device;
 pub mod logs;
 
@@ -561,6 +573,10 @@ pub enum AppsAction {
     RunAsArm(String, bool),
     /// Set how far one app may elevate to root: the package and "off", "ask" or "remember".
     Root(String, String),
+    /// Start one of an app's shortcuts: the package and the shortcut's ID.
+    Shortcut(String, String),
+    /// Put a shortcut of one app on the desktop.
+    DesktopShortcut(String),
 }
 
 /// What `dsa widgets` does.
@@ -986,6 +1002,37 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "settings" if command == Some(Command::Apps) && apps.is_none() => {
                 apps = Some(AppsAction::Settings(None));
+            }
+            "desktop-shortcut" if command == Some(Command::Apps) && apps.is_none() => {
+                let package = args.next().ok_or_else(|| {
+                    "dsa apps desktop-shortcut needs the app's package, such as \
+                     com.example.notes; dsa apps list shows them"
+                        .to_string()
+                })?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                apps = Some(AppsAction::DesktopShortcut(package.clone()));
+            }
+            "shortcut" if command == Some(Command::Apps) && apps.is_none() => {
+                let usage = "dsa apps shortcut needs the app's package and the shortcut's ID, \
+                             such as dsa apps shortcut com.example.chat new-chat; dsa apps info \
+                             <package> --json lists them";
+                let package = args.next().ok_or_else(|| usage.to_string())?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                let id = args.next().ok_or_else(|| usage.to_string())?;
+                if !dsa_host_core::tasks::is_valid_shortcut_id(id) {
+                    return Err(format!("{id:?} is not a shortcut ID; {usage}"));
+                }
+                apps = Some(AppsAction::Shortcut(package.clone(), id.clone()));
             }
             "run-as-arm" if command == Some(Command::Apps) && apps.is_none() => {
                 let usage = "dsa apps run-as-arm needs the app's package and on or off, such as \
@@ -1748,9 +1795,31 @@ pub fn app_json(app: &AppInfo, icon: bool) -> Value {
         "primary_abi": app.primary_abi,
         "native_abis": app.native_libraries.abis().collect::<Vec<_>>(),
         "root": app.root,
+        "shortcuts": app
+            .shortcuts
+            .iter()
+            .map(|shortcut| shortcut_json(shortcut, icon))
+            .collect::<Vec<_>>(),
     });
     if icon {
         value["icon_png"] = Value::String(base64(&app.icon_png));
+    }
+    value
+}
+
+/// One of an app's shortcuts as `dsa apps list` and `info` print it: `id`, `label` (what to
+/// show), `long_label`, `in_jump_list` (a static or dynamic one, which the jump list shows),
+/// `pinned`, and with icons `icon_png` in base64 (empty for none).
+pub fn shortcut_json(shortcut: &dsa_host_core::tasks::AppShortcut, icon: bool) -> Value {
+    let mut value = json!({
+        "id": shortcut.id,
+        "label": shortcut.label(),
+        "long_label": shortcut.long_label,
+        "in_jump_list": shortcut.in_jump_list(),
+        "pinned": shortcut.pinned,
+    });
+    if icon {
+        value["icon_png"] = Value::String(base64(&shortcut.icon_png));
     }
     value
 }
@@ -1878,8 +1947,34 @@ fn apps(
     connector: &mut dyn Connector,
 ) -> Result<String, String> {
     let action = invocation.apps.clone().unwrap_or(AppsAction::List);
+    // A desktop shortcut is made from the list the service keeps, which needs no Android.
+    if let AppsAction::DesktopShortcut(package) = &action {
+        let apps = client
+            .installed_apps()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
+        let app = apps
+            .iter()
+            .find(|app| &app.package_name == package)
+            .ok_or_else(|| {
+                format!("no app of {package} is installed in Android; dsa apps list shows them")
+            })?;
+        let path = desktop::place_on_desktop(app)?;
+        return Ok(if invocation.json {
+            json!({ "package": package, "created": true, "path": path.display().to_string() })
+                .to_string()
+        } else {
+            format!(
+                "Put a shortcut to {} on the desktop: {}",
+                app.label,
+                path.display()
+            )
+        });
+    }
     #[cfg(windows)]
-    if invocation.endpoint.is_none() && matches!(action, AppsAction::Settings(_)) {
+    if invocation.endpoint.is_none()
+        && matches!(action, AppsAction::Settings(_) | AppsAction::Shortcut(..))
+    {
         ensure_window_manager()?;
     }
     client
@@ -2010,6 +2105,18 @@ fn apps(
                 format!("{package} may use root: {}", result.level)
             })
         }
+        AppsAction::Shortcut(package, id) => {
+            client
+                .launch_shortcut(&package, &id)
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "package": package, "shortcut": id, "started": true }).to_string()
+            } else {
+                format!("Starting the shortcut {id} of {package}")
+            })
+        }
+        // Answered before Android was started.
+        AppsAction::DesktopShortcut(_) => unreachable!("answered above"),
     }
 }
 

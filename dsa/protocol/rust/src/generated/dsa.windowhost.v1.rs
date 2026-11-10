@@ -46,6 +46,10 @@ pub struct Attach {
     /// window manager: the app is then started in Android if it has no task yet.
     #[prost(bool, tag = "3")]
     pub launch: bool,
+    /// With `launch`: start this shortcut of the app (its jump list task or desktop shortcut)
+    /// rather than the app itself. Empty for the app.
+    #[prost(string, tag = "4")]
+    pub shortcut_id: ::prost::alloc::string::String,
 }
 /// Window manager to window host: the answer to Attach.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

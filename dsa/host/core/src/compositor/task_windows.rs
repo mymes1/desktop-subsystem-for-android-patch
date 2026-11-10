@@ -549,6 +549,8 @@ impl TaskWindows {
                     editor: editor.clone(),
                 }]
             }
+            // The window manager asks the user about it apart from the windows.
+            TaskEvent::PinShortcut(_) => Vec::new(),
         }
     }
 

@@ -20,7 +20,7 @@ use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::{
     is_valid_package, FromHost, HostAction, HostId, MenuWork, ToHost, WindowHosts,
 };
-use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
+use dsa_host_core::tasks::{AppInfo, PinShortcutRequest, TaskEvent, TaskRequest};
 
 /// The URL scheme DSA's settings app (DSA.app) opens, which a running copy receives too.
 pub const SETTINGS_SCHEME: &str = "dsa-settings";
@@ -47,6 +47,8 @@ pub enum ManagerEvent {
         host: HostId,
         package: String,
         launch: bool,
+        /// With `launch`, the shortcut of the app to start rather than the app; empty for none.
+        shortcut: String,
     },
     /// A window host reported what the user did to a window.
     Report { host: HostId, report: FromHost },
@@ -81,6 +83,14 @@ pub trait Platform {
     fn installed(&mut self, _apps: &[AppInfo]) {}
     /// Whether a task window is the active window now.
     fn focused(&mut self, _any: bool) {}
+    /// An app asks for one of its shortcuts on the Desktop: the user is asked, and the
+    /// answer goes to Android. Without a way to ask, the app hears no.
+    fn pin_requested(&mut self, request: &PinShortcutRequest) {
+        self.request(TaskRequest::AnswerPinShortcut {
+            request_id: request.request_id,
+            accepted: false,
+        });
+    }
     /// Opens DSA's settings on the Apps page at `package`, as a window's App Info does.
     fn open_app_page(&mut self, package: &str) -> Result<(), String>;
     /// Writes a line to the log.
@@ -168,8 +178,15 @@ impl<P: Platform> Manager<P> {
                 host,
                 package,
                 launch,
+                shortcut,
             } => {
-                let actions = self.hosts.attached(host, &package, launch, now);
+                let actions = self.hosts.attached_for(
+                    host,
+                    &package,
+                    launch,
+                    Some(shortcut.as_str()).filter(|id| !id.is_empty()),
+                    now,
+                );
                 self.carry_out(actions);
             }
             ManagerEvent::Report { host, report } => {
@@ -226,6 +243,7 @@ impl<P: Platform> Manager<P> {
                 self.carry_out(actions);
             }
             TaskEvent::Installed(apps) => self.platform.installed(apps),
+            TaskEvent::PinShortcut(request) => self.platform.pin_requested(request),
             _ => {}
         }
     }
@@ -323,9 +341,15 @@ impl<P: Platform> Manager<P> {
                 HostAction::Send { host, message } => {
                     self.platform.send(host, &message);
                 }
-                HostAction::Launch { package } => {
-                    self.platform.request(TaskRequest::Launch {
-                        package_name: package,
+                HostAction::Launch { package, shortcut } => {
+                    self.platform.request(match shortcut {
+                        Some(shortcut_id) => TaskRequest::LaunchShortcut {
+                            package_name: package,
+                            shortcut_id,
+                        },
+                        None => TaskRequest::Launch {
+                            package_name: package,
+                        },
                     });
                 }
                 HostAction::Disconnect { host, why } => {
@@ -459,6 +483,7 @@ mod tests {
             host: HOST,
             package: PACKAGE.into(),
             launch: false,
+            shortcut: String::new(),
         };
         manager.handle(attached, now);
         let frames = TaskEvent::Frames {
