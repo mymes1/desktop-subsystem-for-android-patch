@@ -224,6 +224,7 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
             package_name: setup.package.clone(),
             process_id: setup.process_id,
             launch: setup.launch,
+            shortcut_id: String::new(),
         },
         CONNECT,
     )?;

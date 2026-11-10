@@ -3598,6 +3598,134 @@ fn fr11_an_installed_app_reaches_the_start_menu_through_the_installed_apps_repor
     }
 }
 
+fn shortcut(id: &str, label: &str, rank: u32) -> dsa_protocol::control::AppShortcut {
+    dsa_protocol::control::AppShortcut {
+        id: id.into(),
+        short_label: label.into(),
+        icon_png: vec![0x89, b'P', b'N', b'G', rank as u8],
+        rank,
+        dynamic: true,
+        ..Default::default()
+    }
+}
+
+/// The installed apps the watcher hears of next.
+fn next_installed(
+    watch: &dsa_host_core::tasks::TaskWatch,
+) -> Vec<dsa_host_core::tasks::AppInfo> {
+    loop {
+        if let TaskEvent::Installed(apps) = watch.events.recv_timeout(WAIT).expect("the apps") {
+            return apps;
+        }
+    }
+}
+
+#[test]
+fn fr7_app_shortcuts_are_jump_list_tasks_and_desktop_shortcuts() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_tasks();
+    send_body(
+        &mut agent,
+        Body::InstalledApp(dsa_protocol::control::InstalledApp {
+            package_name: "com.example.chat".into(),
+            label: "Chat".into(),
+            ..Default::default()
+        }),
+    );
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec!["com.example.chat".into()],
+        }),
+    );
+    assert!(next_installed(&watch)[0].shortcuts.is_empty());
+
+    // The agent reports the app's shortcuts; the list of installed apps, which the window
+    // manager builds the jump list from, carries them with their names and icons.
+    send_body(
+        &mut agent,
+        Body::AppShortcuts(dsa_protocol::control::AppShortcuts {
+            package_name: "com.example.chat".into(),
+            shortcuts: vec![shortcut("new-chat", "New chat", 0), shortcut("ana", "Ana", 1)],
+        }),
+    );
+    let apps = next_installed(&watch);
+    let tasks = dsa_host_core::tasks::jump_list_shortcuts(&apps[0].shortcuts);
+    assert_eq!(
+        tasks.iter().map(|s| (s.id.as_str(), s.label())).collect::<Vec<_>>(),
+        vec![("new-chat", "New chat"), ("ana", "Ana")]
+    );
+    assert_eq!(tasks[0].icon_png, vec![0x89, b'P', b'N', b'G', 0]);
+
+    // The app changes them; the jump list follows.
+    send_body(
+        &mut agent,
+        Body::AppShortcuts(dsa_protocol::control::AppShortcuts {
+            package_name: "com.example.chat".into(),
+            shortcuts: vec![shortcut("new-chat", "New chat", 0)],
+        }),
+    );
+    assert_eq!(next_installed(&watch)[0].shortcuts.len(), 1);
+
+    // A jump list task starts its shortcut in Android.
+    session
+        .request(TaskRequest::LaunchShortcut {
+            package_name: "com.example.chat".into(),
+            shortcut_id: "new-chat".into(),
+        })
+        .expect("the launch");
+    loop {
+        if let Body::LaunchShortcut(launch) = next_body(&mut agent) {
+            assert_eq!(launch.package_name, "com.example.chat");
+            assert_eq!(launch.shortcut_id, "new-chat");
+            break;
+        }
+    }
+
+    // The app asks to pin a shortcut: the window manager hears of it, asks the user, and the
+    // answer reaches the agent.
+    send_body(
+        &mut agent,
+        Body::PinShortcutRequest(dsa_protocol::control::PinShortcutRequest {
+            request_id: 7,
+            package_name: "com.example.chat".into(),
+            app_label: "Chat".into(),
+            shortcut: Some(shortcut("ana", "Ana", 1)),
+        }),
+    );
+    let request = loop {
+        if let TaskEvent::PinShortcut(request) = watch.events.recv_timeout(WAIT).expect("pin") {
+            break request;
+        }
+    };
+    assert_eq!(request.request_id, 7);
+    assert_eq!(request.app_label, "Chat");
+    assert_eq!(request.shortcut.label(), "Ana");
+    session
+        .request(TaskRequest::AnswerPinShortcut {
+            request_id: 7,
+            accepted: true,
+        })
+        .expect("the answer");
+    loop {
+        if let Body::PinShortcutAnswer(answer) = next_body(&mut agent) {
+            assert_eq!(answer.request_id, 7);
+            assert!(answer.accepted);
+            break;
+        }
+    }
+
+    // Uninstalled: the app and its shortcuts leave the list, so the host removes its jump
+    // list and desktop shortcuts.
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec![],
+        }),
+    );
+    assert!(next_installed(&watch).is_empty());
+}
+
 #[test]
 fn fr11_the_install_window_learns_the_installed_version_and_signer_from_the_agent() {
     let (session, mut agent, _launcher) = active_session();

@@ -47,6 +47,8 @@ pub enum ManagerEvent {
         host: HostId,
         package: String,
         launch: bool,
+        /// With `launch`, the shortcut of the app to start rather than the app; empty for none.
+        shortcut: String,
     },
     /// A window host reported what the user did to a window.
     Report { host: HostId, report: FromHost },
@@ -168,8 +170,15 @@ impl<P: Platform> Manager<P> {
                 host,
                 package,
                 launch,
+                shortcut,
             } => {
-                let actions = self.hosts.attached(host, &package, launch, now);
+                let actions = self.hosts.attached_for(
+                    host,
+                    &package,
+                    launch,
+                    Some(shortcut.as_str()).filter(|id| !id.is_empty()),
+                    now,
+                );
                 self.carry_out(actions);
             }
             ManagerEvent::Report { host, report } => {
@@ -321,9 +330,15 @@ impl<P: Platform> Manager<P> {
                 HostAction::Send { host, message } => {
                     self.platform.send(host, &message);
                 }
-                HostAction::Launch { package } => {
-                    self.platform.request(TaskRequest::Launch {
-                        package_name: package,
+                HostAction::Launch { package, shortcut } => {
+                    self.platform.request(match shortcut {
+                        Some(shortcut_id) => TaskRequest::LaunchShortcut {
+                            package_name: package,
+                            shortcut_id,
+                        },
+                        None => TaskRequest::Launch {
+                            package_name: package,
+                        },
                     });
                 }
                 HostAction::Disconnect { host, why } => {
@@ -457,6 +472,7 @@ mod tests {
             host: HOST,
             package: PACKAGE.into(),
             launch: false,
+            shortcut: String::new(),
         };
         manager.handle(attached, now);
         let frames = TaskEvent::Frames {

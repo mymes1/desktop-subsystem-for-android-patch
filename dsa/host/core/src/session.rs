@@ -160,8 +160,8 @@ use crate::root_elevation::{AppLevel, Level};
 use crate::share::{ShareOutcome, ShareRequest};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
-    TaskRequest, TaskTable, TaskWatch,
+    AppInfo, AppSettingsPage, AppShortcut, Bounds, PinShortcutRequest, StatusBarAppearance, Task,
+    TaskEvent, TaskOrientation, TaskRequest, TaskTable, TaskWatch,
 };
 use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
@@ -1045,6 +1045,18 @@ impl Shared {
             hub.table.installed_event(packages)
         };
         self.publish_task(event);
+    }
+
+    /// Records the launcher shortcuts of `package`, and hands the list of installed apps that
+    /// carries them to the watchers when they changed it.
+    fn publish_shortcuts(&self, package: &str, shortcuts: Vec<AppShortcut>) {
+        let event = {
+            let mut hub = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
+            hub.table.shortcuts_event(package, shortcuts)
+        };
+        if let Some(event) = event {
+            self.publish_task(event);
+        }
     }
 
     /// Tells whoever waits for a fresh list of installed apps that it arrived.
@@ -2968,6 +2980,20 @@ impl Session {
             TaskRequest::StopApp { package_name } => {
                 Body::StopApp(control::StopApp { package_name })
             }
+            TaskRequest::LaunchShortcut {
+                package_name,
+                shortcut_id,
+            } => Body::LaunchShortcut(control::LaunchShortcut {
+                package_name,
+                shortcut_id,
+            }),
+            TaskRequest::AnswerPinShortcut {
+                request_id,
+                accepted,
+            } => Body::PinShortcutAnswer(control::PinShortcutAnswer {
+                request_id,
+                accepted,
+            }),
             TaskRequest::Resize {
                 task_id,
                 width,
@@ -3841,6 +3867,20 @@ const GAPPS_WAIT: Duration = Duration::from_secs(5);
 /// How long the agent has to say the Google Services Framework Android ID, which it reads
 /// at once.
 const DEVICE_ID_WAIT: Duration = Duration::from_secs(2);
+
+/// One of an app's launcher shortcuts, as the agent describes it.
+fn shortcut_from_control(shortcut: control::AppShortcut) -> AppShortcut {
+    AppShortcut {
+        id: shortcut.id,
+        short_label: shortcut.short_label,
+        long_label: shortcut.long_label,
+        icon_png: shortcut.icon_png,
+        rank: shortcut.rank,
+        manifest: shortcut.manifest,
+        dynamic: shortcut.dynamic,
+        pinned: shortcut.pinned,
+    }
+}
 
 /// What the guest's control daemon says of the Google apps, as the host keeps it.
 fn guest_gapps(state: control::GappsState) -> GuestGapps {
@@ -6075,6 +6115,31 @@ impl Worker {
                 self.shared.publish_installed(&apps.package_names);
                 self.shared.apps_refreshed();
             }
+            Some(Body::AppShortcuts(shortcuts)) => {
+                let list = shortcuts
+                    .shortcuts
+                    .into_iter()
+                    .map(shortcut_from_control)
+                    .collect();
+                self.shared
+                    .publish_shortcuts(&shortcuts.package_name, list);
+            }
+            Some(Body::PinShortcutRequest(request)) => {
+                let Some(shortcut) = request.shortcut else {
+                    eprintln!(
+                        "apps: {} asked to pin a shortcut but gave none; it is ignored",
+                        request.package_name
+                    );
+                    return;
+                };
+                self.shared
+                    .publish_task(TaskEvent::PinShortcut(PinShortcutRequest {
+                        request_id: request.request_id,
+                        package_name: request.package_name,
+                        app_label: request.app_label,
+                        shortcut: shortcut_from_control(shortcut),
+                    }));
+            }
             Some(Body::ReinstallResult(result)) => self.guest_reinstall_result(result),
             Some(Body::NativeLibraryCrash(crash)) => self.native_library_crash(crash),
             Some(Body::UninstallResult(result)) => {
@@ -6376,6 +6441,8 @@ impl Worker {
             | Some(Body::OpenAppSettings(_))
             | Some(Body::RequestGuestMemory(_))
             | Some(Body::StopApp(_))
+            | Some(Body::LaunchShortcut(_))
+            | Some(Body::PinShortcutAnswer(_))
             | Some(Body::ListWidgetProviders(_))
             | Some(Body::AddWidget(_))
             | Some(Body::RemoveWidget(_))

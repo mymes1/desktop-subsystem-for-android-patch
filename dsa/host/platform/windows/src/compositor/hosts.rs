@@ -106,6 +106,8 @@ pub enum ManagerEvent {
         link: Arc<HostLink>,
         package: String,
         launch: bool,
+        /// With `launch`, the shortcut of the app to start rather than the app; empty for none.
+        shortcut: String,
     },
     /// A window host reported what the user did to a window.
     Report { host: HostId, report: FromHost },
@@ -653,6 +655,7 @@ fn serve_host(
         link: Arc::clone(&link),
         package: attach.package_name,
         launch: attach.launch,
+        shortcut: attach.shortcut_id,
     };
     if events.send(attached).is_err() {
         return;
@@ -839,11 +842,18 @@ impl Manager {
                 link,
                 package,
                 launch,
+                shortcut,
             } => {
                 let id = link.id();
                 self.links.insert(id, link);
                 self.host_packages.insert(id, package.clone());
-                let actions = self.hosts.attached(id, &package, launch, now);
+                let actions = self.hosts.attached_for(
+                    id,
+                    &package,
+                    launch,
+                    Some(shortcut.as_str()).filter(|id| !id.is_empty()),
+                    now,
+                );
                 self.carry_out(actions);
             }
             ManagerEvent::Report { host, report } => {
@@ -1185,9 +1195,15 @@ impl Manager {
                         remote.attach(link);
                     }
                 }
-                HostAction::Launch { package } => {
-                    let request = TaskRequest::Launch {
-                        package_name: package,
+                HostAction::Launch { package, shortcut } => {
+                    let request = match shortcut {
+                        Some(shortcut_id) => TaskRequest::LaunchShortcut {
+                            package_name: package,
+                            shortcut_id,
+                        },
+                        None => TaskRequest::Launch {
+                            package_name: package,
+                        },
                     };
                     if self.setup.requests.send(request).is_err() {
                         self.log("the request thread has ended; an app cannot be started");

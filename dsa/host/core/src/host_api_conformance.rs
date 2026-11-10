@@ -1137,6 +1137,10 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::close_and_launch_reach_the_caller(&mut || $make);
         }
         #[test]
+        fn fr7_app_shortcuts_and_pin_requests_reach_the_caller_and_back() {
+            $crate::host_api_conformance::app_shortcuts_reach_the_caller(&mut || $make);
+        }
+        #[test]
         fn fr4_resizing_and_rescaling_a_task_reach_the_callers_android() {
             $crate::host_api_conformance::resize_and_density_reach_the_caller(&mut || $make);
         }
@@ -2177,6 +2181,63 @@ pub fn watcher_receives_editor(make: MakeLocal<'_>) {
         TaskEvent::Updated(sample_task(4, "Notes"))
     );
     assert_eq!(next_event(&mut stream), editor);
+}
+
+pub fn app_shortcuts_reach_the_caller(make: MakeLocal<'_>) {
+    use crate::tasks::{AppInfo, AppShortcut, PinShortcutRequest};
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let mut stream = connect(&mut *connector).watch_tasks().expect("watching");
+    let android = androids.of(&user).unwrap();
+    let new_chat = AppShortcut {
+        id: "new-chat".into(),
+        short_label: "New chat".into(),
+        long_label: "Start a new chat".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G', 9],
+        rank: 0,
+        manifest: true,
+        ..Default::default()
+    };
+    let installed = TaskEvent::Installed(vec![AppInfo {
+        package_name: "com.example.chat".into(),
+        label: "Chat".into(),
+        shortcuts: vec![new_chat.clone()],
+        ..Default::default()
+    }]);
+    android.publish(installed.clone());
+    assert_eq!(next_event(&mut stream), installed);
+    let pin = TaskEvent::PinShortcut(PinShortcutRequest {
+        request_id: 3,
+        package_name: "com.example.chat".into(),
+        app_label: "Chat".into(),
+        shortcut: AppShortcut {
+            pinned: true,
+            ..new_chat
+        },
+    });
+    android.publish(pin.clone());
+    assert_eq!(next_event(&mut stream), pin);
+
+    client
+        .launch_shortcut("com.example.chat", "new-chat")
+        .expect("the launch");
+    client.answer_pin_shortcut(3, false).expect("the answer");
+    assert_eq!(
+        *android.requests.lock().unwrap(),
+        vec![
+            TaskRequest::LaunchShortcut {
+                package_name: "com.example.chat".into(),
+                shortcut_id: "new-chat".into(),
+            },
+            TaskRequest::AnswerPinShortcut {
+                request_id: 3,
+                accepted: false,
+            },
+        ]
+    );
 }
 
 pub fn selection_reaches_the_caller(make: MakeLocal<'_>) {

@@ -694,6 +694,7 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
             package_name: setup.package.clone(),
             process_id: std::process::id(),
             launch: setup.launch,
+            shortcut_id: String::new(),
         },
         CONNECT_TIMEOUT,
     )?;
