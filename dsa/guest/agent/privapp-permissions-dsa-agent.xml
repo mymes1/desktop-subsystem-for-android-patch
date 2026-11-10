@@ -46,5 +46,6 @@
         <permission name="android.permission.BACKUP" />
         <permission name="android.permission.PROVIDE_DEFAULT_ENABLED_CREDENTIAL_SERVICE" />
         <permission name="android.permission.MODIFY_AUDIO_ROUTING" />
+        <permission name="android.permission.MODIFY_AUDIO_SETTINGS" />
     </privapp-permissions>
 </permissions>
