@@ -606,7 +606,11 @@ class KeyMintLockTests(unittest.TestCase):
         crates = ["ciborium", "ciborium-io", "ciborium-ll", "coset", "der", "der_derive", "const-oid", "spki",
                   "pkcs1", "pkcs8", "sec1", "x509-cert", "flagset", "zeroize", "zeroize_derive", "enumn", "hex",
                   "half", "foreign-types", "foreign-types-shared", "openssl-macros", "android_logger", "log",
-                  "libc", "nix", "regex", "zerocopy", "downcast-rs", "thiserror"]
+                  "libc", "nix", "regex", "zerocopy", "downcast-rs", "thiserror",
+                  # The AIDL Rust backend gives every generated interface crate libasync_trait,
+                  # for its async traits. Without it the first KeyMint Framework build stopped on
+                  # the KeyMint, RKP, secure clock and shared secret interface crates.
+                  "async-trait"]
         for version in framework_lock.load()["versions"]:
             projects = {p["path"]: p for p in version["projects"]}
             for whole in ("system/keymint", "external/rust/crates/openssl"):
