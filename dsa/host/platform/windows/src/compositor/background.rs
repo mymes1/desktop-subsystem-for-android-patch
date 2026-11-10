@@ -18,12 +18,17 @@
 //! artist and album art. Each session has a hidden window of its own that carries the app's
 //! AppUserModelID, so the flyout names the app rather than the window manager.
 //!
+//! While an app with a media session has a window open, the window's taskbar preview has
+//! previous, play or pause and next buttons ([`WithWindowMedia`] carries the session to the
+//! app's windows and their presses back).
+//!
 //! The window manager watches the service ([`sync`]); what the user does goes back to it on
 //! new connections. The Win32 side is [`WindowsTray`]; a test's [`Tray`] records what it is
 //! asked.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -31,6 +36,7 @@ use std::time::Duration;
 use dsa_host_core::background::{
     BackgroundApp, BackgroundCommand, BackgroundEvent, MediaCommand, MediaSession,
 };
+use dsa_host_core::compositor::window_hosts::MediaButtons;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_transport::Connector;
 use sha2::{Digest, Sha256};
@@ -239,6 +245,40 @@ pub trait Tray {
     fn command(&mut self, command: TrayCommand);
     /// What the user did since the last call.
     fn reports(&mut self) -> Vec<TrayReport>;
+}
+
+/// A tray that also tells the apps' task windows of each media session, for the media buttons
+/// (previous, play or pause, next) in their taskbar previews, and passes the presses of those
+/// buttons on to the service as it passes the media keys'.
+pub struct WithWindowMedia<'a> {
+    pub tray: &'a mut dyn Tray,
+    /// Told of a package's media buttons when its session changes, and `None` when it ends.
+    pub windows: Box<dyn FnMut(&str, Option<MediaButtons>) + 'a>,
+    /// The media buttons the user clicked in a window's taskbar preview.
+    pub pressed: Receiver<(String, MediaCommand)>,
+}
+
+impl Tray for WithWindowMedia<'_> {
+    fn command(&mut self, command: TrayCommand) {
+        match &command {
+            TrayCommand::Media(session) => {
+                (self.windows)(&session.package_name, Some(MediaButtons::of(session)))
+            }
+            TrayCommand::MediaGone(package) => (self.windows)(package, None),
+            _ => {}
+        }
+        self.tray.command(command);
+    }
+
+    fn reports(&mut self) -> Vec<TrayReport> {
+        let mut reports = self.tray.reports();
+        reports.extend(
+            self.pressed
+                .try_iter()
+                .map(|(package, command)| TrayReport::Media(package, command)),
+        );
+        reports
+    }
 }
 
 /// Shows the apps that run in the background in the user's Android until `stop`,
@@ -1744,6 +1784,101 @@ mod tests {
         wait("the app's icon was never removed", &|r| {
             r.commands
                 .contains(&TrayCommand::Remove("com.example.music".into()))
+        });
+        stop.store(true, Ordering::Relaxed);
+        syncing.join().unwrap();
+    }
+
+    #[test]
+    fn fr24_the_taskbar_preview_buttons_follow_the_session_and_reach_it() {
+        use dsa_host_core::background::Playback;
+        use dsa_host_core::host_api_conformance::{FakeAndroids, RunningService};
+        use dsa_host_core::session::BackgroundRequest;
+        use std::sync::mpsc;
+        use std::time::Instant;
+
+        let (listener, connector) = dsa_transport::local::pair();
+        let androids = Arc::new(FakeAndroids::default());
+        let _service = RunningService::start(Box::new(listener), androids.clone());
+        let recorded = Arc::new(std::sync::Mutex::new(Recorded::default()));
+        let told = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (press, pressed) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let syncing = {
+            let mut tray = Arc::clone(&recorded);
+            let told = Arc::clone(&told);
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || {
+                let mut linked = WithWindowMedia {
+                    tray: &mut tray,
+                    windows: Box::new(move |package: &str, media| {
+                        told.lock().unwrap().push((package.to_string(), media));
+                    }),
+                    pressed,
+                };
+                sync(Box::new(connector), &mut linked, stop, None)
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let android = loop {
+            if let Some(android) = androids.androids.lock().unwrap().values().next().cloned() {
+                break android;
+            }
+            assert!(Instant::now() < deadline, "the apps were never watched");
+            thread::sleep(Duration::from_millis(10));
+        };
+        thread::sleep(Duration::from_millis(100));
+        android.start();
+        let session = MediaSession {
+            package_name: "com.example.music".into(),
+            app_label: "Music".into(),
+            playback: Playback::Playing,
+            can_pause: true,
+            can_next: true,
+            ..MediaSession::default()
+        };
+        android.background_event(BackgroundEvent::Media(session.clone()));
+        let wait = |what: &str, done: &dyn Fn() -> bool| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !done() {
+                assert!(Instant::now() < deadline, "{what}");
+                thread::sleep(Duration::from_millis(10));
+            }
+        };
+        let buttons = MediaButtons::of(&session);
+        wait("the windows never heard of the session", &|| {
+            told.lock()
+                .unwrap()
+                .contains(&("com.example.music".to_string(), Some(buttons)))
+        });
+        // The media controls hear of it too, as before.
+        assert!(recorded
+            .lock()
+            .unwrap()
+            .commands
+            .contains(&TrayCommand::Media(session.clone())));
+        // A click on Next in a window's preview reaches the session, as the Next key does.
+        press
+            .send(("com.example.music".to_string(), MediaCommand::Next))
+            .unwrap();
+        wait("the press never reached Android", &|| {
+            !android.background_requests.lock().unwrap().is_empty()
+        });
+        assert_eq!(
+            *android.background_requests.lock().unwrap(),
+            vec![BackgroundRequest::Media(
+                "com.example.music".into(),
+                MediaCommand::Next
+            )]
+        );
+        // The session's end hides the buttons.
+        android.background_event(BackgroundEvent::MediaRemoved {
+            package_name: "com.example.music".into(),
+        });
+        wait("the windows never heard the session end", &|| {
+            told.lock()
+                .unwrap()
+                .contains(&("com.example.music".to_string(), None))
         });
         stop.store(true, Ordering::Relaxed);
         syncing.join().unwrap();

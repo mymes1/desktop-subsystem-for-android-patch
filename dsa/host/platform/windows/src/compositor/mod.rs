@@ -178,6 +178,33 @@ pub struct Compositor {
     /// Turns Windows' touch gestures off while a task window is in front, when the user's
     /// setting says so. None leaves them alone.
     touch_gestures: Option<touch_gestures::TouchGestureSetup>,
+    /// What joins the media sessions the tray follows to the media buttons in the taskbar
+    /// previews of the task windows.
+    media_windows: MediaWindows,
+}
+
+/// The way between the media sessions the tray follows and the media buttons in the task
+/// windows' taskbar previews: each session goes to the manager, which tells the app's window
+/// host, and each press of a button comes back to the tray's connection to the service, which
+/// sends it to the app's session as it sends a media key's.
+struct MediaWindows {
+    /// The manager's events, once the task windows have started.
+    events: Arc<Mutex<Option<mpsc::Sender<ManagerEvent>>>>,
+    /// Where the manager sends a press.
+    pressed_tx: mpsc::Sender<(String, dsa_host_core::background::MediaCommand)>,
+    /// Where the tray's thread reads the presses; taken when it starts.
+    pressed_rx: Mutex<Option<mpsc::Receiver<(String, dsa_host_core::background::MediaCommand)>>>,
+}
+
+impl MediaWindows {
+    fn new() -> MediaWindows {
+        let (pressed_tx, pressed_rx) = mpsc::channel();
+        MediaWindows {
+            events: Arc::new(Mutex::new(None)),
+            pressed_tx,
+            pressed_rx: Mutex::new(Some(pressed_rx)),
+        }
+    }
 }
 
 /// The installed apps an event from the watch of the tasks carries, if it carries them.
@@ -290,6 +317,7 @@ impl Compositor {
             host_services: true,
             show_background: true,
             touch_gestures: touch_gestures::TouchGestureSetup::for_this_user(),
+            media_windows: MediaWindows::new(),
         }
     }
 
@@ -330,6 +358,7 @@ impl Compositor {
             host_services: false,
             show_background: false,
             touch_gestures: None,
+            media_windows: MediaWindows::new(),
         }
     }
 
@@ -997,6 +1026,13 @@ impl Compositor {
         let stop = Arc::clone(stop);
         let logger = self.logger.clone();
         let failed = self.logger.clone();
+        let events = Arc::clone(&self.media_windows.events);
+        let pressed = self
+            .media_windows
+            .pressed_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         thread::Builder::new()
             .name("dsa-wm-background".into())
             .spawn(move || {
@@ -1010,7 +1046,26 @@ impl Compositor {
                         return;
                     }
                 };
-                background::sync(connector, &mut tray, stop, logger);
+                let Some(pressed) = pressed else {
+                    background::sync(connector, &mut tray, stop, logger);
+                    return;
+                };
+                // Each media session also reaches its app's windows, for the media buttons in
+                // their taskbar previews, and those buttons' presses come back here.
+                let mut linked = background::WithWindowMedia {
+                    tray: &mut tray,
+                    windows: Box::new(move |package: &str, media| {
+                        let events = events.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(events) = events.as_ref() {
+                            let _ = events.send(ManagerEvent::Media {
+                                package: package.to_string(),
+                                media,
+                            });
+                        }
+                    }),
+                    pressed,
+                };
+                background::sync(connector, &mut linked, stop, logger);
             })
             .map_err(|e| {
                 note(
@@ -1288,7 +1343,14 @@ impl Compositor {
             renderer_generation: self.presenter.clone().map(|presenter| {
                 Box::new(move || presenter.device_generation()) as Box<dyn Fn() -> u64 + Send>
             }),
+            media_pressed: Some(self.media_windows.pressed_tx.clone()),
         };
+        // The media sessions the tray follows reach the windows through the manager.
+        *self
+            .media_windows
+            .events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(events_tx.clone());
         let manager = thread::Builder::new()
             .name("dsa-wm-manager".into())
             .spawn(move || hosts::manage(setup))

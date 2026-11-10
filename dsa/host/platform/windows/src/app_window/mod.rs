@@ -27,6 +27,7 @@ pub mod screenshot;
 pub mod splash;
 pub mod system_menu;
 pub mod text_store;
+pub mod thumb_bar;
 pub mod tsf;
 pub mod window;
 
