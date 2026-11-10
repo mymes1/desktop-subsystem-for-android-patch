@@ -248,3 +248,13 @@ DSA는 아직 초기이고 안정화 중이라, 고칠 방법을 몰라도 알�
 
 Android는 Google LLC의 상표입니다. Windows는 Microsoft 그룹의 상표입니다. DSA는 Microsoft나
 Google과 제휴하거나 그들의 보증, 후원을 받지 않습니다.
+
+## 스타 추이
+
+<a href="https://www.star-history.com/#thisisthepy/desktop-subsystem-for-android&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date" />
+    <img alt="Star history of thisisthepy/desktop-subsystem-for-android" src="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date" width="720" />
+  </picture>
+</a>
