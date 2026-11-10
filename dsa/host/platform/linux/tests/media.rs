@@ -1394,7 +1394,7 @@ fn make_test_certificates(dir: &Path) -> Result<(), String> {
         "-days",
         "2",
         "-subj",
-        "/O=DSA Test/CN=DSA FR-28 Test Root",
+        "/O=DSA Test/CN=DSA Host Certificates Test Root",
         "-addext",
         "basicConstraints=critical,CA:TRUE",
         "-addext",
