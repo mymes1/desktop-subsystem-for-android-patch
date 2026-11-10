@@ -42,6 +42,11 @@ allow = [
 ]
 weak_copyleft = ["MS-RL"]
 separate_program = ["GPL-2.0-only", "GPL-2.0-only WITH Linux-syscall-note", "GPL-2.0-or-later"]
+# Map data the host reads, which no program links: allowed with distribution = "data" and the
+# attribution the licence asks for in `notice`, which the third-party notice carries.
+# LicenseRef-KOGL-Type-1 is the Korea Open Government License Type 1 (source indication);
+# LicenseRef-Public-Domain is data its makers put in the public domain.
+data = ["CC-BY-4.0", "LicenseRef-KOGL-Type-1", "LicenseRef-Public-Domain"]
 
 # The setup program (setup.exe and DsaSetup.exe).
 
@@ -225,3 +230,26 @@ license = "Apache-2.0"
 part = "guest"
 distribution = "linked"
 source = "https://github.com/JetBrains/kotlin"
+
+# The address data (geodata/address-boundaries.bin), which the host turns positions into
+# addresses with. dsa/host/core/geodata/build-geodata.py makes it from these, simplified.
+
+[[component]]
+name = "Korean administrative dong boundaries (admdongkor, from Statistics Korea SGIS)"
+version = "ver20261001"
+license = "CC-BY-4.0 AND LicenseRef-KOGL-Type-1"
+part = "data"
+distribution = "data"
+modified = true
+source = "https://github.com/vuski/admdongkor"
+notice = "This data is derived from administrative-dong boundaries released by Statistics Korea SGIS (https://sgis.kostat.go.kr) under KOGL Type 1 (https://www.kogl.or.kr/info/licenseType1.do), modified by vuski/admdongkor (https://github.com/vuski/admdongkor), distributed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). DSA simplified the boundaries and keeps only their names."
+
+[[component]]
+name = "Natural Earth admin-1 states and provinces, countries and populated places (1:10m)"
+version = "5.1.2"
+license = "LicenseRef-Public-Domain"
+part = "data"
+distribution = "data"
+modified = true
+source = "https://www.naturalearthdata.com/"
+notice = "Made with Natural Earth. Free vector and raster map data @ naturalearthdata.com. Natural Earth is in the public domain (https://www.naturalearthdata.com/about/terms-of-use/)."

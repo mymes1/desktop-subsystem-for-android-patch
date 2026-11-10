@@ -768,6 +768,128 @@ pub struct LocationFix {
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
 }
+/// Guest to host, from the agent, which is the guest's geocode provider: look up addresses
+/// for an app's Geocoder. A forward lookup names a place (`query`); a reverse lookup gives a
+/// position. The host answers each request with GeocodeResult, from the host's own geocoding
+/// service, so the guest holds no geocoding engine or data of its own.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeRequest {
+    /// The agent's number for the request, unique while its connection lasts.
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// True for a reverse lookup (a position to addresses), false for a forward one.
+    #[prost(bool, tag = "2")]
+    pub reverse: bool,
+    /// Forward: the name or address of the place, as the app gave it.
+    #[prost(string, tag = "3")]
+    pub query: ::prost::alloc::string::String,
+    /// Reverse: the position.
+    #[prost(double, tag = "4")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "5")]
+    pub longitude_degrees: f64,
+    /// Forward: the box the app prefers results in, when `has_bounds`.
+    #[prost(bool, tag = "6")]
+    pub has_bounds: bool,
+    #[prost(double, tag = "7")]
+    pub lower_left_latitude: f64,
+    #[prost(double, tag = "8")]
+    pub lower_left_longitude: f64,
+    #[prost(double, tag = "9")]
+    pub upper_right_latitude: f64,
+    #[prost(double, tag = "10")]
+    pub upper_right_longitude: f64,
+    /// The most addresses the app takes, from 1.
+    #[prost(uint32, tag = "11")]
+    pub max_results: u32,
+    /// The language the app wants the addresses in, as a BCP 47 tag ("ko-KR"); empty for the
+    /// host's own.
+    #[prost(string, tag = "12")]
+    pub language: ::prost::alloc::string::String,
+}
+/// One address a geocoding lookup found. Empty strings are parts the service did not give.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeAddress {
+    /// The address as lines a person reads, in order.
+    #[prost(string, repeated, tag = "1")]
+    pub address_lines: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The place's own name, such as a building or a landmark.
+    #[prost(string, tag = "2")]
+    pub feature_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub premises: ::prost::alloc::string::String,
+    /// The house number and the street.
+    #[prost(string, tag = "4")]
+    pub sub_thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub sub_locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub sub_admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub postal_code: ::prost::alloc::string::String,
+    /// ISO 3166-1 alpha-2, upper case.
+    #[prost(string, tag = "11")]
+    pub country_code: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub country_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub has_position: bool,
+    #[prost(double, tag = "14")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "15")]
+    pub longitude_degrees: f64,
+}
+/// Host to guest, to the agent: the answer to a GeocodeRequest. `message` says why, in words
+/// for the guest's log, when the status is not OK.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "GeocodeStatus", tag = "2")]
+    pub status: i32,
+    #[prost(message, repeated, tag = "3")]
+    pub addresses: ::prost::alloc::vec::Vec<GeocodeAddress>,
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent's "Share on PC" target: an app shared text, links or files
+/// with the host. The host shows its own share UI with the same content. Each file is read
+/// with DragRead, as a drag's files are, with `share_id` as the drag's ID, and the share ends
+/// with DragEnd, which gives back the guest's access to the files. The host answers with
+/// ShareResult.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareToHost {
+    /// Unique among the shares and drags of one connection.
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    /// The subject or title the app gave; empty when none.
+    #[prost(string, tag = "2")]
+    pub title: ::prost::alloc::string::String,
+    /// The app that shared, and its name as the guest shows it; empty when unknown.
+    #[prost(string, tag = "3")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub app_label: ::prost::alloc::string::String,
+    /// The text and links (`is_text`) and the files, in the order the app gave them.
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Host to guest, to the agent: what became of a ShareToHost.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareResult {
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    #[prost(enumeration = "ShareOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
 /// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 /// controller's deep idle state). The host takes the device not to be in Doze when the agent
 /// connects; the agent sends this on each change after that.
@@ -2515,7 +2637,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2825,6 +2947,14 @@ pub mod envelope {
         ReinstallResult(super::ReinstallResult),
         #[prost(message, tag = "382")]
         NativeLibraryCrash(super::NativeLibraryCrash),
+        #[prost(message, tag = "470")]
+        GeocodeRequest(super::GeocodeRequest),
+        #[prost(message, tag = "471")]
+        GeocodeResult(super::GeocodeResult),
+        #[prost(message, tag = "472")]
+        ShareToHost(super::ShareToHost),
+        #[prost(message, tag = "473")]
+        ShareResult(super::ShareResult),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -3400,6 +3530,86 @@ impl LocationAccess {
             "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
             "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
             "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+/// How a geocoding request ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GeocodeStatus {
+    Unspecified = 0,
+    /// The lookup ran. No addresses means the place is not known.
+    Ok = 1,
+    /// The host's geocoding service cannot answer now: no network, or the service failed.
+    Unavailable = 2,
+    /// The user turned the host's geocoding off, or there is no desktop session to ask.
+    Refused = 3,
+    /// Too many lookups in a short time; the service asks the guest to wait.
+    Busy = 4,
+    /// The request itself cannot be answered: an empty name, or a position not on Earth.
+    Invalid = 5,
+}
+impl GeocodeStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GEOCODE_STATUS_UNSPECIFIED",
+            Self::Ok => "GEOCODE_STATUS_OK",
+            Self::Unavailable => "GEOCODE_STATUS_UNAVAILABLE",
+            Self::Refused => "GEOCODE_STATUS_REFUSED",
+            Self::Busy => "GEOCODE_STATUS_BUSY",
+            Self::Invalid => "GEOCODE_STATUS_INVALID",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GEOCODE_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "GEOCODE_STATUS_OK" => Some(Self::Ok),
+            "GEOCODE_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "GEOCODE_STATUS_REFUSED" => Some(Self::Refused),
+            "GEOCODE_STATUS_BUSY" => Some(Self::Busy),
+            "GEOCODE_STATUS_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+/// What became of a share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareOutcome {
+    Unspecified = 0,
+    /// The host's share UI took the content.
+    Shared = 1,
+    /// The user closed the host's share UI without sharing.
+    Canceled = 2,
+    /// It could not be shared; the message says why.
+    Failed = 3,
+}
+impl ShareOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_OUTCOME_UNSPECIFIED",
+            Self::Shared => "SHARE_OUTCOME_SHARED",
+            Self::Canceled => "SHARE_OUTCOME_CANCELED",
+            Self::Failed => "SHARE_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_OUTCOME_SHARED" => Some(Self::Shared),
+            "SHARE_OUTCOME_CANCELED" => Some(Self::Canceled),
+            "SHARE_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
