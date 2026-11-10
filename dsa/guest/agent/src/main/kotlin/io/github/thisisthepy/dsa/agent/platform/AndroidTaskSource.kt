@@ -17,6 +17,7 @@ import io.github.thisisthepy.dsa.agent.tasks.TaskOrientation
 import io.github.thisisthepy.dsa.agent.tasks.asksForFullScreen
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
+import io.github.thisisthepy.dsa.agent.tasks.WidgetSetupTasks
 import io.github.thisisthepy.dsa.agent.tasks.handlesDensityChange
 import io.github.thisisthepy.dsa.agent.tasks.handlesFontScaleChange
 
@@ -44,9 +45,15 @@ class AndroidTaskSource(
     // Held so it is not collected while the framework calls it.
     private var listener: TaskStackListener? = null
 
-    override fun snapshot(): List<TaskSnapshot> =
+    private val setups = WidgetSetupTasks(context.packageName, WidgetConfigureActivity::class.java.name)
+
+    // Held while the tasks are read, so two reads at once do not mix up which tasks are setups.
+    override fun snapshot(): List<TaskSnapshot> = synchronized(setups) {
         @Suppress("DEPRECATION")
-        activityManager.getRunningTasks(MAX_TASKS).map(::read)
+        val tasks = activityManager.getRunningTasks(MAX_TASKS).map(::read)
+        setups.retain(tasks.map { it.taskId })
+        tasks
+    }
 
     override fun listen(onChange: () -> Unit) {
         val changes = object : TaskStackListener() {
@@ -66,11 +73,14 @@ class AndroidTaskSource(
         val root = info.baseActivity ?: info.baseIntent?.component ?: info.topActivity
         val smallest = fields.minSize(info, context.resources.configuration.densityDpi)
         val top = activityInfo(info.topActivity ?: root)
+        // A widget's setup runs above the agent's own activity, in a task that is the app's.
+        val owner = setups.owner(info.taskId, root?.packageName, root?.className, info.topActivity?.packageName, info.numActivities)
+        val setup = setups.isSetup(info.taskId)
         return TaskSnapshot(
             taskId = info.taskId,
             kind = if (fields.activityType(info) == ACTIVITY_TYPE_STANDARD) TaskKind.APP else TaskKind.OTHER,
-            packageName = root?.packageName,
-            label = label(info, root),
+            packageName = owner,
+            label = label(info, if (setup) info.topActivity ?: root else root),
             bounds = fields.bounds(info)?.let { TaskBounds(it.left, it.top, it.right, it.bottom) } ?: TaskBounds.EMPTY,
             focused = fields.focused(info),
             densityDpi = fields.densityDpi(info) ?: 0,
@@ -92,7 +102,8 @@ class AndroidTaskSource(
             transparentCaption = fields.transparentCaption(info),
             // The task's first activity is at the bottom of its stack; past it, Back has
             // somewhere to go.
-            canGoBack = info.numActivities > 1,
+            // A setup's own first screen is above the agent's: Back there cancels the setup.
+            canGoBack = !setup && info.numActivities > 1,
             // Whether its manifest says it handles a change of density itself
             // (ActivityInfo.configChanges includes density): Android relaunches any other
             // activity whose density changes. False when the package manager does not know it.
