@@ -1242,7 +1242,10 @@ mod win {
                 let reports = stop_chosen(package, &mut ask, || {
                     let text = texts.stop_dialog(app_name(&app));
                     stop_answer(crate::compositor::fluent_dialog::show(
-                        crate::compositor::fluent_dialog::Request { text: &text },
+                        crate::compositor::fluent_dialog::Request {
+                            text: &text,
+                            timeout: None,
+                        },
                     ))
                 });
                 with_state(|s| s.ask_before_stop = ask);

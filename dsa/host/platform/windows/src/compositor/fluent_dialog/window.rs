@@ -5,7 +5,8 @@
 //! frame, so the see-through pixels show the backdrop. It is centred on the work area of the
 //! monitor under the pointer, above the other windows, and is dragged by anywhere that is not
 //! a control. [`show`] runs the thread's messages until the dialog is answered, as a modal
-//! dialog does. Closing it (Alt+F4, the taskbar) cancels it. It follows a move to a monitor
+//! dialog does. Closing it (Alt+F4, the taskbar) cancels it, as does its time running out
+//! when it was given one. It follows a move to a monitor
 //! of another scale and a change of the theme while it is open.
 
 use std::cell::RefCell;
@@ -26,13 +27,13 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW,
-    GetWindowRect, IsWindow, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassExW,
-    SetForegroundWindow, SetWindowPos, ShowWindow, TranslateMessage, HTCAPTION, HTCLIENT,
-    HWND_TOPMOST, IDC_ARROW, MSG, SWP_NOZORDER, SW_SHOW, WM_APP, WM_CHAR, WM_CLOSE, WM_DPICHANGED,
-    WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOVE,
-    WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE, WM_SYSCHAR,
-    WM_SYSCOLORCHANGE, WM_SYSKEYDOWN, WM_THEMECHANGED, WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_TOPMOST,
-    WS_POPUP, WS_THICKFRAME,
+    GetWindowRect, IsWindow, KillTimer, LoadCursorW, PostMessageW, PostQuitMessage,
+    RegisterClassExW, SetForegroundWindow, SetTimer, SetWindowPos, ShowWindow, TranslateMessage,
+    HTCAPTION, HTCLIENT, HWND_TOPMOST, IDC_ARROW, MSG, SWP_NOZORDER, SW_SHOW, WM_APP, WM_CHAR,
+    WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MOUSEMOVE, WM_MOVE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE,
+    WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSEXW,
+    WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_THICKFRAME,
 };
 
 use super::automation::{self, Action, View};
@@ -53,9 +54,15 @@ const WM_MOUSELEAVE: u32 = 0x02A3;
 /// The message a UI Automation client's request is posted to the dialog's window as.
 const WM_DIALOG_ACTION: u32 = WM_APP + 0x41;
 
+/// The timer that closes a dialog whose time ran out.
+const TIMEOUT_TIMER: usize = 0x6474;
+
 /// A dialog to show.
 pub struct Request<'a> {
     pub text: &'a DialogText,
+    /// How long the dialog waits for the user; past it, it closes as cancelled. `None` waits
+    /// for as long as it takes.
+    pub timeout: Option<std::time::Duration>,
 }
 
 /// The dialog while it is open.
@@ -149,6 +156,10 @@ pub fn show(request: Request<'_>) -> Answer {
         ShowWindow(hwnd, SW_SHOW);
         SetForegroundWindow(hwnd);
         SetFocus(hwnd);
+        if let Some(timeout) = request.timeout {
+            let ms = timeout.as_millis().clamp(1, u32::MAX as u128) as u32;
+            SetTimer(hwnd, TIMEOUT_TIMER, ms, None);
+        }
     }
     sync_view(hwnd);
     if let Some((view, focus)) = with_session(|s| (Arc::clone(&s.view), s.state.focus)) {
@@ -526,6 +537,11 @@ unsafe extern "system" fn dialog_proc(
         // The characters the keys make are not wanted: no beep.
         WM_CHAR | WM_SYSCHAR => 0,
         WM_CLOSE => {
+            apply(hwnd, Outcome::Done(Answer::Cancelled));
+            0
+        }
+        WM_TIMER if wparam == TIMEOUT_TIMER => {
+            KillTimer(hwnd, TIMEOUT_TIMER);
             apply(hwnd, Outcome::Done(Answer::Cancelled));
             0
         }
