@@ -7,9 +7,9 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Backup, BackupJob,
-    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, KeyProtection, KeyProtectionShown,
-    Memory, MemoryShare, Network, NetworkMode, Outcome, ProgramUpdateAnswer, ProgramUpdatePhase,
-    State, Status, ALL_FOLDERS,
+    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, ImportedCertificate, KeyProtection,
+    KeyProtectionShown, Memory, MemoryShare, Network, NetworkMode, Outcome, ProgramUpdateAnswer,
+    ProgramUpdatePhase, State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -1026,6 +1026,54 @@ pub fn network_restart_needed(advanced_setting: bool, network: Option<&Network>)
         Some(NetworkMode::Advanced) => !advanced_setting,
         _ => false,
     }
+}
+
+/// Where an added root certificate was found, in the user's language. A source this app does
+/// not know, from a newer service, is shown as the service names it.
+pub fn certificate_source_label(source: &str) -> String {
+    match source {
+        "machine" => tr("This computer's trusted root certificates"),
+        "machine_group_policy" => tr("This computer's group policy"),
+        "machine_enterprise" => tr("This computer's enterprise certificates"),
+        "user" => tr("Your trusted root certificates"),
+        "user_group_policy" => tr("Your group policy"),
+        "admin" => tr("This computer's administrator trust settings"),
+        "system" => tr("Added to the system's certificate store"),
+        other => other.to_string(),
+    }
+}
+
+/// The title of an added root certificate's row: who it is for, or its fingerprint when the
+/// service could not read a name.
+pub fn certificate_title(certificate: &ImportedCertificate) -> String {
+    if !certificate.subject.is_empty() {
+        certificate.subject.clone()
+    } else if !certificate.sha256.is_empty() {
+        trf("SHA-256 {0}", &[&certificate.sha256])
+    } else {
+        tr("A certificate without a name")
+    }
+}
+
+/// What an added root certificate's row says under its title: who signed it, where it was
+/// found, and the file or store, each on its own line.
+pub fn certificate_detail(certificate: &ImportedCertificate) -> String {
+    let mut lines = Vec::new();
+    if !certificate.issuer.is_empty() {
+        lines.push(trf("Issued by {0}", &[&certificate.issuer]));
+    }
+    if !certificate.source.is_empty() {
+        lines.push(certificate_source_label(&certificate.source));
+    }
+    if !certificate.location.is_empty() {
+        lines.push(certificate.location.clone());
+    }
+    lines.join("\n")
+}
+
+/// What the list of added root certificates says when it has none.
+pub fn certificates_empty_text() -> String {
+    tr("No added root certificates were found on this computer.")
 }
 
 /// The fingerprint Android reports from its next start, from the values on the page: the
