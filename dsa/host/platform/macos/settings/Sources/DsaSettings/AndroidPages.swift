@@ -110,6 +110,8 @@ struct AppRowView: View {
                 Spacer()
                 Button(T("AppsOpenButton.Content")) { Task { await vm.open(row.package) } }
                 Button(T("AppsInfoButton.Content")) { Task { await vm.info(row.package) } }
+                Button(T("AppsDesktopShortcutButton.Content")) { Task { await vm.desktopShortcut(row.package) } }
+                    .help(T("AppsDesktopShortcutButton.ToolTip"))
                 Button(T("AppsUninstallButton.Content")) { uninstall() }
                     .disabled(!row.canUninstall || vm.isBusy)
                     .help(row.uninstallTip ?? "")
