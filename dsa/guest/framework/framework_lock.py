@@ -51,6 +51,33 @@ OUTPUTS = {
     "SYSTEM/lib64/libEGL.so": "system/lib64/libEGL.so",
 }
 
+# DSA's KeyMint: the nonsecure KeyMint service whose TA takes the root key of key blobs from the
+# DSA host (the patches in patches/hardware/interfaces, and in patches/system/keymint for
+# Android 16, which lacks the TA's hook for moving blobs to a new root key). The image installs
+# these as vendor files in place of the com.android.hardware.keymint APEX, which it then does
+# not select. The binary links its Rust crates in; libssl, which the Rust openssl crate links, is
+# the one shared library it needs that the published vendor partition does not carry.
+KEYMINT_BINARY = "VENDOR/bin/hw/dsa-keymint"
+KEYMINT_OUTPUTS = {
+    KEYMINT_BINARY: "vendor/bin/hw/dsa-keymint",
+    "VENDOR/lib64/libssl.so": "vendor/lib64/libssl.so",
+}
+# What the APEX carries beside its binary, taken as the tree has it: the VINTF fragments that
+# declare the KeyMint, remotely provisioned component, secure clock and shared secret instances,
+# and the hardware_keystore feature.
+KEYMINT_DIR = "hardware/interfaces/security/keymint/aidl/default"
+KEYMINT_SOURCES = {
+    "VENDOR/etc/vintf/manifest/android.hardware.security.keymint-service.xml":
+        f"{KEYMINT_DIR}/android.hardware.security.keymint-service.xml",
+    "VENDOR/etc/vintf/manifest/android.hardware.security.secureclock-service.xml":
+        f"{KEYMINT_DIR}/android.hardware.security.secureclock-service.xml",
+    "VENDOR/etc/vintf/manifest/android.hardware.security.sharedsecret-service.xml":
+        f"{KEYMINT_DIR}/android.hardware.security.sharedsecret-service.xml",
+    "VENDOR/etc/permissions/android.hardware.hardware_keystore.xml":
+        f"{KEYMINT_DIR}/android.hardware.hardware_keystore.xml",
+}
+KEYMINT_FILES = list(KEYMINT_OUTPUTS) + list(KEYMINT_SOURCES)
+
 # Projects every version fetches: the build system, and the projects the patches change.
 REQUIRED = ["build/make", "build/soong", "build/release", "build/blueprint",
             "frameworks/native", "frameworks/base"]
