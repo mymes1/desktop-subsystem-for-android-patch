@@ -28,7 +28,7 @@ use dsa_protocol::host_api::types::PointerAction;
 use super::geometry::{
     all_clear, android_density, edit_hit_test, edit_layout, edit_margin, frame_overdue, hit_test,
     max_window_size, min_window_size, more_button, placeholder, placement_of, press_threshold,
-    px_of_dip, reachable_origin, to_frame, window_size, Hit, ScreenRect,
+    px_of_dip, reachable_origin, to_frame, window_size, Hit, ScreenRect, HOLD_TO_MOVE,
 };
 use super::gesture::{more_button_shown, Fade, Gesture, Step};
 use super::menu::{self, choice_of, size_choices, Entry, MenuChoice, MenuText};
@@ -866,6 +866,21 @@ impl Desk {
         self.place_effect(widget_id);
     }
 
+    /// A press on the widget firm enough to be a long press at once, as a trackpad's force
+    /// click: it lifts the widget for editing as holding it would, unless it already slid.
+    pub fn force_press(&mut self, widget_id: i32) {
+        let Some(window) = self.windows.get_mut(&widget_id) else {
+            return;
+        };
+        let Gesture::Widget { since, .. } = window.gesture else {
+            return;
+        };
+        let (at, origin) = (window.pointer, window.origin);
+        let step = window.gesture.held(at, origin, since + HOLD_TO_MOVE);
+        let local = (at.0 - origin.0, at.1 - origin.1);
+        self.step(widget_id, step, local);
+    }
+
     /// What is due at `now`: a press held still long enough lifts its widget, a fading More
     /// button is drawn again, and a window still waiting for its first picture is logged once.
     pub fn tick(&mut self, now: Instant) {
@@ -1509,6 +1524,11 @@ mod tests {
     fn fr12_a_finger_may_wander_a_little_and_still_long_press() {
         let (mut desk, now) = placed(160, false);
         desk.down(7, (50, 50), Button::Primary, true, now);
+        // A force click on a trackpad lifts it at once, as holding it would.
+        let (mut forced, now) = placed(160, false);
+        forced.down(7, (50, 50), Button::Primary, false, now);
+        forced.force_press(7);
+        assert!(forced.window(7).unwrap().editing());
         // Ten pixels at 160 dpi is past the mouse's threshold (4 device-independent pixels,
         // 7 here), not a finger's (8, 13 here).
         desk.moved(7, (60, 50));
