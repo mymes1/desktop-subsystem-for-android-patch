@@ -1813,6 +1813,12 @@ impl Client {
         .map(|_| ())
     }
 
+    /// Puts a shortcut to an app on the desktop; returns where it is.
+    pub fn desktop_shortcut(&self, package: &str) -> Result<String, Failure> {
+        self.json(&["apps", "desktop-shortcut", package])
+            .map(|json| text(&json, "path"))
+    }
+
     /// Uninstalls an app; a refusal by Android is an outcome with its reason.
     pub fn uninstall(&self, package: &str) -> Result<Outcome, Failure> {
         match self.json(&["apps", "uninstall", package]) {
