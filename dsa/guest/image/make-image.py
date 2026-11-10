@@ -3651,6 +3651,23 @@ KEYMINT_KEY_RC = "SYSTEM/etc/init/dsa-keymint-key.rc"
 KEYMINT_KEY_SERVICE = "service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key"
 KEYMINT_KEY_DIR = "/dev/dsa_keymint"
 KEYMINT_KEY_CONTEXT = f"{KEYMINT_KEY_DIR}(/.*)? u:object_r:dsa_keymint_key_file:s0"
+# The root certificates a user or administrator added to the host, among Android's system
+# certificates: a system script (as init, which alone may mount over a system folder) makes a
+# tmpfs folder, runs dsa-channeld --cacerts-setup (dsa-channeld.rc) to copy Android's two
+# certificate folders into it, and binds each copy over the original before the zygote starts.
+# The daemon then adds the host's roots there. The folder's label lets the daemon write in it
+# and every domain read it (cacerts.cil).
+CACERTS_RC = "SYSTEM/etc/init/dsa-cacerts.rc"
+CACERTS_SERVICE = "service dsa_cacerts_setup /vendor/bin/dsa-channeld --cacerts-setup"
+CACERTS_DIR = "/dev/dsa_cacerts"
+CACERTS_CONTEXT = f"{CACERTS_DIR}(/.*)? u:object_r:dsa_cacerts_file:s0"
+CACERTS_SCRIPT = [
+    "on post-fs-data",
+    f"    mkdir {CACERTS_DIR} 0755 system system",
+    "    exec_start dsa_cacerts_setup",
+    f"    mount none {CACERTS_DIR}/conscrypt /apex/com.android.conscrypt/cacerts bind",
+    f"    mount none {CACERTS_DIR}/system /system/etc/security/cacerts bind",
+]
 # The agent: a privileged app in system_ext, signed with the platform key, which reports
 # each app task to the host and starts and ends tasks for it. The framework refuses to boot
 # when a privileged app requests a privileged permission its allowlist does not grant.
@@ -4082,6 +4099,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries += SU_SOCKET_CONTEXTS
         # KeyMint's root key, readable only by KeyMint.
         entries.append((f"{KEYMINT_KEY_DIR}(", KEYMINT_KEY_CONTEXT))
+        # The host's root certificates, which the daemon writes and every domain reads.
+        entries.append((f"{CACERTS_DIR}(", CACERTS_CONTEXT))
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
     if power:
@@ -4266,6 +4285,7 @@ GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
 ADDONS_POLICY = HERE / "sepolicy/addons.cil"
 GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 SU_POLICY = HERE / "sepolicy/su.cil"
+CACERTS_POLICY = HERE / "sepolicy/cacerts.cil"
 
 # What root elevation needs of the policy, each with what goes wrong without it.
 ROOT_ELEVATION_RULES = {
@@ -4420,6 +4440,62 @@ def keymint_key_problems(names, read):
         if others:
             problems.append(f"the SELinux policy lets {', '.join(others)} read KeyMint's root key")
     return problems
+
+
+def cacerts_problems(names, read):
+    """Returns what an image with the daemon lacks for the host's root certificates among
+    Android's system certificates: the setup service, the system script that makes the tmpfs
+    folder, runs the setup and binds the copies over Android's folders, the folder's label, and
+    the policy that lets the daemon write there and every domain read it."""
+    problems = []
+    rc = read(CHANNELD_RC).decode() if CHANNELD_RC in names else ""
+    service = rc[rc.find(CACERTS_SERVICE):].split("\n\n", 1)[0].splitlines() if CACERTS_SERVICE in rc else []
+    if not service:
+        problems.append(f"{CHANNELD_RC} lacks \"{CACERTS_SERVICE}\", so nothing copies Android's certificates "
+                        "into the folders the host's roots go in")
+    for line, why in [
+        ("    user system", "the daemon, which runs as system, cannot write the copies"),
+        ("    oneshot", "init would copy the certificates again whenever the setup exits"),
+    ]:
+        if service and line not in service:
+            problems.append(f"{CHANNELD_RC} lacks \"{line.strip()}\" for the setup, so {why}")
+    if CACERTS_RC not in names:
+        problems.append(f"{CACERTS_RC} is missing, so Android never trusts the root certificates the host added")
+    else:
+        script = read(CACERTS_RC).decode().splitlines()
+        for line in CACERTS_SCRIPT:
+            if line not in script:
+                problems.append(f"{CACERTS_RC} lacks \"{line.strip()}\", so the host's root certificates do not "
+                                "reach Android's system certificates before the zygote starts")
+    contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
+                if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
+    if CACERTS_CONTEXT not in contexts:
+        problems.append(f"vendor_file_contexts lacks \"{CACERTS_CONTEXT}\", so the certificate folders have a "
+                        "label apps may not read and the daemon may not write")
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
+        policy = read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        for rule, why in CACERTS_RULES.items():
+            if rule not in policy:
+                problems.append(f"the SELinux policy lacks {rule}, so {why}")
+        rules = re.findall(r"\(allow\s+(\S+)\s+dsa_cacerts_file\s+\(\s*file\s+\(([^)]*)\)", policy)
+        others = sorted({who for who, perms in rules
+                         if {"write", "create", "append"} & set(perms.split()) and who != "dsa_channeld"})
+        if others:
+            problems.append(f"the SELinux policy lets {', '.join(others)} write Android's system certificates")
+    return problems
+
+
+# What the host's root certificates need of the policy, each with what goes wrong without it.
+CACERTS_RULES = {
+    "(allow dsa_channeld dsa_cacerts_file (file (create read write open getattr setattr rename unlink)))":
+        "the daemon cannot add or take away the host's root certificates",
+    "(allow domain dsa_cacerts_file (file (read open getattr map)))":
+        "apps cannot read Android's system certificates once the copies are bound over them",
+    "(allow domain dsa_cacerts_file (dir (search getattr read open)))":
+        "apps cannot look a certificate up in the bound folders",
+    "(allow init dsa_cacerts_file (dir (create search getattr setattr open read write add_name relabelto mounton)))":
+        "init cannot make the folder or bind it",
+}
 
 
 # Shared memory is a memfd in the guest (memory.cil), labelled with the tmpfs type of the
@@ -4792,6 +4868,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 # Root elevation: the su client, and the elevation helper, which is the
                 # daemon's program in a mode of its own, with its sockets.
                 plat_patched += "\n" + SU_POLICY.read_text()
+                # The host's root certificates among Android's system certificates.
+                plat_patched += "\n" + CACERTS_POLICY.read_text()
             if has_power:
                 # The power and health HALs reach the daemon.
                 plat_patched += "\n" + POWER_POLICY.read_text()
@@ -4968,6 +5046,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                  + GAPPS_FS_CONFIG + ADDONS_FS_CONFIG
                                                  + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
                                                      "system/etc/init/dsa-keymint-key.rc 0 0 644 capabilities=0x0",
+                                                     "system/etc/init/dsa-cacerts.rc 0 0 644 capabilities=0x0",
                                                      "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
@@ -5059,6 +5138,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(SU_GUARD_RC, (HERE / "dsa-su-guard.rc").read_bytes())
             zout.writestr(KEYMINT_KEY_RC, (HERE / "dsa-keymint-key.rc").read_bytes())
+            zout.writestr(CACERTS_RC, (HERE / "dsa-cacerts.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
         if su_payload is not None:
             zout.writestr(SU_CLIENT_BINARY, su_payload)

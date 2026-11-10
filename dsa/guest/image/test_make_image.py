@@ -7094,5 +7094,67 @@ class KeyMintKeyImageTests(unittest.TestCase):
         self.assertEqual(len(problems), len(expected), problems)
 
 
+class HostCertificatesImageTests(KeyMintKeyImageTests):
+    """The guest image's side of the root certificates a user or administrator added to the
+    host: the tmpfs copies of Android's certificate folders bound over the originals before the
+    zygote starts, the setup that copies them, and the policy that lets only the daemon write
+    there and every domain read."""
+
+    CACERTS_POLICY = (Path(__file__).parent / "sepolicy" / "cacerts.cil").read_text()
+
+    # The key's tests run once, in the class they belong to.
+    test_fr36_keymint_root_key_is_fetched_once_before_keymint_starts = None
+    test_fr36_only_keymint_reads_its_root_key = None
+    test_fr36_check_image_names_what_the_root_key_lacks = None
+
+    def test_fr28_the_host_certificates_folders_are_bound_before_the_zygote_starts(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.CACERTS_SERVICE)
+        for option in ["user system", "group system", "oneshot", "disabled"]:
+            self.assertIn(option, service)
+        script = (self.HERE / "dsa-cacerts.rc").read_text()
+        block = self._block(script, "on post-fs-data\n")
+        self.assertEqual(block, [line.strip() for line in make_image.CACERTS_SCRIPT])
+        # The copy is made before either bind, so the binds find whole folders.
+        self.assertLess(script.index("exec_start dsa_cacerts_setup"), script.index("    mount none"))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.cacerts_problems(names, archive.read), [])
+            self.assertEqual(archive.read(make_image.CACERTS_RC).decode(), script)
+            self.assertIn("system/etc/init/dsa-cacerts.rc 0 0 644 capabilities=0x0",
+                          archive.read(make_image.SYSTEM_FS_CONFIG).decode().splitlines())
+            self.assertIn(make_image.CACERTS_CONTEXT,
+                          archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
+
+    def test_fr28_only_the_daemon_writes_androids_system_certificates(self):
+        rules = re.findall(r"\(allow\s+(\S+)\s+dsa_cacerts_file\s+\(\s*file\s+\(([^)]*)\)", self.CACERTS_POLICY)
+        writers = {who for who, perms in rules if {"write", "create", "append", "unlink"} & set(perms.split())}
+        self.assertEqual(writers, {"dsa_channeld"})
+        readers = {who for who, perms in rules if "read" in perms.split()}
+        self.assertIn("domain", readers, "every process that checks a certificate reads them")
+        for rule in make_image.CACERTS_RULES:
+            self.assertIn(rule, self.CACERTS_POLICY)
+        self.assertNotIn("dsa_cacerts", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertIn(make_image.CACERTS_CONTEXT,
+                      make_image.update_vendor_file_contexts("", channeld=True).splitlines())
+
+    def test_fr28_check_image_names_what_the_host_certificates_lack(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        del files[make_image.CACERTS_RC]
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
+            b"\n(allow untrusted_app dsa_cacerts_file (file (write open)))\n")
+        files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
+        problems = make_image.cacerts_problems(list(files), files.__getitem__)
+        expected = [
+            "dsa-cacerts.rc is missing",
+            "vendor_file_contexts lacks",
+            "lets untrusted_app write Android's system certificates",
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+
 if __name__ == "__main__":
     unittest.main()

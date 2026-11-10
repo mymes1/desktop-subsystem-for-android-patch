@@ -141,3 +141,15 @@ service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key
     oneshot
     disabled
     stdio_to_kmsg
+
+# Android's system certificates, copied into the tmpfs folders dsa-cacerts.rc binds over
+# Android's own, so the daemon can add the root certificates a user or administrator added to
+# the host beside them. dsa-cacerts.rc runs it once, at post-fs-data, before the zygote starts.
+# It runs as the system user, which the daemon runs as and which owns the folders, in the
+# daemon's domain (sepolicy/cacerts.cil).
+service dsa_cacerts_setup /vendor/bin/dsa-channeld --cacerts-setup
+    user system
+    group system
+    oneshot
+    disabled
+    stdio_to_kmsg
