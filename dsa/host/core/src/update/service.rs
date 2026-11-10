@@ -1042,6 +1042,15 @@ impl UserAndroid for UpdatingAndroid {
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.session)
     }
+    fn watch_app_audio(&self) -> Option<crate::app_audio::AppAudioWatch> {
+        UserAndroid::watch_app_audio(&*self.session)
+    }
+    fn set_app_volume(
+        &self,
+        change: &crate::app_audio::VolumeChange,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::set_app_volume(&*self.session, change)
+    }
     fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
         UserAndroid::background_apps(&*self.session)
     }

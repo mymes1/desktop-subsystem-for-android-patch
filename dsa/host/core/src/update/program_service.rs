@@ -1450,6 +1450,15 @@ impl UserAndroid for WithProgramStatus {
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.android)
     }
+    fn watch_app_audio(&self) -> Option<crate::app_audio::AppAudioWatch> {
+        UserAndroid::watch_app_audio(&*self.android)
+    }
+    fn set_app_volume(
+        &self,
+        change: &crate::app_audio::VolumeChange,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::set_app_volume(&*self.android, change)
+    }
     fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
         UserAndroid::background_apps(&*self.android)
     }
