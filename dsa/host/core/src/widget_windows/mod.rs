@@ -39,9 +39,11 @@
 //! The Windows host keeps its own window procedure, with Win32's own edge resizing and its
 //! Fluent drawing, on top of the same geometry, gestures, menu and watch.
 
+pub mod desk;
 pub mod geometry;
 pub mod gesture;
 pub mod menu;
+pub mod paint;
 pub mod service;
 
 pub use geometry::*;
