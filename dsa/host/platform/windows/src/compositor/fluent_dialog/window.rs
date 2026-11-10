@@ -10,6 +10,9 @@
 
 use std::cell::RefCell;
 use std::ptr::{null, null_mut};
+use std::sync::{Arc, Mutex};
+
+use windows::Win32::UI::Accessibility::IRawElementProviderSimple;
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea, DwmSetWindowAttribute};
@@ -23,14 +26,16 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW,
-    GetWindowRect, IsWindow, LoadCursorW, PostQuitMessage, RegisterClassExW, SetForegroundWindow,
-    SetWindowPos, ShowWindow, TranslateMessage, HTCAPTION, HTCLIENT, HWND_TOPMOST, IDC_ARROW, MSG,
-    SWP_NOZORDER, SW_SHOW, WM_CHAR, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST,
-    WM_PAINT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSKEYDOWN, WM_THEMECHANGED,
-    WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_THICKFRAME,
+    GetWindowRect, IsWindow, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassExW,
+    SetForegroundWindow, SetWindowPos, ShowWindow, TranslateMessage, HTCAPTION, HTCLIENT,
+    HWND_TOPMOST, IDC_ARROW, MSG, SWP_NOZORDER, SW_SHOW, WM_APP, WM_CHAR, WM_CLOSE, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOVE,
+    WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE, WM_SYSCHAR,
+    WM_SYSCOLORCHANGE, WM_SYSKEYDOWN, WM_THEMECHANGED, WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_TOPMOST,
+    WS_POPUP, WS_THICKFRAME,
 };
 
+use super::automation::{self, Action, View};
 use super::{
     centred, frame_attributes, key_of, layout, metrics, palette, render, Answer, Control,
     DialogArt, DialogLayout, DialogPalette, DialogState, DialogText, Font, Key, Outcome,
@@ -45,6 +50,9 @@ use crate::compositor::widgets::px_of_dip;
 /// `WM_MOUSELEAVE`, which windows-sys names under another module.
 const WM_MOUSELEAVE: u32 = 0x02A3;
 
+/// The message a UI Automation client's request is posted to the dialog's window as.
+const WM_DIALOG_ACTION: u32 = WM_APP + 0x41;
+
 /// A dialog to show.
 pub struct Request<'a> {
     pub text: &'a DialogText,
@@ -58,6 +66,12 @@ struct Session {
     layout: DialogLayout,
     art: DialogArt,
     done: Option<Answer>,
+    /// What the dialog's UI Automation providers read, and the provider its window answered
+    /// `WM_GETOBJECT` with.
+    view: Arc<Mutex<View>>,
+    provider: Option<IRawElementProviderSimple>,
+    /// The focused control and the check box's state UI Automation was last told of.
+    announced: (Control, bool),
 }
 
 thread_local! {
@@ -91,9 +105,7 @@ pub fn show(request: Request<'_>) -> Answer {
     let mut pointer = POINT { x: 0, y: 0 };
     // SAFETY: a plain read of the pointer's position.
     unsafe { GetCursorPos(&mut pointer) };
-    // Its name is what a screen reader reads when it takes the focus: the question.
-    let name = format!("{}\n{}", request.text.title, request.text.body);
-    let hwnd = create_window(&class, &name, (pointer.x, pointer.y));
+    let hwnd = create_window(&class, &request.text.title, (pointer.x, pointer.y));
     if hwnd.is_null() {
         return Answer::Cancelled;
     }
@@ -105,14 +117,26 @@ pub fn show(request: Request<'_>) -> Answer {
     };
     let (laid, art) = lay_out(request.text, dpi);
     let (width, height) = (laid.width, laid.height);
+    let state = DialogState::new(request.text.check.is_some());
+    // A client's request is done on this thread, as a key would be.
+    let window = hwnd as isize;
+    let sink: automation::ActionSink = Arc::new(move |action: Action| {
+        // SAFETY: posting to a window is safe from any thread; one that closed drops it.
+        unsafe { PostMessageW(window as HWND, WM_DIALOG_ACTION, action.code(), 0) };
+    });
+    let mut view = View::open(window, sink);
+    view.name = request.text.title.clone();
     SESSION.with(|session| {
         *session.borrow_mut() = Some(Session {
             text: request.text.clone(),
-            state: DialogState::new(request.text.check.is_some()),
+            state,
             palette: palette(&theme),
             layout: laid,
             art,
             done: None,
+            view: Arc::new(Mutex::new(view)),
+            provider: None,
+            announced: (state.focus, state.checked),
         })
     });
     let area = work_area(hwnd).unwrap_or((0, 0, 1024, 768));
@@ -126,7 +150,17 @@ pub fn show(request: Request<'_>) -> Answer {
         SetForegroundWindow(hwnd);
         SetFocus(hwnd);
     }
+    sync_view(hwnd);
+    if let Some((view, focus)) = with_session(|s| (Arc::clone(&s.view), s.state.focus)) {
+        automation::raise_opened(&view);
+        automation::raise_focus(&view, focus);
+    }
     run(hwnd);
+    // UI Automation lets go of the dialog before its window goes.
+    if let Some((view, provider)) = with_session(|s| (Arc::clone(&s.view), s.provider.take())) {
+        view.lock().unwrap_or_else(|e| e.into_inner()).alive = false;
+        automation::release(hwnd as isize, provider);
+    }
     // SAFETY: as above.
     unsafe {
         if IsWindow(hwnd) != 0 {
@@ -301,14 +335,44 @@ unsafe fn style(hwnd: HWND, theme: &Theme) -> Vec<(u32, i32)> {
         .collect()
 }
 
+/// Writes the dialog as it is now into its UI Automation view, and tells UI Automation when
+/// the focus moved or the check box changed.
+fn sync_view(hwnd: HWND) {
+    let mut rect = RECT {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+    };
+    // SAFETY: the dialog's own window, and a structure to fill.
+    unsafe { GetWindowRect(hwnd, &mut rect) };
+    let changed = with_session(|s| {
+        let elements = automation::elements(&s.text, &s.layout, &s.state, (rect.left, rect.top));
+        s.view.lock().unwrap_or_else(|e| e.into_inner()).elements = elements;
+        let now = (s.state.focus, s.state.checked);
+        let was = std::mem::replace(&mut s.announced, now);
+        (Arc::clone(&s.view), was, now)
+    });
+    let Some((view, was, now)) = changed else {
+        return;
+    };
+    if was.1 != now.1 {
+        automation::raise_toggled(&view, now.1);
+    }
+    if was.0 != now.0 {
+        automation::raise_focus(&view, now.0);
+    }
+}
+
 /// Acts on an outcome: draws the dialog again, or ends it.
 fn apply(hwnd: HWND, outcome: Outcome) {
     match outcome {
         Outcome::Nothing => {}
-        // SAFETY: the dialog's own window.
-        Outcome::Changed => unsafe {
-            InvalidateRect(hwnd, null(), 0);
-        },
+        Outcome::Changed => {
+            sync_view(hwnd);
+            // SAFETY: the dialog's own window.
+            unsafe { InvalidateRect(hwnd, null(), 0) };
+        }
         Outcome::Done(answer) => {
             with_session(|s| s.done = Some(answer));
         }
@@ -463,6 +527,32 @@ unsafe extern "system" fn dialog_proc(
         WM_CHAR | WM_SYSCHAR => 0,
         WM_CLOSE => {
             apply(hwnd, Outcome::Done(Answer::Cancelled));
+            0
+        }
+        WM_DIALOG_ACTION => {
+            let outcome = Action::from_code(wparam).and_then(|action| {
+                with_session(|s| match action {
+                    Action::Activate(control) => s.state.activate(control),
+                    Action::Focus(control) => s.state.focus_on(control),
+                })
+            });
+            apply(hwnd, outcome.unwrap_or(Outcome::Nothing));
+            0
+        }
+        WM_GETOBJECT => {
+            let provider = with_session(|s| {
+                s.provider
+                    .get_or_insert_with(|| automation::dialog_provider(&s.view))
+                    .clone()
+            });
+            match provider.and_then(|p| automation::answer(hwnd as isize, wparam, lparam, &p)) {
+                Some(result) => result,
+                None => DefWindowProcW(hwnd, msg, wparam, lparam),
+            }
+        }
+        // The controls' places on the screen follow the window.
+        WM_MOVE => {
+            sync_view(hwnd);
             0
         }
         WM_DPICHANGED => {
