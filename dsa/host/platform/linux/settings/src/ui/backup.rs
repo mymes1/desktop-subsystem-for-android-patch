@@ -23,6 +23,9 @@ fn local_time(unix_ms: i64) -> String {
         .unwrap_or_default()
 }
 
+/// What the backup switch does when it is flipped, set once the rest of the section exists.
+type SwitchHandler = Rc<RefCell<Option<Rc<dyn Fn(bool)>>>>;
+
 /// Adds the Backup section to `page`.
 pub fn backup(ctx: &Shared, page: &Rc<Page>) {
     let backup_group = group(
@@ -30,7 +33,7 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
         Some(&tr("DSA keeps an encrypted backup of your Android apps' data in a folder of your home folder, so the apps and their data can come back after Android's data is reset, or on another computer. The key that opens it is kept in your keyring.")),
     );
     // The switch's changes are handled once the rest of the section exists.
-    let switched: Rc<RefCell<Option<Rc<dyn Fn(bool)>>>> = Rc::default();
+    let switched: SwitchHandler = Rc::default();
     let switch = {
         let switched = switched.clone();
         Switch::new(
