@@ -317,6 +317,29 @@ updated, whether it is part of the Android image, and its size (code, data and c
 `StorageStatsManager`). The host's `RefreshApps` makes the agent read them again and send the
 list even when nothing changed, because the host waits for it.
 
+### App shortcuts
+
+The host shows each app's launcher shortcuts the desktop's way: the static and dynamic ones
+as tasks of the app's jump list (Dock menu, desktop entry actions), and the pinned ones as
+desktop shortcuts. The agent is the guest's default launcher, so `LauncherApps` lets it read
+every app's shortcuts and start them without a permission of its own
+(`platform/AndroidShortcuts.kt`). After each list of apps it sends `AppShortcuts` for every
+app with shortcuts: the static and dynamic ones by rank, then the pinned ones, each with its
+labels and its icon as a PNG of 256 pixels. It sends them again when Android says an app's
+shortcuts changed (`LauncherApps.Callback.onShortcutsChanged`), and an empty list once an app
+has none left. Turned-off shortcuts are left out.
+
+`LaunchShortcut` starts a shortcut through `LauncherApps.startShortcut`, in a freeform window
+like any app the host launches. A shortcut that is gone or turned off opens its app instead.
+
+An app's `requestPinShortcut` reaches the default launcher's activity for
+`CONFIRM_PIN_SHORTCUT`, which the agent declares (`platform/PinShortcutActivity.kt`), so
+`isRequestPinShortcutSupported` is true for apps. The activity shows nothing and finishes at
+once; it is in the agent's package, which the host never shows a window for. The agent sends
+`PinShortcutRequest` with an ID, the app's name and the shortcut, and keeps Android's request.
+`PinShortcutAnswer` with yes accepts it, which pins the shortcut; no lets it go. A request
+with no answer lapses after five minutes, and a new connection drops the ones before it.
+
 The host can uninstall an app (`UninstallApp`). The agent refuses an app that is part of the
 image, itself, and a package that is not installed, each with its reason, and uninstalls any
 other through `PackageInstaller`; `DELETE_PACKAGES` lets it go ahead without asking again in
