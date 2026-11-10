@@ -1069,10 +1069,10 @@ mod tests {
         assert!(!hwnd.is_null(), "the menu's window was not made");
         // SAFETY: a window of this thread, destroyed below.
         unsafe {
-            let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+            let styles = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
             let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-            assert_eq!(style & WS_POPUP, WS_POPUP);
-            assert_eq!(style & WS_THICKFRAME, WS_THICKFRAME);
+            assert_eq!(styles & WS_POPUP, WS_POPUP);
+            assert_eq!(styles & WS_THICKFRAME, WS_THICKFRAME);
             assert_eq!(ex_style & WS_EX_TOOLWINDOW, WS_EX_TOOLWINDOW);
             assert_eq!(ex_style & WS_EX_TOPMOST, WS_EX_TOPMOST);
             assert_eq!(ex_style & WS_EX_APPWINDOW, 0);

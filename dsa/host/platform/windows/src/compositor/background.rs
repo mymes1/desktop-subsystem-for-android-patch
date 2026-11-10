@@ -282,13 +282,17 @@ pub trait Tray {
     fn reports(&mut self) -> Vec<TrayReport>;
 }
 
+/// What hears of a package's media buttons: `Some` when its session changes, `None` when it
+/// ends.
+pub type MediaListener<'a> = Box<dyn FnMut(&str, Option<MediaButtons>) + 'a>;
+
 /// A tray that also tells the apps' task windows of each media session, for the media buttons
 /// (previous, play or pause, next) in their taskbar previews, and passes the presses of those
 /// buttons on to the service as it passes the media keys'.
 pub struct WithWindowMedia<'a> {
     pub tray: &'a mut dyn Tray,
     /// Told of a package's media buttons when its session changes, and `None` when it ends.
-    pub windows: Box<dyn FnMut(&str, Option<MediaButtons>) + 'a>,
+    pub windows: MediaListener<'a>,
     /// The media buttons the user clicked in a window's taskbar preview.
     pub pressed: Receiver<(String, MediaCommand)>,
 }
@@ -1904,6 +1908,7 @@ mod tests {
     #[test]
     fn fr24_the_taskbar_preview_buttons_follow_the_session_and_reach_it() {
         use dsa_host_core::background::Playback;
+        use dsa_host_core::host_api::UserAndroid;
         use dsa_host_core::host_api_conformance::{FakeAndroids, RunningService};
         use dsa_host_core::session::BackgroundRequest;
         use std::sync::mpsc;
