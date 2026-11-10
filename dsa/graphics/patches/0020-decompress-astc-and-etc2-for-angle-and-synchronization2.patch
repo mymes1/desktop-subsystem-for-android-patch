@@ -1,0 +1,375 @@
+diff --git a/host/vulkan/VkDecoder.cpp b/host/vulkan/VkDecoder.cpp
+index 0dc43ad..e1e312f 100644
+--- a/host/vulkan/VkDecoder.cpp
++++ b/host/vulkan/VkDecoder.cpp
+@@ -16478,15 +16478,13 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
+                                       "VkDecoder vkCmdPipelineBarrier2KHR");
+                 VkCommandBuffer commandBuffer;
+                 const VkDependencyInfo* pDependencyInfo;
+-                // Begin non wrapped dispatchable handle unboxing for commandBuffer;
++                // Begin global wrapped dispatchable handle unboxing for commandBuffer;
+                 uint64_t cgen_var_0;
+                 memcpy((uint64_t*)&cgen_var_0, *readStreamPtrPtr, 1 * 8);
+                 *readStreamPtrPtr += 1 * 8;
+                 *(VkCommandBuffer*)&commandBuffer =
+                     (VkCommandBuffer)(VkCommandBuffer)((VkCommandBuffer)(*&cgen_var_0));
+-                auto unboxed_commandBuffer = unbox_VkCommandBuffer(commandBuffer);
+                 auto vk = dispatch_VkCommandBuffer(commandBuffer);
+-                // End manual dispatchable handle unboxing for commandBuffer;
+                 vkReadStream->alloc((void**)&pDependencyInfo, sizeof(const VkDependencyInfo));
+                 reservedunmarshal_VkDependencyInfo(vkReadStream, VK_STRUCTURE_TYPE_MAX_ENUM,
+                                                    (VkDependencyInfo*)(pDependencyInfo),
+@@ -16501,7 +16499,8 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
+                             (unsigned long long)pDependencyInfo);
+                 }
+                 if (CC_LIKELY(vk)) {
+-                    vk->vkCmdPipelineBarrier2KHR(unboxed_commandBuffer, pDependencyInfo);
++                    m_state->on_vkCmdPipelineBarrier2(&m_pool, snapshotApiCallInfo, commandBuffer,
++                                                      pDependencyInfo);
+                 }
+                 vkStream->unsetHandleMapping();
+                 if (m_snapshotsEnabled) {
+@@ -16568,14 +16567,12 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
+                 uint32_t submitCount;
+                 const VkSubmitInfo2* pSubmits;
+                 VkFence fence;
+-                // Begin non wrapped dispatchable handle unboxing for queue;
++                // Begin global wrapped dispatchable handle unboxing for queue;
+                 uint64_t cgen_var_0;
+                 memcpy((uint64_t*)&cgen_var_0, *readStreamPtrPtr, 1 * 8);
+                 *readStreamPtrPtr += 1 * 8;
+                 *(VkQueue*)&queue = (VkQueue)(VkQueue)((VkQueue)(*&cgen_var_0));
+-                auto unboxed_queue = unbox_VkQueue(queue);
+                 auto vk = dispatch_VkQueue(queue);
+-                // End manual dispatchable handle unboxing for queue;
+                 memcpy((uint32_t*)&submitCount, *readStreamPtrPtr, sizeof(uint32_t));
+                 *readStreamPtrPtr += sizeof(uint32_t);
+                 vkReadStream->alloc((void**)&pSubmits,
+@@ -16602,8 +16599,8 @@ size_t VkDecoder::Impl::decode(void* buf, size_t len, IOStream* ioStream,
+                 }
+                 VkResult vkQueueSubmit2KHR_VkResult_return = VK_ERROR_OUT_OF_HOST_MEMORY;
+                 if (CC_LIKELY(vk)) {
+-                    vkQueueSubmit2KHR_VkResult_return =
+-                        vk->vkQueueSubmit2KHR(unboxed_queue, submitCount, pSubmits, fence);
++                    vkQueueSubmit2KHR_VkResult_return = m_state->on_vkQueueSubmit2(
++                        &m_pool, snapshotApiCallInfo, queue, submitCount, pSubmits, fence);
+                 }
+                 if ((vkQueueSubmit2KHR_VkResult_return) == VK_ERROR_DEVICE_LOST)
+                     m_state->on_DeviceLost();
+diff --git a/host/vulkan/VkDecoderGlobalState.cpp b/host/vulkan/VkDecoderGlobalState.cpp
+index 68de0bf..b38987c 100644
+--- a/host/vulkan/VkDecoderGlobalState.cpp
++++ b/host/vulkan/VkDecoderGlobalState.cpp
+@@ -4939,6 +4939,18 @@ class VkDecoderGlobalState::Impl {
+         convertQueueFamilyForeignToExternal(&barrier->dstQueueFamilyIndex);
+     }
+ 
++    inline void convertQueueFamilyForeignToExternal_VkBufferMemoryBarrier2(
++        VkBufferMemoryBarrier2* barrier) {
++        convertQueueFamilyForeignToExternal(&barrier->srcQueueFamilyIndex);
++        convertQueueFamilyForeignToExternal(&barrier->dstQueueFamilyIndex);
++    }
++
++    inline void convertQueueFamilyForeignToExternal_VkImageMemoryBarrier2(
++        VkImageMemoryBarrier2* barrier) {
++        convertQueueFamilyForeignToExternal(&barrier->srcQueueFamilyIndex);
++        convertQueueFamilyForeignToExternal(&barrier->dstQueueFamilyIndex);
++    }
++
+     inline VkImage getIMBImage(const VkImageMemoryBarrier& imb) { return imb.image; }
+     inline VkImage getIMBImage(const VkImageMemoryBarrier2& imb) { return imb.image; }
+ 
+@@ -5082,15 +5094,29 @@ class VkDecoderGlobalState::Impl {
+                                   const VkDependencyInfo* pDependencyInfo) {
+         auto commandBuffer = unbox_VkCommandBuffer(boxed_commandBuffer);
+         auto vk = dispatch_VkCommandBuffer(boxed_commandBuffer);
++        if (!pDependencyInfo) return;
++
++        auto dispatchBarrier2 = [vk](VkCommandBuffer cb, const VkDependencyInfo* info) {
++            if (vk->vkCmdPipelineBarrier2) {
++                vk->vkCmdPipelineBarrier2(cb, info);
++            } else {
++                vk->vkCmdPipelineBarrier2KHR(cb, info);
++            }
++        };
+ 
+         for (uint32_t i = 0; i < pDependencyInfo->bufferMemoryBarrierCount; ++i) {
+-            convertQueueFamilyForeignToExternal_VkBufferMemoryBarrier(
+-                ((VkBufferMemoryBarrier*)pDependencyInfo->pBufferMemoryBarriers) + i);
++            convertQueueFamilyForeignToExternal_VkBufferMemoryBarrier2(
++                const_cast<VkBufferMemoryBarrier2*>(pDependencyInfo->pBufferMemoryBarriers) + i);
+         }
+ 
+         for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; ++i) {
+-            convertQueueFamilyForeignToExternal_VkImageMemoryBarrier(
+-                ((VkImageMemoryBarrier*)pDependencyInfo->pImageMemoryBarriers) + i);
++            convertQueueFamilyForeignToExternal_VkImageMemoryBarrier2(
++                const_cast<VkImageMemoryBarrier2*>(pDependencyInfo->pImageMemoryBarriers) + i);
++        }
++
++        if (pDependencyInfo->imageMemoryBarrierCount == 0) {
++            dispatchBarrier2(commandBuffer, pDependencyInfo);
++            return;
+         }
+ 
+         std::lock_guard<std::mutex> lock(mMutex);
+@@ -5103,9 +5129,51 @@ class VkDecoderGlobalState::Impl {
+         processImageMemoryBarrierLocked(commandBuffer, pDependencyInfo->imageMemoryBarrierCount,
+                                         pDependencyInfo->pImageMemoryBarriers);
+ 
+-        // TODO: If this is a decompressed image, handle decompression before calling
+-        // VkCmdvkCmdPipelineBarrier2 i.e. match on_vkCmdPipelineBarrier implementation
+-        vk->vkCmdPipelineBarrier2(commandBuffer, pDependencyInfo);
++        if (!deviceInfo->emulateTextureEtc2 && !deviceInfo->emulateTextureAstc) {
++            dispatchBarrier2(commandBuffer, pDependencyInfo);
++            return;
++        }
++
++        bool needRebind = false;
++        std::vector<VkImageMemoryBarrier2> imageBarriers;
++        for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; ++i) {
++            const VkImageMemoryBarrier2& srcBarrier = pDependencyInfo->pImageMemoryBarriers[i];
++            VkImage image = srcBarrier.image;
++            auto* imageInfo = android::base::find(mImageInfo, image);
++            if (!imageInfo ||
++                (!imageInfo->cmpInfo.isEtc2() && !imageInfo->cmpInfo.isAstc()) ||
++                imageInfo->cmpInfo.successfullyDecompressedOnCpu()) {
++                imageBarriers.push_back(srcBarrier);
++                continue;
++            }
++
++            bool decompressed = imageInfo->cmpInfo.decompressIfNeeded(
++                vk, commandBuffer, pDependencyInfo->dependencyFlags, srcBarrier, imageBarriers);
++            if (decompressed) {
++                needRebind = true;
++            }
++        }
++
++        if (needRebind && cmdBufferInfo->computePipeline) {
++            vk->vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
++                                  cmdBufferInfo->computePipeline);
++            if (!cmdBufferInfo->currentDescriptorSets.empty()) {
++                vk->vkCmdBindDescriptorSets(
++                    commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, cmdBufferInfo->descriptorLayout,
++                    cmdBufferInfo->firstSet, cmdBufferInfo->currentDescriptorSets.size(),
++                    cmdBufferInfo->currentDescriptorSets.data(),
++                    cmdBufferInfo->dynamicOffsets.size(), cmdBufferInfo->dynamicOffsets.data());
++            }
++        }
++
++        if (pDependencyInfo->memoryBarrierCount || pDependencyInfo->bufferMemoryBarrierCount ||
++            !imageBarriers.empty()) {
++            VkDependencyInfo updatedInfo = *pDependencyInfo;
++            updatedInfo.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size());
++            updatedInfo.pImageMemoryBarriers =
++                imageBarriers.empty() ? nullptr : imageBarriers.data();
++            dispatchBarrier2(commandBuffer, &updatedInfo);
++        }
+     }
+ 
+     bool mapHostVisibleMemoryToGuestPhysicalAddressLocked(VulkanDispatch* vk, VkDevice device,
+@@ -6356,7 +6424,10 @@ class VkDecoderGlobalState::Impl {
+ 
+     VkResult dispatchVkQueueSubmit(VulkanDispatch* vk, VkQueue unboxed_queue, uint32_t submitCount,
+                                    const VkSubmitInfo2* pSubmits, VkFence fence) {
+-        return vk->vkQueueSubmit2(unboxed_queue, submitCount, pSubmits, fence);
++        if (vk->vkQueueSubmit2) {
++            return vk->vkQueueSubmit2(unboxed_queue, submitCount, pSubmits, fence);
++        }
++        return vk->vkQueueSubmit2KHR(unboxed_queue, submitCount, pSubmits, fence);
+     }
+ 
+     int getCommandBufferCount(const VkSubmitInfo& submitInfo) {
+@@ -8396,22 +8467,14 @@ class VkDecoderGlobalState::Impl {
+         return instanceInfo->isAngle;
+     }
+ 
+-    bool enableEmulatedEtc2Locked(VkPhysicalDevice physicalDevice, VulkanDispatch* vk)
++    bool enableEmulatedEtc2Locked(VkPhysicalDevice /*physicalDevice*/, VulkanDispatch* /*vk*/)
+         REQUIRES(mMutex) {
+-        if (!m_vkEmulation->isEtc2EmulationEnabled()) return false;
+-
+-        // Don't enable ETC2 emulation for ANGLE, let it do its own emulation.
+-        return !isAngleInstanceLocked(physicalDevice, vk);
++        return m_vkEmulation->isEtc2EmulationEnabled();
+     }
+ 
+-    bool enableEmulatedAstcLocked(VkPhysicalDevice physicalDevice, VulkanDispatch* vk)
++    bool enableEmulatedAstcLocked(VkPhysicalDevice /*physicalDevice*/, VulkanDispatch* /*vk*/)
+         REQUIRES(mMutex) {
+-        if (m_vkEmulation->getAstcLdrEmulationMode() == AstcEmulationMode::Disabled) {
+-            return false;
+-        }
+-
+-        // Don't enable ASTC emulation for ANGLE, let it do its own emulation.
+-        return !isAngleInstanceLocked(physicalDevice, vk);
++        return m_vkEmulation->getAstcLdrEmulationMode() != AstcEmulationMode::Disabled;
+     }
+ 
+     bool needEmulatedEtc2(VkPhysicalDevice physicalDevice, VulkanDispatch* vk) EXCLUDES(mMutex) {
+diff --git a/host/vulkan/VkSubDecoder.cpp b/host/vulkan/VkSubDecoder.cpp
+index d218bbe..2712242 100644
+--- a/host/vulkan/VkSubDecoder.cpp
++++ b/host/vulkan/VkSubDecoder.cpp
+@@ -2434,7 +2434,8 @@ size_t subDecode(VulkanMemReadingStream* readStream, VulkanDispatch* vk, void* b
+                                                       (VkDependencyInfo*)(pDependencyInfo));
+                 }
+                 if (CC_LIKELY(vk)) {
+-                    vk->vkCmdPipelineBarrier2KHR((VkCommandBuffer)dispatchHandle, pDependencyInfo);
++                    this->on_vkCmdPipelineBarrier2(
++                        pool, nullptr, (VkCommandBuffer)(boxed_dispatchHandle), pDependencyInfo);
+                 }
+                 break;
+             }
+diff --git a/host/vulkan/emulated_textures/CompressedImageInfo.cpp b/host/vulkan/emulated_textures/CompressedImageInfo.cpp
+index ba02e0a..a66f9b8 100644
+--- a/host/vulkan/emulated_textures/CompressedImageInfo.cpp
++++ b/host/vulkan/emulated_textures/CompressedImageInfo.cpp
+@@ -156,7 +156,8 @@ bool isWritableImageLayout(VkImageLayout layout) {
+ }
+ 
+ // Returns whether a given memory barrier puts the image in a layout where it can be read from.
+-bool imageWillBecomeReadable(const VkImageMemoryBarrier& barrier) {
++template <typename Barrier>
++bool imageWillBecomeReadable(const Barrier& barrier) {
+     bool fromReadable = isReadableImageLayout(barrier.oldLayout);
+     bool toReadable = isReadableImageLayout(barrier.newLayout);
+     bool toWritable = isWritableImageLayout(barrier.newLayout);
+@@ -504,6 +505,85 @@ bool CompressedImageInfo::decompressIfNeeded(VulkanDispatch* vk, VkCommandBuffer
+     return true;
+ }
+ 
++bool CompressedImageInfo::decompressIfNeeded(VulkanDispatch* vk, VkCommandBuffer commandBuffer,
++                                             VkDependencyFlags dependencyFlags,
++                                             const VkImageMemoryBarrier2& targetBarrier,
++                                             std::vector<VkImageMemoryBarrier2>& outputBarriers) {
++    std::vector<VkImageMemoryBarrier2> imageBarriers = getImageBarriers2(targetBarrier);
++
++    if (!imageWillBecomeReadable(targetBarrier)) {
++        outputBarriers.insert(outputBarriers.end(), imageBarriers.begin(), imageBarriers.end());
++        return false;
++    }
++
++    VkResult result = initializeDecompressionPipeline(vk, mDevice);
++    if (result != VK_SUCCESS) {
++        WARN("Failed to initialize pipeline for texture decompression");
++        return false;
++    }
++
++    auto cmdPipelineBarrier2 = [vk](VkCommandBuffer cb, const VkDependencyInfo* info) {
++        if (vk->vkCmdPipelineBarrier2) {
++            vk->vkCmdPipelineBarrier2(cb, info);
++        } else {
++            vk->vkCmdPipelineBarrier2KHR(cb, info);
++        }
++    };
++
++    for (auto& barrier : imageBarriers) {
++        barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++        barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
++        barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
++    }
++
++    imageBarriers.back().srcStageMask = VK_PIPELINE_STAGE_2_NONE;
++    imageBarriers.back().srcAccessMask = VK_ACCESS_2_NONE;
++    imageBarriers.back().oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++    imageBarriers.back().dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++    imageBarriers.back().dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
++    imageBarriers.back().newLayout = VK_IMAGE_LAYOUT_GENERAL;
++
++    VkDependencyInfo preDecompInfo = {
++        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
++        .pNext = nullptr,
++        .dependencyFlags = dependencyFlags,
++        .memoryBarrierCount = 0,
++        .pMemoryBarriers = nullptr,
++        .bufferMemoryBarrierCount = 0,
++        .pBufferMemoryBarriers = nullptr,
++        .imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size()),
++        .pImageMemoryBarriers = imageBarriers.data(),
++    };
++    cmdPipelineBarrier2(commandBuffer, &preDecompInfo);
++
++    decompress(vk, commandBuffer, getImageSubresourceRange(targetBarrier.subresourceRange));
++
++    for (auto& barrier : imageBarriers) {
++        barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++        barrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
++        barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
++        barrier.dstStageMask = targetBarrier.dstStageMask;
++        barrier.dstAccessMask = targetBarrier.dstAccessMask;
++        barrier.newLayout = targetBarrier.newLayout;
++    }
++    imageBarriers.back().srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
++
++    VkDependencyInfo postDecompInfo = {
++        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
++        .pNext = nullptr,
++        .dependencyFlags = dependencyFlags,
++        .memoryBarrierCount = 0,
++        .pMemoryBarriers = nullptr,
++        .bufferMemoryBarrierCount = 0,
++        .pBufferMemoryBarriers = nullptr,
++        .imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size()),
++        .pImageMemoryBarriers = imageBarriers.data(),
++    };
++    cmdPipelineBarrier2(commandBuffer, &postDecompInfo);
++
++    return true;
++}
++
+ void CompressedImageInfo::decompressOnCpu(VkCommandBuffer commandBuffer, uint8_t* srcAstcData,
+                                           size_t astcDataSize, VkImage dstImage,
+                                           VkImageLayout dstImageLayout, uint32_t regionCount,
+@@ -639,6 +719,27 @@ std::vector<VkImageMemoryBarrier> CompressedImageInfo::getImageBarriers(
+     return imageBarriers;
+ }
+ 
++std::vector<VkImageMemoryBarrier2> CompressedImageInfo::getImageBarriers2(
++    const VkImageMemoryBarrier2& srcBarrier) {
++    const VkImageSubresourceRange range = getImageSubresourceRange(srcBarrier.subresourceRange);
++
++    std::vector<VkImageMemoryBarrier2> imageBarriers;
++    imageBarriers.reserve(range.levelCount + 1);
++
++    VkImageMemoryBarrier2 mipmapBarrier = srcBarrier;
++    mipmapBarrier.subresourceRange.baseMipLevel = 0;
++    mipmapBarrier.subresourceRange.levelCount = 1;
++    imageBarriers.insert(imageBarriers.begin(), range.levelCount, mipmapBarrier);
++    for (uint32_t j = 0; j < range.levelCount; j++) {
++        imageBarriers[j].image = mCompressedMipmaps[range.baseMipLevel + j];
++    }
++
++    imageBarriers.push_back(srcBarrier);
++    imageBarriers.back().image = mOutputImage;
++
++    return imageBarriers;
++}
++
+ VkImageSubresourceRange CompressedImageInfo::getImageSubresourceRange(
+     const VkImageSubresourceRange& range) const {
+     VkImageSubresourceRange result = range;
+diff --git a/host/vulkan/emulated_textures/CompressedImageInfo.h b/host/vulkan/emulated_textures/CompressedImageInfo.h
+index 8a9127e..ece6ac0 100644
+--- a/host/vulkan/emulated_textures/CompressedImageInfo.h
++++ b/host/vulkan/emulated_textures/CompressedImageInfo.h
+@@ -87,6 +87,11 @@ class CompressedImageInfo {
+                             const VkImageMemoryBarrier& targetBarrier,
+                             std::vector<VkImageMemoryBarrier>& outputBarriers);
+ 
++    bool decompressIfNeeded(VulkanDispatch* vk, VkCommandBuffer commandBuffer,
++                            VkDependencyFlags dependencyFlags,
++                            const VkImageMemoryBarrier2& targetBarrier,
++                            std::vector<VkImageMemoryBarrier2>& outputBarriers);
++
+     void decompressOnCpu(VkCommandBuffer commandBuffer, uint8_t* srcAstcData, size_t astcDataSize,
+                          VkImage dstImage, VkImageLayout dstImageLayout, uint32_t regionCount,
+                          const VkBufferImageCopy* pRegions, const VkDecoderContext& context);
+@@ -124,6 +129,7 @@ class CompressedImageInfo {
+     // Returns a vector of image barriers for the compressed mipmap images and the decompressed
+     // image.
+     std::vector<VkImageMemoryBarrier> getImageBarriers(const VkImageMemoryBarrier& srcBarrier);
++    std::vector<VkImageMemoryBarrier2> getImageBarriers2(const VkImageMemoryBarrier2& srcBarrier);
+ 
+     VkImageSubresourceRange getImageSubresourceRange(const VkImageSubresourceRange& range) const;
+ 

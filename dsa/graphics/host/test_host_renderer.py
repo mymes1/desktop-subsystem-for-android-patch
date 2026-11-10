@@ -292,6 +292,34 @@ class RendererWithoutVulkanTests(unittest.TestCase):
         result = json.loads(done.stdout.strip().splitlines()[-1])
         self.assertIsInstance(result["init"], int)
 
+    @unittest.skipUnless(sys.platform == "win32", "Bundled vulkan_lvp.dll fallback is packaged for Windows")
+    def test_pr3_renderer_falls_back_to_bundled_lavapipe_when_vulkan_loader_is_missing(self):
+        env_path = os.environ.get("GFXSTREAM_BACKEND_PATH")
+        if not env_path or not Path(env_path).exists():
+            self.skipTest("GFXSTREAM_BACKEND_PATH is not set or library does not exist.")
+        dll_dir = Path(env_path).resolve().parent
+        if not (dll_dir / "vulkan_lvp.dll").exists():
+            self.skipTest("vulkan_lvp.dll is not staged beside gfxstream_backend.dll.")
+        env = dict(os.environ)
+        env.pop("VK_ICD_FILENAMES", None)
+        env.pop("VK_DRIVER_FILES", None)
+        env.pop("ANDROID_EMU_VK_ICD", None)
+        # Simulate a Windows PC (such as Intel Iris Pro 5200) that has no hardware Vulkan
+        # runtime installed: vulkan-1.dll cannot be loaded, so the renderer must switch
+        # directly to the bundled vulkan_lvp.dll beside gfxstream_backend.dll.
+        env["ANDROID_EMU_VK_LOADER_PATH"] = str(dll_dir / "no-such-vulkan-1.dll")
+        done = subprocess.run(
+            [sys.executable, __file__, "--probe-init-without-vulkan",
+             str(Path(env_path).resolve())],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=env,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        result = json.loads(done.stdout.strip().splitlines()[-1])
+        self.assertEqual(result["init"], 0, done.stderr)
+
 
 class RenderGpuSelectionTests(unittest.TestCase):
     def run_probe(self, rule, argument):

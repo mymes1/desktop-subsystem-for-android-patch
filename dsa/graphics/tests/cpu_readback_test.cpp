@@ -158,6 +158,29 @@ static void pr3_only_buffers_a_submit_may_have_drawn_are_read_back_once() {
     EXPECT(set.empty());
 }
 
+static void nfr1_submits_that_do_not_touch_a_readback_buffer_leave_it_idle() {
+    dsa::CpuReadbackSet set;
+    int capture = 0;
+    int thumbnail = 0;
+    set.add(100, 1, &capture);
+    set.add(101, 1, &thumbnail);
+    EXPECT(set.contains(100) && set.contains(101) && !set.contains(999));
+
+    // A normal swapchain frame touches neither CPU-readback buffer: nothing becomes pending.
+    set.submitted(1, {});
+    EXPECT(set.takePending(1).empty());
+
+    // A submit touching an unrelated memory handle also leaves both idle.
+    set.submitted(1, {555});
+    EXPECT(set.takePending(1).empty());
+
+    // Only the buffer whose image was touched in the submitted command buffer is read back.
+    set.submitted(1, {101});
+    auto pending = set.takePending(1);
+    EXPECT(pending.size() == 1 && pending[0] == &thumbnail);
+    EXPECT(set.takePending(1).empty());
+}
+
 int main() {
     pr3_only_a_buffer_the_gpu_draws_and_the_cpu_only_reads_is_read_back();
     pr3_each_format_asks_the_host_for_its_colorbuffers_own_pixel_size();
@@ -165,6 +188,7 @@ int main() {
     pr3_rgb_888_keeps_each_pixels_first_three_bytes();
     nfr5_a_buffer_too_small_for_its_drawing_is_left_alone();
     pr3_only_buffers_a_submit_may_have_drawn_are_read_back_once();
+    nfr1_submits_that_do_not_touch_a_readback_buffer_leave_it_idle();
     if (failures) {
         std::fprintf(stderr, "%d expectation(s) failed\n", failures);
         return 1;

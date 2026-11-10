@@ -91,6 +91,16 @@ class MappedMemoryPatchTests(unittest.TestCase):
         tests = (HERE / "tests/test.sh").read_text(encoding="utf-8")
         self.assertIn('"$out/shadow_memory_test"', tests)
 
+    def test_nfr1_unmapped_memory_flushes_once_and_stops_hashing_and_reading_back(self):
+        unmap_patch = next(PATCH_DIR.glob("0009-*.patch"))
+        added, _ = file_hunks(unmap_patch, TRACKER)
+        text = "\n".join(added)
+        self.assertIn("it->second.shadowMapping.unmapped();", text)
+        self.assertIn("!info.shadowMapping.takeFlush()) {", text)
+        policy = (HERE / "include/dsa_shadow_memory.h").read_text(encoding="utf-8")
+        self.assertIn("void unmapped()", policy)
+        self.assertIn("bool takeFlush()", policy)
+
 
 if __name__ == "__main__":
     unittest.main()

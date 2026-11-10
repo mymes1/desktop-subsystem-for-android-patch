@@ -463,6 +463,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             .scratch/build-host/dist/bin/gfxstream_backend.dll
+            .scratch/build-host/dist/bin/vulkan_lvp.dll
             .scratch/build-host/dist/include/
           if-no-files-found: error
 
@@ -502,6 +503,10 @@ jobs:
           $renderer = Get-ChildItem -Recurse msi-extracted -Filter "dsa-gfx.exe" | Select-Object -First 1
           if (-not $renderer -or $renderer.DirectoryName -ne $dll.DirectoryName) {
             throw "dsa-gfx.exe is not packaged beside gfxstream_backend.dll and dsa-wm.exe"
+          }
+          $lvp = Get-ChildItem -Recurse msi-extracted -Filter "vulkan_lvp.dll" | Select-Object -First 1
+          if (-not $lvp -or $lvp.DirectoryName -ne $dll.DirectoryName -or $lvp.Length -eq 0) {
+            throw "vulkan_lvp.dll is not packaged beside gfxstream_backend.dll and dsa-gfx.exe"
           }
           if ($renderer.VersionInfo.FileDescription -cne 'Graphics renderer for Android') {
             throw "dsa-gfx.exe calls itself '$($renderer.VersionInfo.FileDescription)'"

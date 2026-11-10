@@ -79,7 +79,9 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0021-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

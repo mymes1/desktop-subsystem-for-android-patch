@@ -138,6 +138,25 @@ class CpuReadbackPatchTests(unittest.TestCase):
         self.assertEqual(names[names.index(PATCH.name) - 1][:5], "0001-")
         self.assertIn('"$here/cpu_readback_test.cpp"', TESTS.read_text(encoding="utf-8"))
 
+    def test_nfr1_only_cpu_readback_buffers_touched_by_submitted_command_buffers_are_marked_dirty(self):
+        selective = next((HERE / "patches/guest/mesa").glob("0010-*.patch"))
+        added, removed = file_hunks(selective, "src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp")
+        text = "\n".join(added)
+        self.assertIn("            mCpuReadback.submitted((uint64_t)queueIt->second.device);", removed)
+        self.assertIn("mCpuReadback.submitted((uint64_t)queueIt->second.device, touchedMemories);", text)
+        self.assertIn("imageIt->second.currentBacking = memory;", text)
+        self.assertIn("void ResourceTracker::on_vkCmdPipelineBarrier2(", text)
+        func_added, _ = file_hunks(selective, "src/gfxstream/guest/vulkan_enc/func_table.cpp")
+        func_text = "\n".join(func_added)
+        self.assertIn("resources->on_vkQueueSubmit2KHR(", func_text)
+        self.assertIn("on_vkCmdPipelineBarrier2(", func_text)
+        self.assertIn("noteRenderingReadback(", func_text)
+        self.assertIn("noteRenderPassReadback(", func_text)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
 
 if __name__ == "__main__":
     unittest.main()

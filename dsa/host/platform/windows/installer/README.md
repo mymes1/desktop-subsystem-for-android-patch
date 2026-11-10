@@ -5,15 +5,21 @@ The Windows installer: `dsa.wxs` is the package (MSI), `bundle.wxs` wraps it in
 and the .NET SDK, build tools that are not shipped with DSA.
 
 ```
+pwsh dsa/graphics/host/build.ps1 -ScratchDir .scratch -OutDir .scratch/build-host
 dotnet tool install --global wix --version 5.0.2
+wix extension add -g WixToolset.Util.wixext/5.0.2
 pwsh dsa/host/platform/windows/installer/build.ps1 -Version 0.1.0 -Kernel bzImage `
-    -GfxstreamBackend gfxstream_backend.dll `
+    -GfxstreamBackend .scratch/build-host/dist/bin/gfxstream_backend.dll `
     -ListUrl https://.../images.json -TrustedKey <public key> -AndroidMajor 17 `
     -ProgramListUrl https://.../program-stable.json `
     -PrereleaseProgramListUrl https://.../program-prerelease.json -Channel prerelease
 ```
 
-The results land in `dsa/target/installer/`.
+`dsa/graphics/host/build.ps1` builds `gfxstream_backend.dll` and stages the bundled Mesa
+Lavapipe software Vulkan ICD (`vulkan_lvp.dll`) beside it, which `installer/build.ps1`
+packages alongside `dsa-gfx.exe` so machines without a hardware Vulkan driver (such as
+Intel Haswell / Iris Pro 5200) work out of the box. The results land in
+`dsa/target/installer/`.
 
 `-PlaceholderKernel` builds a test package instead, which only checks the installer: its
 kernel and graphics library are empty stand-ins. It cannot be taken for the real one. Its

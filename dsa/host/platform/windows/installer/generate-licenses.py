@@ -581,7 +581,7 @@ It incorporates the following third-party components:
 The MIT License text is in mit.txt.
 """
 
-GFXSTREAM_NOTICE = """gfxstream Graphics Remoting Transport
+GFXSTREAM_NOTICE = """gfxstream Graphics Remoting Transport and Bundled Lavapipe Fallback
 
 Desktop Subsystem for Android includes patches and components from the Android Open Source
 Project gfxstream repository (platform/hardware/google/gfxstream).
@@ -594,6 +594,11 @@ You may obtain a copy of the License at
 
 Portions of gfxstream and related guest and host dependencies (aemu, mesa3d, libhardware, system/core, glm, renderdoc, stb, angle)
 are licensed under the MIT License or BSD-3-Clause License.
+
+On Windows, DSA also ships Mesa's Lavapipe software Vulkan driver (vulkan_lvp.dll, built with
+LLVM and zlib from https://github.com/mmozeiko/build-mesa) as an automatic fallback for GPUs
+without a hardware Vulkan driver, under the MIT License, Apache License 2.0 with LLVM Exception,
+and the zlib License.
 """
 
 AOSP_NOTICE = """Android Open Source Project (AOSP) Guest Images
@@ -684,7 +689,7 @@ def is_allowed_expression(expr: str, allow_list: set) -> bool:
 PART_TITLES = {
     "setup": "Setup program (setup.exe, DsaSetup.exe)",
     "settings": "Settings app and APK Installer (settings\\DsaSettings.exe, DsaApkInstaller.exe)",
-    "graphics": "Host graphics path (gfxstream_backend.dll)",
+    "graphics": "Host graphics path (gfxstream_backend.dll, vulkan_lvp.dll)",
     "guest": "Guest image (vm\\bzImage and the Android image)",
     "linux": "Linux host's VM (/usr/lib/dsa/bin/crosvm and passt)",
     "data": "Address data (geodata\\address-boundaries.bin, /usr/lib/dsa/geodata, "

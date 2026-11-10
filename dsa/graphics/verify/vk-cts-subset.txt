@@ -16,6 +16,12 @@ dEQP-VK.memory.mapping.suballocation.full.*
 dEQP-VK.draw.renderpass.simple_draw.*
 dEQP-VK.synchronization.basic.fence.*
 dEQP-VK.synchronization.smoke.*
+dEQP-VK.synchronization2.smoke.*
+dEQP-VK.texture.compressed.astc_4x4_unorm_block_2d_pot
+dEQP-VK.texture.compressed.astc_4x4_srgb_block_2d_pot
+dEQP-VK.texture.compressed.etc2_r8g8b8_unorm_block_2d_pot
+dEQP-VK.texture.compressed.etc2_r8g8b8a8_unorm_block_2d_pot
+dEQP-VK.texture.compressed.etc2_r8g8b8a8_srgb_block_2d_pot
 dEQP-VK.wsi.android.surface.*
 dEQP-VK.wsi.android.swapchain.create.min_image_count
 
