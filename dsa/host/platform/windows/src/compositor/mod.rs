@@ -191,10 +191,14 @@ struct MediaWindows {
     /// The manager's events, once the task windows have started.
     events: Arc<Mutex<Option<mpsc::Sender<ManagerEvent>>>>,
     /// Where the manager sends a press.
-    pressed_tx: mpsc::Sender<(String, dsa_host_core::background::MediaCommand)>,
+    pressed_tx: mpsc::Sender<MediaPress>,
     /// Where the tray's thread reads the presses; taken when it starts.
-    pressed_rx: Mutex<Option<mpsc::Receiver<(String, dsa_host_core::background::MediaCommand)>>>,
+    pressed_rx: Mutex<Option<mpsc::Receiver<MediaPress>>>,
 }
+
+/// A media button pressed in a task window's taskbar preview: the app's package and what the
+/// button asks of its media session.
+type MediaPress = (String, dsa_host_core::background::MediaCommand);
 
 impl MediaWindows {
     fn new() -> MediaWindows {

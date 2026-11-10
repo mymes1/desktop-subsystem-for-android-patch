@@ -381,7 +381,7 @@ impl ThumbBar {
                 THBF_DISABLED
             };
             if button.hidden {
-                flags = flags | THBF_HIDDEN;
+                flags |= THBF_HIDDEN;
             }
             let icon = icons
                 .as_ref()
