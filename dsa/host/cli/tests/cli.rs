@@ -1063,6 +1063,62 @@ fn fr5_touch_gestures_off_is_on_by_default_and_dsa_turns_it_off() {
 }
 
 #[test]
+fn fr28_host_certificates_are_on_by_default_and_dsa_turns_them_off() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("settings set host-certificates off"))
+            .unwrap()
+            .change,
+        Some(Change::HostCertificates(false))
+    );
+    assert!(parse(&args("settings set host-certificates maybe")).is_err());
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["host_certificates"], true);
+    assert_eq!(settings["imported_certificates"], serde_json::json!([]));
+    let changed = json_of(&dsa(&endpoint, "settings set host-certificates off --json"));
+    assert_eq!(changed["host_certificates"], false);
+}
+
+#[test]
+fn fr28_the_settings_list_the_root_certificates_found_and_where() {
+    use dsa_host_core::host_api::SettingsReport;
+    use dsa_host_core::host_certificates::ImportedCertificate;
+    let report = SettingsReport {
+        settings: dsa_host_core::settings::Settings::default(),
+        facts: Default::default(),
+        network: None,
+        adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
+        adb_shell_root: String::new(),
+        imported_certificates: vec![ImportedCertificate {
+            subject: "CN=Filter Root, O=Example Filter".into(),
+            issuer: "CN=Filter Root, O=Example Filter".into(),
+            source: "machine_group_policy".into(),
+            location: "HKLM\\SOFTWARE\\Policies\\Microsoft\\SystemCertificates\\Root".into(),
+            sha256: "ab".repeat(32),
+            not_after: 1_893_456_000,
+        }],
+    };
+    let json = dsa_cli::settings_json(&report);
+    let listed = &json["imported_certificates"][0];
+    assert_eq!(listed["subject"], "CN=Filter Root, O=Example Filter");
+    assert_eq!(listed["source"], "machine_group_policy");
+    assert_eq!(listed["not_after"], 1_893_456_000);
+    let text = dsa_cli::describe_settings(&report);
+    assert!(
+        text.contains("Trust the root certificates added to this computer: on (1 found)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Root certificate: CN=Filter Root, O=Example Filter")
+            && text.contains("this computer's group policy"),
+        "{text}"
+    );
+}
+
+#[test]
 fn fr5_the_touch_gestures_line_says_why_it_cannot_be_used_and_is_hidden_without_gestures() {
     use dsa_host_core::host_api::SettingsReport;
     use dsa_host_core::touch_gestures::TouchGesturesState;
@@ -1073,6 +1129,7 @@ fn fr5_the_touch_gestures_line_says_why_it_cannot_be_used_and_is_hidden_without_
         adb_auto_connect_state: Default::default(),
         touch_gestures: state,
         adb_shell_root: String::new(),
+        imported_certificates: Vec::new(),
     };
     let line = |report: &SettingsReport| {
         dsa_cli::describe_settings(report)
@@ -3303,6 +3360,7 @@ fn fr15_settings_say_where_program_updates_come_from() {
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
         adb_shell_root: String::new(),
+        imported_certificates: Vec::new(),
     };
     let text = dsa_cli::describe_settings(&report);
     let line = text
@@ -3773,6 +3831,7 @@ fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
         adb_shell_root: String::new(),
+        imported_certificates: Vec::new(),
     };
     let channel_line = |report: &SettingsReport| {
         dsa_cli::describe_settings(report)
@@ -3805,6 +3864,7 @@ fn fr35_the_settings_apps_read_root_elevation_and_each_apps_level() {
         adb_auto_connect_state: Default::default(),
         touch_gestures: Default::default(),
         adb_shell_root: String::new(),
+        imported_certificates: Vec::new(),
     };
     assert_eq!(dsa_cli::settings_json(&report)["root_elevation"], true);
     let line = dsa_cli::describe_settings(&report)
