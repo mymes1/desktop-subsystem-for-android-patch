@@ -302,11 +302,9 @@ fn fr12_right_clicking_a_widget_resizes_or_removes_it() {
         panic!("no menu: {effects:?}");
     };
     let shown = rows(&entries);
-    assert_eq!(
-        shown[0],
-        Row::Header("Resize".into()),
-        "no Widget settings? it has them"
-    );
+    // Resize is a section of the menu, with its sizes under it, then Remove.
+    assert!(shown.contains(&Row::Header("Resize".into())), "{shown:?}");
+    assert!(matches!(shown.last(), Some(Row::Item { label, .. }) if label == "Remove"));
     let large = shown
         .iter()
         .find_map(|row| match row {
