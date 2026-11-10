@@ -84,14 +84,14 @@ unsafe extern "C-unwind" fn did_complete(
     controller: *mut AnyObject,
     authorization: *mut AnyObject,
 ) {
-    let outcome =
-        std::panic::catch_unwind(|| unsafe { outcome_of(authorization) }).unwrap_or_else(|_| {
-            MacOutcome::Error {
-                domain: String::new(),
-                code: -1,
-                message: "the passkey's result could not be read".into(),
-            }
-        });
+    // The closure only reads the authorization the system handed this callback; a panic
+    // while reading it leaves nothing half changed, so asserting unwind safety is sound.
+    let read = std::panic::AssertUnwindSafe(|| unsafe { outcome_of(authorization) });
+    let outcome = std::panic::catch_unwind(read).unwrap_or_else(|_| MacOutcome::Error {
+        domain: String::new(),
+        code: -1,
+        message: "the passkey's result could not be read".into(),
+    });
     deliver(controller, outcome);
 }
 
