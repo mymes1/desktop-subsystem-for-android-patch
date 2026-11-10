@@ -184,8 +184,14 @@ pub fn backup(ctx: &Shared, page: &Rc<Page>) {
     };
     // Backs up or restores, showing that it runs until it ends, and how it ended.
     let run: Rc<dyn Fn(BackupJob)> = {
-        let (ctx, show, running, buttons) =
-            (ctx.clone(), show.clone(), running.clone(), buttons.clone());
+        let (ctx, show, running, buttons, busy_row, result_row) = (
+            ctx.clone(),
+            show.clone(),
+            running.clone(),
+            buttons.clone(),
+            busy_row.clone(),
+            result_row.clone(),
+        );
         Rc::new(move |job: BackupJob| {
             running.set(Some(job));
             busy_row.set_title(&view::backup_busy_text(job));
