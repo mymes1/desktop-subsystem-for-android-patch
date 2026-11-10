@@ -51,6 +51,14 @@ class AgentTest {
         return agent
     }
 
+    /**
+     * The task reports [endpoint] heard, alone. A connection also carries what other parts of
+     * the agent tell the host at once (the apps' sound streams, the request for the host's
+     * voices), which these tests are not about.
+     */
+    private fun taskUpdates(endpoint: FakeEndpoint = daemon) =
+        endpoint.sentMessages().filter { it.hasTaskUpdated() }.map { it.taskUpdated }
+
     @Test
     fun fr2_the_agent_tells_the_daemon_it_is_there_each_time_it_connects() {
         started()
@@ -64,7 +72,7 @@ class AgentTest {
         started()
 
         assertEquals(WINDOWING_MODE_FREEFORM, windowing.mode)
-        assertEquals(listOf(1), daemon.sentMessages().map { it.taskUpdated.taskId })
+        assertEquals(listOf(1), taskUpdates().map { it.taskId })
     }
 
     @Test
@@ -81,7 +89,7 @@ class AgentTest {
         tasks.change(listOf(appTask(9, packageName = "org.example.mail", label = "Mail", focused = true)))
         scheduler.runDue()
 
-        val update = daemon.sentMessages().single().taskUpdated
+        val update = taskUpdates().single()
         assertEquals(9, update.taskId)
         assertEquals("org.example.mail", update.packageName)
         assertEquals("Mail", update.label)
@@ -130,7 +138,7 @@ class AgentTest {
         locator.up = restarted
         scheduler.advance(1000)
 
-        assertEquals(listOf(1), restarted.sentMessages().map { it.taskUpdated.taskId })
+        assertEquals(listOf(1), taskUpdates(restarted).map { it.taskId })
     }
 
     private fun launcherApp(packageName: String) =
@@ -257,7 +265,7 @@ class AgentTest {
         assertEquals(listOf(5 to target), actions.moved)
         // The host never hears of the two tasks overlapping: the moving task is reported at
         // the place it is going to.
-        val reported = daemon.sentMessages().associate { it.taskUpdated.taskId to it.taskUpdated.bounds }
+        val reported = taskUpdates().associate { it.taskId to it.bounds }
         assertEquals(686, reported.getValue(4).left)
         assertEquals(0, reported.getValue(5).left)
         assertEquals(548, reported.getValue(5).right)
@@ -317,7 +325,7 @@ class AgentTest {
         scheduler.advance(1000)
 
         assertEquals(1, actions.moved.size)
-        assertEquals(listOf(4, 5), daemon.sentMessages().map { it.taskUpdated.taskId }.sorted())
+        assertEquals(listOf(4, 5), taskUpdates().map { it.taskId }.sorted())
     }
 
     @Test
@@ -327,7 +335,7 @@ class AgentTest {
         started()
 
         assertTrue(actions.moved.isEmpty())
-        assertEquals(listOf(4, 5), daemon.sentMessages().map { it.taskUpdated.taskId }.sorted())
+        assertEquals(listOf(4, 5), taskUpdates().map { it.taskId }.sorted())
     }
 
     @Test
@@ -721,7 +729,7 @@ class AgentTest {
         tasks.running = listOf(appTask(1).copy(minWidth = 700, minHeight = 500))
         started()
 
-        val update = daemon.sentMessages().single().taskUpdated
+        val update = taskUpdates().single()
         assertEquals(700, update.minWidth)
         assertEquals(500, update.minHeight)
 
@@ -737,7 +745,7 @@ class AgentTest {
         tasks.running = listOf(appTask(1, densityDpi = 240))
         started()
 
-        val update = daemon.sentMessages().single().taskUpdated
+        val update = taskUpdates().single()
         assertEquals(240, update.densityDpi)
         assertEquals(1920, update.maxWidth)
         assertEquals(1080, update.maxHeight)
@@ -770,7 +778,7 @@ class AgentTest {
         tasks.change(listOf(appTask(1), appTask(2)))
         scheduler.runDue()
 
-        assertEquals(listOf(1, 2), daemon.sentMessages().map { it.taskUpdated.taskId })
+        assertEquals(listOf(1, 2), taskUpdates().map { it.taskId })
     }
 
     private fun keyFrame(taskId: Int, action: KeyAction, keyCode: Int, meta: Int = 0): ByteArray =

@@ -438,12 +438,19 @@ fn nfr1_dsa_memory_asks_the_guest_and_shows_it_beside_the_host_processes() {
                 .expect("connecting")
                 .memory()
         });
-        // The service asks the agent for a fresh report, which it answers.
-        let asked = dsa_protocol::decode(&setup.agent.recv(Some(WAIT)).unwrap()).unwrap();
-        assert_eq!(
-            asked.body,
-            Some(Body::RequestGuestMemory(control::RequestGuestMemory {}))
-        );
+        // The service asks the agent for a fresh report, which it answers. What else the
+        // host tells a newly connected agent (whether app backups are on) comes on the same
+        // channel, and is not what this test is about.
+        let deadline = Instant::now() + WAIT;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            assert!(!left.is_zero(), "the service never asked for a report");
+            let frame = setup.agent.recv(Some(left)).unwrap();
+            let asked = dsa_protocol::decode(&frame).unwrap();
+            if asked.body == Some(Body::RequestGuestMemory(control::RequestGuestMemory {})) {
+                break;
+            }
+        }
         send(&mut setup.agent, Body::GuestMemory(report()));
         reader.join().unwrap()
     });
