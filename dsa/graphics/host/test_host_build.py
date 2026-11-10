@@ -235,6 +235,15 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+                emu->suspectDeviceLost();", patch)
         self.assertIn("-                VK_ANB_ERR(\"Timeout when waiting for the Qsri fence.\");", patch)
 
+    def test_pr4_a_yuv_buffer_a_guest_cpu_writes_gets_a_yuv_colorbuffer(self):
+        # Image test run 42724126311: every decoder's pictures showed green on screen, since
+        # a YUV gralloc buffer had an RGBA ColorBuffer nothing wrote.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0019", script.read_text(encoding="utf-8"))
+        patch = next((HERE.parent / "patches").glob("0019-*.patch")).read_text(encoding="utf-8")
+        self.assertIn("+bool FrameBuffer::updateColorBufferFromDsaPackedYuv(", patch)
+        self.assertIn("+bool VkEmulation::supportsYuvColorBuffer(", patch)
+
     def test_nfr5_a_frame_copy_into_a_task_window_never_waits_without_an_end(self):
         # A copy the GPU did not finish in a second was waited for with UINT64_MAX, so a hung
         # GPU held the renderer's device, and every task window's frames, until Windows reset
