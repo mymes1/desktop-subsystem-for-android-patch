@@ -2119,5 +2119,16 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer();
 
+  /**
+   * <code>.dsa.control.v1.HostCertificates host_certificates = 684;</code>
+   * @return Whether the hostCertificates field is set.
+   */
+  boolean hasHostCertificates();
+  /**
+   * <code>.dsa.control.v1.HostCertificates host_certificates = 684;</code>
+   * @return The hostCertificates.
+   */
+  io.github.thisisthepy.dsa.control.v1.HostCertificates getHostCertificates();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }
