@@ -62,6 +62,12 @@ const PROBE_RUNNER: &str = "io.github.thisisthepy.dsa.mediaprobe/.MediaProbe";
 const TRACK_INITIALIZED: i64 = 1;
 /// The tone the probe plays: a second at 48 kHz.
 const TONE_FRAMES: i64 = 48_000;
+/// The tone's amplitude, out of 32768 (`MediaProbe.tone`).
+const TONE_PEAK: u32 = 8000;
+/// How long the check waits for the probe's sound to go idle on the host, which is when the
+/// host logs how loud it arrived: the guest's mixer stands by a few seconds after the last
+/// sound.
+const LEVEL_WAIT: Duration = Duration::from_secs(30);
 /// The guest's own decoders, which every image has.
 const SOFTWARE_DECODERS: &[(&str, &str)] = &[
     ("avc", "c2.android.avc.decoder"),
@@ -557,6 +563,35 @@ fn audio_problems(results: &BTreeMap<String, String>) -> Vec<String> {
         }
     }
     problems
+}
+
+/// The loudest peak an output of the guest's sound reached the host at, as the audio port logs
+/// it when the output goes idle or closes ("audio stream primary is idle: 96000 frames
+/// received, peak 8000").
+fn loudest_peak(log: &str) -> Option<u32> {
+    log.lines()
+        .filter(|line| line.contains("audio stream "))
+        .filter_map(|line| {
+            let after = &line[line.find(" peak ")? + " peak ".len()..];
+            let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+            digits.parse().ok()
+        })
+        .max()
+}
+
+/// What is wrong with how loud the probe's tone reached the host. Android's media volume is
+/// left at its default, and the tone must still arrive as the probe made it, within a tenth:
+/// the host's volume is the only one the guest's sound has. Before, the guest's mixer applied
+/// Android's media volume first, and the sound left the guest some 15 dB down.
+fn sound_level_problems(log: &str) -> Vec<String> {
+    match loudest_peak(log) {
+        None => vec!["no output of the guest's sound said how loud it reached the host".into()],
+        Some(peak) if peak * 10 < TONE_PEAK * 9 => vec![format!(
+            "the probe's tone reached the host at a peak of {peak}, not its {TONE_PEAK}: the \
+             guest turned it down before the host's volume"
+        )],
+        Some(_) => Vec::new(),
+    }
 }
 
 /// What is wrong with the probe's decode results: each stream must be encoded, the guest's
@@ -1241,6 +1276,21 @@ fn fr36_the_boot_check_rejects_another_default_or_engine() {
 }
 
 #[test]
+fn fr26_the_boot_check_finds_sound_turned_down_before_the_host() {
+    let full = "dsa-devices: audio stream primary opened\n\
+                audio stream primary is idle: 96000 frames received, peak 8000\n";
+    assert!(sound_level_problems(full).is_empty());
+    assert_eq!(loudest_peak(full), Some(8000));
+    // Android's media volume at 10 out of 15 took the tone some 15 dB down.
+    let turned_down = "audio stream primary is idle: 96000 frames received, peak 1423\n\
+                       audio stream app 0 closed (the guest closed it): 0 frames received, \
+                       peak 0, 0 frames of underrun\n";
+    assert_eq!(loudest_peak(turned_down), Some(1423));
+    assert_eq!(sound_level_problems(turned_down).len(), 1);
+    assert_eq!(sound_level_problems("nothing about sound").len(), 1);
+}
+
+#[test]
 fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
     boot_check(true, false);
 }
@@ -1315,11 +1365,12 @@ fn boot_check(check_media: bool, check_root: bool) {
         dir.join("compositor.log"),
     );
     // The guest's sound goes to the host's audio port, which dsa-devices serves.
+    let devices_log = dir.join("devices.log");
     let _devices = Service::spawn(
         Command::new(env!("CARGO_BIN_EXE_dsa-devices"))
             .arg("--socket")
             .arg(&socket),
-        dir.join("devices.log"),
+        devices_log.clone(),
     );
     let mut api = client(&socket, Duration::from_secs(30));
     let log: Arc<Mutex<Vec<String>>> = Arc::default();
@@ -1466,6 +1517,18 @@ fn boot_check(check_media: bool, check_root: bool) {
             Ok(results) => {
                 eprintln!("audio: {results:?}");
                 problems.extend(audio_problems(&results));
+                // How loud the tone reached the host, at Android's default media volume.
+                let waited = Instant::now();
+                let level = loop {
+                    let log = std::fs::read_to_string(&devices_log).unwrap_or_default();
+                    let level = sound_level_problems(&log);
+                    if level.is_empty() || waited.elapsed() >= LEVEL_WAIT {
+                        eprintln!("sound level on the host: {:?}", loudest_peak(&log));
+                        break level;
+                    }
+                    std::thread::sleep(Duration::from_millis(500));
+                };
+                problems.extend(level);
             }
             Err(why) => problems.push(why),
         }

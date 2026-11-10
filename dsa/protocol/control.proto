@@ -2109,6 +2109,43 @@ message AudioOutputControl {
   AudioOutputCommand command = 1;
 }
 
+// The volume of the guest's sound is the host's to set, so it is set once. The audio module
+// sends every output at full scale: Android's media volume never makes the sound quieter on
+// its way to the host. Each app with a window gets an output of its own ("app 0", "app 1",
+// ...), and every other sound plays on the shared output ("primary"). The agent says which
+// app each output plays and the volume Android gives that app, and the host plays the output
+// as that app, at that volume, in its own volume mixer. A change the user makes there comes
+// back as SetAppVolume, and becomes the volume Android's apps read.
+
+// One output of the audio module, and the app it plays.
+message AppAudioStream {
+  // The output, as its AudioOutputOpen names it on the audio port ("app 0", "primary").
+  string stream = 1;
+  // The app that plays on it. Empty for the shared output.
+  string package_name = 2;
+  // The app's name as a launcher shows it. Empty for the shared output.
+  string app_label = 3;
+  // The app's volume, from 0 (silent) to 1 (full): Android's media volume index over its
+  // largest index, while the app is the one Android's media volume stands for.
+  float volume = 4;
+  bool muted = 5;
+}
+
+// Guest to host, from the agent: the outputs and the apps they play, the whole list. Sent on
+// each connection and whenever any of it changes.
+message AppAudio {
+  repeated AppAudioStream streams = 1;
+}
+
+// Host to guest: the user set an app's volume or mute on the host. Empty `package_name` is the
+// shared output. The agent keeps it as the app's volume, and makes it Android's media volume
+// while that app is the one it stands for.
+message SetAppVolume {
+  string package_name = 1;
+  float volume = 2;
+  bool muted = 3;
+}
+
 // The guest's log, as logd keeps it in memory. A record's buffer is logd's log ID plus one,
 // so 0 stays "unspecified".
 enum LogBuffer {
@@ -3025,6 +3062,8 @@ message Envelope {
     AudioOutputControl audio_output_control = 103;
     AudioInputOpen audio_input_open = 104;
     AudioInputOpened audio_input_opened = 105;
+    AppAudio app_audio = 106;
+    SetAppVolume set_app_volume = 107;
     VideoCapabilities video_capabilities = 120;
     VideoDecoderOpen video_decoder_open = 121;
     VideoDecoderOpened video_decoder_opened = 122;

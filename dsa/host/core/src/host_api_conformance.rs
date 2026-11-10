@@ -24,6 +24,7 @@ use crate::accessibility::{
 use crate::adb_discovery::AutoConnectState;
 use crate::addon_disk::{Addon, AddonDisk, Format};
 use crate::apk::{self, InstallOutcome, InstallPart, InstallStatus, InstalledPackage};
+use crate::app_audio::{AppAudioHub, AppAudioWatch, AppStream, VolumeChange};
 use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::background::{
     BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
@@ -116,6 +117,10 @@ pub struct FakeAndroid {
     background: Mutex<BackgroundHub>,
     /// What the user did with its apps that run in the background, in order.
     pub background_requests: Mutex<Vec<BackgroundRequest>>,
+    /// Which app each output of its sound plays, and who watches it.
+    app_audio: Mutex<AppAudioHub>,
+    /// The app volumes the host set, in order.
+    pub app_volumes: Mutex<Vec<VolumeChange>>,
     /// The APKs it installed or refused, by name, with their whole content, in order.
     pub installs: Mutex<Vec<(String, Vec<u8>)>>,
     /// The installs of several files it took, in order: the bundle's name, the parts, the ABI
@@ -260,6 +265,8 @@ impl FakeAndroid {
             print_watchers: Mutex::new(Vec::new()),
             background: Mutex::new(BackgroundHub::default()),
             background_requests: Mutex::new(Vec::new()),
+            app_audio: Mutex::new(AppAudioHub::default()),
+            app_volumes: Mutex::new(Vec::new()),
             installs: Mutex::new(Vec::new()),
             part_installs: Mutex::new(Vec::new()),
             install_steps: Mutex::new(Vec::new()),
@@ -316,6 +323,12 @@ impl FakeAndroid {
     /// Changes its apps that run in the background as its agent would, and tells the watchers.
     pub fn background_event(&self, event: BackgroundEvent) {
         self.background.lock().unwrap().apply(event);
+    }
+
+    /// Lists which app each output of its sound plays, as its agent would, and tells the
+    /// watchers.
+    pub fn list_app_audio(&self, streams: Vec<AppStream>) {
+        self.app_audio.lock().unwrap().apply(streams);
     }
 
     /// Changes its notifications as an app in this Android would, and tells the watchers.
@@ -596,6 +609,14 @@ impl UserAndroid for FakeAndroid {
     fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
         self.background_requests.lock().unwrap().push(request);
+        Ok(())
+    }
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        Some(self.app_audio.lock().unwrap().watch())
+    }
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.app_volumes.lock().unwrap().push(change.clone());
         Ok(())
     }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
@@ -1421,6 +1442,14 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::notification_watcher_that_sends_is_disconnected(
                 &mut || $make,
             );
+        }
+        #[test]
+        fn fr26_app_outputs_reach_a_watcher_and_a_hosts_volume_reaches_the_callers_android() {
+            $crate::host_api_conformance::app_audio_reaches_a_watcher(&mut || $make);
+        }
+        #[test]
+        fn nfr5_a_malformed_app_volume_is_refused() {
+            $crate::host_api_conformance::malformed_app_volume_is_refused(&mut || $make);
         }
         #[test]
         fn fr24_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
@@ -4195,6 +4224,81 @@ pub fn background_apps_reach_a_watcher(make: MakeLocal<'_>) {
             package_name: playing.package_name
         })
     );
+}
+
+/// An output of sound that plays `package` at `volume`.
+pub fn sample_app_stream(stream: &str, package: &str, volume: f32) -> AppStream {
+    AppStream {
+        stream: stream.into(),
+        package_name: package.into(),
+        app_label: if package.is_empty() {
+            String::new()
+        } else {
+            "Music".into()
+        },
+        volume,
+        muted: false,
+    }
+}
+
+pub fn app_audio_reaches_a_watcher(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let android = androids.of(&user).expect("the caller's Android");
+    let first = vec![
+        sample_app_stream("primary", "", 1.0),
+        sample_app_stream("app 0", "com.example.music", 0.5),
+    ];
+    android.list_app_audio(first.clone());
+
+    let mut watch = connect(&mut *connector)
+        .watch_app_audio()
+        .expect("watching the outputs of Android's sound");
+    assert_eq!(watch.streams, first, "starts from the outputs now");
+    assert_eq!(watch.next(Duration::from_millis(50)).unwrap(), None);
+    let louder = vec![
+        sample_app_stream("primary", "", 1.0),
+        sample_app_stream("app 0", "com.example.music", 0.75),
+    ];
+    android.list_app_audio(louder.clone());
+    assert_eq!(watch.next(WAIT).unwrap(), Some(louder));
+
+    let change = VolumeChange {
+        package_name: "com.example.music".into(),
+        volume: 0.25,
+        muted: true,
+    };
+    connect(&mut *connector)
+        .set_app_volume(&change)
+        .expect("the host's volume reaches Android");
+    assert_eq!(*android.app_volumes.lock().unwrap(), vec![change.clone()]);
+    // A stopped Android has no app to set it for, and that is no failure.
+    connect(&mut *connector).stop().unwrap();
+    connect(&mut *connector)
+        .set_app_volume(&change)
+        .expect("nothing to set is no failure");
+    assert_eq!(android.app_volumes.lock().unwrap().len(), 1);
+}
+
+pub fn malformed_app_volume_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, _user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let refused = client.set_app_volume(&VolumeChange {
+        package_name: "not a package".into(),
+        volume: 0.5,
+        muted: false,
+    });
+    assert!(
+        refused.is_err(),
+        "a package name that is not one is refused"
+    );
+    // The service goes on.
+    assert!(connect(&mut *connector).status().is_ok());
 }
 
 pub fn background_actions_reach_the_caller(make: MakeLocal<'_>) {

@@ -67,7 +67,7 @@ fn main() {
     });
     let mut threads = Vec::new();
     if ports {
-        threads.extend(devices::start_guest_ports(&stop, &log));
+        threads.extend(devices::start_guest_ports(&connect, &stop, &log));
     }
     threads.extend(devices::start_followers(connect, which, &stop, &log));
     threads.extend(devices::start_monitor_refresh(&stop, &log));
