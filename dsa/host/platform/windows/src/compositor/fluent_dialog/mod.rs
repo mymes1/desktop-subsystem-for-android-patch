@@ -15,8 +15,12 @@
 //! What is platform neutral is here and tested on its own: the text ([`DialogText`]), the
 //! layout at a DPI ([`layout`]) with the body wrapped to the dialog's width ([`wrap`]), what a
 //! point hits, what the keyboard and the pointer do ([`DialogState`]), the colors
-//! ([`palette`]) and the drawing ([`render`]). The window that shows it is in `window`.
+//! ([`palette`]) and the drawing ([`render`]). The window that shows it is in `window`, and
+//! its UI Automation tree (a dialog with its message, check box and buttons, so Narrator reads
+//! and operates it as it does a Win32 dialog box) in `automation`.
 
+#[cfg(windows)]
+mod automation;
 #[cfg(windows)]
 mod window;
 
@@ -369,6 +373,29 @@ impl DialogState {
             cues: false,
             has_check,
         }
+    }
+
+    /// Whether the dialog has a check box.
+    pub fn has_check(&self) -> bool {
+        self.has_check
+    }
+
+    /// What a UI Automation client asked of `control` (Invoke on a button, Toggle on the
+    /// check box), done as a click on it is.
+    pub fn activate(&mut self, control: Control) -> Outcome {
+        if control == Control::Check && !self.has_check {
+            return Outcome::Nothing;
+        }
+        self.invoke(control)
+    }
+
+    /// A UI Automation client moved the focus to `control`.
+    pub fn focus_on(&mut self, control: Control) -> Outcome {
+        if (control == Control::Check && !self.has_check) || self.focus == control {
+            return Outcome::Nothing;
+        }
+        self.focus = control;
+        Outcome::Changed
     }
 
     /// The controls in tab order.
