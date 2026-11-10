@@ -7,6 +7,7 @@ import io.github.thisisthepy.dsa.control.v1.AddWidget
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.ListWidgetProviders
 import io.github.thisisthepy.dsa.control.v1.PointerAction
+import io.github.thisisthepy.dsa.control.v1.ReconfigureWidget
 import io.github.thisisthepy.dsa.control.v1.RemoveWidget
 import io.github.thisisthepy.dsa.control.v1.ResizeWidget
 import io.github.thisisthepy.dsa.control.v1.WidgetPointer
@@ -89,6 +90,14 @@ class FakeWidgetPlatform : WidgetPlatform {
             return
         }
         listening += widgetId
+    }
+
+    /** The widgets drawn anew whatever they drew before, in order. */
+    val redrawn = mutableListOf<Pair<Int, WidgetSize>>()
+
+    override fun redraw(widgetId: Int, size: WidgetSize) {
+        redrawn += widgetId to size
+        show(widgetId, size)
     }
 
     override fun pointer(widgetId: Int, action: PointerAction, pointerId: Int, x: Float, y: Float) {
@@ -300,6 +309,77 @@ class WidgetManagerTest {
         add()
         assertTrue("no setup runs", platform.setups.isEmpty())
         assertEquals(1, sent.single { it.hasWidgetAdded() }.widgetAdded.widgetId)
+    }
+
+    private fun reconfigure(widgetId: Int, requestId: Int) {
+        manager.handle(
+            Envelope.newBuilder().setReconfigureWidget(
+                ReconfigureWidget.newBuilder().setRequestId(requestId).setWidgetId(widgetId),
+            ).build(),
+        )
+        scheduler.runDue()
+    }
+
+    @Test
+    fun fr12_long_pressing_a_widget_edits_it_like_a_home_screen() {
+        val reconfigurable = WidgetInfo.FEATURE_RECONFIGURABLE
+        val optional = WidgetInfo.FEATURE_CONFIGURATION_OPTIONAL
+        // Its settings are offered only for a widget with a setup whose app says it can run again.
+        assertTrue(WidgetInfo.canSetUpAgain(true, reconfigurable))
+        assertTrue(WidgetInfo.canSetUpAgain(true, reconfigurable or optional))
+        assertFalse("a setup only when placed", WidgetInfo.canSetUpAgain(true, 0))
+        assertFalse("optional alone is not reconfigurable", WidgetInfo.canSetUpAgain(true, optional))
+        assertFalse("no setup to run", WidgetInfo.canSetUpAgain(false, reconfigurable))
+        assertTrue(clock().copy(reconfigurable = true).toProto().reconfigurable)
+        assertFalse(clock().toProto().reconfigurable)
+
+        started()
+        platform.offered += clock().copy(reconfigurable = true)
+        platform.offered += clock(provider = "com.example.notes/.NotesWidget")
+        add(requestId = 1)
+        add(provider = "com.example.notes/.NotesWidget", requestId = 2)
+        assertTrue(platform.setups.isEmpty())
+        sent.clear()
+
+        // The user finishes the settings: the same widget ID is set up, then described and
+        // drawn anew at its size, and the host hears it finished.
+        reconfigure(widgetId = 1, requestId = 5)
+        assertEquals(listOf(1), platform.setups)
+        assertTrue("nothing is answered before the user is done", sent.isEmpty())
+        platform.configuring.getValue(1)(WidgetSetup.Finished)
+        scheduler.runDue()
+        assertEquals(
+            listOf(Envelope.BodyCase.WIDGET_UPDATED, Envelope.BodyCase.WIDGET_RECONFIGURED),
+            sent.map { it.bodyCase },
+        )
+        assertEquals(1, sent[0].widgetUpdated.widgetId)
+        assertTrue(sent[0].widgetUpdated.provider.reconfigurable)
+        val done = sent[1].widgetReconfigured
+        assertEquals(5, done.requestId)
+        assertEquals(1, done.widgetId)
+        assertTrue(done.finished)
+        assertEquals(listOf(1 to WidgetSize(180, 110, 160, 180, 110)), platform.redrawn)
+        assertEquals(mapOf(1 to "com.example.clock/.ClockWidget", 2 to "com.example.notes/.NotesWidget"), platform.bound.toMap())
+
+        // The user closes them instead: the widget stays as it was, and the host hears why.
+        sent.clear()
+        reconfigure(widgetId = 1, requestId = 6)
+        platform.configuring.getValue(1)(WidgetSetup.Canceled)
+        scheduler.runDue()
+        val canceled = sent.single().widgetReconfigured
+        assertEquals(6, canceled.requestId)
+        assertFalse(canceled.finished)
+        assertTrue(canceled.error, canceled.error.contains("without a change"))
+        assertEquals(1, platform.redrawn.size)
+        assertTrue(platform.deleted.isEmpty())
+
+        // A widget whose app offers no settings, and one that is not placed, run no setup.
+        sent.clear()
+        reconfigure(widgetId = 2, requestId = 7)
+        reconfigure(widgetId = 9, requestId = 8)
+        assertEquals(listOf(1, 1), platform.setups)
+        assertEquals(listOf(7, 8), sent.map { it.widgetReconfigured.requestId })
+        assertTrue(sent.none { it.widgetReconfigured.finished })
     }
 
     @Test

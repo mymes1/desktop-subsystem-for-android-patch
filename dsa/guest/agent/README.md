@@ -96,7 +96,11 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   app's focused window. `RESULT_OK` places the widget, also from a setup that finishes at
   once; any other result, Back and a closed window cancel it, and a setup that cannot start
   is reported as such, not as a cancel. A widget whose app says it is reconfigurable and its
-  setup optional is placed without one. Each widget's view lives in a presentation on a private virtual
+  setup optional is placed without one. A widget whose app says it is reconfigurable, and
+  that has a setup, is described as such (`reconfigurable`), and the host's Widget settings
+  (`ReconfigureWidget`) runs its setup again the same way for the same widget ID; the answer
+  (`WidgetReconfigured`) says whether the user finished it, and a finished one describes and
+  draws the widget anew. Each widget's view lives in a presentation on a private virtual
   display of the widget's size, which keeps its views running, and is drawn by the agent's
   own hardware renderer into PNG frames (`WidgetFrame`), only when it changes, at most ten
   times a second, and at most once a second while the guest dozes. That drawing does not use
