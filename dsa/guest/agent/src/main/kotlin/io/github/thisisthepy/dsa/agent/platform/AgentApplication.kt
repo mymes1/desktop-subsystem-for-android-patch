@@ -102,6 +102,7 @@ class AgentApplication : Application() {
             accessibility = AndroidAccessibilitySource(this, log),
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
+            privateDns = AndroidPrivateDns(this),
             dragCatcher = dragCatcher,
             backupManager = AndroidBackupManager(this, log),
             languageSetup = AndroidLanguageServicesSetup(this),
