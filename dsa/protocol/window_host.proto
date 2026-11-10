@@ -81,6 +81,9 @@ message Attach {
   // Whether the user started the window host (from the Start menu, say) rather than the
   // window manager: the app is then started in Android if it has no task yet.
   bool launch = 3;
+  // With `launch`: start this shortcut of the app (its jump list task or desktop shortcut)
+  // rather than the app itself. Empty for the app.
+  string shortcut_id = 4;
 }
 
 // Window manager to window host: the answer to Attach.

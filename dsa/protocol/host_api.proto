@@ -1273,6 +1273,51 @@ message AppInfo {
   // (approved without asking, within the grace). "unavailable" when root elevation is off for
   // the whole computer, so the level cannot be set. Set it with SetAppRoot.
   string root = 16;
+  // The app's launcher shortcuts, in the list of installed apps: the static and dynamic ones
+  // in rank order, then the pinned ones. Empty for a task's app.
+  repeated AppShortcut shortcuts = 17;
+}
+
+// One of an app's launcher shortcuts in Android: a static one from its manifest, a dynamic
+// one it published, or one pinned at its request. The host's jump list (Dock menu, desktop
+// entry actions) shows the static and dynamic ones; a pinned one is a desktop shortcut.
+message AppShortcut {
+  // Unique within its app.
+  string id = 1;
+  string short_label = 2;
+  // Empty when the app gave none.
+  string long_label = 3;
+  // A square PNG image; empty when the shortcut has none, and the app's icon stands in.
+  bytes icon_png = 4;
+  // Lowest first.
+  uint32 rank = 5;
+  bool manifest = 6;
+  bool dynamic = 7;
+  bool pinned = 8;
+}
+
+// Starts one of an app's shortcuts in the caller's Android as a task in its own window, as
+// its jump list task or desktop shortcut does. Answered with Done once Android has been
+// asked.
+message LaunchShortcut {
+  string package_name = 1;
+  string shortcut_id = 2;
+}
+
+// An app of the caller's Android asks for one of its shortcuts on the desktop
+// (requestPinShortcut). Sent as a TaskEvent to every watcher of the tasks; the window manager
+// asks the user and answers with AnswerPinShortcut. A request nobody answers lapses.
+message PinShortcutRequest {
+  uint32 request_id = 1;
+  string package_name = 2;
+  string app_label = 3;
+  AppShortcut shortcut = 4;
+}
+
+// The user's answer to a PinShortcutRequest. Answered with Done.
+message AnswerPinShortcut {
+  uint32 request_id = 1;
+  bool accepted = 2;
 }
 
 // Installs an app of the caller's Android again from the APKs it has there, with its native
@@ -1373,6 +1418,9 @@ message TaskEvent {
     ImeEditor ime_editor = 7;
     // The apps installed in the caller's Android changed: the whole list, as it is now.
     InstalledApps installed = 6;
+    // An app asks for one of its shortcuts on the desktop. It is passed on as it comes and is
+    // not part of the tasks a late watcher starts from.
+    PinShortcutRequest pin_shortcut = 8;
   }
 }
 
@@ -2563,6 +2611,8 @@ message Request {
     ReportPasskeyCeremony report_passkey_ceremony = 646;
     SetBackup set_backup = 647;
     GetKeyProtection get_key_protection = 648;
+    LaunchShortcut launch_shortcut = 680;
+    AnswerPinShortcut answer_pin_shortcut = 681;
   }
 }
 
