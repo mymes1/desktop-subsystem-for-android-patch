@@ -4,7 +4,7 @@
 # disk template and ramdisk match image.json. Each run signs with a throwaway key set; a
 # release signs with the project's keys.
 #
-# The Android 17 x86_64 image is then booted by seven boot checks at once, each on a runner of
+# The Android 17 x86_64 image is then booted by eight boot checks at once, each on a runner of
 # its own, with the guest kernel built from the same commit. That image is kept in the Actions
 # cache, keyed on everything that decides it, so a run whose inputs did not change takes it
 # from there instead of making it again; the checks run on it all the same.
@@ -1123,8 +1123,8 @@ jobs:
             timeout: 18
             keep: Keep the media check's logs
             artifact: media-check-logs
-            # The root check boots on a runner of its own, below.
-            filter: --skip fr35_an_app_needs_approval_and_su_is_hidden_when_disabled
+            # The root check and the root certificate check boot on runners of their own, below.
+            filter: --skip fr35_an_app_needs_approval_and_su_is_hidden_when_disabled --skip fr28_
             logs: |
               .scratch/media-*/*.log
               .scratch/media-*/*.txt
@@ -1137,6 +1137,16 @@ jobs:
             logs: |
               .scratch/root-*/*.log
               .scratch/root-*/*.txt
+              ~/.local/share/dsa/logs/android-console.log*
+          - check: Trust a root certificate the host added in an app on the booted image
+            test: media
+            timeout: 18
+            keep: Keep the root certificate check's logs
+            artifact: root-certificate-check-logs
+            filter: fr28_
+            logs: |
+              .scratch/certs-*/*.log
+              .scratch/certs-*/*.txt
               ~/.local/share/dsa/logs/android-console.log*
           - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
             test: graphics
