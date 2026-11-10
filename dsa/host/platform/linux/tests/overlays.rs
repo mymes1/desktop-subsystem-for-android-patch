@@ -1745,6 +1745,12 @@ fn play_services_component_problems(dump: &str, when: &str) -> Vec<String> {
 
 #[test]
 fn fr32_the_play_services_components_turned_off_are_read_from_the_package_dump() {
+    // The shell may turn single components back on only in a test-only package; for any
+    // other app the package manager refuses `pm enable <package>/<class>` from adb.
+    assert!(
+        GMS_PROBE_MANIFEST.contains("android:testOnly=\"true\""),
+        "the Play services probe must be a test-only package, or the shell cannot turn its services back on"
+    );
     let services = probe_services(GMS_PROBE_MANIFEST);
     assert!(services.contains(&GMS_KEPT), "{services:?}");
     assert!(
@@ -1809,10 +1815,11 @@ fn wait_for_off(adb: &Adb) -> String {
 /// services the agent keeps off must be off and the push service on. Then each is turned on
 /// again from the shell, as Play services' own setup does after an update, and the probe is
 /// installed over itself, which Android announces as an update: a moment later they must be
-/// off again.
+/// off again. The probe is a test-only package, so it installs with `-t` and the shell may
+/// change its single components.
 fn play_services_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<String>) {
     let _ = adb.shell("logcat -c -b main");
-    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+    if let Err(why) = adb.run(&["install", "-r", "-t", &apk.to_string_lossy()]) {
         problems.push(format!("Google Play services: installing the probe: {why}"));
         return;
     }
@@ -1833,7 +1840,7 @@ fn play_services_problems(adb: &Adb, apk: &Path, dir: &Path, problems: &mut Vec<
         ));
         return;
     }
-    if let Err(why) = adb.run(&["install", "-r", &apk.to_string_lossy()]) {
+    if let Err(why) = adb.run(&["install", "-r", "-t", &apk.to_string_lossy()]) {
         problems.push(format!("Google Play services: updating the probe: {why}"));
         return;
     }
