@@ -33,6 +33,7 @@ on:
       - "dsa/guest/aidl/**"
       - "dsa/protocol/**"
       - "dsa/guest/media-probe/**"
+      - "dsa/guest/widget-probe/**"
       - "dsa/guest/arm-probe/**"
       - "dsa/guest/gms-probe/**"
       - "dsa/host/platform/linux/tests/widgets.rs"
@@ -473,6 +474,19 @@ jobs:
         with:
           name: guest-media-probe
           path: .scratch/media-probe/dsa-media-probe.apk
+          if-no-files-found: error
+
+      # An app whose widgets need a setup, which the widget boot check places.
+      - name: Build the widget probe
+        id: widget-probe
+        if: ${{ !cancelled() }}
+        run: bash dsa/guest/widget-probe/build.sh .scratch/widget-probe
+
+      - if: ${{ !cancelled() && steps.widget-probe.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-widget-probe
+          path: .scratch/widget-probe/dsa-widget-probe.apk
           if-no-files-found: error
 
       # An app whose only code is an ARM64 library, which the overlay check starts through
@@ -1020,7 +1034,9 @@ jobs:
   #
   # widgets: the digital clock widget placed through the local API. Its pictures must reach the
   # client, show something and change as the clock ticks, and the guest log must not say a
-  # widget failed to draw.
+  # widget failed to draw. Then the widget probe's widgets, which need a setup: each setup must
+  # open as the probe's own focused task window, a finished one places its widget, a canceled
+  # one does not, one that finishes at once places it, and an optional one is skipped.
   #
   # system_screens: Settings opened in a window 800 dp tall and one 520 dp tall and read
   # through adb in developer mode: its view hierarchy and the screen. The home page's large
@@ -1083,7 +1099,7 @@ jobs:
         include:
           - check: Place a widget on the booted image
             test: widgets
-            timeout: 12
+            timeout: 15
             keep: Keep the widget boot check's logs
             artifact: widget-boot-logs
             logs: |
@@ -1228,6 +1244,13 @@ jobs:
           name: guest-media-probe
           path: .scratch/media-probe
 
+      - name: Download the widget probe
+        if: matrix.test == 'widgets'
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-widget-probe
+          path: .scratch/widget-probe
+
       - name: Download the ARM probe
         if: matrix.test == 'overlays'
         uses: actions/download-artifact@v4
@@ -1306,6 +1329,9 @@ jobs:
           export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
           if [[ "${{ matrix.test }}" == media ]]; then
             export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
+          fi
+          if [[ "${{ matrix.test }}" == widgets ]]; then
+            export DSA_WIDGET_PROBE="$GITHUB_WORKSPACE/.scratch/widget-probe/dsa-widget-probe.apk"
           fi
           if [[ "${{ matrix.test }}" == overlays ]]; then
             export DSA_ARM_PROBE="$GITHUB_WORKSPACE/.scratch/arm-probe/dsa-arm-probe.apk"
