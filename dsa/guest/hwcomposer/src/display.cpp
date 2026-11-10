@@ -70,7 +70,11 @@ BufferRef bufferRefFromHandle(const aidl::android::hardware::common::NativeHandl
     if (cros->magic != kCrosGrallocMagic) {
         return {};
     }
-    BufferRef ref{cros->id, cros->width, cros->height, cros->format};
+    BufferRef ref;
+    ref.id = cros->id;
+    ref.width = cros->width;
+    ref.height = cros->height;
+    ref.format = cros->format;
     ref.usage = static_cast<uint64_t>(cros->usage);
     ref.androidFormat = cros->droid_format;
     ref.pixelStride = cros->pixel_stride;
