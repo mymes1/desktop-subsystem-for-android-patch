@@ -90,6 +90,7 @@ pub mod computer_identity;
 pub mod data_reset;
 pub mod device_identity;
 pub mod diagnostics;
+pub mod dns;
 pub mod drag;
 pub mod erofs;
 pub mod file_share;

@@ -168,6 +168,7 @@ use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
 
+mod dns_port;
 mod host_services;
 pub use host_services::{KeyMintKeyState, RestoreOutcome};
 
@@ -6485,6 +6486,9 @@ impl Worker {
                     "control channel: dropping a request for the KeyMint root key, which belongs \
                      on the KeyMint port"
                 );
+            }
+            Some(Body::DnsQuery(_) | Body::DnsAnswer(_)) => {
+                eprintln!("control channel: dropping a DNS message, which belongs on the DNS port");
             }
             Some(
                 body @ (Body::ListSpeechVoices(_)

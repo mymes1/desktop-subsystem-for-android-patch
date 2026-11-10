@@ -788,6 +788,12 @@ impl Router {
                         .to_string(),
                 ))
             }
+            Some(Body::DnsQuery(_) | Body::DnsAnswer(_)) => {
+                return Err(SendError::NotAllowed(
+                    "DNS queries go to the host on a port of their own, by the daemon alone"
+                        .to_string(),
+                ))
+            }
             Some(Body::AgentConnected(_)) => {
                 if !state.listeners.iter().any(|s| s.peer == sender) {
                     return Err(SendError::NotAllowed(
