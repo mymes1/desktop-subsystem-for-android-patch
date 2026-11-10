@@ -91,6 +91,11 @@ import io.github.thisisthepy.dsa.agent.windowing.GestureExclusion
 import io.github.thisisthepy.dsa.agent.windowing.CaptionInsets
 import io.github.thisisthepy.dsa.agent.windowing.TaskArranger
 import io.github.thisisthepy.dsa.agent.windowing.WindowingControl
+import io.github.thisisthepy.dsa.agent.backup.BackupManagerPort
+import io.github.thisisthepy.dsa.agent.backup.BackupRuns
+import io.github.thisisthepy.dsa.agent.backup.HostBackup
+import io.github.thisisthepy.dsa.agent.channel.HostCalls
+import io.github.thisisthepy.dsa.agent.passkeys.HostPasskeys
 import io.github.thisisthepy.dsa.control.v1.AgentConnected
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.PointerAction
@@ -129,7 +134,10 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * host's desktop are hosted and drawn here, and their images go to the host ([WidgetManager]).
  * When the host gathers diagnostics, the agent sends its part: the system services' state and
  * the dropbox ([DiagnosticsCollector]). Documents apps print to the agent's print service go
- * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
+ * to the host, which prints them on its printers ([HostPrinter]). Android's app data backups go
+ * to the host's backup folder through the agent's backup transport, and come back from it
+ * ([HostBackup], [BackupRuns]), and passkeys are made and used by the host's authenticator
+ * ([HostPasskeys]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
  * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
  * The agent's text-to-speech engine, speech recognition service and spell checker, the guest's
@@ -198,6 +206,7 @@ class Agent(
     private val editorFocused: () -> Boolean = { false },
     private val languageSetup: LanguageServicesSetup = LanguageServicesSetup.NONE,
     componentStates: ComponentStates = ComponentStates.NONE,
+    backupManager: BackupManagerPort = BackupManagerPort.NONE,
     /** Tells the user that a share did not reach the PC (the host's reason, or empty). */
     shareNotice: (String) -> Unit = {},
 ) {
@@ -295,6 +304,29 @@ class Agent(
         post = { work -> scheduler.post(work) },
         onInstalled = { requestAppsRefresh() },
         expansionFiles = expansionFiles,
+    )
+    /** The thread the scheduler runs the agent's work on, once it has started. */
+    @Volatile
+    private var agentThread: Thread? = null
+
+    /**
+     * The backup transport's and the credential provider's requests to the host, which they
+     * make on Android's binder threads and wait for ([HostCalls]).
+     */
+    private val hostCalls = HostCalls(::sendFromAnyThread, log)
+
+    /** The backup transport's half on the host's side ([HostBackup]). */
+    val hostBackup = HostBackup(hostCalls, log)
+
+    /** The credential provider's half on the host's side ([HostPasskeys]). */
+    val passkeys = HostPasskeys(hostCalls, log)
+    private val backupRuns = BackupRuns(
+        backupManager,
+        hostBackup,
+        { frame -> channel.send(frame) },
+        log,
+        post = { work -> scheduler.post(work) },
+        later = { delay, work -> scheduler.postDelayed(delay, work) },
     )
     private val printer = HostPrinter(
         { frame -> channel.send(frame) },
@@ -406,6 +438,8 @@ class Agent(
 
     fun start() {
         scheduler.post {
+            agentThread = Thread.currentThread()
+            backupRuns.start()
             freeform.start()
             closedApps.configure()
             playServices.start()
@@ -561,6 +595,7 @@ class Agent(
         widgetManager.connected()
         apkInstaller.connected()
         printer.connected()
+        hostCalls.connected()
         language.connected()
         networkLocation.connected()
         installed.resend()
@@ -663,6 +698,8 @@ class Agent(
         if (geocoder.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true
         if (appReinstaller.handle(envelope)) return true
+        if (hostCalls.handle(envelope)) return true
+        if (backupRuns.handle(envelope)) return true
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
@@ -768,6 +805,22 @@ class Agent(
     /** Android canceled a job the print service was given. Called from any thread. */
     fun cancelPrint(job: QueuedPrintJob) {
         scheduler.post { printer.cancelRequested(job) }
+    }
+
+    /**
+     * Sends a frame from any thread: on the agent's thread at once, from another through the
+     * scheduler, waiting for it to go. False when it did not go.
+     */
+    private fun sendFromAnyThread(frame: ByteArray): Boolean {
+        if (Thread.currentThread() === agentThread) return channel.send(frame)
+        val sent = java.util.concurrent.ArrayBlockingQueue<Boolean>(1)
+        scheduler.post { sent.offer(channel.send(frame)) }
+        return try {
+            sent.poll(SEND_WAIT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS) ?: false
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
     }
 
     /** Reports the guest's memory if the frame asks for it. False for any other frame. */
@@ -879,5 +932,8 @@ class Agent(
 
     private companion object {
         const val RETRY_MILLIS = 1000L
+
+        /** How long a frame from another thread waits for the agent's thread to send it. */
+        const val SEND_WAIT_MILLIS = 10_000L
     }
 }

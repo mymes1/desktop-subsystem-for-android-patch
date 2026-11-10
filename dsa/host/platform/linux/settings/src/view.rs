@@ -6,9 +6,10 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
-    GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network, NetworkMode, Outcome,
-    ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
+    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Backup, BackupJob,
+    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, KeyProtection, KeyProtectionShown,
+    Memory, MemoryShare, Network, NetworkMode, Outcome, ProgramUpdateAnswer, ProgramUpdatePhase,
+    State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -841,6 +842,137 @@ pub fn gapps_device_id(gapps: &Gapps) -> String {
     match &gapps.device_id {
         Some(_) => tr("Enter this number on Google's registration page."),
         None => tr("It shows here once Google Play is installed and Android has started."),
+    }
+}
+
+/// When something last happened to the backup, in local time through `local` (which takes
+/// milliseconds since 1970), or "Never".
+pub fn backup_when(unix_ms: Option<i64>, local: impl Fn(i64) -> String) -> String {
+    match unix_ms {
+        Some(ms) => local(ms),
+        None => tr("Never"),
+    }
+}
+
+/// What the backup holds: how many apps, and how much of their data.
+pub fn backup_contents(backup: &Backup) -> String {
+    if backup.packages == 0 {
+        return tr("No apps yet");
+    }
+    trf(
+        "{0} apps, {1}",
+        &[&backup.packages.to_string(), &size_bytes(backup.size)],
+    )
+}
+
+/// What the backup section says while `job` runs; empty for a request that ends at once.
+pub fn backup_busy_text(job: BackupJob) -> String {
+    match job {
+        BackupJob::BackUp => tr(
+            "Backing up every app. Android starts if it is not running. This can take a while.",
+        ),
+        BackupJob::Restore => tr(
+            "Restoring apps and their data from the backup. Android starts if it is not running. This can take a while.",
+        ),
+        BackupJob::Read | BackupJob::ShowKey | BackupJob::ImportKey | BackupJob::Switch => {
+            String::new()
+        }
+    }
+}
+
+/// What the backup switch says under its title: what backup keeps, and while it is off, what
+/// earlier backups are still kept.
+pub fn backup_switch_subtitle(backup: Option<&Backup>) -> String {
+    let what = tr("Keeps a second copy of your Android apps' user data on this computer, encrypted, so it can be restored after a data reset or on another computer. Off until you turn it on.");
+    match backup {
+        Some(backup) if !backup.enabled && backup.has_backups_kept() => format!(
+            "{what}\n{}",
+            trf(
+                "Earlier backups of {0} apps ({1}) are still kept in your DSA Backup folder.",
+                &[&backup.packages.to_string(), &size_bytes(backup.size)],
+            )
+        ),
+        _ => what,
+    }
+}
+
+/// What the question says when backup is turned off while backups are kept.
+pub fn backup_delete_question(backup: &Backup) -> String {
+    trf(
+        "The backups of {0} apps ({1}) are still kept on this computer. Delete them and their key as well, or keep them for a later restore?",
+        &[&backup.packages.to_string(), &size_bytes(backup.size)],
+    )
+}
+
+/// What turning backup on or off did.
+pub fn backup_switched(on: bool, deleted: bool) -> String {
+    match (on, deleted) {
+        (true, _) => {
+            tr("Backup is on. Android backs up its apps' data to this computer from now on.")
+        }
+        (false, true) => tr("Backup is off, and the backups and their key were deleted."),
+        (false, false) => tr("Backup is off. The backups made so far are kept."),
+    }
+}
+
+/// What protects Android's keys on this computer.
+pub fn key_protection_text(key: &KeyProtection) -> String {
+    match key.shown() {
+        KeyProtectionShown::NotYet => {
+            tr("Android's keys get their protection the first time Android starts.")
+        }
+        KeyProtectionShown::Tpm => tr("Sealed by this computer's TPM. A copy of Android's disk cannot open the apps' keys or Android's encrypted storage anywhere else."),
+        KeyProtectionShown::Keyring => tr("Kept by your keyring only, because this computer has no TPM 2.0 that can be used. Once one works, DSA seals the keys with it."),
+        KeyProtectionShown::Other => trf("Protected by {0}.", &[&key.description]),
+    }
+}
+
+/// Why no TPM seals Android's keys, when none does.
+pub fn key_protection_reason(key: &KeyProtection) -> Option<String> {
+    key.shown_reason()
+        .map(|reason| trf("Why not the TPM: {0}", &[reason]))
+}
+
+/// How a backup or a restore ended, from the report it answered with.
+pub fn backup_result(job: BackupJob, backup: &Backup) -> String {
+    let (ok, failed, installed) = (
+        backup.succeeded.to_string(),
+        backup.failed.to_string(),
+        backup.installed.to_string(),
+    );
+    match (job, backup.failed) {
+        (BackupJob::Restore, 0) => trf(
+            "Apps restored: {0}. Apps installed first: {1}.",
+            &[&ok, &installed],
+        ),
+        (BackupJob::Restore, _) => trf(
+            "Apps restored: {0}. Apps installed first: {1}. Apps that could not be restored: {2}.",
+            &[&ok, &installed, &failed],
+        ),
+        (_, 0) => trf("Apps backed up: {0}.", &[&ok]),
+        (_, _) => trf(
+            "Apps backed up: {0}. Apps that could not be backed up: {1}.",
+            &[&ok, &failed],
+        ),
+    }
+}
+
+/// What the question before a restore says: what it installs and what it replaces.
+pub fn backup_restore_warning() -> String {
+    tr("Apps in the backup that Android does not have are installed, and the data of every app in the backup is replaced with the backup's. What those apps saved since the backup is lost. Android starts if it is not running.")
+}
+
+/// What the recovery key dialog says under its title.
+pub fn backup_key_advice() -> String {
+    tr("Write this key down and keep it somewhere safe, away from this computer. Anyone with it can read the backup. Without it, the backup cannot be opened on another computer or after this computer's keyring is lost.")
+}
+
+/// Why a recovery key was not used, from the service's reason; empty is no key at all.
+pub fn backup_key_refusal(reason: &str) -> String {
+    if reason.is_empty() {
+        tr("Enter the recovery key.")
+    } else {
+        trf("The key was not used: {0}", &[reason])
     }
 }
 

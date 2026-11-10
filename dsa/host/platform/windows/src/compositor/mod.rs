@@ -47,6 +47,7 @@ pub mod location;
 pub mod log;
 pub mod microphone;
 pub mod notifications;
+pub mod passkeys;
 pub mod present;
 pub mod print;
 pub mod share;
@@ -162,6 +163,8 @@ pub struct Compositor {
     show_widgets: bool,
     /// Whether the documents the user's Android prints are printed here.
     print_jobs: bool,
+    /// Whether the passkeys the apps in the user's Android make and use go to Windows Hello.
+    passkeys: bool,
     /// Whether the user's Android gets the computer's location from Windows.
     give_location: bool,
     /// Whether the user's Android speaks, recognises speech and checks spelling with Windows.
@@ -281,6 +284,7 @@ impl Compositor {
             show_notifications: true,
             show_widgets: true,
             print_jobs: true,
+            passkeys: true,
             give_location: true,
             serve_language: true,
             host_services: true,
@@ -320,6 +324,7 @@ impl Compositor {
             show_notifications: false,
             show_widgets: false,
             print_jobs: false,
+            passkeys: false,
             give_location: false,
             serve_language: false,
             host_services: false,
@@ -451,6 +456,7 @@ impl Compositor {
         let background_thread = self.start_background(&stop);
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
+        let passkeys_thread = self.start_passkeys(&stop);
         let geocode_thread = self.start_geocoding(&stop);
         let share_thread = self.start_shares(&stop);
         let audio_thread = self.start_audio(&stop);
@@ -669,6 +675,9 @@ impl Compositor {
             let _ = thread.join();
         }
         if let Some(thread) = print_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = passkeys_thread {
             let _ = thread.join();
         }
         if let Some(thread) = geocode_thread {
@@ -1077,6 +1086,32 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the print jobs' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts performing the passkey ceremonies of the user's Android with Windows Hello, on
+    /// a thread of its own that ends with `stop`. Each ceremony runs on a thread of its own
+    /// besides.
+    fn start_passkeys(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.passkeys {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-passkeys".into())
+            .spawn(move || {
+                let hello = Arc::new(passkeys::WindowsHello);
+                passkeys::serve(connector, hello, stop, logger);
+            })
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the passkeys' thread: {e}"),
                 )
             })
             .ok()

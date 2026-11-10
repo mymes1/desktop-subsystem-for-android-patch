@@ -455,8 +455,8 @@ struct Switches {
     root_at_start: Cell<Option<bool>>,
 }
 
-/// Files, links, ARM apps, the clipboard, freezing, the diagnostics, the logs, the command line
-/// and resetting Android's data.
+/// Files, links, ARM apps, the clipboard, freezing, the diagnostics, the logs, the command line,
+/// the backup of the apps' data and resetting Android's data.
 pub fn advanced(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
     let settings: Rc<RefCell<Option<Settings>>> = Rc::default();
@@ -753,6 +753,9 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     }
     page.add(&logs);
     page.add(&command);
+
+    // The backup of the apps' data, which brings them back after a reset.
+    super::backup::backup(ctx, &page);
 
     // Reset.
     let reset_group = group(&tr("Reset"), None);

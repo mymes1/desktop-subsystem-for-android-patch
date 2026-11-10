@@ -102,6 +102,7 @@ class AgentApplication : Application() {
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
             dragCatcher = dragCatcher,
+            backupManager = AndroidBackupManager(this, log),
             languageSetup = AndroidLanguageServicesSetup(this),
             shareNotice = { reason ->
                 val main = android.os.Handler(mainLooper)
@@ -125,6 +126,8 @@ class AgentApplication : Application() {
             android.os.SystemClock::elapsedRealtime,
             log,
         ).start()
+        // The host's passkeys stay a credential provider whatever another provider writes.
+        AndroidCredentialSetup(this, log).start()
         // Starting windows draw on a thread of their own, so a slow app theme never holds up
         // the agent's work or the home activity on the main thread.
         val splash = HandlerThread("dsa-splash").apply { start() }

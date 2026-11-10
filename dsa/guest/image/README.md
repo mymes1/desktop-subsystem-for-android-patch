@@ -18,6 +18,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `dsa-console.rc` | Quiets the serial console once boot completes, so it carries only the kernel's early boot and a panic |
 | `unavailable-features.xml` | Hardware features the VM lacks, withdrawn from the system |
 | `dsa-channeld.rc` | The service that runs the control channel daemon, and the trigger that drops the guest's caches when it asks |
+| `dsa-keymint-key.rc` | Makes the tmpfs folder for KeyMint's root key and starts the daemon's mode that fetches it from the host, on init |
 | `dsa-memory.rc` | Turns on the zram swap and tunes the kernel for it |
 | `dsa-display.rc` | Starts SurfaceFlinger, and so every app, at the density the boot names (the user's main monitor's) |
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
@@ -207,6 +208,22 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   build number and architecture; `image.json` lists their SHA-256 under `framework`, and
   `check-image.py` finds them in the image. `sepolicy/gpu-reset.cil` lets SurfaceFlinger tell
   the apps of a reset through `debug.dsa.gpu.resets`.
+- The same Framework build makes DSA's KeyMint, `dsa-keymint`. The KeyMint APEX the published
+  build selects wraps every key under a fixed all-zero root key, so a copy of the guest's disk
+  gives up every key on it. `dsa-keymint` is the same nonsecure KeyMint, patched to take its
+  root key from the host: dsa-channeld fetches it each boot and leaves it on tmpfs as
+  `/dev/dsa_keymint/root_key`. New keys are wrapped under the host's key; keys wrapped before
+  under the built-in one still open, and Android is asked to upgrade each one, which wraps it
+  again under the host's key, so an existing install loses no key. Without a key from the host
+  it behaves as the APEX did. When the framework folder has it, `make-image.py` installs it as
+  vendor files (`/vendor/bin/hw/dsa-keymint`, the `libssl` it needs, `dsa-keymint.rc`, and the
+  VINTF fragments and feature file the APEX carries), labels it as the APEX labelled its binary
+  (`hal_keymint_default_exec`, so it runs in the same domain as the same service), and selects
+  no KeyMint APEX (`androidboot.vendor.apex.com.android.hardware.keymint=none`). `image.json`
+  lists its files' SHA-256 under `framework`, and `check-image.py` checks that they are in the
+  image, that it declares every instance the service registers and has every library it needs,
+  and that no KeyMint APEX is active beside it. A framework folder from before the KeyMint has
+  none of these files, and the image keeps the APEX.
 - Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
   settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
   and makes an erofs image of its apps, permission lists, system configuration and framework
@@ -295,6 +312,20 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
 - The agent (`dsa/guest/agent/`) is added as a privileged app in
   `/system_ext/priv-app/DsaAgent/`, with its privileged permission list, and is signed with
   the platform key. It tells the host about each app task, so each gets its own window.
+  `sysconfig-dsa-agent.xml` goes with it to `/system_ext/etc/sysconfig/`: Android's backup
+  manager uses a backup transport only when a sysconfig file lists it, and the agent's keeps
+  app data in the host's backup folder once the user turns backup on (it is off until then).
+- KeyMint's root key comes from the host, which keeps it sealed by the computer's TPM (the
+  Secure Enclave on a Mac), and by the user's credential store only where there is none, so a
+  copy of the guest's disk opens none of Android's keys. `dsa-keymint-key.rc` makes the
+  tmpfs folder `/dev/dsa_keymint` (mode 0700, owned by `nobody`, KeyMint's user) on init and
+  starts `dsa-channeld --keymint-key` (`dsa-channeld.rc`), a oneshot that runs as `nobody` in
+  its own domain. It asks the host on vsock port 5604, past the control channel's handshake,
+  and writes `root_key` there: `key <hex>`, or `none <reason>` when the host has none or cannot
+  be reached within 25 seconds. The key never reaches the user's disk. `channeld.cil` labels the
+  folder `dsa_keymint_key_file`, which only that domain writes and only KeyMint
+  (`hal_keymint_server`) reads; `check-image.py` refuses an image that lets any other domain
+  read it.
 - The published kernel modules are dropped. They belong to Google's kernel; DSA boots its
   own kernel with the drivers built in.
 - `fstab.dsa` replaces the mount table. Every partition is found by its name

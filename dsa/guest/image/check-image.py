@@ -15,7 +15,10 @@ other dex, another boot image or another compiler filter, when the files
 do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
 image's default one does not match image.json or would be refused by the host, when the patched
 framework image.json names (SurfaceFlinger, libhwui and libEGL from the Framework build) is not
-in the image as built, when the kernel or a DSA guest binary is built for another
+in the image as built, when DSA's KeyMint from the same build, when image.json names it, is not
+in the image as built, would not start in the KeyMint HAL's domain or lacks a library, or runs
+beside a KeyMint APEX the kernel command line still selects, when the kernel or a DSA guest
+binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
 first stage init needs, when the network adapter is not shown to Android as Wi-Fi with its
 address and DNS servers from DHCP, or when the kernel command line, a mount table or an init script
@@ -306,6 +309,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # guard that hides su from every app the host did not allow.
     if "VENDOR/bin/dsa-channeld" in names:
         problems += make_image.root_elevation_problems(names, z.read)
+        # KeyMint's root key from the host, which only KeyMint may read.
+        problems += make_image.keymint_key_problems(names, z.read)
 
     # The binder service the agent and the hwcomposer reach the daemon through.
     # servicemanager refuses it unless the vendor manifest declares it, and checks who may
@@ -346,6 +351,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml" not in names:
         problems.append("SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml is missing, so the "
                         "framework refuses to boot with the agent")
+    if agent in names and make_image.AGENT_SYSCONFIG not in names:
+        problems.append(f"{make_image.AGENT_SYSCONFIG} is missing, so Android's backup manager does not use "
+                        "the agent's backup transport and app data never reaches the host's backup")
 
     # The network: eth0 shown as Wi-Fi, with its address and DNS servers from DHCP.
     problems.extend(make_image.network_problems(names, z.read, manifest["kernel_cmdline"]))
@@ -390,7 +398,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if f"SYSTEM/etc/init/{rc_name}" in names:
             problems += make_image.program_folder_problems(
                 rc_name, z.read(f"SYSTEM/etc/init/{rc_name}").decode(errors="replace"))
-    # The patched framework: the Framework build's files, for this build and architecture.
+    # The patched framework: the Framework build's files, for this build and architecture, and
+    # its KeyMint, the only one Android runs.
     problems += make_image.check_framework(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
     # x86_64 builds of Google Play services and the other system apps, not their ARM builds.

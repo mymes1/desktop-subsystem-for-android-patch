@@ -37,7 +37,9 @@ The results go to dsa/target/image/<version>/:
 
 With --framework, the system partition carries the patched SurfaceFlinger, libhwui and libEGL
 that recover from a GPU device loss, in place of the build's own (FRAMEWORK_FILES), and
-image.json describes them under "framework".
+image.json describes them under "framework". When the framework build has DSA's KeyMint
+(KEYMINT_FILES), whose root key of key blobs comes from the host, the vendor partition carries it
+in place of the KeyMint APEX, which the image then does not select.
 """
 
 import argparse
@@ -870,6 +872,9 @@ DSA_SERVED_INSTANCES = {
     "VENDOR/bin/hw/dsa-sensors": ("aidl", "android.hardware.sensors", "ISensors", "default"),
     "VENDOR/bin/hw/dsa-camera": ("aidl", "android.hardware.camera.provider", "ICameraProvider", "internal/0"),
     "VENDOR/bin/hw/dsa-audio": ("aidl", "android.hardware.audio.core", "IModule", "default"),
+    # It serves the remotely provisioned component, the secure clock and the shared secret too,
+    # which the same fragments declare.
+    "VENDOR/bin/hw/dsa-keymint": ("aidl", "android.hardware.security.keymint", "IKeyMintDevice", "default"),
 }
 
 
@@ -3191,6 +3196,150 @@ FRAMEWORK_FILES = list(framework_lock.OUTPUTS)
 GPU_RESET_PROPERTY = "debug.dsa.gpu.resets"
 GPU_RESET_RULE = "(allow surfaceflinger debug_prop (property_service (set)))"
 
+# DSA's KeyMint, from the same Framework build: the nonsecure KeyMint service whose root key of
+# key blobs comes from the DSA host (dsa-channeld --keymint-key leaves it in
+# /dev/dsa_keymint/root_key each boot), with the libssl it needs and the VINTF fragments and
+# feature file the KeyMint APEX carries. The image installs them as vendor files and selects no
+# KeyMint APEX (bootconfig "none", which apexd takes as "activate none of this module's
+# APEXes"), so one KeyMint serves each instance. init starts it as the APEX's service was
+# started, under the same name, and in the same domain: its label is the one the APEX gave its
+# binary, hal_keymint_default_exec, and hal_keymint_default serves the KeyMint HAL. A framework
+# build from before the KeyMint has none of these files, and the image then keeps the APEX.
+KEYMINT_FILES = list(framework_lock.KEYMINT_FILES)
+KEYMINT_ELF_FILES = list(framework_lock.KEYMINT_OUTPUTS)
+KEYMINT_BINARY = framework_lock.KEYMINT_BINARY
+KEYMINT_RC = "VENDOR/etc/init/dsa-keymint.rc"
+KEYMINT_RC_SOURCE = HERE / "dsa-keymint.rc"
+KEYMINT_CONTEXT = "/vendor/bin/hw/dsa-keymint u:object_r:hal_keymint_default_exec:s0"
+KEYMINT_APEX_MODULE = "com.android.hardware.keymint"
+KEYMINT_APEX_SELECTION = f"androidboot.vendor.apex.{KEYMINT_APEX_MODULE}=none"
+# The instances the KeyMint service registers (kmr_hal's ALL_HALS), each of which a fragment must
+# declare.
+KEYMINT_INSTANCES = [
+    ("aidl", "android.hardware.security.keymint", "IKeyMintDevice", "default"),
+    ("aidl", "android.hardware.security.keymint", "IRemotelyProvisionedComponent", "default"),
+    ("aidl", "android.hardware.security.secureclock", "ISecureClock", "default"),
+    ("aidl", "android.hardware.security.sharedsecret", "ISharedSecret", "default"),
+]
+# The libraries a vendor binary gets from the system partition (the LLNDK) rather than from
+# /vendor/lib64, so need not be in the vendor partition.
+LLNDK_LIBRARIES = {
+    "libc.so", "libm.so", "libdl.so", "liblog.so", "libbinder_ndk.so", "libvndksupport.so",
+    "libsync.so", "libnativewindow.so", "libselinux.so", "libcgrouprc.so", "libandroid_net.so",
+    "libmediandk.so", "libvulkan.so", "libEGL.so", "libGLESv1_CM.so", "libGLESv2.so",
+    "libGLESv3.so", "libstatssocket.so",
+}
+
+
+def framework_has_keymint(names):
+    """Whether a framework build's files (their target_files names) carry DSA's KeyMint."""
+    return KEYMINT_BINARY in names
+
+
+def elf_needed(data):
+    """The DT_NEEDED entries of a little-endian 64-bit ELF file, or None for anything else."""
+    if elf_machine(data[:64]) is None or len(data) < 64:
+        return None
+    shoff = int.from_bytes(data[0x28:0x30], "little")
+    shentsize = int.from_bytes(data[0x3A:0x3C], "little")
+    shnum = int.from_bytes(data[0x3C:0x3E], "little")
+    sections = []
+    for i in range(shnum):
+        at = shoff + i * shentsize
+        if at + 64 > len(data):
+            return None
+        kind = int.from_bytes(data[at + 4:at + 8], "little")
+        offset = int.from_bytes(data[at + 24:at + 32], "little")
+        size = int.from_bytes(data[at + 32:at + 40], "little")
+        link = int.from_bytes(data[at + 40:at + 44], "little")
+        sections.append((kind, offset, size, link))
+    needed = []
+    for kind, offset, size, link in sections:
+        if kind != 6 or link >= len(sections):  # SHT_DYNAMIC, with its string table
+            continue
+        strings = sections[link][1]
+        for at in range(offset, offset + size, 16):
+            tag = int.from_bytes(data[at:at + 8], "little", signed=True)
+            if tag == 0:
+                break
+            if tag == 1:  # DT_NEEDED
+                start = strings + int.from_bytes(data[at + 8:at + 16], "little")
+                needed.append(data[start:data.index(b"\0", start)].decode(errors="replace"))
+    return needed
+
+
+def keymint_library_problems(binary, vendor_names):
+    """The libraries DSA's KeyMint binary needs that neither the vendor partition (by the
+    target_files names in `vendor_names`) nor the LLNDK gives it: without one, the linker stops
+    it, and Android has no KeyMint."""
+    needed = elf_needed(binary)
+    if needed is None:
+        return ["the KeyMint binary is not an ELF file whose libraries can be read"]
+    return [f"the KeyMint binary needs {lib}, which the vendor partition does not carry"
+            for lib in needed if lib not in LLNDK_LIBRARIES and f"VENDOR/lib64/{lib}" not in vendor_names]
+
+
+def selected_vendor_apexes(cmdline):
+    """The vendor APEX each module's bootconfig selection names, by module."""
+    selected = {}
+    for part in cmdline.split():
+        if part.startswith("androidboot.vendor.apex.") and "=" in part:
+            module, value = part[len("androidboot.vendor.apex."):].split("=", 1)
+            selected[module] = value
+    return selected
+
+
+def keymint_problems(manifest, entry, names, read):
+    """The problems with DSA's KeyMint in an image whose framework `entry` (image.json's) names
+    it: its files are the framework build's, init starts it in the APEX's domain, and no KeyMint
+    APEX is active beside it."""
+    problems = []
+    files = entry.get("files") or {}
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    machine = ARCHES.get(arch, {}).get("elf_machine")
+    for name in KEYMINT_FILES:
+        if name not in names:
+            problems.append(f"{name} is missing from the image")
+            continue
+        data = read(name)
+        if hashlib.sha256(data).hexdigest() != files.get(name):
+            problems.append(f"{name} is not the framework build's file that image.json names, so the "
+                            "image's KeyMint is not the one that takes its root key from the host")
+        if name in KEYMINT_ELF_FILES and elf_machine(data[:64]) != machine:
+            problems.append(f"{name} is built for ELF machine {elf_machine(data[:64])}, not {arch}")
+    declared = set()
+    for name in KEYMINT_FILES:
+        if name.startswith("VENDOR/etc/vintf/") and name in names:
+            declared |= vintf_instances(read(name))
+    for instance in KEYMINT_INSTANCES:
+        if instance not in declared:
+            problems.append(f"the KeyMint's fragments do not declare {instance[1]}.{instance[2]}/{instance[3]}, "
+                            "so servicemanager refuses it")
+    if KEYMINT_RC not in names:
+        problems.append(f"{KEYMINT_RC} is missing, so init never starts the KeyMint")
+    elif b"/vendor/bin/hw/dsa-keymint" not in read(KEYMINT_RC):
+        problems.append(f"{KEYMINT_RC} does not start /vendor/bin/hw/dsa-keymint")
+    contexts = "VENDOR/etc/selinux/vendor_file_contexts"
+    if contexts in names and KEYMINT_CONTEXT not in read(contexts).decode(errors="replace").splitlines():
+        problems.append("the KeyMint binary is not labelled hal_keymint_default_exec, so init does not "
+                        "start it in the KeyMint HAL's domain")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-keymint" not in read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-keymint, so the vendor image gives it "
+                        "another label and init refuses to start it")
+    if KEYMINT_BINARY in names:
+        problems += keymint_library_problems(read(KEYMINT_BINARY), names)
+    cmdline = manifest.get("kernel_cmdline", "")
+    selected = selected_vendor_apexes(cmdline)
+    if selected.get(KEYMINT_APEX_MODULE) != "none":
+        problems.append(f"the kernel command line does not have {KEYMINT_APEX_SELECTION}, so apexd "
+                        "activates a KeyMint APEX beside DSA's KeyMint")
+    for name in vendor_apex_members(names):
+        if apex_module_name(read(name)) != KEYMINT_APEX_MODULE:
+            continue
+        if KEYMINT_APEX_MODULE not in selected or selected[KEYMINT_APEX_MODULE] == apex_file_stem(name):
+            problems.append(f"{name} is active beside DSA's KeyMint")
+    return problems
+
 
 def framework_problems(description, build_id, android_major, arch, read):
     """What makes a framework build's files wrong for an image: its framework.json (parsed),
@@ -3206,10 +3355,11 @@ def framework_problems(description, build_id, android_major, arch, read):
     if description.get("arch") != arch:
         problems.append(f"the framework is built for {description.get('arch')}, not {arch}")
     files = description.get("files") or {}
-    if sorted(files) != sorted(FRAMEWORK_FILES):
-        problems.append(f"the framework has {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    wanted = framework_names(files)
+    if sorted(files) != sorted(wanted):
+        problems.append(f"the framework has {sorted(files)}, not {sorted(wanted)}")
     machine = ARCHES.get(arch, {}).get("elf_machine")
-    for name in FRAMEWORK_FILES:
+    for name in wanted:
         entry = files.get(name) or {}
         data = read(name)
         if data is None:
@@ -3217,10 +3367,19 @@ def framework_problems(description, build_id, android_major, arch, read):
             continue
         if len(data) != entry.get("size") or hashlib.sha256(data).hexdigest() != entry.get("sha256"):
             problems.append(f"the framework's {name} is not the file framework.json describes")
-        if elf_machine(data[:64]) != machine:
+        if name in FRAMEWORK_FILES + KEYMINT_ELF_FILES and elf_machine(data[:64]) != machine:
             problems.append(f"the framework's {name} is built for ELF machine {elf_machine(data[:64])}, "
                             f"not {arch} ({machine})")
     return problems
+
+
+def framework_names(files):
+    """The files a framework build must have, given the names its framework.json lists: the
+    framework's three, and the KeyMint's when it has any of them (a build from before the KeyMint
+    has none)."""
+    if any(name in KEYMINT_FILES for name in files):
+        return FRAMEWORK_FILES + KEYMINT_FILES
+    return list(FRAMEWORK_FILES)
 
 
 def checked_framework(folder, build_id, android_major, arch):
@@ -3236,7 +3395,7 @@ def checked_framework(folder, build_id, android_major, arch):
     problems = framework_problems(description, build_id, android_major, arch, read)
     if problems:
         raise SystemExit("; ".join(problems))
-    return {name: read(name) for name in FRAMEWORK_FILES}, description
+    return {name: read(name) for name in framework_names(description["files"])}, description
 
 
 def framework_entry(description):
@@ -3246,15 +3405,17 @@ def framework_entry(description):
         "build_id": description["build_id"],
         "release": description.get("release", ""),
         "arch": description["arch"],
-        "files": {name: description["files"][name]["sha256"] for name in FRAMEWORK_FILES},
+        "files": {name: description["files"][name]["sha256"]
+                  for name in framework_names(description["files"])},
     }
 
 
 def check_framework(manifest, names, read):
     """The problems with the patched framework in an image, given image.json, the names in its
     target files and a function that reads one: each file image.json names is in the image with
-    that SHA-256, built from the image's own build for its architecture, and SurfaceFlinger may
-    tell the apps about a reset."""
+    that SHA-256, built from the image's own build for its architecture, SurfaceFlinger may
+    tell the apps about a reset, and DSA's KeyMint, when the framework has it, is the one Android
+    runs (keymint_problems)."""
     entry = manifest.get("framework")
     if entry is None:
         return []
@@ -3267,8 +3428,11 @@ def check_framework(manifest, names, read):
     if entry.get("arch") != arch:
         problems.append(f"the framework is built for {entry.get('arch')}, not {arch}")
     files = entry.get("files") or {}
-    if sorted(files) != sorted(FRAMEWORK_FILES):
-        problems.append(f"image.json's framework names {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    wanted = framework_names(files)
+    if sorted(files) != sorted(wanted):
+        problems.append(f"image.json's framework names {sorted(files)}, not {sorted(wanted)}")
+    if framework_has_keymint(files):
+        problems += keymint_problems(manifest, entry, names, read)
     machine = ARCHES.get(arch, {}).get("elf_machine")
     for name in FRAMEWORK_FILES:
         if name not in names:
@@ -3479,6 +3643,14 @@ CHANNEL_INSTANCE = "io.github.thisisthepy.dsa.channel.IChannel/default"
 CHANNEL_MANIFEST = "VENDOR/etc/vintf/manifest/dsa-channel.xml"
 VENDOR_SERVICE_CONTEXTS = "VENDOR/etc/selinux/vendor_service_contexts"
 CHANNEL_SERVICE_CONTEXT = f"{CHANNEL_INSTANCE} u:object_r:dsa_channel_service:s0"
+# KeyMint's root key from the host: dsa-channeld --keymint-key, which dsa-channeld.rc defines,
+# writes it to a tmpfs folder that a system script makes and starts it for on init (as init:
+# a vendor script's mkdir runs as vendor_init). The folder's label lets only KeyMint's domain
+# read the key (channeld.cil).
+KEYMINT_KEY_RC = "SYSTEM/etc/init/dsa-keymint-key.rc"
+KEYMINT_KEY_SERVICE = "service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key"
+KEYMINT_KEY_DIR = "/dev/dsa_keymint"
+KEYMINT_KEY_CONTEXT = f"{KEYMINT_KEY_DIR}(/.*)? u:object_r:dsa_keymint_key_file:s0"
 # The agent: a privileged app in system_ext, signed with the platform key, which reports
 # each app task to the host and starts and ends tasks for it. The framework refuses to boot
 # when a privileged app requests a privileged permission its allowlist does not grant.
@@ -3490,6 +3662,11 @@ AGENT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/privapp-permissions-dsa-agent
 # Android/obb/, where the agent puts the expansion files of the apps the host installs.
 AGENT_DEFAULT_PERMISSIONS = "SYSTEM_EXT/etc/default-permissions/default-permissions-dsa-agent.xml"
 AGENT_DEFAULT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/default-permissions-dsa-agent.xml"
+# The agent's system configuration: Android's backup manager uses a backup transport only when
+# a sysconfig file lists it, so this one names the agent's, which keeps app data in the host's
+# backup folder.
+AGENT_SYSCONFIG = "SYSTEM_EXT/etc/sysconfig/sysconfig-dsa-agent.xml"
+AGENT_SYSCONFIG_SOURCE = REPO / "dsa/guest/agent/sysconfig-dsa-agent.xml"
 AGENT_APKCERTS = (
     'name="DsaAgent.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="system_ext"'
@@ -3873,12 +4050,14 @@ AGENT_FS_CONFIG = [
     "system_ext/etc/permissions/privapp-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
     "system_ext/etc/default-permissions 0 0 755 capabilities=0x0",
     "system_ext/etc/default-permissions/default-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
+    "system_ext/etc/sysconfig 0 0 755 capabilities=0x0",
+    "system_ext/etc/sysconfig/sysconfig-dsa-agent.xml 0 0 644 capabilities=0x0",
 ]
 
 
 def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
                                 audio=False, gnss=False, sensors=False,
-                                camera=False):
+                                camera=False, keymint=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -3901,6 +4080,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries.append((r"/vendor/bin/dsa-channeld", CHANNELD_CONTEXT))
         # The elevation helper's sockets: init gives a socket file the label its path has here.
         entries += SU_SOCKET_CONTEXTS
+        # KeyMint's root key, readable only by KeyMint.
+        entries.append((f"{KEYMINT_KEY_DIR}(", KEYMINT_KEY_CONTEXT))
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
     if power:
@@ -3911,6 +4092,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
     if gnss:
         entries.append((r"/vendor/bin/hw/dsa-gnss", GNSS_CONTEXT))
+    if keymint:
+        entries.append((r"/vendor/bin/hw/dsa-keymint", KEYMINT_CONTEXT))
     if sensors:
         entries.append((r"/vendor/bin/hw/dsa-sensors", SENSORS_CONTEXT))
     if camera:
@@ -4009,7 +4192,7 @@ def add_filesystem_config(fs_config_text, rules):
 
 def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
                                     codec2=False, audio=False, gnss=False, sensors=False,
-                                    camera=False):
+                                    camera=False, keymint=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -4050,6 +4233,11 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
             ("vendor/bin/hw/dsa-audio", "vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0"),
             ("vendor/etc/init/dsa-audio.rc", "vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0"),
         ]
+    if keymint:
+        for name in KEYMINT_FILES + [KEYMINT_RC]:
+            path = "vendor/" + name.split("/", 1)[1]
+            mode = "0 2000 755" if "/bin/" in path else "0 0 644"
+            entries.append((path, f"{path} {mode} capabilities=0x0"))
     for path, rule in entries:
         if not any(line.startswith(path + " ") for line in lines):
             lines.append(rule)
@@ -4187,6 +4375,50 @@ def root_elevation_problems(names, read):
         if context not in contexts:
             problems.append(f"vendor_file_contexts lacks \"{context}\", so init makes the socket with a label "
                             "its clients may not write")
+    return problems
+
+
+def keymint_key_problems(names, read):
+    """Returns what an image with the daemon lacks for KeyMint's root key from the host: the
+    service that fetches it, in its own domain as KeyMint's user, the system script that makes
+    its tmpfs folder and starts it before KeyMint, the folder's label, and the policy that lets
+    only KeyMint read the key."""
+    problems = []
+    rc = read(CHANNELD_RC).decode().splitlines() if CHANNELD_RC in names else []
+    for line, why in [
+        (KEYMINT_KEY_SERVICE, "nothing fetches KeyMint's root key from the host"),
+        ("    user nobody", "the key file is not KeyMint's user's"),
+        ("    seclabel u:r:dsa_keymint_key:s0", "the key is fetched outside its own domain"),
+        ("    oneshot", "init would ask the host for the key again, which it refuses"),
+    ]:
+        if line not in rc:
+            problems.append(f"{CHANNELD_RC} lacks \"{line.strip()}\", so {why}")
+    if KEYMINT_KEY_RC not in names:
+        problems.append(f"{KEYMINT_KEY_RC} is missing, so KeyMint's root key has no folder and is never fetched")
+    else:
+        script = read(KEYMINT_KEY_RC).decode().splitlines()
+        for line in ["on init", f"    mkdir {KEYMINT_KEY_DIR} 0700 nobody nobody", "    start dsa_keymint_key"]:
+            if line not in script:
+                problems.append(f"{KEYMINT_KEY_RC} lacks \"{line.strip()}\", so the key is not there "
+                                "before KeyMint starts")
+    contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
+                if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
+    if KEYMINT_KEY_CONTEXT not in contexts:
+        problems.append(f"vendor_file_contexts lacks \"{KEYMINT_KEY_CONTEXT}\", so the key's folder has a "
+                        "label other domains may read")
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
+        policy = read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        for rule, why in [
+            ("(typeattributeset domain (dsa_keymint_key))", "the key is fetched in no domain of its own"),
+            ("(allow hal_keymint_server dsa_keymint_key_file (file (read open getattr)))",
+             "KeyMint cannot read its key"),
+        ]:
+            if rule not in policy:
+                problems.append(f"the SELinux policy lacks {rule}, so {why}")
+        readers = re.findall(r"\(allow\s+(\S+)\s+dsa_keymint_key_file\s+\(\s*file\s+\(([^)]*)\)", policy)
+        others = sorted({who for who, perms in readers if "read" in perms.split() and who != "hal_keymint_server"})
+        if others:
+            problems.append(f"the SELinux policy lets {', '.join(others)} read KeyMint's root key")
     return problems
 
 
@@ -4481,6 +4713,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, source in CAMERA_FILES.items()
         }
     has_camera = camera_payloads is not None
+    # DSA's KeyMint, when the framework build has it, in place of the KeyMint APEX.
+    has_keymint = framework is not None and framework_has_keymint(framework)
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, settings_overlay_payload, *design_payloads.values(),
@@ -4504,6 +4738,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if SYSTEM_EXT_FS_CONFIG not in z.namelist():
                 raise ValueError(f"target_files has no {SYSTEM_EXT_FS_CONFIG}, so there is no system_ext "
                                  "partition to install the agent in")
+
+    if has_keymint:
+        with zipfile.ZipFile(source) as z:
+            problems = keymint_library_problems(framework[KEYMINT_BINARY], set(z.namelist()) | set(framework))
+        if problems:
+            raise ValueError("; ".join(problems))
 
     with zipfile.ZipFile(source) as zin, zipfile.ZipFile(dest, "w", zipfile.ZIP_STORED, allowZip64=True) as zout:
         names = set(zin.namelist())
@@ -4609,7 +4849,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 text = update_plat_file_contexts(text)
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
-                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
+                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera, keymint=has_keymint)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
@@ -4727,6 +4967,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                     if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG + ADDONS_FS_CONFIG
                                                  + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
+                                                     "system/etc/init/dsa-keymint-key.rc 0 0 644 capabilities=0x0",
                                                      "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
                                                  + (["system/bin/su 0 0 755 capabilities=0x0"]
@@ -4750,7 +4991,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
+                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera, keymint=has_keymint)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                         if settings_overlay_payload is not None:
@@ -4763,7 +5004,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
                                                        has_hwcomposer, has_power, codec2=has_codec2,
-                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode()
+                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera, keymint=has_keymint).encode()
                 elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2
                                                           or has_camera):
                     data = update_vendor_service_contexts(
@@ -4817,6 +5058,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(SU_GUARD_RC, (HERE / "dsa-su-guard.rc").read_bytes())
+            zout.writestr(KEYMINT_KEY_RC, (HERE / "dsa-keymint-key.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
         if su_payload is not None:
             zout.writestr(SU_CLIENT_BINARY, su_payload)
@@ -4835,6 +5077,14 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if has_camera:
             for name, payload in camera_payloads.items():
                 zout.writestr(name, payload)
+        if has_keymint:
+            # The files the build has under the same name (libssl, should a build carry it) were
+            # replaced above; the rest are added.
+            for name in KEYMINT_FILES:
+                if name not in replaced_framework:
+                    zout.writestr(name, framework[name])
+                    replaced_framework.add(name)
+            zout.writestr(KEYMINT_RC, KEYMINT_RC_SOURCE.read_bytes())
         if (channeld_payload is not None or has_codec2 or has_camera) and VENDOR_SERVICE_CONTEXTS not in names:
             zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
                 "", codec2=has_codec2, channeld=channeld_payload is not None, camera=has_camera))
@@ -4848,6 +5098,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(AGENT_APK, agent_payload)
             zout.writestr(AGENT_PERMISSIONS, AGENT_PERMISSIONS_SOURCE.read_bytes())
             zout.writestr(AGENT_DEFAULT_PERMISSIONS, AGENT_DEFAULT_PERMISSIONS_SOURCE.read_bytes())
+            zout.writestr(AGENT_SYSCONFIG, AGENT_SYSCONFIG_SOURCE.read_bytes())
         if vulkan_payload is not None and not replaced_vulkan_payload:
             zout.writestr(VULKAN_RANCHU_LIBRARY, vulkan_payload)
             replaced_vulkan_payload = True
@@ -4855,12 +5106,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
                 update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
-                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode(),
+                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera, keymint=has_keymint).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
         raise ValueError(f"target_files does not contain {GFXSTREAM_LIBRARY}")
-    if framework is not None and replaced_framework != set(framework):
+    if framework is not None and set(framework) - replaced_framework:
         dest.unlink(missing_ok=True)
         raise ValueError("target_files does not contain "
                          + ", ".join(sorted(set(framework) - replaced_framework))
@@ -5771,10 +6022,11 @@ def data_disk(otatools, work, out):
 SERIAL_CONSOLE = {"x86_64": ["console=ttyS0", "8250.nr_uarts=1"], "arm64": ["console=ttyAMA0"]}
 
 
-def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camera=False):
+def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camera=False, keymint=False):
     """Returns the kernel command line shared by every DSA guest image of `arch`. With
     `hwcomposer`, the image has DSA's composer in place of Cuttlefish's; with `camera`, DSA's
-    camera HAL in place of Cuttlefish's emulated cameras, whose APEX is then not selected."""
+    camera HAL in place of Cuttlefish's emulated cameras, whose APEX is then not selected; with
+    `keymint`, DSA's KeyMint in place of the KeyMint APEX, of which none is then selected."""
     if hwcomposer:
         composer = [f"androidboot.dsa.{key}={value}" for key, value in DISPLAY_BOOTCONFIG.items()]
         apexes = {module: apex for module, apex in VENDOR_APEX_BOOTCONFIG.items()
@@ -5790,6 +6042,9 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
         apexes = VENDOR_APEX_BOOTCONFIG
     if camera:
         apexes = {module: apex for module, apex in apexes.items() if module != CAMERA_APEX_MODULE}
+    if keymint:
+        # apexd activates none of a module's APEXes whose selection is "none".
+        apexes = {**apexes, KEYMINT_APEX_MODULE: "none"}
     return " ".join([
         # No audit=1, as on Android devices: SELinux denials reach logd's auditd without it.
         # With it, the kernel also audited every iptables change and BPF program load with
@@ -5884,8 +6139,9 @@ def main():
                              "an x86_64 image carries as its default translator, and releases beside it")
     parser.add_argument("--framework", type=Path,
                         help="a folder from the Framework build (framework.json and the files it names): "
-                             "SurfaceFlinger, libhwui and libEGL that recover from a GPU device loss, built "
-                             "from the image's own build for its architecture")
+                             "SurfaceFlinger, libhwui and libEGL that recover from a GPU device loss, and "
+                             "DSA's KeyMint, whose root key comes from the host, built from the image's own "
+                             "build for its architecture")
     args = parser.parse_args()
     if args.arm_translation:
         checked_arm_translation(args.arm_translation, args.arch)
@@ -6014,7 +6270,8 @@ def main():
         files.append(kernel)
 
     cmdline = kernel_cmdline(partition_cmdline, hwcomposer=args.hwcomposer is not None, arch=args.arch,
-                             camera=args.camera is not None)
+                             camera=args.camera is not None,
+                             keymint=framework_payloads is not None and framework_has_keymint(framework_payloads))
     manifest = {
         "version": spec["version"],
         "android_major": spec["android_major"],

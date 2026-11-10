@@ -974,6 +974,25 @@ impl UserAndroid for UpdatingAndroid {
     fn print_result(&self, job_id: u32, outcome: &PrintOutcome) -> Result<(), TaskRequestError> {
         UserAndroid::print_result(&*self.session, job_id, outcome)
     }
+    fn backup(&self) -> Option<std::sync::Arc<crate::backup::BackupService>> {
+        UserAndroid::backup(&*self.session)
+    }
+    fn backup_now(&self) -> Result<dsa_protocol::control::BackupRunResult, TaskRequestError> {
+        UserAndroid::backup_now(&*self.session)
+    }
+    fn restore_backup(&self) -> Result<crate::session::RestoreOutcome, TaskRequestError> {
+        UserAndroid::restore_backup(&*self.session)
+    }
+    fn watch_passkeys(&self) -> Option<Receiver<crate::passkeys::PasskeyEvent>> {
+        UserAndroid::watch_passkeys(&*self.session)
+    }
+    fn passkey_result(
+        &self,
+        id: u64,
+        result: crate::passkeys::CeremonyResult,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::passkey_result(&*self.session, id, result)
+    }
     fn watch_background(&self) -> Option<BackgroundWatch> {
         UserAndroid::watch_background(&*self.session)
     }

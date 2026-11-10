@@ -23,6 +23,7 @@
 //! (`settings_dir`). Turning either kind of update off there stops the checks while the
 //! service runs; the render GPU is for each user's window manager, which asks for it.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
@@ -239,6 +240,71 @@ fn user_network(sid: &str) -> crate::hcn::SharedNetwork {
     Arc::clone(networks.entry(sid.to_string()).or_default())
 }
 
+/// The system services the host gives the user's Android: the backup of its apps' data in
+/// `<profile>\DSA Backup`, passkeys (checked here, made and used by Windows Hello in the user's
+/// desktop session, which watches for them) and the root key of its KeyMint on its own port.
+/// The backup key and the KeyMint root key are sealed in the user's DSA folder
+/// (`%LOCALAPPDATA%\DSA\keys`), never on the guest's disk; the KeyMint root key by the
+/// computer's TPM first. Backup is off until the user turns it on, which the service keeps in
+/// its own settings folder (`settings_dir`); until then neither the backup folder nor its key
+/// is made. A part that cannot be set up is logged and left unavailable, which Android reports
+/// as such; the rest goes on.
+fn serve_host_services(
+    session: &Session,
+    sid: &str,
+    build: &str,
+    keymint: VmBoundListener,
+    settings_dir: &Path,
+) {
+    use dsa_host_core::backup::{BackupService, BackupSwitch, FileSwitch, MemorySwitch};
+    use dsa_host_core::host_keys::{HostKeyStore, NoKeyStore};
+    use dsa_host_core::passkeys::PasskeyService;
+
+    let keys: Arc<dyn HostKeyStore> = match local_app_data(sid) {
+        Ok(local) => Arc::new(crate::credential_store::for_user(
+            sid,
+            &crate::paths::UserRoot::in_local_app_data(&local).keys(),
+        )),
+        Err(why) => {
+            eprintln!(
+                "{sid}: keys: the user's DSA folder cannot be found, so no key is kept: {why}"
+            );
+            Arc::new(NoKeyStore(format!(
+                "the folder this user's keys are kept in cannot be found ({why})"
+            )))
+        }
+    };
+    session.set_keymint_keys(Arc::clone(&keys));
+    session.serve_keymint_port(Box::new(keymint), build);
+    match crate::profile::profile_folder(sid) {
+        Ok(home) => {
+            let folder = dsa_host_core::backup::folder_in(&home);
+            let switch: Arc<dyn BackupSwitch> = match FileSwitch::for_user(settings_dir, sid) {
+                Ok(switch) => Arc::new(switch),
+                Err(why) => {
+                    eprintln!("{sid}: backup: the choice cannot be kept, so it is off: {why}");
+                    Arc::new(MemorySwitch::default())
+                }
+            };
+            // Made at the first backup, never before the user turns backup on.
+            let owner = sid.to_string();
+            let prepare = Arc::new(move |folder: &Path| {
+                crate::user_disk::prepare_backup_folder(folder, &owner)
+            });
+            let made_on = crate::computer_identity::computer_name();
+            session.serve_backup(Arc::new(
+                BackupService::new(folder, keys, &made_on)
+                    .with_switch(switch)
+                    .with_prepare(prepare),
+            ));
+        }
+        Err(why) => eprintln!("{sid}: backup: the user's backups cannot be kept: {why}"),
+    }
+    session.serve_passkeys(Arc::new(PasskeyService::new(Arc::new(
+        crate::https::WinHttpsGet::default(),
+    ))));
+}
+
 /// The user's Android: their data disk, VM and session, created on their first request.
 /// With `power`, the session hears the computer's power from it.
 pub fn create_user_android(
@@ -431,6 +497,14 @@ pub fn create_user_android(
                 .map(|l| Box::new(l) as Box<dyn Listener>)
         }),
     );
+    // The port the guest's control daemon asks for KeyMint's root key on, each boot.
+    let keymint_service = Guid::vsock_service(dsa_host_core::keymint_root::KEYMINT_PORT);
+    let keymint_listener = VmBoundListener::new(
+        launcher.vm_id_slot(),
+        Box::new(move |vm_id| {
+            HvSocketListener::bind(vm_id, keymint_service).map(|l| Box::new(l) as Box<dyn Listener>)
+        }),
+    );
     let session_config = config.session_config();
     let handshake = ControlHandshake::new(build, session_config.connect_timeout);
     let session = Session::new(launcher, Box::new(listener), handshake, session_config);
@@ -490,6 +564,13 @@ pub fn create_user_android(
         Arc::new(crate::root_approval::UacPrompt::new(sid)),
         dsa_host_core::root_approval::service_log(),
     )));
+    serve_host_services(
+        &session,
+        sid,
+        build,
+        keymint_listener,
+        &config.settings_dir(),
+    );
     let session = Arc::new(session);
     {
         let (watched, user_name) = (Arc::downgrade(&session), sid.to_string());

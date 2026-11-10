@@ -1675,6 +1675,162 @@
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>바뀐 설정은 Android가 다음에 시작할 때 적용됩니다. 일반 페이지에서 Android를 중지한 뒤 앱을 여세요.</value>
   </data>
+  <data name="BackupHeader.Text" xml:space="preserve">
+    <value>백업</value>
+  </data>
+  <data name="BackupUnavailableBar.Title" xml:space="preserve">
+    <value>지금은 백업을 쓸 수 없습니다</value>
+  </data>
+  <data name="BackupErrorBar.Title" xml:space="preserve">
+    <value>하지 못했습니다</value>
+  </data>
+  <data name="BackupResultBar.Title" xml:space="preserve">
+    <value>완료</value>
+  </data>
+  <data name="BackupCard.Header" xml:space="preserve">
+    <value>앱 데이터 백업</value>
+  </data>
+  <data name="BackupCard.Description" xml:space="preserve">
+    <value>Android가 앱 데이터를 사용자 폴더 안의 폴더에 백업합니다. 백업은 Windows가 사용자를 위해 보관하는 키로 암호화됩니다. 데이터를 초기화한 뒤에, 또는 복구 키로 다른 PC에서 복원하세요.</value>
+  </data>
+  <data name="BackupNowButton.Content" xml:space="preserve">
+    <value>지금 백업</value>
+  </data>
+  <data name="BackupRestoreButton.Content" xml:space="preserve">
+    <value>복원</value>
+  </data>
+  <data name="BackupRestoreConfirm.Title" xml:space="preserve">
+    <value>백업에서 앱 데이터를 복원할까요?</value>
+  </data>
+  <data name="BackupRestoreConfirm.Action" xml:space="preserve">
+    <value>복원</value>
+  </data>
+  <data name="RecoveryKeyCard.Header" xml:space="preserve">
+    <value>복구 키</value>
+  </data>
+  <data name="RecoveryKeyCard.Description" xml:space="preserve">
+    <value>복구 키가 있으면 다른 PC에서나 Windows를 다시 설치한 뒤에도 백업을 열 수 있습니다. 복구 키가 없으면 이 PC의 이 Windows 계정만 백업을 읽을 수 있습니다.</value>
+  </data>
+  <data name="RecoveryKeyShowButton.Content" xml:space="preserve">
+    <value>복구 키 보기</value>
+  </data>
+  <data name="RecoveryKeyHideButton.Content" xml:space="preserve">
+    <value>숨기기</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Header" xml:space="preserve">
+    <value>복구 키 사용</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Description" xml:space="preserve">
+    <value>다른 PC에서 만든 백업을 복원하려면 그 PC의 DSA Backup 폴더를 사용자 폴더에 복사하고, 그 백업을 만들 때의 복구 키를 입력하세요.</value>
+  </data>
+  <data name="UseRecoveryKeyCard.Placeholder" xml:space="preserve">
+    <value>복구 키</value>
+  </data>
+  <data name="UseRecoveryKeyButton.Content" xml:space="preserve">
+    <value>키 사용</value>
+  </data>
+  <data name="Backup_NoService" xml:space="preserve">
+    <value>DSA 서비스가 백업 상태를 알려 주지 않았습니다. 잠시 뒤 이 페이지를 다시 여세요.</value>
+  </data>
+  <data name="Backup_Unavailable" xml:space="preserve">
+    <value>지금은 백업 폴더나 그 키를 쓸 수 없습니다.</value>
+  </data>
+  <data name="Backup_Folder" xml:space="preserve">
+    <value>폴더: {0}</value>
+  </data>
+  <data name="Backup_Last" xml:space="preserve">
+    <value>마지막 백업: {0}</value>
+  </data>
+  <data name="Backup_Never" xml:space="preserve">
+    <value>없음</value>
+  </data>
+  <data name="Backup_Apps" xml:space="preserve">
+    <value>백업한 앱: {0}개 ({1})</value>
+  </data>
+  <data name="Backup_LastError" xml:space="preserve">
+    <value>마지막 문제: {0}</value>
+  </data>
+  <data name="Backup_Done" xml:space="preserve">
+    <value>앱 {0}개의 데이터를 백업했습니다.</value>
+  </data>
+  <data name="Backup_DoneSome" xml:space="preserve">
+    <value>앱 {0}개의 데이터를 백업했습니다. {1}개는 백업하지 못했습니다.</value>
+  </data>
+  <data name="Backup_Restored" xml:space="preserve">
+    <value>앱 {0}개의 데이터를 복원하고 앱 {1}개를 설치했습니다.</value>
+  </data>
+  <data name="Backup_RestoredSome" xml:space="preserve">
+    <value>앱 {0}개의 데이터를 복원하고 앱 {1}개를 설치했습니다. {2}개는 복원하지 못했습니다.</value>
+  </data>
+  <data name="Backup_RestoreWarning" xml:space="preserve">
+    <value>백업에 있는 각 앱의 데이터가 지금 데이터 대신 백업의 데이터로 바뀝니다. 없는 앱은 다시 설치됩니다. Android가 실행 중이 아니면 시작됩니다.</value>
+  </data>
+  <data name="Backup_KeyAdvice" xml:space="preserve">
+    <value>키를 적어 두거나 암호 관리자에 넣어 이 PC와 따로 보관하세요. 키와 백업 폴더가 있으면 누구나 백업을 읽을 수 있습니다.</value>
+  </data>
+  <data name="Backup_KeyEmpty" xml:space="preserve">
+    <value>먼저 복구 키를 입력하세요.</value>
+  </data>
+  <data name="Backup_KeyUsed" xml:space="preserve">
+    <value>복구 키를 백업 키로 보관했습니다. 이제 그 키로 만든 백업 폴더를 여기서 복원할 수 있습니다.</value>
+  </data>
+  <data name="BackupSwitchCard.Header" xml:space="preserve">
+    <value>이 PC에 앱 데이터 백업</value>
+  </data>
+  <data name="BackupSwitchCard.Description" xml:space="preserve">
+    <value>Android 앱의 사용자 데이터를 암호화해 이 PC에 한 벌 더 보관합니다. 데이터를 초기화한 뒤나 다른 PC에서 복원할 수 있습니다. 켜기 전까지는 꺼져 있습니다.</value>
+  </data>
+  <data name="Backup_Off" xml:space="preserve">
+    <value>백업이 꺼져 있습니다. 백업을 만들지 않고, 앱 데이터를 이 PC에 보관하지 않습니다.</value>
+  </data>
+  <data name="Backup_OffKept" xml:space="preserve">
+    <value>백업이 꺼져 있습니다. 앞서 만든 앱 {0}개의 백업({1})이 DSA Backup 폴더에 아직 남아 있습니다.</value>
+  </data>
+  <data name="Backup_DeleteQuestion" xml:space="preserve">
+    <value>앱 {0}개의 백업({1})이 이 PC에 아직 남아 있습니다. 백업과 그 키도 삭제할까요, 나중에 복원하도록 남겨 둘까요?</value>
+  </data>
+  <data name="BackupOffConfirm.Title" xml:space="preserve">
+    <value>백업 끄기</value>
+  </data>
+  <data name="BackupOffConfirm.Delete" xml:space="preserve">
+    <value>백업 삭제</value>
+  </data>
+  <data name="BackupOffConfirm.Keep" xml:space="preserve">
+    <value>남겨 두기</value>
+  </data>
+  <data name="Backup_TurnedOn" xml:space="preserve">
+    <value>백업을 켰습니다. 이제부터 Android가 앱 데이터를 이 PC에 백업합니다.</value>
+  </data>
+  <data name="Backup_TurnedOff" xml:space="preserve">
+    <value>백업을 껐습니다. 지금까지 만든 백업은 남아 있습니다.</value>
+  </data>
+  <data name="Backup_TurnedOffDeleted" xml:space="preserve">
+    <value>백업을 끄고, 백업과 그 키를 삭제했습니다.</value>
+  </data>
+  <data name="KeyProtectionCard.Header" xml:space="preserve">
+    <value>Android 키 보호</value>
+  </data>
+  <data name="KeyProtection_None" xml:space="preserve">
+    <value>Android를 처음 시작할 때 Android의 키 보호가 정해집니다.</value>
+  </data>
+  <data name="KeyProtection_Tpm" xml:space="preserve">
+    <value>이 PC의 TPM으로 봉인되어 있습니다. Android 디스크를 복사해도 다른 곳에서는 앱의 키와 Android의 암호화된 저장소를 열 수 없습니다.</value>
+  </data>
+  <data name="KeyProtection_Dpapi" xml:space="preserve">
+    <value>이 PC에 쓸 수 있는 TPM이 없어 Windows가 사용자 계정에만 보관합니다. Android 디스크를 복사해도 이 계정 없이는 키를 열 수 없습니다. TPM을 쓸 수 있게 되면 DSA가 키를 TPM으로 봉인합니다.</value>
+  </data>
+  <data name="KeyProtection_Hardware" xml:space="preserve">
+    <value>{0}(으)로 봉인되어 있습니다.</value>
+  </data>
+  <data name="KeyProtection_Store" xml:space="preserve">
+    <value>{0}에 보관되어 있습니다.</value>
+  </data>
+  <data name="KeyProtection_Why" xml:space="preserve">
+    <value>TPM을 쓰지 않는 까닭: {0}</value>
+  </data>
+  <data name="KeyProblemBar.Title" xml:space="preserve">
+    <value>Android의 키를 열지 못했습니다</value>
+  </data>
   <data name="ResetDataHeader.Text" xml:space="preserve">
     <value>초기화</value>
   </data>
