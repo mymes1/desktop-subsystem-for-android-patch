@@ -25,7 +25,13 @@ class FakeWidgetPlatform : WidgetPlatform {
     val shown = mutableListOf<Pair<Int, WidgetSize>>()
     val pointers = mutableListOf<String>()
     val dozing = mutableListOf<Boolean>()
-    val configuring = mutableMapOf<Int, (Boolean) -> Unit>()
+    val configuring = mutableMapOf<Int, (WidgetSetup) -> Unit>()
+
+    /** How the next setup ends before [configure] returns, as one that finishes at once; null to wait. */
+    var setupAtOnce: WidgetSetup? = null
+
+    /** Setups started, by widget ID, in order. */
+    val setups = mutableListOf<Int>()
     var frame: (Int, Int, Int, ByteArray) -> Unit = { _, _, _, _ -> }
     var changed: () -> Unit = {}
     var failed: (Int) -> Unit = {}
@@ -69,8 +75,10 @@ class FakeWidgetPlatform : WidgetPlatform {
         deleted += widgetId
     }
 
-    override fun configure(widgetId: Int, done: (Boolean) -> Unit) {
+    override fun configure(widgetId: Int, done: (WidgetSetup) -> Unit) {
+        setups += widgetId
         configuring[widgetId] = done
+        setupAtOnce?.let(done)
     }
 
     override fun show(widgetId: Int, size: WidgetSize) {
@@ -98,9 +106,9 @@ class FakeWidgetPlatform : WidgetPlatform {
     }
 }
 
-fun clock(configure: Boolean = false) = WidgetInfo(
-    provider = "com.example.clock/.ClockWidget",
-    packageName = "com.example.clock",
+fun clock(configure: Boolean = false, provider: String = "com.example.clock/.ClockWidget") = WidgetInfo(
+    provider = provider,
+    packageName = provider.substringBefore('/'),
     label = "Clock",
     previewPng = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte()),
     minWidthDp = 110,
@@ -198,19 +206,117 @@ class WidgetManagerTest {
         platform.offered += clock(configure = true)
         add()
         assertTrue("nothing is placed before the setup ends", sent.isEmpty())
-        platform.configuring.getValue(1)(true)
+        assertEquals("the setup runs once", listOf(1), platform.setups)
+        platform.configuring.getValue(1)(WidgetSetup.Finished)
         scheduler.runDue()
         assertEquals(1, sent.first { it.hasWidgetAdded() }.widgetAdded.widgetId)
+        assertEquals(listOf(1), platform.placedIds())
+        assertEquals(1, platform.shown.last().first)
 
         add(requestId = 9)
-        platform.configuring.getValue(2)(false)
+        platform.configuring.getValue(2)(WidgetSetup.Canceled)
         scheduler.runDue()
         assertTrue(sent.last { it.hasWidgetAdded() }.widgetAdded.error.contains("canceled"))
         assertEquals(listOf(2), platform.deleted)
         // A second answer changes nothing.
-        platform.configuring.getValue(2)(true)
+        platform.configuring.getValue(2)(WidgetSetup.Finished)
         scheduler.runDue()
         assertEquals(listOf(1), platform.placedIds())
+    }
+
+    @Test
+    fun fr12_a_setup_that_finishes_at_once_with_ok_places_the_widget() {
+        started()
+        platform.offered += clock(configure = true)
+        platform.setupAtOnce = WidgetSetup.Finished
+        add()
+        val added = sent.single { it.hasWidgetAdded() }.widgetAdded
+        assertEquals("", added.error)
+        assertEquals(1, added.widgetId)
+        assertEquals(listOf(1), platform.placedIds())
+        assertTrue("the host hears of the placed widget", sent.any { it.hasWidgetUpdated() && it.widgetUpdated.widgetId == 1 })
+    }
+
+    @Test
+    fun fr12_a_setup_canceled_at_once_removes_the_widget_and_says_the_user_canceled() {
+        started()
+        platform.offered += clock(configure = true)
+        platform.setupAtOnce = WidgetSetup.Canceled
+        add()
+        val added = sent.single { it.hasWidgetAdded() }.widgetAdded
+        assertEquals("the user canceled the widget's setup", added.error)
+        assertEquals(listOf(1), platform.deleted)
+        assertTrue(platform.placedIds().isEmpty())
+    }
+
+    @Test
+    fun fr12_only_a_real_cancel_is_reported_as_canceled() {
+        started()
+        platform.offered += clock(configure = true)
+        platform.setupAtOnce = WidgetSetup.Failed("ActivityNotFoundException: no setup activity")
+        add()
+        val failed = sent.single { it.hasWidgetAdded() }.widgetAdded.error
+        assertFalse(failed, failed.contains("canceled"))
+        assertTrue(failed, failed.contains("did not start") && failed.contains("no setup activity"))
+        assertEquals(listOf(1), platform.deleted)
+
+        // A setup that cannot even be asked for is not a cancel either.
+        val throwing = object : WidgetPlatform by platform {
+            override fun configure(widgetId: Int, done: (WidgetSetup) -> Unit) {
+                throw SecurityException("not allowed")
+            }
+        }
+        val other = mutableListOf<Envelope>()
+        val manager = WidgetManager(throwing, WidgetStore.memory(), { frame -> other += decode(frame); true }, log, { true })
+        manager.start { it() }
+        manager.handle(Envelope.newBuilder().setAddWidget(AddWidget.newBuilder().setRequestId(3).setProvider(clock().provider)).build())
+        val error = other.single { it.hasWidgetAdded() }.widgetAdded.error
+        assertFalse(error, error.contains("canceled"))
+        assertTrue(error, error.contains("did not start"))
+    }
+
+    @Test
+    fun fr12_the_setups_answer_is_read_from_its_result_code() {
+        assertEquals(WidgetSetup.Finished, WidgetSetup.ofResult(-1))
+        assertEquals(WidgetSetup.Canceled, WidgetSetup.ofResult(0))
+        // A result an app made up is not a finished setup.
+        assertEquals(WidgetSetup.Canceled, WidgetSetup.ofResult(1))
+    }
+
+    @Test
+    fun fr12_a_setup_the_app_says_is_optional_is_skipped_and_the_widget_placed_at_once() {
+        val reconfigurable = WidgetInfo.FEATURE_RECONFIGURABLE
+        val optional = WidgetInfo.FEATURE_CONFIGURATION_OPTIONAL
+        assertFalse("no configuration activity, no setup", WidgetInfo.needsSetup(false, 0))
+        assertTrue(WidgetInfo.needsSetup(true, 0))
+        assertTrue("reconfigurable alone still sets the widget up first", WidgetInfo.needsSetup(true, reconfigurable))
+        assertTrue("optional means nothing without reconfigurable", WidgetInfo.needsSetup(true, optional))
+        assertFalse(WidgetInfo.needsSetup(true, reconfigurable or optional))
+        // Hidden from the picker (2) does not change it.
+        assertFalse(WidgetInfo.needsSetup(true, reconfigurable or optional or 2))
+
+        started()
+        platform.offered += clock(configure = WidgetInfo.needsSetup(true, reconfigurable or optional))
+        add()
+        assertTrue("no setup runs", platform.setups.isEmpty())
+        assertEquals(1, sent.single { it.hasWidgetAdded() }.widgetAdded.widgetId)
+    }
+
+    @Test
+    fun fr12_two_setups_at_once_each_get_their_own_answer() {
+        started()
+        platform.offered += clock(configure = true)
+        platform.offered += clock(configure = true, provider = "com.example.notes/.NotesWidget")
+        add(requestId = 1)
+        add(provider = "com.example.notes/.NotesWidget", requestId = 2)
+        assertEquals(listOf(1, 2), platform.setups)
+        platform.configuring.getValue(2)(WidgetSetup.Finished)
+        platform.configuring.getValue(1)(WidgetSetup.Canceled)
+        scheduler.runDue()
+        val answers = sent.filter { it.hasWidgetAdded() }.associate { it.widgetAdded.requestId to it.widgetAdded }
+        assertEquals(2, answers.getValue(2).widgetId)
+        assertTrue(answers.getValue(1).error.contains("canceled"))
+        assertEquals(listOf(2), platform.placedIds())
     }
 
     @Test

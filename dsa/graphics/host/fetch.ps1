@@ -59,7 +59,10 @@ git -C $GfxstreamDir clean -fdx
 # shared ColorBuffer before it knows whether another made it. Without 0018 an image release the
 # GPU has not finished in three seconds hands its still pending fence back to the pool, the
 # next release resets it and submits with it again while the GPU may still signal it, and
-# nothing checks the renderer's device. A patch that does not apply stops the fetch.
+# nothing checks the renderer's device. Without 0019 a YUV gralloc buffer a guest CPU writes (a
+# video decoder's pictures, a camera's frames) gets an RGBA ColorBuffer the guest cannot copy
+# its planes into, so videos show their sound and a green picture. A patch that does not apply
+# stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -75,7 +78,8 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

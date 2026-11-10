@@ -89,8 +89,14 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   It lists the installed widgets for the host's gallery (`WidgetProviders`, in parts under
   256 KiB, with previews of at most 160 pixels and 48 KiB), and places one the host asks for
   (`AddWidget`): it allocates a widget ID, binds it without asking (`BIND_APPWIDGET`), and
-  runs the widget's setup when its app has one, through `WidgetConfigureActivity`; the setup
-  shows as a task window. Each widget's view lives in a presentation on a private virtual
+  runs the widget's setup when its app has one, through `WidgetConfigureActivity`. That
+  activity opens a freeform task of its own (an affinity of its own, `NEW_TASK` and
+  `MULTIPLE_TASK`), never the agent's home task, which has no host window, and the setup runs
+  above it; the agent reports that task as the app's, so the host shows the setup as the
+  app's focused window. `RESULT_OK` places the widget, also from a setup that finishes at
+  once; any other result, Back and a closed window cancel it, and a setup that cannot start
+  is reported as such, not as a cancel. A widget whose app says it is reconfigurable and its
+  setup optional is placed without one. Each widget's view lives in a presentation on a private virtual
   display of the widget's size, which keeps its views running, and is drawn by the agent's
   own hardware renderer into PNG frames (`WidgetFrame`), only when it changes, at most ten
   times a second, and at most once a second while the guest dozes. That drawing does not use

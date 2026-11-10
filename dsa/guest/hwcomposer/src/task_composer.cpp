@@ -183,6 +183,9 @@ void TaskComposer::syncGenerationLocked() {
     // one, so every display is made, and announced, again.
     mGeneration = mHost.generation();
     mShared.clear();
+    mUploadedAhead.clear();
+    // The new connection's ColorBuffers hold nothing yet.
+    mUploads.clear();
     mResizeGate.clear();
     for (auto& [_, output] : mOutputs) {
         output.onHost = false;
@@ -215,6 +218,34 @@ void TaskComposer::present(Frame& frame) {
     auto owned = std::make_shared<Frame>(std::move(frame));
     const double presentedMs = traceMonoMs();
     mPipeline.submit([this, owned, presentedMs] { compose(*owned, presentedMs); });
+}
+
+void TaskComposer::uploadCpuWritten(std::vector<CpuLayer>& layers) {
+    if (layers.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mMutex);
+    if (!mHost.connected()) {
+        return;
+    }
+    syncGenerationLocked();
+    for (CpuLayer& layer : layers) {
+        // The producer's CPU has finished writing once the fence signals.
+        if (!waitForFence(layer.acquireFence, kFenceTimeoutMs)) {
+            HWC_LOGW("layer %lld's buffer was not ready in %d ms to copy up",
+                     static_cast<long long>(layer.id), kFenceTimeoutMs);
+        }
+        const uint32_t handle = sharedHandleLocked(layer.buffer);
+        if (handle == 0) {
+            continue;
+        }
+        mUploadedAhead.insert(layer.buffer.id);
+        mUploads.upload(mHost, handle, layer.buffer, layer.fresh);
+    }
+    if (!mHost.connected()) {
+        mDisconnected = true;
+        mReconnectWake.notify_all();
+    }
 }
 
 void TaskComposer::drain() { mPipeline.drain(); }
@@ -443,13 +474,17 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
 
         // Drop this process's hold on buffers SurfaceFlinger can no longer show.
         for (auto it = mShared.begin(); it != mShared.end();) {
-            if (frame.liveBuffers.count(it->first) || it->first == frame.clientTarget.id) {
+            if (frame.liveBuffers.count(it->first) || it->first == frame.clientTarget.id ||
+                mUploadedAhead.count(it->first)) {
                 ++it;
             } else {
                 mHost.closeColorBuffer(it->second);
+                mUploads.forget(it->first);
                 it = mShared.erase(it);
             }
         }
+        // The next frame names the buffers copied up for it among its own.
+        mUploadedAhead.clear();
 
         if (!mHost.connected()) {
             mDisconnected = true;
