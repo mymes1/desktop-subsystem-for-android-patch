@@ -141,6 +141,9 @@ pub struct HostSetup {
     pub package: String,
     /// Whether the user started it, rather than the window manager.
     pub launch: bool,
+    /// With `launch`, the shortcut of the app to start rather than the app itself: a jump list
+    /// task or a desktop shortcut started the program with `--shortcut <id>`.
+    pub shortcut: Option<String>,
     /// Dials the window manager.
     pub connector: Box<dyn Connector>,
     /// Dials the service's local API, which the windows' pointer and key input go to directly, so
@@ -225,6 +228,7 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
             package_name: setup.package.clone(),
             process_id: setup.process_id,
             launch: setup.launch,
+            shortcut_id: setup.shortcut.clone().unwrap_or_default(),
         },
         CONNECT,
     )?;

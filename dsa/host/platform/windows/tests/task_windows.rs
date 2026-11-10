@@ -109,6 +109,7 @@ impl HostLauncher for InProcessHosts {
         let setup = HostSetup {
             package: package.to_string(),
             launch: false,
+            shortcut: None,
             connector: Box::new(self.connector.clone()),
             input: Box::new(AsUser(self.api.clone())),
             process_id: std::process::id(),

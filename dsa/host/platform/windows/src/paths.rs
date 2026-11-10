@@ -216,6 +216,14 @@ impl UserRoot {
     pub fn start_menu_note(&self) -> PathBuf {
         join(&self.0, &["start-menu.json"])
     }
+    /// The note of the desktop shortcuts the window manager and `dsa` made for the apps.
+    pub fn desktop_shortcuts_note(&self) -> PathBuf {
+        join(&self.0, &["desktop-shortcuts.json"])
+    }
+    /// The note of the jump lists the window manager committed for the apps.
+    pub fn jump_lists_note(&self) -> PathBuf {
+        join(&self.0, &["jump-lists.json"])
+    }
     pub fn tmp(&self) -> PathBuf {
         join(&self.0, &["tmp"])
     }

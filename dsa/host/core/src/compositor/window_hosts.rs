@@ -299,7 +299,12 @@ pub enum HostAction {
     /// Send `message` to the window host on connection `host`.
     Send { host: HostId, message: ToHost },
     /// Ask the guest to start the app, for a window host the user started.
-    Launch { package: String },
+    /// `shortcut` names one of the app's shortcuts to start instead, for a window host started
+    /// from a jump list task or a desktop shortcut.
+    Launch {
+        package: String,
+        shortcut: Option<String>,
+    },
     /// Close the connection `host`; its window host then exits. `why` is for the log.
     Disconnect { host: HostId, why: String },
 }
@@ -740,14 +745,33 @@ impl WindowHosts {
         launch: bool,
         now: Instant,
     ) -> Vec<HostAction> {
+        self.attached_for(host, package, launch, None, now)
+    }
+
+    /// [`WindowHosts::attached`], for a window host the user started from one of the app's
+    /// shortcuts (`shortcut`, with `launch`): the shortcut is started rather than the app,
+    /// whether the app's window host runs already or not. An ID no command line could carry
+    /// starts the app.
+    pub fn attached_for(
+        &mut self,
+        host: HostId,
+        package: &str,
+        launch: bool,
+        shortcut: Option<&str>,
+        now: Instant,
+    ) -> Vec<HostAction> {
         if !is_valid_package(package) {
             return vec![HostAction::Disconnect {
                 host,
                 why: format!("a window host named an invalid package {package:?}"),
             }];
         }
+        let shortcut = shortcut
+            .filter(|id| crate::tasks::is_valid_shortcut_id(id))
+            .map(str::to_string);
         let launch_action = || HostAction::Launch {
             package: package.to_string(),
+            shortcut: shortcut.clone(),
         };
         match self.hosts.get_mut(package) {
             Some(AppHost {
@@ -1706,7 +1730,8 @@ mod tests {
             vec![
                 menu(host, false),
                 HostAction::Launch {
-                    package: CLOCK.into()
+                    package: CLOCK.into(),
+                    shortcut: None,
                 }
             ]
         );
@@ -1723,7 +1748,8 @@ mod tests {
         assert_eq!(
             second[0],
             HostAction::Launch {
-                package: CLOCK.into()
+                package: CLOCK.into(),
+                shortcut: None,
             }
         );
         assert!(matches!(
@@ -2046,6 +2072,7 @@ mod tests {
                 package_name: CLOCK.into(),
                 process_id: 42,
                 launch: true,
+                shortcut_id: String::new(),
             },
             Duration::from_secs(5),
         )
@@ -2132,6 +2159,32 @@ mod tests {
     }
 
     #[test]
+    fn fr7_a_window_host_started_from_a_shortcut_starts_the_shortcut() {
+        let now = Instant::now();
+        let mut hosts = WindowHosts::new();
+        let shortcut = |id: &str| HostAction::Launch {
+            package: CLOCK.into(),
+            shortcut: Some(id.into()),
+        };
+        // Not running yet: the shortcut is started, and its task opens in this window host.
+        let first = hosts.attached_for(HostId(1), CLOCK, true, Some("new-alarm"), now);
+        assert_eq!(first.last(), Some(&shortcut("new-alarm")));
+        // Running already: a second start from another shortcut asks for that shortcut.
+        hosts.change(&open(1, CLOCK), now);
+        let second = hosts.attached_for(HostId(2), CLOCK, true, Some("timer"), now);
+        assert_eq!(second[0], shortcut("timer"));
+        // An ID no command line could carry starts the app instead.
+        let third = hosts.attached_for(HostId(3), CLOCK, true, Some("bad\nid"), now);
+        assert_eq!(
+            third[0],
+            HostAction::Launch {
+                package: CLOCK.into(),
+                shortcut: None,
+            }
+        );
+    }
+
+    #[test]
     fn fr7_a_window_host_the_user_started_shows_the_apps_latest_icon() {
         let now = Instant::now();
         let mut hosts = WindowHosts::new();
@@ -2142,7 +2195,8 @@ mod tests {
                 menu(HostId(1), false),
                 icon_sent(HostId(1), 6, 7),
                 HostAction::Launch {
-                    package: CLOCK.into()
+                    package: CLOCK.into(),
+                    shortcut: None,
                 }
             ]
         );

@@ -185,6 +185,12 @@ public final class AppsService {
     /// Opens the app in a window of its own.
     public func open(_ package: String) async throws { _ = try await service.runText(["launch", package]) }
 
+    /// Puts a shortcut to `package` on the Desktop, which opens the app as Launchpad does and
+    /// goes when the app is uninstalled.
+    public func desktopShortcut(_ package: String) async throws {
+        _ = try await service.runJson(["apps", "desktop-shortcut", package])
+    }
+
     /// Opens Android's own settings of `package` (its permissions, storage and notifications),
     /// or Android's list of every app when it is nil.
     public func openSettings(_ package: String?) async throws {
@@ -612,6 +618,14 @@ public final class AppsViewModel: ObservableObject {
         await run(reload: false) {
             try await service.openSettings(package)
             return nil
+        }
+    }
+
+    /// Puts a shortcut to the app on the Desktop, and says so.
+    public func desktopShortcut(_ package: String) async {
+        await run(reload: false) {
+            try await service.desktopShortcut(package)
+            return text.format("Apps_DesktopShortcutMade", labelOf(package))
         }
     }
 

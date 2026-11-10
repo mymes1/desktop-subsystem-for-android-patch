@@ -107,8 +107,8 @@ use crate::settings::{Settings, SettingsStore};
 use crate::share::{ShareOutcome, ShareRequest};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
-    TaskRequest, TaskRequestError, TaskWatch,
+    AppInfo, AppSettingsPage, AppShortcut, Bounds, PinShortcutRequest, StatusBarAppearance, Task,
+    TaskEvent, TaskOrientation, TaskRequest, TaskRequestError, TaskWatch,
 };
 use crate::touch_gestures::TouchGesturesState;
 use crate::update::alerts::{self as update_alerts, UpdateAlert};
@@ -1585,7 +1585,52 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
         root: app.root,
+        shortcuts: app.shortcuts.into_iter().map(shortcut_to_wire).collect(),
     }
+}
+
+fn shortcut_to_wire(shortcut: AppShortcut) -> types::AppShortcut {
+    types::AppShortcut {
+        id: shortcut.id,
+        short_label: shortcut.short_label,
+        long_label: shortcut.long_label,
+        icon_png: shortcut.icon_png,
+        rank: shortcut.rank,
+        manifest: shortcut.manifest,
+        dynamic: shortcut.dynamic,
+        pinned: shortcut.pinned,
+    }
+}
+
+fn shortcut_from_wire(shortcut: types::AppShortcut) -> AppShortcut {
+    AppShortcut {
+        id: shortcut.id,
+        short_label: shortcut.short_label,
+        long_label: shortcut.long_label,
+        icon_png: shortcut.icon_png,
+        rank: shortcut.rank,
+        manifest: shortcut.manifest,
+        dynamic: shortcut.dynamic,
+        pinned: shortcut.pinned,
+    }
+}
+
+fn pin_request_to_wire(request: PinShortcutRequest) -> types::PinShortcutRequest {
+    types::PinShortcutRequest {
+        request_id: request.request_id,
+        package_name: request.package_name,
+        app_label: request.app_label,
+        shortcut: Some(shortcut_to_wire(request.shortcut)),
+    }
+}
+
+fn pin_request_from_wire(request: types::PinShortcutRequest) -> Option<PinShortcutRequest> {
+    Some(PinShortcutRequest {
+        request_id: request.request_id,
+        package_name: request.package_name,
+        app_label: request.app_label,
+        shortcut: shortcut_from_wire(request.shortcut?),
+    })
 }
 
 fn app_from_wire(app: types::AppInfo) -> AppInfo {
@@ -1606,6 +1651,7 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         caption_icon_png: app.caption_icon_png,
         multiple_windows: app.multiple_windows,
         root: app.root,
+        shortcuts: app.shortcuts.into_iter().map(shortcut_from_wire).collect(),
     }
 }
 
@@ -1633,6 +1679,7 @@ fn event_to_wire(event: TaskEvent) -> types::TaskEvent {
             }),
         }),
         TaskEvent::ImeEditor { task_id, editor } => Event::ImeEditor(editor.to_wire(task_id)),
+        TaskEvent::PinShortcut(request) => Event::PinShortcut(pin_request_to_wire(request)),
     };
     types::TaskEvent { body: Some(body) }
 }
@@ -1667,6 +1714,7 @@ fn event_from_wire(event: types::TaskEvent) -> Option<TaskEvent> {
             let (task_id, editor) = ImeEditor::from_wire(&editor).ok()?;
             TaskEvent::ImeEditor { task_id, editor }
         }
+        Event::PinShortcut(request) => TaskEvent::PinShortcut(pin_request_from_wire(request)?),
     })
 }
 
@@ -1688,7 +1736,8 @@ fn tasks_to_wire(events: Vec<TaskEvent>) -> types::Tasks {
             TaskEvent::Installed(apps) => tasks.installed = Some(installed_to_wire(Some(apps))),
             TaskEvent::Removed { .. }
             | TaskEvent::ImeCursor { .. }
-            | TaskEvent::ImeEditor { .. } => {}
+            | TaskEvent::ImeEditor { .. }
+            | TaskEvent::PinShortcut(_) => {}
         }
     }
     tasks
@@ -4956,6 +5005,20 @@ impl HostApiService {
                     package_name: stop.package_name,
                 },
             ),
+            Some(request::Body::LaunchShortcut(launch)) => self.request(
+                peer,
+                TaskRequest::LaunchShortcut {
+                    package_name: launch.package_name,
+                    shortcut_id: launch.shortcut_id,
+                },
+            ),
+            Some(request::Body::AnswerPinShortcut(answer)) => self.request(
+                peer,
+                TaskRequest::AnswerPinShortcut {
+                    request_id: answer.request_id,
+                    accepted: answer.accepted,
+                },
+            ),
             Some(request::Body::ResizeTask(resize)) => {
                 let started = Instant::now();
                 let answer = self.request(
@@ -5091,6 +5154,8 @@ impl HostApiService {
                         | request::Body::WatchLog(_)
                         | request::Body::CollectDiagnostics(_)
                         | request::Body::StopApp(_)
+                        | request::Body::LaunchShortcut(_)
+                        | request::Body::AnswerPinShortcut(_)
                         | request::Body::WatchLocation(_)
                         | request::Body::ServeLanguageServices(_)
                         | request::Body::SetSystemSettings(_)
@@ -7277,7 +7342,41 @@ impl HostApiClient {
             } => self.set_task_caption(*task_id, *height, *start_width, *end_width),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
             TaskRequest::StopApp { package_name } => self.stop_app(package_name),
+            TaskRequest::LaunchShortcut {
+                package_name,
+                shortcut_id,
+            } => self.launch_shortcut(package_name, shortcut_id),
+            TaskRequest::AnswerPinShortcut {
+                request_id,
+                accepted,
+            } => self.answer_pin_shortcut(*request_id, *accepted),
         }
+    }
+
+    /// Asks the caller's Android to start one of an app's shortcuts in a task of its own, as
+    /// its jump list task or desktop shortcut does.
+    pub fn launch_shortcut(
+        &mut self,
+        package_name: &str,
+        shortcut_id: &str,
+    ) -> Result<(), ClientError> {
+        self.done(request::Body::LaunchShortcut(types::LaunchShortcut {
+            package_name: package_name.into(),
+            shortcut_id: shortcut_id.into(),
+        }))
+    }
+
+    /// Gives the caller's Android the user's answer to an app's request to put a shortcut on
+    /// the desktop.
+    pub fn answer_pin_shortcut(
+        &mut self,
+        request_id: u32,
+        accepted: bool,
+    ) -> Result<(), ClientError> {
+        self.done(request::Body::AnswerPinShortcut(types::AnswerPinShortcut {
+            request_id,
+            accepted,
+        }))
     }
 
     /// Watches the app tasks of the caller's Android. The connection carries nothing else

@@ -2813,6 +2813,80 @@ fn fr25_dsa_apps_run_as_arm_is_parsed() {
 }
 
 #[test]
+fn fr7_dsa_apps_shortcut_and_desktop_shortcut_are_parsed() {
+    use dsa_cli::AppsAction;
+    assert_eq!(
+        parse(&args("apps shortcut com.example.chat new-chat"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::Shortcut(
+            "com.example.chat".into(),
+            "new-chat".into()
+        ))
+    );
+    assert_eq!(
+        parse(&args("apps desktop-shortcut com.example.chat --json"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::DesktopShortcut("com.example.chat".into()))
+    );
+    assert!(parse(&args("apps shortcut com.example.chat")).is_err());
+    assert!(parse(&args("apps shortcut not/a/package new-chat")).is_err());
+    assert!(parse(&args("apps desktop-shortcut")).is_err());
+}
+
+#[test]
+fn fr7_dsa_apps_shortcut_starts_the_shortcut_in_the_users_android() {
+    use dsa_host_core::tasks::TaskRequest;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let output = dsa(&endpoint, "apps shortcut com.example.chat new-chat --json");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("\"started\":true"),
+        "{}",
+        stdout(&output)
+    );
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .requests
+        .lock()
+        .unwrap()
+        .contains(&TaskRequest::LaunchShortcut {
+            package_name: "com.example.chat".into(),
+            shortcut_id: "new-chat".into(),
+        }));
+}
+
+#[test]
+fn fr7_dsa_apps_lists_each_apps_shortcuts() {
+    use dsa_host_core::tasks::{AppInfo, AppShortcut};
+    let app = AppInfo {
+        package_name: "com.example.chat".into(),
+        label: "Chat".into(),
+        shortcuts: vec![AppShortcut {
+            id: "new-chat".into(),
+            short_label: "New chat".into(),
+            dynamic: true,
+            icon_png: vec![1, 2, 3],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let listed = dsa_cli::app_json(&app, true);
+    assert_eq!(listed["shortcuts"][0]["id"], "new-chat");
+    assert_eq!(listed["shortcuts"][0]["label"], "New chat");
+    assert_eq!(listed["shortcuts"][0]["in_jump_list"], true);
+    assert_eq!(listed["shortcuts"][0]["pinned"], false);
+    assert_eq!(listed["shortcuts"][0]["icon_png"], "AQID");
+    assert!(dsa_cli::app_json(&app, false)["shortcuts"][0]
+        .get("icon_png")
+        .is_none());
+}
+
+#[test]
 fn fr25_dsa_apps_run_as_arm_asks_before_erasing_data_and_lists_the_switch() {
     let ((listener, _, user), endpoint) = local_pair();
     let androids = Arc::new(FakeAndroids::default());

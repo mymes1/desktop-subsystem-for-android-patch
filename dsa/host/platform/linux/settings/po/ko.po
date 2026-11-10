@@ -414,6 +414,21 @@ msgstr "앱 정보"
 msgid "Permissions, storage and notifications, in Android's settings"
 msgstr "Android 설정의 권한, 저장 공간, 알림"
 
+msgid "Desktop shortcut"
+msgstr "바탕 화면 바로 가기"
+
+msgid "A shortcut on the desktop that opens the app"
+msgstr "앱을 여는 바탕 화면의 바로 가기"
+
+msgid "Create desktop shortcut"
+msgstr "바탕 화면 바로 가기 만들기"
+
+msgid "The desktop shortcut could not be made"
+msgstr "바탕 화면 바로 가기를 만들지 못했습니다"
+
+msgid "{0} is on the desktop."
+msgstr "{0}을(를) 바탕 화면에 두었습니다."
+
 msgid "{0}'s windows follow the new settings from the next one that opens."
 msgstr "{0}의 창은 다음에 열리는 창부터 새 설정을 따릅니다."
 
