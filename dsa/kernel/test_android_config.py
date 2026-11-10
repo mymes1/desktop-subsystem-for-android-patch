@@ -35,6 +35,13 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn(".unlocked_ioctl\t= shmem_file_ioctl,", patch)
         self.assertIn("config MEMFD_ASHMEM_SHIM", patch)
 
+    def test_fr28_both_families_can_redirect_dns_queries_to_the_guests_stub(self):
+        # dsa-channeld --dns-redirect fills a nat OUTPUT chain for IPv4 and IPv6 that sends
+        # port 53 to the daemon's stub, which hands each query to the host's resolver.
+        config = CONFIG.read_text()
+        for option in ["CONFIG_IP_NF_NAT=y", "CONFIG_IP6_NF_NAT=y", "CONFIG_NETFILTER_XT_TARGET_REDIRECT=y"]:
+            self.assertIn(option, config)
+
     def test_fr35_the_su_guard_is_built_in_and_hides_su_by_inode(self):
         # su exists only for the uids the host allows; the guard returns -ENOENT for any
         # other task, so an app that may not ask never finds su (INTENT D28).
