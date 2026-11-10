@@ -1391,6 +1391,68 @@ pub struct AppInfo {
     /// the whole computer, so the level cannot be set. Set it with SetAppRoot.
     #[prost(string, tag = "16")]
     pub root: ::prost::alloc::string::String,
+    /// The app's launcher shortcuts, in the list of installed apps: the static and dynamic ones
+    /// in rank order, then the pinned ones. Empty for a task's app.
+    #[prost(message, repeated, tag = "17")]
+    pub shortcuts: ::prost::alloc::vec::Vec<AppShortcut>,
+}
+/// One of an app's launcher shortcuts in Android: a static one from its manifest, a dynamic
+/// one it published, or one pinned at its request. The host's jump list (Dock menu, desktop
+/// entry actions) shows the static and dynamic ones; a pinned one is a desktop shortcut.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppShortcut {
+    /// Unique within its app.
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub short_label: ::prost::alloc::string::String,
+    /// Empty when the app gave none.
+    #[prost(string, tag = "3")]
+    pub long_label: ::prost::alloc::string::String,
+    /// A square PNG image; empty when the shortcut has none, and the app's icon stands in.
+    #[prost(bytes = "vec", tag = "4")]
+    pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// Lowest first.
+    #[prost(uint32, tag = "5")]
+    pub rank: u32,
+    #[prost(bool, tag = "6")]
+    pub manifest: bool,
+    #[prost(bool, tag = "7")]
+    pub dynamic: bool,
+    #[prost(bool, tag = "8")]
+    pub pinned: bool,
+}
+/// Starts one of an app's shortcuts in the caller's Android as a task in its own window, as
+/// its jump list task or desktop shortcut does. Answered with Done once Android has been
+/// asked.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LaunchShortcut {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub shortcut_id: ::prost::alloc::string::String,
+}
+/// An app of the caller's Android asks for one of its shortcuts on the desktop
+/// (requestPinShortcut). Sent as a TaskEvent to every watcher of the tasks; the window manager
+/// asks the user and answers with AnswerPinShortcut. A request nobody answers lapses.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PinShortcutRequest {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "4")]
+    pub shortcut: ::core::option::Option<AppShortcut>,
+}
+/// The user's answer to a PinShortcutRequest. Answered with Done.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AnswerPinShortcut {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(bool, tag = "2")]
+    pub accepted: bool,
 }
 /// Installs an app of the caller's Android again from the APKs it has there, with its native
 /// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
@@ -1461,7 +1523,7 @@ pub struct InstalledApps {
 /// A change to the tasks of the caller's Android, sent after the answer to WatchTasks.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskEvent {
-    #[prost(oneof = "task_event::Body", tags = "1, 2, 3, 4, 5, 7, 6")]
+    #[prost(oneof = "task_event::Body", tags = "1, 2, 3, 4, 5, 7, 6, 8")]
     pub body: ::core::option::Option<task_event::Body>,
 }
 /// Nested message and enum types in `TaskEvent`.
@@ -1484,6 +1546,10 @@ pub mod task_event {
         /// The apps installed in the caller's Android changed: the whole list, as it is now.
         #[prost(message, tag = "6")]
         Installed(super::InstalledApps),
+        /// An app asks for one of its shortcuts on the desktop. It is passed on as it comes and is
+        /// not part of the tasks a late watcher starts from.
+        #[prost(message, tag = "8")]
+        PinShortcut(super::PinShortcutRequest),
     }
 }
 /// The answer to ListTasks and WatchTasks: the tasks there are now.
@@ -2795,7 +2861,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 46, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 660, 661"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 46, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 660, 661, 680, 681"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2975,6 +3041,10 @@ pub mod request {
         WatchAppAudio(super::WatchAppAudio),
         #[prost(message, tag = "661")]
         SetAppVolume(super::SetAppVolume),
+        #[prost(message, tag = "680")]
+        LaunchShortcut(super::LaunchShortcut),
+        #[prost(message, tag = "681")]
+        AnswerPinShortcut(super::AnswerPinShortcut),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
