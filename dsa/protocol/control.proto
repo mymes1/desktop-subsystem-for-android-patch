@@ -1817,6 +1817,10 @@ message WidgetProvider {
   bool needs_configuration = 12;
   // The name of the app that offers the widget, as a launcher shows it. Empty when unknown.
   string app_label = 13;
+  // Whether the widget can be set up again once placed: it has a configuration activity, and
+  // its app says so (the reconfigurable widget feature). The widget's menu then offers its
+  // settings, which ReconfigureWidget opens.
+  bool reconfigurable = 14;
 }
 
 // Guest to host, from the agent: part of the answer to ListWidgetProviders. Each message is
@@ -1862,6 +1866,26 @@ message WidgetList {
 // with WidgetList.
 message RemoveWidget {
   int32 widget_id = 1;
+}
+
+// Host to guest: the user chose the settings of a placed widget. The agent runs the widget's
+// configuration activity again for the same widget ID, as AddWidget does for a new one (it
+// shows as the app's task window), and answers with WidgetReconfigured once the user is done.
+// When they finish it, the agent describes the widget again (WidgetUpdated) and draws it anew,
+// so the widget shows what they chose.
+message ReconfigureWidget {
+  uint32 request_id = 1;
+  int32 widget_id = 2;
+}
+
+// Guest to host, from the agent: the answer to ReconfigureWidget. `finished` says the user
+// finished the setup; otherwise they canceled it, or it could not start, and `error` says, in
+// words a person can act on, which. The widget stays placed either way.
+message WidgetReconfigured {
+  uint32 request_id = 1;
+  int32 widget_id = 2;
+  bool finished = 3;
+  string error = 4;
 }
 
 // Host to guest: the size of the widget's host window. The agent draws the widget at `width`
@@ -3148,5 +3172,7 @@ message Envelope {
     KeyMintRootKeyRequest keymint_root_key_request = 654;
     KeyMintRootKey keymint_root_key = 655;
     BackupSetting backup_setting = 656;
+    ReconfigureWidget reconfigure_widget = 657;
+    WidgetReconfigured widget_reconfigured = 658;
   }
 }

@@ -235,19 +235,26 @@ after two minutes. `"keep_window_manager": false` turns this off.
   rounded corners, so a widget is never an invisible hole on the desktop. While the pointer
   is over a widget, a small round "More" button fades in at its top right corner, inside
   its rounded corners. Clicking it, or right-clicking the widget, opens the widget's menu:
-  Resize, with the sizes the widget allows, and Remove (in Korean when that is the display
-  language). The menu is a Windows 11 menu drawn by the window manager, with rounded
-  corners, the acrylic backdrop (a solid fill on Windows 10 or with transparency effects
-  off), the light or dark theme, icons and full keyboard use, and UI Automation reads it as
-  a menu. Dragging the More button moves the widget, and so does pressing anywhere on it,
-  holding still for half a second and then dragging; a press that moves sooner stays the
-  widget's own, so its lists scroll and its buttons work. Dragging its edges resizes it.
-  When the user lets go, the service remembers the placement (per user, beside the user's
-  settings, as `users/<user>.widgets.json`) and tells Android the window's size, which the
-  widget draws at. Presses, moves and releases inside the widget go to Android. The widgets
-  come from the settings app's Widgets
-  page, which shows changes made elsewhere through `dsa widgets watch`, or
-  `dsa widgets list|add <provider>|remove <id>`. The
+  Widget settings, for a widget whose app lets it be set up again, Resize, with the sizes
+  the widget allows, and Remove (in Korean when that is the display language). The menu is
+  a Windows 11 menu drawn by the window manager, with rounded corners, the acrylic backdrop
+  (a solid fill on Windows 10 or with transparency effects off), the light or dark theme,
+  icons and full keyboard use, and UI Automation reads it as a menu. Widget settings opens
+  the widget's setup again as the app's window, and the widget shows what the user chose
+  once they finish. A long press edits the widget as Android's home screen does: a finger
+  or a pen held on it, or the left mouse button held for half a second without moving past
+  the drag threshold. Android's press is cancelled then, so a long press never also clicks.
+  The widget lifts a little over a soft shadow, with an accent border and a handle on each
+  edge it may be resized along; dragging moves it, letting go opens its menu under it, the
+  handles resize it within the widget's minimum and maximum, and Esc, a click anywhere else
+  or the end of a move or a resize ends the edit. A press that moves sooner stays the
+  widget's own, so its lists scroll and its buttons work. Dragging the More button also
+  moves the widget, and dragging its edges resizes it. When the user lets go, the service
+  remembers the placement (per user, beside the user's settings, as
+  `users/<user>.widgets.json`) and tells Android the window's size, which the widget draws
+  at. Presses, moves and releases inside the widget go to Android. The widgets come from the
+  settings app's Widgets page, which shows changes made elsewhere through
+  `dsa widgets watch`, or `dsa widgets list|add <provider>|settings <id>|remove <id>`. The
   window manager starts at sign-in and starts Android then, so the first app opened after
   the computer starts does not wait for a boot and remembered widgets come back.
 - It owns no window. Each Android app task shows in a window of the app's own window

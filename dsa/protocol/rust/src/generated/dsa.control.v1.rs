@@ -1895,6 +1895,11 @@ pub struct WidgetProvider {
     /// The name of the app that offers the widget, as a launcher shows it. Empty when unknown.
     #[prost(string, tag = "13")]
     pub app_label: ::prost::alloc::string::String,
+    /// Whether the widget can be set up again once placed: it has a configuration activity, and
+    /// its app says so (the reconfigurable widget feature). The widget's menu then offers its
+    /// settings, which ReconfigureWidget opens.
+    #[prost(bool, tag = "14")]
+    pub reconfigurable: bool,
 }
 /// Guest to host, from the agent: part of the answer to ListWidgetProviders. Each message is
 /// kept under 256 KiB, so a long list comes in several; `complete` marks the last.
@@ -1952,6 +1957,32 @@ pub struct WidgetList {
 pub struct RemoveWidget {
     #[prost(int32, tag = "1")]
     pub widget_id: i32,
+}
+/// Host to guest: the user chose the settings of a placed widget. The agent runs the widget's
+/// configuration activity again for the same widget ID, as AddWidget does for a new one (it
+/// shows as the app's task window), and answers with WidgetReconfigured once the user is done.
+/// When they finish it, the agent describes the widget again (WidgetUpdated) and draws it anew,
+/// so the widget shows what they chose.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReconfigureWidget {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(int32, tag = "2")]
+    pub widget_id: i32,
+}
+/// Guest to host, from the agent: the answer to ReconfigureWidget. `finished` says the user
+/// finished the setup; otherwise they canceled it, or it could not start, and `error` says, in
+/// words a person can act on, which. The widget stays placed either way.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WidgetReconfigured {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(int32, tag = "2")]
+    pub widget_id: i32,
+    #[prost(bool, tag = "3")]
+    pub finished: bool,
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
 }
 /// Host to guest: the size of the widget's host window. The agent draws the widget at `width`
 /// by `height` pixels at `density_dpi` (96 at a scale of 100%), and tells the widget's app
@@ -3126,7 +3157,7 @@ pub struct SpellingResult {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 106, 107, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 106, 107, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656, 657, 658"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3506,6 +3537,10 @@ pub mod envelope {
         KeymintRootKey(super::KeyMintRootKey),
         #[prost(message, tag = "656")]
         BackupSetting(super::BackupSetting),
+        #[prost(message, tag = "657")]
+        ReconfigureWidget(super::ReconfigureWidget),
+        #[prost(message, tag = "658")]
+        WidgetReconfigured(super::WidgetReconfigured),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

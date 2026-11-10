@@ -848,6 +848,10 @@ pub struct WidgetProvider {
     /// The name of the app that offers the widget, as a launcher shows it. Empty when unknown.
     #[prost(string, tag = "13")]
     pub app_label: ::prost::alloc::string::String,
+    /// Whether a placed widget can be set up again (ReconfigureWidget): its app says so and it
+    /// has a setup. Its menu offers its settings only then.
+    #[prost(bool, tag = "14")]
+    pub reconfigurable: bool,
 }
 /// The answer to ListWidgetProviders, in label order.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -866,6 +870,16 @@ pub struct AddWidget {
 /// Removes a widget: Android forgets it, its window closes, and its place is forgotten.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RemoveWidget {
+    #[prost(int32, tag = "1")]
+    pub widget_id: i32,
+}
+/// Opens the setup of a placed widget whose app says it can be set up again, as the app's
+/// window, for the same widget. The answer waits for the user: the Widget once they finish the
+/// setup, which the widget then shows, or ERROR_CODE_WIDGET_REFUSED with the reason when they
+/// cancel it, when it could not start, or when the widget cannot be set up again. The widget
+/// stays where it is either way.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReconfigureWidget {
     #[prost(int32, tag = "1")]
     pub widget_id: i32,
 }
@@ -2781,7 +2795,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 660, 661"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 46, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 660, 661"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2843,6 +2857,8 @@ pub mod request {
         AddWidget(super::AddWidget),
         #[prost(message, tag = "31")]
         RemoveWidget(super::RemoveWidget),
+        #[prost(message, tag = "46")]
+        ReconfigureWidget(super::ReconfigureWidget),
         #[prost(message, tag = "32")]
         ListWidgets(super::ListWidgets),
         #[prost(message, tag = "33")]

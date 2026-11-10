@@ -491,6 +491,14 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not host widgets".into(),
         ))
     }
+    /// Opens a placed widget's setup again and waits for the user to finish it (Ok) or leave
+    /// it (Refused, with the reason).
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        let _ = widget_id;
+        Err(WidgetError::Refused(
+            "this Android does not host widgets".into(),
+        ))
+    }
     /// Tells this Android the size of a widget's window.
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         let _ = (widget_id, size);
@@ -1014,6 +1022,9 @@ impl UserAndroid for Session {
     }
     fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
         Session::remove_widget(self, widget_id).map_err(request_error)
+    }
+    fn reconfigure_widget(&self, widget_id: i32) -> Result<(), WidgetError> {
+        Session::reconfigure_widget(self, widget_id, WIDGET_ADD_WAIT).map_err(widget_error)
     }
     fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
         Session::resize_widget(self, widget_id, size).map_err(request_error)
@@ -4282,6 +4293,53 @@ impl HostApiService {
         }
     }
 
+    fn reconfigure_widget(&self, peer: &Peer, widget_id: i32) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        let Some(provider) = android
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider)
+        else {
+            return error(
+                ErrorCode::UnknownRequest,
+                format!("there is no widget {widget_id}"),
+            );
+        };
+        if !provider.reconfigurable {
+            return error(
+                ErrorCode::WidgetRefused,
+                format!(
+                    "the widget {widget_id} ({}) cannot be set up again; its app offers no settings for it",
+                    provider.provider
+                ),
+            );
+        }
+        eprintln!(
+            "widgets: {} opens the settings of widget {widget_id} ({})",
+            peer.user, provider.provider
+        );
+        if let Err(why) = android.reconfigure_widget(widget_id) {
+            return match why {
+                WidgetError::NotRunning(why) => error(ErrorCode::NotRunning, why),
+                WidgetError::Refused(why) => error(ErrorCode::WidgetRefused, why),
+            };
+        }
+        let provider = android
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider)
+            .unwrap_or(provider);
+        let mut kept = self.placements_of(&peer.user);
+        response::Body::Widget(widget_to_wire(
+            self.placed(&peer.user, widget_id, provider, &mut kept),
+        ))
+    }
+
     fn place_widget(&self, peer: &Peer, place: types::PlaceWidget) -> response::Body {
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -4953,6 +5011,9 @@ impl HostApiService {
             Some(request::Body::EndDrag(end)) => self.end_drag(peer, end),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
             Some(request::Body::RemoveWidget(remove)) => self.remove_widget(peer, remove.widget_id),
+            Some(request::Body::ReconfigureWidget(reconfigure)) => {
+                self.reconfigure_widget(peer, reconfigure.widget_id)
+            }
             Some(request::Body::ListWidgets(_)) => self.list_widgets(peer),
             Some(request::Body::PlaceWidget(place)) => self.place_widget(peer, place),
             Some(request::Body::WidgetPointer(pointer)) => self.widget_pointer(peer, pointer),
@@ -5021,6 +5082,7 @@ impl HostApiService {
                         | request::Body::EndDrag(_)
                         | request::Body::AddWidget(_)
                         | request::Body::RemoveWidget(_)
+                        | request::Body::ReconfigureWidget(_)
                         | request::Body::ListWidgets(_)
                         | request::Body::WatchWidgets(_)
                         | request::Body::PlaceWidget(_)
@@ -7890,6 +7952,25 @@ impl HostApiClient {
         }))
     }
 
+    /// Opens the setup of a placed widget again, as its app's window, and returns the widget
+    /// once the user finishes it, waiting at most `timeout`. A setup the user leaves, or a
+    /// widget that cannot be set up again, is an error with the reason.
+    pub fn reconfigure_widget(
+        &mut self,
+        widget_id: i32,
+        timeout: Duration,
+    ) -> Result<Widget, ClientError> {
+        match self.exchange(
+            request::Body::ReconfigureWidget(types::ReconfigureWidget { widget_id }),
+            timeout,
+        )? {
+            response::Body::Widget(widget) => Ok(widget_from_wire(widget)),
+            _ => Err(ClientError::Malformed(
+                "expected the widget set up again".into(),
+            )),
+        }
+    }
+
     /// The widgets placed on the caller's desktop, and how many places the service keeps.
     pub fn widgets(&mut self) -> Result<(Vec<Widget>, u32), ClientError> {
         match self.exchange(
@@ -8577,6 +8658,7 @@ fn provider_to_wire(provider: &WidgetProvider) -> types::WidgetProvider {
         resize_mode: provider.resize_mode,
         needs_configuration: provider.needs_configuration,
         app_label: provider.app_label.clone(),
+        reconfigurable: provider.reconfigurable,
     }
 }
 
@@ -8595,6 +8677,7 @@ fn provider_from_wire(provider: types::WidgetProvider) -> WidgetProvider {
         resize_mode: provider.resize_mode,
         needs_configuration: provider.needs_configuration,
         app_label: provider.app_label,
+        reconfigurable: provider.reconfigurable,
     }
 }
 

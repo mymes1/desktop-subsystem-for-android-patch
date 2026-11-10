@@ -195,6 +195,12 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         WidgetConfigureActivity.start(context, widgetId, done)
     }
 
+    override fun redraw(widgetId: Int, size: WidgetSize) {
+        // Without its renderer the widget is drawn as new, and its next image goes out.
+        main.post { renderers.remove(widgetId)?.close() }
+        show(widgetId, size)
+    }
+
     override fun show(widgetId: Int, size: WidgetSize) {
         main.post {
             try {
@@ -276,6 +282,7 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             resizeMode = info.resizeMode and (AppWidgetProviderInfo.RESIZE_HORIZONTAL or AppWidgetProviderInfo.RESIZE_VERTICAL),
             needsConfiguration = WidgetInfo.needsSetup(info.configure != null, info.widgetFeatures),
             appLabel = appLabel(info.provider.packageName),
+            reconfigurable = WidgetInfo.canSetUpAgain(info.configure != null, info.widgetFeatures),
         )
     }
 

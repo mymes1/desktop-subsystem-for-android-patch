@@ -846,6 +846,8 @@ pub enum BackgroundRequest {
 enum WidgetAnswer {
     Providers(Vec<WidgetProvider>, bool),
     Added(Result<i32, String>),
+    /// How a widget's setup, opened again, ended: Ok when the user finished it.
+    Reconfigured(Result<(), String>),
 }
 
 /// The widgets the agent hosts, each with what it last showed, and who is watching them,
@@ -3444,7 +3446,7 @@ impl Session {
                             break;
                         }
                     }
-                    Ok(WidgetAnswer::Added(_)) => {}
+                    Ok(WidgetAnswer::Added(_)) | Ok(WidgetAnswer::Reconfigured(_)) => {}
                     Err(_) => {
                         return Err(SessionError::WidgetRefused(format!(
                             "Android did not list its widgets within {} seconds",
@@ -3495,10 +3497,78 @@ impl Session {
                     Ok(WidgetAnswer::Added(Err(why))) => {
                         return Err(SessionError::WidgetRefused(why))
                     }
-                    Ok(WidgetAnswer::Providers(..)) => {}
+                    Ok(WidgetAnswer::Providers(..)) | Ok(WidgetAnswer::Reconfigured(_)) => {}
                     Err(_) => {
                         return Err(SessionError::WidgetRefused(format!(
                             "Android did not place the widget within {} seconds",
+                            timeout.as_secs()
+                        )))
+                    }
+                }
+            }
+        })();
+        self.forget_widget_request(request_id);
+        result
+    }
+
+    /// Opens the setup of a placed widget again, as its app's window, and waits up to
+    /// `timeout` for the user to finish it (Ok) or leave it (WidgetRefused with the reason).
+    /// Only a widget whose app says it can be set up again is asked for; the widget stays
+    /// placed either way, and once the user finishes, the agent describes and draws it anew.
+    /// A press wakes a guest in Doze first, as the setup is a window the user works in.
+    /// Needs an active session.
+    pub fn reconfigure_widget(
+        &self,
+        widget_id: i32,
+        timeout: Duration,
+    ) -> Result<(), SessionError> {
+        let provider = self
+            .widgets()
+            .into_iter()
+            .find(|(id, _)| *id == widget_id)
+            .map(|(_, provider)| provider);
+        match provider {
+            None => {
+                return Err(SessionError::WidgetRefused(format!(
+                    "there is no widget {widget_id}"
+                )))
+            }
+            Some(provider) if !provider.reconfigurable => {
+                return Err(SessionError::WidgetRefused(format!(
+                    "the widget {} cannot be set up again; its app offers no settings for it",
+                    if provider.label.is_empty() {
+                        provider.provider
+                    } else {
+                        provider.label
+                    }
+                )))
+            }
+            Some(_) => {}
+        }
+        let (reply_tx, reply_rx) = mpsc::channel();
+        if self.commands.send(Command::WidgetPressed(reply_tx)).is_ok() {
+            let _ = reply_rx.recv();
+        }
+        let (request_id, answers) = self.widget_request();
+        let result = (|| {
+            self.send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::ReconfigureWidget(control::ReconfigureWidget {
+                    request_id,
+                    widget_id,
+                })),
+            }))?;
+            let deadline = Instant::now() + timeout;
+            loop {
+                let left = deadline.saturating_duration_since(Instant::now());
+                match answers.recv_timeout(left) {
+                    Ok(WidgetAnswer::Reconfigured(Ok(()))) => return Ok(()),
+                    Ok(WidgetAnswer::Reconfigured(Err(why))) => {
+                        return Err(SessionError::WidgetRefused(why))
+                    }
+                    Ok(WidgetAnswer::Providers(..)) | Ok(WidgetAnswer::Added(_)) => {}
+                    Err(_) => {
+                        return Err(SessionError::WidgetRefused(format!(
+                            "the widget's settings did not close within {} seconds",
                             timeout.as_secs()
                         )))
                     }
@@ -6217,6 +6287,16 @@ impl Worker {
                     Err(added.error.chars().take(512).collect())
                 }),
             ),
+            Some(Body::WidgetReconfigured(answer)) => self.shared.widget_answer(
+                answer.request_id,
+                WidgetAnswer::Reconfigured(if answer.finished {
+                    Ok(())
+                } else if answer.error.trim().is_empty() {
+                    Err("the widget's settings were closed without a change".into())
+                } else {
+                    Err(answer.error.chars().take(512).collect())
+                }),
+            ),
             Some(Body::WidgetUpdated(updated)) => self.guest_widget(updated),
             Some(Body::WidgetList(list)) => self.guest_widget_list(list.widget_ids),
             Some(Body::PackageState(state)) => {
@@ -6418,6 +6498,7 @@ impl Worker {
             | Some(Body::ListWidgetProviders(_))
             | Some(Body::AddWidget(_))
             | Some(Body::RemoveWidget(_))
+            | Some(Body::ReconfigureWidget(_))
             | Some(Body::ResizeWidget(_))
             | Some(Body::WidgetPointer(_))
             | Some(Body::AccessibilityWatch(_))
