@@ -653,6 +653,47 @@ fn fr26_the_host_hears_no_location_is_wanted_when_the_gnss_hal_dies() {
 }
 
 #[test]
+fn fr36_the_host_hears_what_the_gnss_hal_and_the_network_provider_want_together() {
+    let (router, host) = router();
+    let gnss = router.subscribe(GNSS_HAL, Arc::new(Recorder::default()));
+    let agent = router.subscribe(AGENT, Arc::new(Recorder::default()));
+
+    // The agent's network location provider asks first, then the GNSS HAL more often.
+    router
+        .from_guest(AGENT, location_request(true, 5000))
+        .unwrap();
+    router
+        .from_guest(GNSS_HAL, location_request(true, 1000))
+        .unwrap();
+    assert_eq!(
+        apart_from_boot(&host),
+        vec![location_request(true, 5000), location_request(true, 1000)]
+    );
+
+    // The GNSS HAL stops: the network provider still wants one, at its own interval.
+    router
+        .from_guest(GNSS_HAL, location_request(false, 0))
+        .unwrap();
+    assert_eq!(apart_from_boot(&host), vec![location_request(true, 5000)]);
+
+    // A host that connects again learns it.
+    router.host_connected();
+    assert_eq!(apart_from_boot(&host), vec![location_request(true, 5000)]);
+
+    // The GNSS HAL asks again and dies: the host goes back to the provider's interval.
+    router
+        .from_guest(GNSS_HAL, location_request(true, 1000))
+        .unwrap();
+    host.try_iter().count();
+    assert!(router.remove(gnss));
+    assert_eq!(apart_from_boot(&host), vec![location_request(true, 5000)]);
+
+    // Once the agent is gone too, none is wanted.
+    assert!(router.remove(agent));
+    assert_eq!(apart_from_boot(&host), vec![location_request(false, 0)]);
+}
+
+#[test]
 fn fr30_the_hosts_controllers_stop_at_the_daemon_and_the_system_settings_reach_the_agent() {
     use dsa_guest_channeld::gamepad::{GamepadDevices, InputEvent, PadMaker, VirtualPad};
     use dsa_protocol::control::{GamepadConnected, GamepadState, SystemSettings};

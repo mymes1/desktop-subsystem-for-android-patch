@@ -80,6 +80,8 @@ windows-future = "0.3"
 windows-numerics = "0.3"
 # The COM objects of each task window's UI Automation tree: #[implement] names this crate.
 windows-core = "0.62"
+# The list of shared files handed to Windows' share window.
+windows-collections = "0.3"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     # ReleaseStgMedium, for files dropped on a task window.
@@ -137,6 +139,15 @@ windows = { version = "0.62", features = [
     "Win32_Media_Audio",
     # Windows' media controls for the media sessions of the user's Android.
     "Media",
+    # Speech and spelling for the user's Android: Windows' voices, speech recognition and
+    # spell checker.
+    "Media_SpeechSynthesis",
+    "Media_SpeechRecognition",
+    "Media_Core",
+    "Globalization",
+    "Win32_Globalization",
+    # Windows' share window, for what apps in the user's Android share with the PC.
+    "ApplicationModel_DataTransfer",
 ] }
 
 [build-dependencies]

@@ -22,7 +22,11 @@
 //! - [`keys`]: key input in a task's window.
 //! - [`power`]: the host computer's power, which each guest's battery state follows.
 //! - [`power_hints`]: the guest's power hints, and how hard the host runs its processors.
-//! - [`location`]: the host's location, which the guest's GNSS HAL gives its apps.
+//! - [`location`]: the host's location, which the guest's GNSS HAL and its network location
+//!   provider give its apps.
+//! - [`geocode`]: address lookups of the guest's apps, answered by the host from the
+//!   administrative boundaries it keeps ([`boundaries`]).
+//! - [`share`]: what the guest's apps share with the host's share UI ("Share on PC").
 //! - [`links`]: web links apps in the guest open, which the host opens in its browser.
 //! - [`apk_info`]: what an APK on the host says about itself (its name, icon, version,
 //!   permissions and signer), read from the file before Android sees it, and
@@ -75,6 +79,7 @@ pub mod audio;
 pub mod background;
 pub mod backup;
 pub mod bootconfig;
+pub mod boundaries;
 pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;
@@ -90,6 +95,7 @@ pub mod files;
 pub mod files_door;
 pub mod gamepads;
 pub mod gapps;
+pub mod geocode;
 pub mod guest_display;
 pub mod guest_log;
 pub mod guest_log_api;
@@ -106,6 +112,7 @@ pub mod input;
 pub mod input_trace;
 pub mod keymint_root;
 pub mod keys;
+pub mod language;
 pub mod links;
 pub mod location;
 pub mod memory;
@@ -122,6 +129,7 @@ pub mod root_elevation;
 pub mod sensors;
 pub mod session;
 pub mod settings;
+pub mod share;
 pub mod system_settings;
 pub mod tasks;
 pub mod touch_gestures;

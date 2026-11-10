@@ -7,11 +7,10 @@
 # their generated files start to conflict or go stale. Forks are never touched: their
 # token cannot push, and their code is not run with a token that can.
 #
-# What it does to one branch is .github/scripts/protocol/regenerate.sh. The pull request
-# runs a push made with the workflow token gets are held for approval ("action required")
-# and run no job, so after pushing it starts the test workflows on the branch itself. Those
-# runs test the same commit, so their checks are the ones that show on the pull request. Those runs are not pull request events, so they never start this workflow
-# again; and a pull request whose last commit is already a regeneration is skipped.
+# What it does to one branch is .github/scripts/protocol/regenerate.sh. It starts no tests
+# on the branch: tests run only on develop, once the branch is merged, because a test run
+# on every open branch after each push to develop held the runners for hours. A pull
+# request whose last commit is already a regeneration is skipped.
 
 name: Protocol sync
 
@@ -96,11 +95,6 @@ jobs:
             if bash "$RUNNER_TEMP/regenerate.sh" "$branch" "$base" < /dev/null > "$RUNNER_TEMP/out" 2>&1; then
               cat "$RUNNER_TEMP/out"
               result="$(tail -1 "$RUNNER_TEMP/out")"
-              if [[ "$result" == pushed ]]; then
-                for workflow in test.yml test-image.yml test-installer.yml; do
-                  gh workflow run "$workflow" --repo "$REPO" --ref "$branch" < /dev/null || failed=1
-                done
-              fi
             else
               cat "$RUNNER_TEMP/out"
               result="failed"

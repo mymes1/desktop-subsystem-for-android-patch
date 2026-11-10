@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.HandlerThread
 import android.os.Process
 import io.github.thisisthepy.dsa.agent.Agent
+import io.github.thisisthepy.dsa.agent.R
 import io.github.thisisthepy.dsa.agent.trace.FrameStatsTrace
 import io.github.thisisthepy.dsa.agent.trace.InputTrace
 import io.github.thisisthepy.dsa.agent.trace.SurfaceFlingerTrace
@@ -102,6 +103,18 @@ class AgentApplication : Application() {
             wifi = AndroidWifi(this),
             dragCatcher = dragCatcher,
             backupManager = AndroidBackupManager(this, log),
+            languageSetup = AndroidLanguageServicesSetup(this),
+            shareNotice = { reason ->
+                val main = android.os.Handler(mainLooper)
+                main.post {
+                    val text = if (reason.isBlank()) {
+                        getString(R.string.share_unavailable)
+                    } else {
+                        getString(R.string.share_failed, reason)
+                    }
+                    android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show()
+                }
+            },
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }

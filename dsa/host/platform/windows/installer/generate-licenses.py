@@ -687,8 +687,10 @@ PART_TITLES = {
     "graphics": "Host graphics path (gfxstream_backend.dll)",
     "guest": "Guest image (vm\\bzImage and the Android image)",
     "linux": "Linux host's VM (/usr/lib/dsa/bin/crosvm and passt)",
+    "data": "Address data (geodata\\address-boundaries.bin, /usr/lib/dsa/geodata, "
+            "DSA.app/Contents/Resources/geodata)",
 }
-DISTRIBUTIONS = {"linked", "build-only", "aggregate", "separate-program"}
+DISTRIBUTIONS = {"linked", "build-only", "aggregate", "separate-program", "data"}
 
 REPO_URL = "https://github.com/thisisthepy/desktop-subsystem-for-android"
 
@@ -709,7 +711,9 @@ def component_problems(component: dict, policy: dict) -> list:
 
     A licence from the allow list is always fine. A weak copyleft licence is fine for a
     component shipped unmodified. A GPL licence is fine only for a separate program with a
-    source shipped beside it in the same release.
+    source shipped beside it in the same release. A data licence (policy.data: attribution
+    licences for map data) is fine only for data that no program links (distribution =
+    "data"), and only with the attribution it asks for (`notice`).
     """
     name = component.get("name", "<unnamed>")
     problems = [f"{name}: has no {key}" for key in ("name", "license", "part", "distribution", "source")
@@ -724,6 +728,7 @@ def component_problems(component: dict, policy: dict) -> list:
     allow = set(policy.get("allow", []))
     weak = set(policy.get("weak_copyleft", []))
     separate = set(policy.get("separate_program", []))
+    data = set(policy.get("data", []))
 
     def ok(token: str) -> bool:
         if token in allow:
@@ -732,6 +737,8 @@ def component_problems(component: dict, policy: dict) -> list:
             return component.get("modified") is False
         if token in separate:
             return component["distribution"] == "separate-program" and bool(component.get("shipped_source"))
+        if token in data:
+            return component["distribution"] == "data" and bool(component.get("notice"))
         return False
 
     expr = component["license"]
@@ -747,6 +754,9 @@ def component_problems(component: dict, policy: dict) -> list:
             problems.append(
                 f"{name}: '{expr}' is allowed only for a separate program whose source is shipped beside it "
                 "(distribution = \"separate-program\" and shipped_source)")
+        elif any(t in data for t in ids):
+            problems.append(f"{name}: '{expr}' is allowed only for data (distribution = \"data\") "
+                            "with its attribution (notice)")
         elif any(t in weak for t in ids):
             problems.append(f"{name}: '{expr}' is allowed only for a component shipped unmodified (modified = false)")
         else:

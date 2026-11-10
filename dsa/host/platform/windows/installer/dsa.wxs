@@ -97,6 +97,7 @@
             <Directory Id="INSTALLFOLDER" Name="DSA">
                 <Directory Id="VMFOLDER" Name="vm" />
                 <Directory Id="LICENSESFOLDER" Name="licenses" />
+                <Directory Id="GEODATAFOLDER" Name="geodata" />
                 <Directory Id="SETTINGSFOLDER" Name="settings" />
             </Directory>
         </StandardDirectory>
@@ -529,6 +530,17 @@
             </Component>
         </ComponentGroup>
 
+        <!-- The address data: the administrative boundaries the window manager turns Android's
+             positions into addresses with, and the attribution their licences ask for. -->
+        <ComponentGroup Id="AddressData" Directory="GEODATAFOLDER">
+            <Component Id="AddressBoundaries" Guid="*">
+                <File Id="AddressBoundaries" Source="$(SourceDir)\geodata\address-boundaries.bin" KeyPath="yes" />
+            </Component>
+            <Component Id="AddressDataNotice" Guid="*">
+                <File Id="AddressDataNotice" Source="$(SourceDir)\geodata\NOTICE.txt" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
         <!-- The kernel: readable by everyone and by the VMs. -->
         <ComponentGroup Id="Kernel" Directory="VMFOLDER">
             <Component Id="Kernel" Guid="*">
@@ -700,6 +712,7 @@
             <ComponentGroupRef Id="Service" />
             <ComponentGroupRef Id="SettingsApp" />
             <ComponentGroupRef Id="Licenses" />
+            <ComponentGroupRef Id="AddressData" />
             <ComponentGroupRef Id="Data" />
             <ComponentGroupRef Id="Kernel" />
             <?ifdef ImageVersion ?>

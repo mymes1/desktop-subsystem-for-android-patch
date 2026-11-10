@@ -768,6 +768,128 @@ pub struct LocationFix {
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
 }
+/// Guest to host, from the agent, which is the guest's geocode provider: look up addresses
+/// for an app's Geocoder. A forward lookup names a place (`query`); a reverse lookup gives a
+/// position. The host answers each request with GeocodeResult, from the host's own geocoding
+/// service, so the guest holds no geocoding engine or data of its own.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeRequest {
+    /// The agent's number for the request, unique while its connection lasts.
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// True for a reverse lookup (a position to addresses), false for a forward one.
+    #[prost(bool, tag = "2")]
+    pub reverse: bool,
+    /// Forward: the name or address of the place, as the app gave it.
+    #[prost(string, tag = "3")]
+    pub query: ::prost::alloc::string::String,
+    /// Reverse: the position.
+    #[prost(double, tag = "4")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "5")]
+    pub longitude_degrees: f64,
+    /// Forward: the box the app prefers results in, when `has_bounds`.
+    #[prost(bool, tag = "6")]
+    pub has_bounds: bool,
+    #[prost(double, tag = "7")]
+    pub lower_left_latitude: f64,
+    #[prost(double, tag = "8")]
+    pub lower_left_longitude: f64,
+    #[prost(double, tag = "9")]
+    pub upper_right_latitude: f64,
+    #[prost(double, tag = "10")]
+    pub upper_right_longitude: f64,
+    /// The most addresses the app takes, from 1.
+    #[prost(uint32, tag = "11")]
+    pub max_results: u32,
+    /// The language the app wants the addresses in, as a BCP 47 tag ("ko-KR"); empty for the
+    /// host's own.
+    #[prost(string, tag = "12")]
+    pub language: ::prost::alloc::string::String,
+}
+/// One address a geocoding lookup found. Empty strings are parts the service did not give.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeAddress {
+    /// The address as lines a person reads, in order.
+    #[prost(string, repeated, tag = "1")]
+    pub address_lines: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The place's own name, such as a building or a landmark.
+    #[prost(string, tag = "2")]
+    pub feature_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub premises: ::prost::alloc::string::String,
+    /// The house number and the street.
+    #[prost(string, tag = "4")]
+    pub sub_thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub sub_locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub sub_admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub postal_code: ::prost::alloc::string::String,
+    /// ISO 3166-1 alpha-2, upper case.
+    #[prost(string, tag = "11")]
+    pub country_code: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub country_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub has_position: bool,
+    #[prost(double, tag = "14")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "15")]
+    pub longitude_degrees: f64,
+}
+/// Host to guest, to the agent: the answer to a GeocodeRequest. `message` says why, in words
+/// for the guest's log, when the status is not OK.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "GeocodeStatus", tag = "2")]
+    pub status: i32,
+    #[prost(message, repeated, tag = "3")]
+    pub addresses: ::prost::alloc::vec::Vec<GeocodeAddress>,
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent's "Share on PC" target: an app shared text, links or files
+/// with the host. The host shows its own share UI with the same content. Each file is read
+/// with DragRead, as a drag's files are, with `share_id` as the drag's ID, and the share ends
+/// with DragEnd, which gives back the guest's access to the files. The host answers with
+/// ShareResult.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareToHost {
+    /// Unique among the shares and drags of one connection.
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    /// The subject or title the app gave; empty when none.
+    #[prost(string, tag = "2")]
+    pub title: ::prost::alloc::string::String,
+    /// The app that shared, and its name as the guest shows it; empty when unknown.
+    #[prost(string, tag = "3")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub app_label: ::prost::alloc::string::String,
+    /// The text and links (`is_text`) and the files, in the order the app gave them.
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Host to guest, to the agent: what became of a ShareToHost.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareResult {
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    #[prost(enumeration = "ShareOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
 /// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 /// controller's deep idle state). The host takes the device not to be in Doze when the agent
 /// connects; the agent sends this on each change after that.
@@ -2510,271 +2632,204 @@ pub struct GamepadRumble {
     #[prost(uint32, tag = "4")]
     pub duration_ms: u32,
 }
-/// Guest to host, from the agent's backup transport: one piece of an upload, at most 256 KiB,
-/// in order from offset 0. Each piece is answered with BackupAnswer before the next is sent.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupUpload {
-    /// The upload's number, the agent's own, unique while the agent runs.
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(uint64, tag = "2")]
-    pub offset: u64,
-    #[prost(bytes = "vec", tag = "3")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// Guest to host: the upload `request_id` is whole. The host keeps it as the package's data of
-/// that kind, encrypted, and answers BackupAnswer. An upload of size 0 needs no BackupUpload.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupCommit {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(string, tag = "2")]
-    pub package: ::prost::alloc::string::String,
-    #[prost(enumeration = "BackupDataKind", tag = "3")]
-    pub kind: i32,
-    #[prost(uint64, tag = "4")]
-    pub size: u64,
-    /// KEY_VALUE only: the records change what the host keeps for the package, rather than
-    /// replace it.
-    #[prost(bool, tag = "5")]
-    pub incremental: bool,
-    /// The package's version code when it was backed up.
-    #[prost(int64, tag = "6")]
-    pub version_code: i64,
-    /// APK only: the file's name in the package's install, such as base.apk or
-    /// split_config.en.apk.
-    #[prost(string, tag = "7")]
-    pub apk_name: ::prost::alloc::string::String,
-    /// APK only: every APK name of the package at this version, so the host drops the files of
-    /// an older version that this one no longer has.
-    #[prost(string, repeated, tag = "8")]
-    pub apk_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// Guest to host: drops the upload or the read `request_id` under way, and keeps nothing of it.
+/// Guest to host: asks for the host's voices. The host answers with SpeechVoices.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupDiscard {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-}
-/// Guest to host: removes everything the backup holds for a package (the backup manager's
-/// clearBackupData). Answered with BackupAnswer.
+pub struct ListSpeechVoices {}
+/// One of the host's voices.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupClear {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(string, tag = "2")]
-    pub package: ::prost::alloc::string::String,
-}
-/// Host to guest: the answer to BackupUpload, BackupCommit and BackupClear.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupAnswer {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "BackupStatus", tag = "2")]
-    pub status: i32,
-    /// Why it failed, in words a person can act on; empty when it did not.
-    #[prost(string, tag = "3")]
-    pub message: ::prost::alloc::string::String,
-    /// BackupCommit of KEY_VALUE or FULL only: the host holds no APKs of the package at this
-    /// version, so the agent sends them.
-    #[prost(bool, tag = "4")]
-    pub apks_wanted: bool,
-}
-/// Guest to host: what the backup holds, for a restore. Answered with BackupContents.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupQuery {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-}
-/// One package in the backup.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupPackage {
+pub struct SpeechVoice {
+    /// The host's name for the voice, which SpeakText gives back. Opaque to the guest.
     #[prost(string, tag = "1")]
-    pub package: ::prost::alloc::string::String,
-    #[prost(bool, tag = "2")]
-    pub key_value: bool,
-    #[prost(bool, tag = "3")]
-    pub full: bool,
-    #[prost(int64, tag = "4")]
-    pub version_code: i64,
-    /// The APK files the backup holds for the package at version_code; empty when it holds none.
-    #[prost(string, repeated, tag = "5")]
-    pub apk_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// When its data was last backed up, in milliseconds since the Unix epoch.
-    #[prost(int64, tag = "6")]
-    pub backed_up_unix_ms: i64,
-    /// The bytes its data and APKs take, before encryption.
-    #[prost(uint64, tag = "7")]
-    pub size: u64,
-}
-/// Host to guest: what the backup holds. There is one restore set, the user's backup folder.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BackupContents {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "BackupStatus", tag = "2")]
-    pub status: i32,
-    #[prost(string, tag = "3")]
-    pub message: ::prost::alloc::string::String,
-    /// The restore set's token: the same for the folder wherever it is moved.
-    #[prost(uint64, tag = "4")]
-    pub token: u64,
-    /// The restore set's name, as Android shows it: the computer it was made on.
-    #[prost(string, tag = "5")]
-    pub name: ::prost::alloc::string::String,
-    #[prost(message, repeated, tag = "6")]
-    pub packages: ::prost::alloc::vec::Vec<BackupPackage>,
-}
-/// Guest to host: the next piece of a package's data, from `offset`. Answered with
-/// BackupFetchData. The agent asks for each piece after the last one came, so the host never
-/// sends faster than the agent reads.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupFetch {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(uint64, tag = "2")]
-    pub token: u64,
-    #[prost(string, tag = "3")]
-    pub package: ::prost::alloc::string::String,
-    #[prost(enumeration = "BackupDataKind", tag = "4")]
-    pub kind: i32,
-    /// APK only: which file.
-    #[prost(string, tag = "5")]
-    pub apk_name: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "6")]
-    pub offset: u64,
-}
-/// Host to guest: one piece of the data asked for, at most 256 KiB, or why there is none.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupFetchData {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "BackupStatus", tag = "2")]
-    pub status: i32,
-    #[prost(string, tag = "3")]
-    pub message: ::prost::alloc::string::String,
-    /// The whole data's size.
-    #[prost(uint64, tag = "4")]
-    pub size: u64,
-    #[prost(uint64, tag = "5")]
-    pub offset: u64,
-    #[prost(bytes = "vec", tag = "6")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-    /// This piece reaches the end of the data.
-    #[prost(bool, tag = "7")]
-    pub last: bool,
-}
-/// Host to guest, to the agent: back up every app now, as `bmgr backupnow --all` does.
-/// Answered with BackupRunResult once the backup manager has finished.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupRun {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-}
-/// Host to guest, to the agent: restore the packages from the restore set `token`. The host
-/// has installed the apps the backup holds APKs of first. Answered with BackupRunResult.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupRestore {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(uint64, tag = "2")]
-    pub token: u64,
-    #[prost(string, repeated, tag = "3")]
-    pub packages: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// Guest to host: how a BackupRun or a BackupRestore ended.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupRunResult {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "BackupStatus", tag = "2")]
-    pub status: i32,
-    #[prost(string, tag = "3")]
-    pub message: ::prost::alloc::string::String,
-    /// The packages backed up or restored, and those that failed.
-    #[prost(uint32, tag = "4")]
-    pub succeeded: u32,
-    #[prost(uint32, tag = "5")]
-    pub failed: u32,
-}
-/// Host to guest, to the agent: whether the user turned backup to the host on. Sent each time
-/// the agent connects and whenever the user changes it. Until the agent hears it is on, it keeps
-/// Android's backup manager from backing up to the host (backup off, automatic restore off),
-/// so a user who never turned backup on has nothing backed up and nothing scheduled.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupSetting {
-    #[prost(bool, tag = "1")]
-    pub enabled: bool,
-}
-/// Guest to host, from the agent's credential provider: an app asks to make or use a passkey.
-/// What names the app comes from Android's credential manager (CallingAppInfo), never from the
-/// app itself. Answered with PasskeyResponse.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct PasskeyRequest {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "PasskeyOperation", tag = "2")]
-    pub operation: i32,
-    /// The app's request: WebAuthn's PublicKeyCredentialCreationOptionsJSON or
-    /// PublicKeyCredentialRequestOptionsJSON, as Android's credential manager passes it.
-    #[prost(string, tag = "3")]
-    pub request_json: ::prost::alloc::string::String,
-    /// The calling app's package.
-    #[prost(string, tag = "4")]
-    pub package: ::prost::alloc::string::String,
-    /// The SHA-256 of each certificate the calling app is signed with now (its signing
-    /// certificate, or every signer of an app with several).
-    #[prost(bytes = "vec", repeated, tag = "5")]
-    pub signer_sha256: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
-    /// The web origin the credential manager reports, only for a browser the agent recognises
-    /// by its package and signing certificate (a privileged browser, or one the image
-    /// carries); empty for any other app, whose request is checked as an app's.
-    #[prost(string, tag = "6")]
-    pub origin: ::prost::alloc::string::String,
-    /// The hash of the client data a browser made itself; empty when it gave none.
-    #[prost(bytes = "vec", tag = "7")]
-    pub client_data_hash: ::prost::alloc::vec::Vec<u8>,
-    /// The app's name, for the host's prompt.
-    #[prost(string, tag = "8")]
-    pub app_label: ::prost::alloc::string::String,
-}
-/// Host to guest: what became of a PasskeyRequest.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct PasskeyResponse {
-    #[prost(uint64, tag = "1")]
-    pub request_id: u64,
-    #[prost(enumeration = "PasskeyStatus", tag = "2")]
-    pub status: i32,
-    /// OK only: WebAuthn's RegistrationResponseJSON or AuthenticationResponseJSON.
-    #[prost(string, tag = "3")]
-    pub response_json: ::prost::alloc::string::String,
-    /// Why it did not succeed, in words a person can act on.
-    #[prost(string, tag = "4")]
-    pub message: ::prost::alloc::string::String,
-}
-/// Guest to host, on the KeyMint port, from the control daemon after the handshake: the root
-/// key the guest's KeyMint wraps its keys with. Asked once each boot, before Android's storage
-/// is unlocked. Answered with KeyMintRootKey.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct KeyMintRootKeyRequest {}
-/// Host to guest: the KeyMint root key, which the host keeps sealed by the user's credential
-/// store (and the computer's TPM where it has one), so the guest's disk alone never holds it.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct KeyMintRootKey {
-    /// 32 bytes; empty when the host has no root key to give, and KeyMint then keeps the keys
-    /// it made without one.
-    #[prost(bytes = "vec", tag = "1")]
-    pub key: ::prost::alloc::vec::Vec<u8>,
-    /// Why it is empty.
+    pub id: ::prost::alloc::string::String,
+    /// The voice's name as the host shows it, such as "Microsoft Heami".
     #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// The voice's language as a BCP 47 tag, such as "ko-KR".
+    #[prost(string, tag = "3")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// A neural voice that sounds natural, such as Windows' natural voices.
+    #[prost(bool, tag = "4")]
+    pub natural: bool,
+    /// The voice needs the network to speak.
+    #[prost(bool, tag = "5")]
+    pub needs_network: bool,
+}
+/// Host to guest: the host's voices, in answer to ListSpeechVoices, and again whenever the
+/// host's speech service comes or goes. At most 512.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpeechVoices {
+    #[prost(message, repeated, tag = "1")]
+    pub voices: ::prost::alloc::vec::Vec<SpeechVoice>,
+    /// The voice the host speaks with when none is named; empty when it has none.
+    #[prost(string, tag = "2")]
+    pub default_voice_id: ::prost::alloc::string::String,
+    /// Whether the host can speak at all. False when it has no speech synthesis, or no session
+    /// of the user's is open to run it in.
+    #[prost(bool, tag = "3")]
+    pub available: bool,
+}
+/// Guest to host: speaks `text`. The host answers with SpeechAudio pieces, then SpeechDone.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpeakText {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// At most 4000 characters, as Android's TextToSpeech takes.
+    #[prost(string, tag = "2")]
+    pub text: ::prost::alloc::string::String,
+    /// The voice to speak with, from SpeechVoices; empty for the host's voice for the language.
+    #[prost(string, tag = "3")]
+    pub voice_id: ::prost::alloc::string::String,
+    /// The language to speak in as a BCP 47 tag; empty for the host's own.
+    #[prost(string, tag = "4")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// How fast and how high, where 1 is the voice's own. The host keeps them in the range its
+    /// voices can take.
+    #[prost(float, tag = "5")]
+    pub rate: f32,
+    #[prost(float, tag = "6")]
+    pub pitch: f32,
+}
+/// Host to guest: a piece of the spoken text's sound, as 16-bit signed little-endian PCM,
+/// channels interleaved, at most 64 KiB. Every piece of a request has the same format. A host
+/// whose speech service plays the sound itself and gives programs none sends no piece, only
+/// SpeechDone once the sound has played.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpeechAudio {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub sample_rate_hz: u32,
+    #[prost(uint32, tag = "3")]
+    pub channel_count: u32,
+    #[prost(bytes = "vec", tag = "4")]
+    pub pcm: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest: a SpeakText is over. No SpeechAudio of it follows.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpeechDone {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "SpeechOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
+}
+/// Guest to host: stops a SpeakText. The host answers with SpeechDone (STOPPED), unless the
+/// request was already over.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopSpeaking {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Guest to host: listens to the host's microphone and recognises what is said. The host
+/// answers with RecognitionEvent messages until one of kind FINAL or ERROR. The guest sends it
+/// only for an app that holds Android's microphone permission; the host's own microphone
+/// privacy settings apply as well.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StartRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// The language to recognise as a BCP 47 tag; empty for the host's own.
+    #[prost(string, tag = "2")]
+    pub language_tag: ::prost::alloc::string::String,
+    /// Whether the app wants what is recognised while the user still speaks (PARTIAL events).
+    #[prost(bool, tag = "3")]
+    pub partial_results: bool,
+    /// The most alternatives a FINAL event carries; 0 is 1.
+    #[prost(uint32, tag = "4")]
+    pub max_results: u32,
+    /// Whether the app prefers recognition that stays on the computer.
+    #[prost(bool, tag = "5")]
+    pub prefer_offline: bool,
+}
+/// Guest to host: the user has stopped speaking; the host stops listening and sends what it
+/// recognised as the FINAL event.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Guest to host: drops a recognition. The host stops listening and sends nothing more for it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelRecognition {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+}
+/// Host to guest: what became of a StartRecognition so far.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecognitionEvent {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(enumeration = "RecognitionEventKind", tag = "2")]
+    pub kind: i32,
+    /// For PARTIAL, the text so far; for FINAL, the alternatives, best first.
+    #[prost(string, repeated, tag = "3")]
+    pub texts: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// For FINAL, how sure the host is of each alternative, from 0 to 1, in the same order;
+    /// empty when the host does not say.
+    #[prost(float, repeated, tag = "4")]
+    pub confidences: ::prost::alloc::vec::Vec<f32>,
+    /// For ERROR.
+    #[prost(enumeration = "RecognitionError", tag = "5")]
+    pub error: i32,
+    #[prost(string, tag = "6")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Guest to host: checks the spelling of each of `texts`, at most 64 of at most 4096
+/// characters each. The host answers with SpellingResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CheckSpelling {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// The language as a BCP 47 tag, such as "en-US".
+    #[prost(string, tag = "2")]
+    pub language_tag: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub texts: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The most suggestions for each mistake; 0 is 5.
+    #[prost(uint32, tag = "4")]
+    pub max_suggestions: u32,
+}
+/// A word the host's spell checker finds wrong.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SpellingMistake {
+    /// Where the word is in its text, in UTF-16 code units, as Android counts.
+    #[prost(uint32, tag = "1")]
+    pub start: u32,
+    #[prost(uint32, tag = "2")]
+    pub length: u32,
+    /// What to write instead, best first. An empty suggestion means the word is to be deleted,
+    /// as a word written twice.
+    #[prost(string, repeated, tag = "3")]
+    pub suggestions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The host is sure of its first suggestion, as when it would correct the word itself.
+    #[prost(bool, tag = "4")]
+    pub recommended: bool,
+}
+/// The mistakes in one text, in order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpellingText {
+    #[prost(message, repeated, tag = "1")]
+    pub mistakes: ::prost::alloc::vec::Vec<SpellingMistake>,
+}
+/// Host to guest: the mistakes in each text of a CheckSpelling, one SpellingText each, in the
+/// same order.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpellingResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(message, repeated, tag = "2")]
+    pub texts: ::prost::alloc::vec::Vec<SpellingText>,
+    /// False when the host has no spell checker for the language; `texts` is empty then.
+    #[prost(bool, tag = "3")]
+    pub supported: bool,
 }
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633, 634, 635, 636"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3085,39 +3140,37 @@ pub mod envelope {
         #[prost(message, tag = "382")]
         NativeLibraryCrash(super::NativeLibraryCrash),
         #[prost(message, tag = "620")]
-        BackupUpload(super::BackupUpload),
+        ListSpeechVoices(super::ListSpeechVoices),
         #[prost(message, tag = "621")]
-        BackupCommit(super::BackupCommit),
+        SpeechVoices(super::SpeechVoices),
         #[prost(message, tag = "622")]
-        BackupDiscard(super::BackupDiscard),
+        SpeakText(super::SpeakText),
         #[prost(message, tag = "623")]
-        BackupClear(super::BackupClear),
+        SpeechAudio(super::SpeechAudio),
         #[prost(message, tag = "624")]
-        BackupAnswer(super::BackupAnswer),
+        SpeechDone(super::SpeechDone),
         #[prost(message, tag = "625")]
-        BackupQuery(super::BackupQuery),
+        StopSpeaking(super::StopSpeaking),
         #[prost(message, tag = "626")]
-        BackupContents(super::BackupContents),
+        StartRecognition(super::StartRecognition),
         #[prost(message, tag = "627")]
-        BackupFetch(super::BackupFetch),
+        StopRecognition(super::StopRecognition),
         #[prost(message, tag = "628")]
-        BackupFetchData(super::BackupFetchData),
+        CancelRecognition(super::CancelRecognition),
         #[prost(message, tag = "629")]
-        BackupRun(super::BackupRun),
+        RecognitionEvent(super::RecognitionEvent),
         #[prost(message, tag = "630")]
-        BackupRestore(super::BackupRestore),
+        CheckSpelling(super::CheckSpelling),
         #[prost(message, tag = "631")]
-        BackupRunResult(super::BackupRunResult),
-        #[prost(message, tag = "632")]
-        PasskeyRequest(super::PasskeyRequest),
-        #[prost(message, tag = "633")]
-        PasskeyResponse(super::PasskeyResponse),
-        #[prost(message, tag = "634")]
-        KeymintRootKeyRequest(super::KeyMintRootKeyRequest),
-        #[prost(message, tag = "635")]
-        KeymintRootKey(super::KeyMintRootKey),
-        #[prost(message, tag = "636")]
-        BackupSetting(super::BackupSetting),
+        SpellingResult(super::SpellingResult),
+        #[prost(message, tag = "470")]
+        GeocodeRequest(super::GeocodeRequest),
+        #[prost(message, tag = "471")]
+        GeocodeResult(super::GeocodeResult),
+        #[prost(message, tag = "472")]
+        ShareToHost(super::ShareToHost),
+        #[prost(message, tag = "473")]
+        ShareResult(super::ShareResult),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -3693,6 +3746,86 @@ impl LocationAccess {
             "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
             "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
             "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+/// How a geocoding request ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GeocodeStatus {
+    Unspecified = 0,
+    /// The lookup ran. No addresses means the place is not known.
+    Ok = 1,
+    /// The host's geocoding service cannot answer now: no network, or the service failed.
+    Unavailable = 2,
+    /// The user turned the host's geocoding off, or there is no desktop session to ask.
+    Refused = 3,
+    /// Too many lookups in a short time; the service asks the guest to wait.
+    Busy = 4,
+    /// The request itself cannot be answered: an empty name, or a position not on Earth.
+    Invalid = 5,
+}
+impl GeocodeStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GEOCODE_STATUS_UNSPECIFIED",
+            Self::Ok => "GEOCODE_STATUS_OK",
+            Self::Unavailable => "GEOCODE_STATUS_UNAVAILABLE",
+            Self::Refused => "GEOCODE_STATUS_REFUSED",
+            Self::Busy => "GEOCODE_STATUS_BUSY",
+            Self::Invalid => "GEOCODE_STATUS_INVALID",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GEOCODE_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "GEOCODE_STATUS_OK" => Some(Self::Ok),
+            "GEOCODE_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "GEOCODE_STATUS_REFUSED" => Some(Self::Refused),
+            "GEOCODE_STATUS_BUSY" => Some(Self::Busy),
+            "GEOCODE_STATUS_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+/// What became of a share.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareOutcome {
+    Unspecified = 0,
+    /// The host's share UI took the content.
+    Shared = 1,
+    /// The user closed the host's share UI without sharing.
+    Canceled = 2,
+    /// It could not be shared; the message says why.
+    Failed = 3,
+}
+impl ShareOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_OUTCOME_UNSPECIFIED",
+            Self::Shared => "SHARE_OUTCOME_SHARED",
+            Self::Canceled => "SHARE_OUTCOME_CANCELED",
+            Self::Failed => "SHARE_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_OUTCOME_SHARED" => Some(Self::Shared),
+            "SHARE_OUTCOME_CANCELED" => Some(Self::Canceled),
+            "SHARE_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
@@ -4356,164 +4489,150 @@ impl GamepadButton {
         }
     }
 }
-/// What the host says of a request of the agent's backup transport.
+/// How a SpeakText ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum BackupStatus {
+pub enum SpeechOutcome {
     Unspecified = 0,
-    Ok = 1,
-    /// The host could not store or read it; the message says why.
-    Error = 2,
-    /// The package's data is larger than the host keeps for one app.
-    QuotaExceeded = 3,
-    /// The host keeps no backup now: it has no credential store for the key, or the folder was
-    /// made with another key. The message says which, and what to do.
-    NotAvailable = 4,
-    /// The backup holds nothing of that kind for the package.
-    NotFound = 5,
+    /// Every piece of the sound was sent.
+    Done = 1,
+    /// StopSpeaking stopped it.
+    Stopped = 2,
+    /// The host has no voice for the language, or no speech synthesis.
+    Unavailable = 3,
+    /// The host's speech service failed; the message says why.
+    Failed = 4,
 }
-impl BackupStatus {
+impl SpeechOutcome {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Unspecified => "BACKUP_STATUS_UNSPECIFIED",
-            Self::Ok => "BACKUP_STATUS_OK",
-            Self::Error => "BACKUP_STATUS_ERROR",
-            Self::QuotaExceeded => "BACKUP_STATUS_QUOTA_EXCEEDED",
-            Self::NotAvailable => "BACKUP_STATUS_NOT_AVAILABLE",
-            Self::NotFound => "BACKUP_STATUS_NOT_FOUND",
+            Self::Unspecified => "SPEECH_OUTCOME_UNSPECIFIED",
+            Self::Done => "SPEECH_OUTCOME_DONE",
+            Self::Stopped => "SPEECH_OUTCOME_STOPPED",
+            Self::Unavailable => "SPEECH_OUTCOME_UNAVAILABLE",
+            Self::Failed => "SPEECH_OUTCOME_FAILED",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "BACKUP_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
-            "BACKUP_STATUS_OK" => Some(Self::Ok),
-            "BACKUP_STATUS_ERROR" => Some(Self::Error),
-            "BACKUP_STATUS_QUOTA_EXCEEDED" => Some(Self::QuotaExceeded),
-            "BACKUP_STATUS_NOT_AVAILABLE" => Some(Self::NotAvailable),
-            "BACKUP_STATUS_NOT_FOUND" => Some(Self::NotFound),
+            "SPEECH_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SPEECH_OUTCOME_DONE" => Some(Self::Done),
+            "SPEECH_OUTCOME_STOPPED" => Some(Self::Stopped),
+            "SPEECH_OUTCOME_UNAVAILABLE" => Some(Self::Unavailable),
+            "SPEECH_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
 }
-/// The kinds of data a package's backup holds.
+/// What a RecognitionEvent says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum BackupDataKind {
+pub enum RecognitionEventKind {
     Unspecified = 0,
-    /// A key-value backup: records, each a key and its value or its deletion. A record is a
-    /// 32-bit big-endian key length, the key in UTF-8, a 32-bit big-endian value length (-1 for
-    /// a deleted key) and the value.
-    KeyValue = 1,
-    /// A full backup: the tar stream Android's backup manager writes for the package.
-    Full = 2,
-    /// One APK file of the package, so a restore after a data reset can install the app first.
-    Apk = 3,
+    /// The host listens: the user may speak.
+    Ready = 1,
+    /// The host hears speech.
+    SpeechBegan = 2,
+    /// The speech has stopped.
+    SpeechEnded = 3,
+    /// What is recognised so far, while the user still speaks.
+    Partial = 4,
+    /// What was recognised, best first. The recognition is over.
+    Final = 5,
+    /// The recognition failed, for `error`. It is over.
+    Error = 6,
 }
-impl BackupDataKind {
+impl RecognitionEventKind {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Unspecified => "BACKUP_DATA_KIND_UNSPECIFIED",
-            Self::KeyValue => "BACKUP_DATA_KIND_KEY_VALUE",
-            Self::Full => "BACKUP_DATA_KIND_FULL",
-            Self::Apk => "BACKUP_DATA_KIND_APK",
+            Self::Unspecified => "RECOGNITION_EVENT_KIND_UNSPECIFIED",
+            Self::Ready => "RECOGNITION_EVENT_KIND_READY",
+            Self::SpeechBegan => "RECOGNITION_EVENT_KIND_SPEECH_BEGAN",
+            Self::SpeechEnded => "RECOGNITION_EVENT_KIND_SPEECH_ENDED",
+            Self::Partial => "RECOGNITION_EVENT_KIND_PARTIAL",
+            Self::Final => "RECOGNITION_EVENT_KIND_FINAL",
+            Self::Error => "RECOGNITION_EVENT_KIND_ERROR",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "BACKUP_DATA_KIND_UNSPECIFIED" => Some(Self::Unspecified),
-            "BACKUP_DATA_KIND_KEY_VALUE" => Some(Self::KeyValue),
-            "BACKUP_DATA_KIND_FULL" => Some(Self::Full),
-            "BACKUP_DATA_KIND_APK" => Some(Self::Apk),
+            "RECOGNITION_EVENT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "RECOGNITION_EVENT_KIND_READY" => Some(Self::Ready),
+            "RECOGNITION_EVENT_KIND_SPEECH_BEGAN" => Some(Self::SpeechBegan),
+            "RECOGNITION_EVENT_KIND_SPEECH_ENDED" => Some(Self::SpeechEnded),
+            "RECOGNITION_EVENT_KIND_PARTIAL" => Some(Self::Partial),
+            "RECOGNITION_EVENT_KIND_FINAL" => Some(Self::Final),
+            "RECOGNITION_EVENT_KIND_ERROR" => Some(Self::Error),
             _ => None,
         }
     }
 }
-/// Which passkey ceremony an app asks for.
+/// Why a recognition failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum PasskeyOperation {
+pub enum RecognitionError {
     Unspecified = 0,
-    /// Make a new passkey (navigator.credentials.create).
-    Create = 1,
-    /// Sign in with a passkey (navigator.credentials.get).
-    Get = 2,
+    /// Nothing that was said was recognised.
+    NoMatch = 1,
+    /// Nobody spoke before the host stopped waiting.
+    SpeechTimeout = 2,
+    /// The host's privacy settings keep DSA from the microphone, or from speech recognition.
+    Denied = 3,
+    /// The host has no microphone, or it could not be opened.
+    NoMicrophone = 4,
+    /// The host does not recognise the language.
+    LanguageUnsupported = 5,
+    /// The host has no speech recognition, or no session of the user's is open to run it in.
+    Unavailable = 6,
+    /// The host's recognition needs the network, which failed.
+    Network = 7,
+    /// The host is already recognising for another request.
+    Busy = 8,
+    /// Anything else; the message says what.
+    Other = 9,
 }
-impl PasskeyOperation {
+impl RecognitionError {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Unspecified => "PASSKEY_OPERATION_UNSPECIFIED",
-            Self::Create => "PASSKEY_OPERATION_CREATE",
-            Self::Get => "PASSKEY_OPERATION_GET",
+            Self::Unspecified => "RECOGNITION_ERROR_UNSPECIFIED",
+            Self::NoMatch => "RECOGNITION_ERROR_NO_MATCH",
+            Self::SpeechTimeout => "RECOGNITION_ERROR_SPEECH_TIMEOUT",
+            Self::Denied => "RECOGNITION_ERROR_DENIED",
+            Self::NoMicrophone => "RECOGNITION_ERROR_NO_MICROPHONE",
+            Self::LanguageUnsupported => "RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED",
+            Self::Unavailable => "RECOGNITION_ERROR_UNAVAILABLE",
+            Self::Network => "RECOGNITION_ERROR_NETWORK",
+            Self::Busy => "RECOGNITION_ERROR_BUSY",
+            Self::Other => "RECOGNITION_ERROR_OTHER",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "PASSKEY_OPERATION_UNSPECIFIED" => Some(Self::Unspecified),
-            "PASSKEY_OPERATION_CREATE" => Some(Self::Create),
-            "PASSKEY_OPERATION_GET" => Some(Self::Get),
-            _ => None,
-        }
-    }
-}
-/// How a passkey request ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum PasskeyStatus {
-    Unspecified = 0,
-    Ok = 1,
-    /// The app may not use passkeys of that relying party: its signature is not in the
-    /// relying party's Digital Asset Links, or the origin a browser gave does not belong to it.
-    Rejected = 2,
-    /// The person canceled the host's prompt.
-    Canceled = 3,
-    /// This computer has no passkeys, or they are turned off.
-    Unavailable = 4,
-    /// The host's authenticator failed; the message says why.
-    Error = 5,
-    /// The authenticator holds no passkey the request allows, or already holds one it excludes.
-    NotAllowed = 6,
-}
-impl PasskeyStatus {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "PASSKEY_STATUS_UNSPECIFIED",
-            Self::Ok => "PASSKEY_STATUS_OK",
-            Self::Rejected => "PASSKEY_STATUS_REJECTED",
-            Self::Canceled => "PASSKEY_STATUS_CANCELED",
-            Self::Unavailable => "PASSKEY_STATUS_UNAVAILABLE",
-            Self::Error => "PASSKEY_STATUS_ERROR",
-            Self::NotAllowed => "PASSKEY_STATUS_NOT_ALLOWED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "PASSKEY_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
-            "PASSKEY_STATUS_OK" => Some(Self::Ok),
-            "PASSKEY_STATUS_REJECTED" => Some(Self::Rejected),
-            "PASSKEY_STATUS_CANCELED" => Some(Self::Canceled),
-            "PASSKEY_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
-            "PASSKEY_STATUS_ERROR" => Some(Self::Error),
-            "PASSKEY_STATUS_NOT_ALLOWED" => Some(Self::NotAllowed),
+            "RECOGNITION_ERROR_UNSPECIFIED" => Some(Self::Unspecified),
+            "RECOGNITION_ERROR_NO_MATCH" => Some(Self::NoMatch),
+            "RECOGNITION_ERROR_SPEECH_TIMEOUT" => Some(Self::SpeechTimeout),
+            "RECOGNITION_ERROR_DENIED" => Some(Self::Denied),
+            "RECOGNITION_ERROR_NO_MICROPHONE" => Some(Self::NoMicrophone),
+            "RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED" => Some(Self::LanguageUnsupported),
+            "RECOGNITION_ERROR_UNAVAILABLE" => Some(Self::Unavailable),
+            "RECOGNITION_ERROR_NETWORK" => Some(Self::Network),
+            "RECOGNITION_ERROR_BUSY" => Some(Self::Busy),
+            "RECOGNITION_ERROR_OTHER" => Some(Self::Other),
             _ => None,
         }
     }

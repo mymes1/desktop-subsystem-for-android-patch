@@ -396,6 +396,27 @@ pub struct LocationFix {
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
 }
+/// Turns the connection into the speech and spelling of the caller's Android: after the
+/// answer (Done), the service sends a LanguageServiceFrame for each request the Android's
+/// text-to-speech engine, speech recognition service or spell checker makes (ListSpeechVoices,
+/// SpeakText, StopSpeaking, StartRecognition, StopRecognition, CancelRecognition and
+/// CheckSpelling), and the client answers each with LanguageServiceFrame messages of its own
+/// (SpeechVoices, SpeechAudio, SpeechDone, RecognitionEvent and SpellingResult), which the
+/// service passes to the Android. The client runs the host's speech synthesis, speech
+/// recognition and spell checker in the user's session, where the user's voices, dictionaries
+/// and privacy settings are. Requests go to the first client still connected; when its
+/// connection ends, every request it had not finished fails in the Android. The connection
+/// lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ServeLanguageServices {}
+/// One message of control.proto (an encoded Envelope of dsa.control.v1), on a connection that
+/// serves speech and spelling. The service checks each one the client sends is an answer and
+/// passes it on unchanged, so the messages are defined once, where the Android reads them.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LanguageServiceFrame {
+    #[prost(bytes = "vec", tag = "1")]
+    pub control: ::prost::alloc::vec::Vec<u8>,
+}
 /// A notification of the caller's Android, on a connection that watches them
 /// (WatchNotifications). One with the key of an earlier one replaces it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -504,6 +525,128 @@ pub struct ReportPrintJob {
     #[prost(uint32, tag = "1")]
     pub job_id: u32,
     #[prost(enumeration = "PrintOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Turns the connection into the geocoding of the caller's Android: after the answer (Done),
+/// the service sends a GeocodeQuery each time an app in the Android looks up an address. Each
+/// query goes to one watcher only. The client looks it up with the host's geocoding service,
+/// in the user's session, and answers each query with ReportGeocode on another connection. It
+/// sends nothing on this one. The watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchGeocoding {}
+/// One lookup of an app in the caller's Android, on a connection that watches them.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeQuery {
+    /// The service's number for the query, unique while the service runs.
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    /// True for a reverse lookup (a position to addresses), false for a forward one.
+    #[prost(bool, tag = "2")]
+    pub reverse: bool,
+    #[prost(string, tag = "3")]
+    pub query: ::prost::alloc::string::String,
+    #[prost(double, tag = "4")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "5")]
+    pub longitude_degrees: f64,
+    #[prost(bool, tag = "6")]
+    pub has_bounds: bool,
+    #[prost(double, tag = "7")]
+    pub lower_left_latitude: f64,
+    #[prost(double, tag = "8")]
+    pub lower_left_longitude: f64,
+    #[prost(double, tag = "9")]
+    pub upper_right_latitude: f64,
+    #[prost(double, tag = "10")]
+    pub upper_right_longitude: f64,
+    /// From 1.
+    #[prost(uint32, tag = "11")]
+    pub max_results: u32,
+    /// A BCP 47 tag; empty for the host's own language.
+    #[prost(string, tag = "12")]
+    pub language: ::prost::alloc::string::String,
+}
+/// One address a lookup found. Empty strings are parts the service did not give.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeAddress {
+    #[prost(string, repeated, tag = "1")]
+    pub address_lines: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "2")]
+    pub feature_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub premises: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub sub_thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub sub_locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub sub_admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub postal_code: ::prost::alloc::string::String,
+    /// ISO 3166-1 alpha-2, upper case.
+    #[prost(string, tag = "11")]
+    pub country_code: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub country_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub has_position: bool,
+    #[prost(double, tag = "14")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "15")]
+    pub longitude_degrees: f64,
+}
+/// Tells the caller's Android what a lookup found. Answered with Done, also for a query the
+/// Android no longer waits for.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReportGeocode {
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    #[prost(enumeration = "GeocodeStatus", tag = "2")]
+    pub status: i32,
+    #[prost(message, repeated, tag = "3")]
+    pub addresses: ::prost::alloc::vec::Vec<GeocodeAddress>,
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Turns the connection into a watch of what apps in the caller's Android share with the
+/// host ("Share on PC" in Android's share sheet): after the answer (Done), the service sends a
+/// ShareOffer for each share. Each share goes to one watcher only. The client reads its files
+/// with ReadDrag (the share's ID is the drag's), ends it with EndDrag, shows the host's share
+/// UI, and answers with ReportShare on another connection. It sends nothing on this one. The
+/// watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchShares {}
+/// Content an app in the caller's Android shares with the host, on a connection that watches
+/// shares.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareOffer {
+    /// The drag ID its files are read with, unique among the Android's shares and drags.
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    /// The subject or title the app gave; empty when none.
+    #[prost(string, tag = "2")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Tells the caller's Android what became of one of its shares. Answered with Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReportShare {
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    #[prost(enumeration = "ShareOutcome", tag = "2")]
     pub outcome: i32,
     #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
@@ -1752,220 +1895,6 @@ pub struct NetworkStatus {
 /// they are. The answer is Done once the new disk is in place; the next start boots it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResetData {}
-/// Backs up every app of the caller's Android now, into the caller's backup folder, encrypted
-/// with the key the host's credential store keeps for them. Android has to be running
-/// (ERROR_CODE_NOT_RUNNING otherwise). The answer is BackupReport once Android's backup
-/// manager has finished.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupNow {}
-/// Asks where the caller's backup stands. The service answers BackupReport. It reads only the
-/// backup folder, so it answers while Android is stopped too.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GetBackup {}
-/// Restores the caller's Android from their backup folder: installs each app the backup holds
-/// the APKs of and Android does not have, then has Android restore every app's data. It is
-/// how the data comes back after a data reset, or on another computer once the folder and
-/// the recovery key are there. Android has to be running (ERROR_CODE_NOT_RUNNING otherwise).
-/// Answered with BackupReport.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct RestoreBackup {}
-/// Asks for the caller's backup recovery key: the key their backup folder is encrypted with,
-/// as text to write down. With it the folder can be restored on another computer or under
-/// another user. Answered with BackupRecoveryKey.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GetBackupRecoveryKey {}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupRecoveryKey {
-    /// Groups of letters and digits with a check at the end, such as `ABCD-EFGH-...`.
-    #[prost(string, tag = "1")]
-    pub key: ::prost::alloc::string::String,
-}
-/// Keeps `key`, a recovery key GetBackupRecoveryKey gave, as the caller's backup key, so a
-/// backup folder made on another computer or under another user can be read here. Text that
-/// is not a recovery key, or one the folder was not made with, is ERROR_CODE_INVALID_SETTING.
-/// Answered with BackupReport.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SetBackupRecoveryKey {
-    #[prost(string, tag = "1")]
-    pub key: ::prost::alloc::string::String,
-}
-/// Where the caller's backup stands.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackupReport {
-    /// Whether backups can be made and read now.
-    #[prost(bool, tag = "1")]
-    pub available: bool,
-    /// Why not, in words a person can act on; empty when they can.
-    #[prost(string, tag = "2")]
-    pub problem: ::prost::alloc::string::String,
-    /// The backup folder.
-    #[prost(string, tag = "3")]
-    pub folder: ::prost::alloc::string::String,
-    /// When an app was last backed up, in milliseconds since the Unix epoch; 0 for never.
-    #[prost(int64, tag = "4")]
-    pub last_backup_unix_ms: i64,
-    /// The apps the backup holds, and the bytes their data and APKs take before encryption.
-    #[prost(uint32, tag = "5")]
-    pub packages: u32,
-    #[prost(uint64, tag = "6")]
-    pub size: u64,
-    /// What went wrong in the last backup or restore; empty when nothing did.
-    #[prost(string, tag = "7")]
-    pub last_error: ::prost::alloc::string::String,
-    /// BackupNow and RestoreBackup: the apps backed up or restored, those that failed, and the
-    /// apps a restore installed.
-    #[prost(uint32, tag = "8")]
-    pub succeeded: u32,
-    #[prost(uint32, tag = "9")]
-    pub failed: u32,
-    #[prost(uint32, tag = "10")]
-    pub installed: u32,
-    /// When the backup was last restored, in milliseconds since the Unix epoch; 0 for never.
-    #[prost(int64, tag = "11")]
-    pub last_restore_unix_ms: i64,
-    /// Whether the user turned backup on. Off by default: until the user turns it on, no backup
-    /// runs, and neither the backup folder nor its key is made. While it is off `available` is
-    /// false with no problem, and what an earlier backup left in the folder is still counted.
-    #[prost(bool, tag = "12")]
-    pub enabled: bool,
-}
-/// Turns the caller's backup on or off. On, Android's backup manager backs the apps' data up to
-/// the host on its own schedule, and BackupNow and RestoreBackup work. Off, Android's backup
-/// manager stops backing up to the host, and the host takes no more backups; with
-/// `delete_backups` the backup folder's files and the backup key are removed as well, else
-/// they stay for a later restore. Answered with BackupReport.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SetBackup {
-    #[prost(bool, tag = "1")]
-    pub enabled: bool,
-    #[prost(bool, tag = "2")]
-    pub delete_backups: bool,
-}
-/// Asks how the root key of the caller's Android's KeyMint is protected on this computer.
-/// Answered with KeyProtection. It reads only what the key's file records, so it never asks
-/// for a password and answers while Android is stopped.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct GetKeyProtection {}
-/// How the root key of the guest's KeyMint is sealed on this computer.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct KeyProtection {
-    /// Whether a root key is kept yet: one is made the first time Android starts.
-    #[prost(bool, tag = "1")]
-    pub kept: bool,
-    /// What sealed it: "tpm" (the computer's TPM), "secure-enclave" (the Mac's Secure Enclave),
-    /// "dpapi" (Windows DPAPI under the user's account), "secret-service" (the user's Secret
-    /// Service keyring) or "keychain" (the user's login keychain). Empty while none is kept.
-    #[prost(string, tag = "2")]
-    pub sealed_by: ::prost::alloc::string::String,
-    /// Whether hardware of this computer (a TPM or the Secure Enclave) holds what seals it.
-    #[prost(bool, tag = "3")]
-    pub hardware: bool,
-    /// What sealed it, in words, such as "the computer's TPM 2.0 and DPAPI under your account".
-    #[prost(string, tag = "4")]
-    pub description: ::prost::alloc::string::String,
-    /// When it is not sealed by hardware: why this computer's hardware could not be used.
-    #[prost(string, tag = "5")]
-    pub fallback_reason: ::prost::alloc::string::String,
-    /// Why the kept key could not be opened for the latest start of Android, and what to do;
-    /// empty when it opened (or no start has asked for it yet).
-    #[prost(string, tag = "6")]
-    pub problem: ::prost::alloc::string::String,
-}
-/// Turns the connection into a watch of the passkey ceremonies of the caller's Android: after
-/// the answer (Done), the service sends a PasskeyCeremony for each request of an app that the
-/// service has checked (the app's signature against the relying party's Digital Asset Links,
-/// or a browser's origin against the relying party), and a PasskeyCeremonyWithdrawn when
-/// Android no longer waits for one. Requests that fail the check never reach a watcher. The
-/// watcher, which runs in the user's desktop session, brings up the host's passkey prompt and
-/// answers each ceremony with ReportPasskeyCeremony, on another connection, and sends
-/// nothing on this one.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct WatchPasskeys {}
-/// A passkey ceremony the host's authenticator is to perform, already checked.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct PasskeyCeremony {
-    #[prost(uint64, tag = "1")]
-    pub ceremony_id: u64,
-    #[prost(enumeration = "PasskeyOperation", tag = "2")]
-    pub operation: i32,
-    #[prost(string, tag = "3")]
-    pub rp_id: ::prost::alloc::string::String,
-    /// CREATE only: the relying party's name and the account the passkey is for.
-    #[prost(string, tag = "4")]
-    pub rp_name: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "5")]
-    pub user_id: ::prost::alloc::vec::Vec<u8>,
-    #[prost(string, tag = "6")]
-    pub user_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "7")]
-    pub user_display_name: ::prost::alloc::string::String,
-    /// The client data the authenticator signs the hash of (WebAuthn's CollectedClientData
-    /// JSON); empty when a browser gave only its hash.
-    #[prost(bytes = "vec", tag = "8")]
-    pub client_data_json: ::prost::alloc::vec::Vec<u8>,
-    /// SHA-256 of client_data_json, or the browser's own hash.
-    #[prost(bytes = "vec", tag = "9")]
-    pub client_data_hash: ::prost::alloc::vec::Vec<u8>,
-    /// CREATE only: the COSE algorithms the relying party takes, the one it prefers first.
-    #[prost(int32, repeated, tag = "10")]
-    pub algorithms: ::prost::alloc::vec::Vec<i32>,
-    /// CREATE: the passkeys the authenticator must not already hold. GET: the passkeys it may
-    /// use; empty for any of the relying party's.
-    #[prost(bytes = "vec", repeated, tag = "11")]
-    pub credential_ids: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
-    /// CREATE only: "required", "preferred" or "discouraged".
-    #[prost(string, tag = "12")]
-    pub resident_key: ::prost::alloc::string::String,
-    /// "required", "preferred" or "discouraged".
-    #[prost(string, tag = "13")]
-    pub user_verification: ::prost::alloc::string::String,
-    /// How long the relying party waits; 0 for the authenticator's own default.
-    #[prost(uint32, tag = "14")]
-    pub timeout_ms: u32,
-    /// The app that asked, for the prompt.
-    #[prost(string, tag = "15")]
-    pub app_label: ::prost::alloc::string::String,
-    #[prost(string, tag = "16")]
-    pub package: ::prost::alloc::string::String,
-    /// The origin the client data names: the browser's https origin, or the app's
-    /// android:apk-key-hash origin.
-    #[prost(string, tag = "17")]
-    pub origin: ::prost::alloc::string::String,
-    /// CREATE only: "none", "indirect", "direct" or "enterprise".
-    #[prost(string, tag = "18")]
-    pub attestation: ::prost::alloc::string::String,
-}
-/// The ceremony is no longer wanted: its app went away, or Android stopped.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct PasskeyCeremonyWithdrawn {
-    #[prost(uint64, tag = "1")]
-    pub ceremony_id: u64,
-}
-/// Tells the caller's Android what became of a passkey ceremony. Answered with Done.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ReportPasskeyCeremony {
-    #[prost(uint64, tag = "1")]
-    pub ceremony_id: u64,
-    #[prost(enumeration = "PasskeyResult", tag = "2")]
-    pub result: i32,
-    #[prost(string, tag = "3")]
-    pub message: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "4")]
-    pub credential_id: ::prost::alloc::vec::Vec<u8>,
-    /// CREATE: the attestation object (CBOR), and the transports the passkey can be reached by.
-    #[prost(bytes = "vec", tag = "5")]
-    pub attestation_object: ::prost::alloc::vec::Vec<u8>,
-    #[prost(string, repeated, tag = "6")]
-    pub transports: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// GET: the authenticator data, the signature over it and the client data hash, and the
-    /// passkey's user handle.
-    #[prost(bytes = "vec", tag = "7")]
-    pub authenticator_data: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "8")]
-    pub signature: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "9")]
-    pub user_handle: ::prost::alloc::vec::Vec<u8>,
-}
 /// Asks which Android version runs and which can be chosen. The service answers
 /// AndroidVersions.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2596,7 +2525,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 621, 622, 623, 624, 625, 626, 627, 628"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2743,23 +2672,15 @@ pub mod request {
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
         #[prost(message, tag = "620")]
-        BackupNow(super::BackupNow),
-        #[prost(message, tag = "621")]
-        GetBackup(super::GetBackup),
-        #[prost(message, tag = "622")]
-        RestoreBackup(super::RestoreBackup),
-        #[prost(message, tag = "623")]
-        GetBackupRecoveryKey(super::GetBackupRecoveryKey),
-        #[prost(message, tag = "624")]
-        SetBackupRecoveryKey(super::SetBackupRecoveryKey),
-        #[prost(message, tag = "625")]
-        WatchPasskeys(super::WatchPasskeys),
-        #[prost(message, tag = "626")]
-        ReportPasskeyCeremony(super::ReportPasskeyCeremony),
-        #[prost(message, tag = "627")]
-        SetBackup(super::SetBackup),
-        #[prost(message, tag = "628")]
-        GetKeyProtection(super::GetKeyProtection),
+        ServeLanguageServices(super::ServeLanguageServices),
+        #[prost(message, tag = "470")]
+        WatchGeocoding(super::WatchGeocoding),
+        #[prost(message, tag = "471")]
+        ReportGeocode(super::ReportGeocode),
+        #[prost(message, tag = "472")]
+        WatchShares(super::WatchShares),
+        #[prost(message, tag = "473")]
+        ReportShare(super::ReportShare),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2768,7 +2689,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 332, 400, 401, 340, 341, 620, 621, 622"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 332, 400, 401, 340, 341"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2832,12 +2753,6 @@ pub mod response {
         RunAsArmResult(super::RunAsArmResult),
         #[prost(message, tag = "341")]
         AppRootResult(super::AppRootResult),
-        #[prost(message, tag = "620")]
-        BackupReport(super::BackupReport),
-        #[prost(message, tag = "621")]
-        BackupRecoveryKey(super::BackupRecoveryKey),
-        #[prost(message, tag = "622")]
-        KeyProtection(super::KeyProtection),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2845,7 +2760,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620, 621"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620, 470, 471"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2922,9 +2837,11 @@ pub mod envelope {
         #[prost(message, tag = "301")]
         GamepadRumble(super::GamepadRumble),
         #[prost(message, tag = "620")]
-        PasskeyCeremony(super::PasskeyCeremony),
-        #[prost(message, tag = "621")]
-        PasskeyCeremonyWithdrawn(super::PasskeyCeremonyWithdrawn),
+        LanguageServiceFrame(super::LanguageServiceFrame),
+        #[prost(message, tag = "470")]
+        GeocodeQuery(super::GeocodeQuery),
+        #[prost(message, tag = "471")]
+        ShareOffer(super::ShareOffer),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -3277,6 +3194,84 @@ impl PrintOutcome {
             "PRINT_OUTCOME_PRINTED" => Some(Self::Printed),
             "PRINT_OUTCOME_CANCELED" => Some(Self::Canceled),
             "PRINT_OUTCOME_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// How a lookup ended on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GeocodeStatus {
+    Unspecified = 0,
+    Ok = 1,
+    /// No network, or the geocoding service failed.
+    Unavailable = 2,
+    /// The user turned geocoding off on the host.
+    Refused = 3,
+    /// Too many lookups in a short time.
+    Busy = 4,
+    /// The query cannot be answered as it is.
+    Invalid = 5,
+}
+impl GeocodeStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GEOCODE_STATUS_UNSPECIFIED",
+            Self::Ok => "GEOCODE_STATUS_OK",
+            Self::Unavailable => "GEOCODE_STATUS_UNAVAILABLE",
+            Self::Refused => "GEOCODE_STATUS_REFUSED",
+            Self::Busy => "GEOCODE_STATUS_BUSY",
+            Self::Invalid => "GEOCODE_STATUS_INVALID",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GEOCODE_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "GEOCODE_STATUS_OK" => Some(Self::Ok),
+            "GEOCODE_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "GEOCODE_STATUS_REFUSED" => Some(Self::Refused),
+            "GEOCODE_STATUS_BUSY" => Some(Self::Busy),
+            "GEOCODE_STATUS_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+/// What became of a share on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareOutcome {
+    Unspecified = 0,
+    Shared = 1,
+    /// The user closed the share UI without sharing.
+    Canceled = 2,
+    /// It could not be shared; the message says why.
+    Failed = 3,
+}
+impl ShareOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_OUTCOME_UNSPECIFIED",
+            Self::Shared => "SHARE_OUTCOME_SHARED",
+            Self::Canceled => "SHARE_OUTCOME_CANCELED",
+            Self::Failed => "SHARE_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_OUTCOME_SHARED" => Some(Self::Shared),
+            "SHARE_OUTCOME_CANCELED" => Some(Self::Canceled),
+            "SHARE_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
@@ -3830,81 +3825,6 @@ impl ProgramUpdatePhase {
             "PROGRAM_UPDATE_PHASE_RESTARTING" => Some(Self::Restarting),
             "PROGRAM_UPDATE_PHASE_APPLIED" => Some(Self::Applied),
             "PROGRAM_UPDATE_PHASE_FAILED" => Some(Self::Failed),
-            _ => None,
-        }
-    }
-}
-/// Which passkey ceremony.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum PasskeyOperation {
-    Unspecified = 0,
-    /// Make a new passkey.
-    Create = 1,
-    /// Sign in with a passkey.
-    Get = 2,
-}
-impl PasskeyOperation {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "PASSKEY_OPERATION_UNSPECIFIED",
-            Self::Create => "PASSKEY_OPERATION_CREATE",
-            Self::Get => "PASSKEY_OPERATION_GET",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "PASSKEY_OPERATION_UNSPECIFIED" => Some(Self::Unspecified),
-            "PASSKEY_OPERATION_CREATE" => Some(Self::Create),
-            "PASSKEY_OPERATION_GET" => Some(Self::Get),
-            _ => None,
-        }
-    }
-}
-/// What became of a passkey ceremony on the host.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum PasskeyResult {
-    Unspecified = 0,
-    Ok = 1,
-    /// The person canceled the prompt, or it timed out.
-    Canceled = 2,
-    /// The host has no authenticator, or the person turned passkeys off.
-    Unavailable = 3,
-    /// The authenticator failed; the message says why.
-    Error = 4,
-    /// CREATE: the authenticator already holds an excluded passkey. GET: it holds none allowed.
-    NotAllowed = 5,
-}
-impl PasskeyResult {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "PASSKEY_RESULT_UNSPECIFIED",
-            Self::Ok => "PASSKEY_RESULT_OK",
-            Self::Canceled => "PASSKEY_RESULT_CANCELED",
-            Self::Unavailable => "PASSKEY_RESULT_UNAVAILABLE",
-            Self::Error => "PASSKEY_RESULT_ERROR",
-            Self::NotAllowed => "PASSKEY_RESULT_NOT_ALLOWED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "PASSKEY_RESULT_UNSPECIFIED" => Some(Self::Unspecified),
-            "PASSKEY_RESULT_OK" => Some(Self::Ok),
-            "PASSKEY_RESULT_CANCELED" => Some(Self::Canceled),
-            "PASSKEY_RESULT_UNAVAILABLE" => Some(Self::Unavailable),
-            "PASSKEY_RESULT_ERROR" => Some(Self::Error),
-            "PASSKEY_RESULT_NOT_ALLOWED" => Some(Self::NotAllowed),
             _ => None,
         }
     }

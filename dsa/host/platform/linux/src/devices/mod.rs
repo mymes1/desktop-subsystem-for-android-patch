@@ -1,6 +1,6 @@
 //! The host's devices, lent to the apps in the guest: sound out and in, the cameras, the
 //! location, the sensors, printing, the user's folders, the user's settings, web links and
-//! the computer's power.
+//! the computer's power, and the desktop's speech and spelling.
 //!
 //! Each device has a platform-neutral half in `dsa-host-core` (the guest's port, the rules,
 //! the messages) and a Linux half here that reaches the desktop's own service for it:
@@ -14,11 +14,16 @@
 //! folders            the XDG user folders, opened with the user's own rights
 //! settings           the time zone, the locale, and the portal's appearance settings
 //! web links          xdg-open
+//! address lookups    the administrative boundaries in /usr/lib/dsa/geodata
+//! sharing            the OpenURI portal's app chooser, else xdg-open
 //! power              UPower, power-profiles-daemon, logind and /proc/meminfo
+//! speech             Speech Dispatcher; no speech recognition
+//! spelling           Enchant
 //! ```
 //!
 //! The devices that need the user's desktop session (sound, cameras, location, sensors,
-//! printing, links and settings) run in a process of the user's: [`start_guest_ports`] serves
+//! printing, links, settings, address lookups and shares) run in a process of the user's:
+//! [`start_guest_ports`] serves
 //! the guest's device ports, which the service relays from the user's own VM to sockets in
 //! the user's runtime folder ([`relay`]), and [`start_followers`] follows the local API. In an
 //! X11 session without Wayland [`start_monitor_refresh`] records the monitors' refresh rate,
@@ -32,6 +37,8 @@ pub mod audio;
 pub mod camera;
 pub mod dbus;
 pub mod file_share;
+pub mod geocode;
+pub mod language;
 pub mod links;
 pub mod location;
 pub mod portal_camera;
@@ -40,6 +47,7 @@ pub mod print;
 pub mod relay;
 pub mod sensors;
 pub mod settings;
+pub mod share;
 pub mod v4l2;
 
 use std::sync::atomic::AtomicBool;
@@ -150,6 +158,12 @@ pub struct Followers {
     pub print: bool,
     pub links: bool,
     pub settings: bool,
+    /// Speech synthesis, speech recognition and spell checking for Android.
+    pub language: bool,
+    /// The address lookups of the apps in Android.
+    pub geocoding: bool,
+    /// What the apps in Android share with the PC.
+    pub share: bool,
 }
 
 impl Default for Followers {
@@ -159,12 +173,16 @@ impl Default for Followers {
             print: true,
             links: true,
             settings: true,
+            language: true,
+            geocoding: true,
+            share: true,
         }
     }
 }
 
-/// Follows the local API for the devices it carries (the location, print jobs, web links and
-/// the user's settings) until `stop`, each on a thread of its own with its own connection.
+/// Follows the local API for the devices it carries (the location, print jobs, web links, the
+/// user's settings, speech and spelling, address lookups and shares) until `stop`, each on a
+/// thread of its own with its own connection.
 pub fn start_followers(
     connect: ConnectorFactory,
     which: Followers,
@@ -195,6 +213,24 @@ pub fn start_followers(
         let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
         threads.extend(spawn("dsa-settings", &Arc::clone(&log), move || {
             settings::follow(connector, stop, log)
+        }));
+    }
+    if which.language {
+        let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+        threads.extend(spawn("dsa-language", &Arc::clone(&log), move || {
+            language::serve(connector, stop, log)
+        }));
+    }
+    if which.geocoding {
+        let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+        threads.extend(spawn("dsa-geocode", &Arc::clone(&log), move || {
+            geocode::serve(connector, stop, log)
+        }));
+    }
+    if which.share {
+        let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+        threads.extend(spawn("dsa-share", &Arc::clone(&log), move || {
+            share::serve(connector, stop, log)
         }));
     }
     threads

@@ -223,6 +223,11 @@ impl UserRoot {
     pub fn print_spool(&self) -> PathBuf {
         join(&self.0, &["tmp", "print"])
     }
+    /// Where the window manager copies the files apps in Android share with the PC, for the
+    /// app the user shares them with to read.
+    pub fn share_spool(&self) -> PathBuf {
+        join(&self.0, &["tmp", "share"])
+    }
     /// The empty files that turned traces on before they were settings.
     pub fn old_trace_markers(&self) -> [PathBuf; 2] {
         [

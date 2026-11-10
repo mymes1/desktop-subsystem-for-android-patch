@@ -242,6 +242,81 @@ fn instrumentation_results(out: &str) -> Result<BTreeMap<String, String>, String
 }
 
 /// The lines of `log` that record an SELinux denial naming one of `types`.
+/// The agent's package, whose speech and spelling services the image makes the defaults.
+const AGENT: &str = "io.github.thisisthepy.dsa.agent";
+
+/// The secure settings that name the guest's text-to-speech engine, speech recognition
+/// service and spell checker, the services' intent actions, and the component each must be.
+const LANGUAGE_SERVICES: [(&str, &str, &str); 3] = [
+    (
+        "tts_default_synth",
+        "android.intent.action.TTS_SERVICE",
+        ".platform.HostTextToSpeechService",
+    ),
+    (
+        "voice_recognition_service",
+        "android.speech.RecognitionService",
+        ".platform.HostRecognitionService",
+    ),
+    (
+        "selected_spell_checker",
+        "android.service.textservice.SpellCheckerService",
+        ".platform.HostSpellCheckerService",
+    ),
+];
+
+/// Whether `value` names the agent's component `class` (".platform.Name"), in the short or
+/// the full form; for the engine, whose setting names only a package, the agent's package.
+fn names_agent(value: &str, class: &str) -> bool {
+    let value = value.trim();
+    if value == AGENT {
+        return class.ends_with("TextToSpeechService");
+    }
+    value == format!("{AGENT}/{class}") || value == format!("{AGENT}/{AGENT}{class}")
+}
+
+/// What is wrong with the guest's speech and spelling defaults: each setting with its value
+/// (`settings get secure`), and for each service action the components that answer it
+/// (`cmd package query-services --brief`). The agent's must be the defaults and the only ones,
+/// and spell checking must be on.
+fn language_service_problems(
+    settings: &BTreeMap<String, String>,
+    services: &BTreeMap<String, String>,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (key, action, class) in LANGUAGE_SERVICES {
+        let value = settings.get(key).map(String::as_str).unwrap_or("");
+        if !names_agent(value, class) {
+            problems.push(format!("{key} is {value:?}, not the agent's {class}"));
+        }
+        let listed = services.get(action).map(String::as_str).unwrap_or("");
+        let others: Vec<&str> = listed
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.contains('/') && !line.starts_with(&format!("{AGENT}/")))
+            .collect();
+        if !others.is_empty() {
+            problems.push(format!(
+                "the image has another {action}: {}",
+                others.join(", ")
+            ));
+        }
+        if !listed.lines().any(|line| names_agent(line, class)) {
+            problems.push(format!(
+                "the agent's {class} does not answer {action}: {listed:?}"
+            ));
+        }
+    }
+    let enabled = settings
+        .get("spell_checker_enabled")
+        .map(|v| v.trim())
+        .unwrap_or("");
+    if enabled != "1" {
+        problems.push(format!("spell_checker_enabled is {enabled:?}, not 1"));
+    }
+    problems
+}
+
 fn denials<'a>(log: &'a str, types: &[&str]) -> Vec<&'a str> {
     log.lines()
         .filter(|line| line.contains("avc:") && line.contains("denied"))
@@ -1120,6 +1195,51 @@ fn fr26_the_sensors_hal_refused_its_event_queue_is_found_in_the_log() {
     assert_eq!(denials(log, SHARED_MEMORY_TYPES).len(), 1);
 }
 
+fn agent_language_settings() -> (BTreeMap<String, String>, BTreeMap<String, String>) {
+    let settings = [
+        ("tts_default_synth", AGENT.to_string()),
+        (
+            "voice_recognition_service",
+            format!("{AGENT}/{AGENT}.platform.HostRecognitionService"),
+        ),
+        (
+            "selected_spell_checker",
+            format!("{AGENT}/.platform.HostSpellCheckerService"),
+        ),
+        ("spell_checker_enabled", "1".to_string()),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    let services = LANGUAGE_SERVICES
+        .iter()
+        .map(|(_, action, class)| (action.to_string(), format!("{AGENT}/{class}\n")))
+        .collect();
+    (settings, services)
+}
+
+#[test]
+fn fr36_the_boot_check_finds_the_agents_speech_and_spelling_services_the_defaults() {
+    let (settings, services) = agent_language_settings();
+    assert_eq!(
+        language_service_problems(&settings, &services),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn fr36_the_boot_check_rejects_another_default_or_engine() {
+    let (mut settings, mut services) = agent_language_settings();
+    settings.insert("tts_default_synth".into(), "com.svox.pico".into());
+    settings.insert("spell_checker_enabled".into(), "null".into());
+    services.insert(
+        "android.service.textservice.SpellCheckerService".into(),
+        format!("{AGENT}/.platform.HostSpellCheckerService\ncom.android.inputmethod.latin/.spellcheck.AndroidSpellCheckerService\n"),
+    );
+    let problems = language_service_problems(&settings, &services);
+    assert_eq!(problems.len(), 3, "{problems:?}");
+}
+
 #[test]
 fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
     boot_check(true, false);
@@ -1320,6 +1440,28 @@ fn boot_check(check_media: bool, check_root: bool) {
         }
     }
     if check_media {
+        // The agent's text-to-speech engine, speech recognition service and spell checker
+        // are the image's only ones, and its defaults.
+        let mut settings = BTreeMap::new();
+        for key in LANGUAGE_SERVICES
+            .iter()
+            .map(|(key, _, _)| *key)
+            .chain(["spell_checker_enabled"])
+        {
+            let value = adb
+                .shell(&format!("settings get secure {key}"))
+                .unwrap_or_else(|error| error);
+            settings.insert(key.to_string(), value.trim().to_string());
+        }
+        let mut services = BTreeMap::new();
+        for (_, action, _) in LANGUAGE_SERVICES {
+            let listed = adb
+                .shell(&format!("cmd package query-services --brief -a {action}"))
+                .unwrap_or_else(|error| error);
+            services.insert(action.to_string(), listed);
+        }
+        eprintln!("speech and spelling: {settings:?} {services:?}");
+        problems.extend(language_service_problems(&settings, &services));
         match adb.probe(&dir, "audio") {
             Ok(results) => {
                 eprintln!("audio: {results:?}");

@@ -915,8 +915,34 @@ fn settings_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> R
                 image_updates_available: true,
                 android_version: Some("17.0.0-16373615-7".into()),
             },
-        );
+        )
+        .with_addon_disks(addon_disks());
     RunningService::start_service(listener, service)
+}
+
+/// Each user's add-on disk, a raw disk in a folder of its own for every service a test starts,
+/// as the installed service keeps one in each user's data folder. The service puts the Google
+/// apps and ARM translation packages there, not on Android's own disk.
+fn addon_disks() -> dsa_host_core::host_api::AddonDiskSource {
+    use dsa_host_core::addon_disk::{AddonDisk, Format};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "dsa-cli-addons-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    Arc::new(move |user: &str| {
+        let stem: String = user
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        Ok(AddonDisk::new(
+            dir.join(format!("{stem}-addons.img")),
+            Format::Raw,
+        ))
+    })
 }
 
 fn json_of(output: &Output) -> serde_json::Value {
@@ -1235,7 +1261,8 @@ fn fr25_dsa_uses_the_images_default_translator_until_a_package_replaces_it() {
     let ((listener, _, _), endpoint) = local_pair();
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
-        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())));
+        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())))
+        .with_addon_disks(addon_disks());
     let _service = RunningService::start_service(listener, service);
 
     // From the first start, with nothing installed.
@@ -3535,7 +3562,8 @@ fn gapps_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> Runn
     let work = std::env::temp_dir().join(format!("dsa-cli-gapps-{}", std::process::id()));
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
-        .with_gapps(Source::new(Arc::new(host), work).with_project(project));
+        .with_gapps(Source::new(Arc::new(host), work).with_project(project))
+        .with_addon_disks(addon_disks());
     RunningService::start_service(listener, service)
 }
 

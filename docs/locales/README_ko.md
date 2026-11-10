@@ -62,6 +62,8 @@ CI에서 테스트합니다. 실제 하드웨어에서 손으로 하는 확인�
 - 양방향 텍스트 클립보드, 호스트 브라우저로 여는 링크, 안드로이드 앱으로 열고 공유하는 호스트
   파일, 공유 폴더.
 - 두 번 클릭, 상황에 맞는 메뉴, `dsa install`로 하는 APK 설치.
+- 안드로이드 공유 시트의 "PC에서 공유". 글, 링크, 파일을 근처 공유를 포함한 Windows 공유 창으로
+  넘깁니다(macOS는 공유 메뉴, Linux는 데스크톱의 앱 선택 창).
 
 **시스템**
 
@@ -69,6 +71,11 @@ CI에서 테스트합니다. 실제 하드웨어에서 손으로 하는 확인�
   호스트로 돌아갑니다. 안드로이드 동결은 선택 사항이며 기본값은 꺼짐입니다.
 - 안드로이드에 빌려주는 호스트 장치: GPU(gfxstream을 통한 Vulkan 원격, ANGLE을 통한 OpenGL
   ES), 오디오, 동영상 코덱, 마이크, 카메라, 위치, 센서, 전원.
+- 안드로이드의 네트워크 위치는 Google Play가 있든 없든 호스트가 답합니다. Google Play가 없으면
+  주소 변환(`Geocoder`)도 DSA에 함께 들어 있는 행정 경계 데이터로 컴퓨터 안에서 답합니다. 좌표가
+  나라, 시도, 시로 바뀌고, 한국에서는 구와 읍면동까지 나옵니다. 서버와 키가 필요 없고 위치가
+  컴퓨터 밖으로 나가지 않습니다. 번지 단위 주소와 주소를 좌표로 바꾸는 것은 하지 않습니다. Google
+  Play가 있으면 Google의 주소 변환이 답합니다.
 - x64에서 ARM 전용 앱을 위한 ARM 번역 계층. x64 이미지에 오픈 소스 번역기 Digitalis가 함께 들어 있고,
   Google의 번역기나 다른 묶음으로 바꿀 수 있습니다.
 - 안드로이드 이미지와 DSA 자체의 서명된 자동 업데이트. 실패한 이미지는 마지막으로 정상이던
@@ -248,3 +255,13 @@ DSA는 아직 초기이고 안정화 중이라, 고칠 방법을 몰라도 알�
 
 Android는 Google LLC의 상표입니다. Windows는 Microsoft 그룹의 상표입니다. DSA는 Microsoft나
 Google과 제휴하거나 그들의 보증, 후원을 받지 않습니다.
+
+## 스타 추이
+
+<a href="https://www.star-history.com/#thisisthepy/desktop-subsystem-for-android&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date" />
+    <img alt="Star history of thisisthepy/desktop-subsystem-for-android" src="https://api.star-history.com/svg?repos=thisisthepy/desktop-subsystem-for-android&type=Date" width="720" />
+  </picture>
+</a>

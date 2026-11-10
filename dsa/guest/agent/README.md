@@ -133,6 +133,26 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   (or its text), and streams each file from the app's provider in answer to `DragRead`.
   Content URIs and paths stay in the guest. `DragEnd` closes the streams and gives the
   access back, whether the drag was dropped or cancelled on the host.
+- **Share on PC.** "Share on PC" in Android's share sheet (`ShareActivity`, for `ACTION_SEND`
+  and `ACTION_SEND_MULTIPLE` of any type) sends the host `ShareToHost` with the shared text,
+  links and files. The host reads the files with `DragRead` under the share's ID, as a drag's,
+  ends the share with `DragEnd`, and shows its own share UI (Windows' share window with Nearby
+  sharing, the macOS share menu, the desktop portal on Linux). The activity shows nothing and
+  stays, in a task of its own the host shows no window for, until the host has the files,
+  since the app's read access lasts only while it does. A `ShareResult` that failed is shown
+  to the user as a toast.
+- **Network location and geocoding.** The image names the agent as the guest's network
+  location provider, with or without Google Play, and as its geocode provider without Google
+  Play; on a boot with the Google apps image an overlay names Google's geocoder instead. The
+  network provider (`HostNetworkLocationService`) asks the host for its location with
+  `LocationRequest` while Android wants network locations, and reports each `LocationFix` as a
+  `network` location; a `LocationStatus` that is not allowed disables the provider. The control
+  daemon tells the host what it and the GNSS HAL want together. The geocode provider
+  (`HostGeocodeService`) sends each lookup as `GeocodeRequest` and turns the `GeocodeResult`
+  into Android `Address`es, or into the `IOException` Android's geocoder reports when the
+  service is not available. The host answers a position from administrative boundary data it
+  keeps (country, province, city, district and neighbourhood, with no street or house number)
+  and an address with no positions; nothing goes to a server.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.
@@ -146,6 +166,19 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   the service with the agent's `DEVICE_POWER` permission, which they check; they need no
   shell or debuggable build. The image's `sepolicy/agent.cil` lets system_server use the
   descriptors the call hands it.
+- **Speech and spelling.** The agent is the guest's text-to-speech engine
+  (`HostTextToSpeechService`), speech recognition service (`HostRecognitionService`) and spell
+  checker (`HostSpellCheckerService`), and makes them the defaults at boot
+  (`tts_default_synth`, `voice_recognition_service`, `selected_spell_checker`,
+  `spell_checker_enabled`) unless the user picked another one that is still installed. None
+  keeps an engine or a dictionary in the guest: the engine lists the host's voices
+  (`ListSpeechVoices`) and speaks with them (`SpeakText`, the sound back as `SpeechAudio`
+  pieces and `SpeechDone`), the recognizer asks the host to listen (`StartRecognition`, then
+  `RecognitionEvent`s with partial and final results), and the spell checker sends each
+  sentence an editor asks about (`CheckSpelling`, answered by `SpellingResult`). An app
+  without the permission to record gets the recognizer's permission error before the host
+  is asked; the host's own microphone privacy settings apply there. A host that cannot
+  answer fails the request at once, so no app waits.
 - **The channel.** It reaches the host through the control daemon's binder service,
   `io.github.thisisthepy.dsa.channel.IChannel/default` (`dsa/guest/aidl/`). It looks for
   the service every second until the daemon is up, subscribes, and sends every app task

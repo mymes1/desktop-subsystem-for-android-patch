@@ -67,7 +67,7 @@
                                              Visibility="{Binding IsDownloading, Converter={StaticResource Visible}}" />
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Style="{StaticResource CardControls}">
                             <!-- Shown while a downloaded image waits for this user's Android to restart. -->
                             <ui:Button x:Name="RestartNowButton" Content="{l:Text AndroidRestartButton.Content}" Appearance="Primary"
                                        Margin="0,0,8,0" Click="OnRestartNow" IsEnabled="{Binding CanRestartNow, Mode=OneWay}"

@@ -814,6 +814,115 @@ message LocationFix {
   uint64 unix_time_ms = 11;
 }
 
+// Guest to host, from the agent, which is the guest's geocode provider: look up addresses
+// for an app's Geocoder. A forward lookup names a place (`query`); a reverse lookup gives a
+// position. The host answers each request with GeocodeResult, from the host's own geocoding
+// service, so the guest holds no geocoding engine or data of its own.
+message GeocodeRequest {
+  // The agent's number for the request, unique while its connection lasts.
+  uint32 request_id = 1;
+  // True for a reverse lookup (a position to addresses), false for a forward one.
+  bool reverse = 2;
+  // Forward: the name or address of the place, as the app gave it.
+  string query = 3;
+  // Reverse: the position.
+  double latitude_degrees = 4;
+  double longitude_degrees = 5;
+  // Forward: the box the app prefers results in, when `has_bounds`.
+  bool has_bounds = 6;
+  double lower_left_latitude = 7;
+  double lower_left_longitude = 8;
+  double upper_right_latitude = 9;
+  double upper_right_longitude = 10;
+  // The most addresses the app takes, from 1.
+  uint32 max_results = 11;
+  // The language the app wants the addresses in, as a BCP 47 tag ("ko-KR"); empty for the
+  // host's own.
+  string language = 12;
+}
+
+// How a geocoding request ended.
+enum GeocodeStatus {
+  GEOCODE_STATUS_UNSPECIFIED = 0;
+  // The lookup ran. No addresses means the place is not known.
+  GEOCODE_STATUS_OK = 1;
+  // The host's geocoding service cannot answer now: no network, or the service failed.
+  GEOCODE_STATUS_UNAVAILABLE = 2;
+  // The user turned the host's geocoding off, or there is no desktop session to ask.
+  GEOCODE_STATUS_REFUSED = 3;
+  // Too many lookups in a short time; the service asks the guest to wait.
+  GEOCODE_STATUS_BUSY = 4;
+  // The request itself cannot be answered: an empty name, or a position not on Earth.
+  GEOCODE_STATUS_INVALID = 5;
+}
+
+// One address a geocoding lookup found. Empty strings are parts the service did not give.
+message GeocodeAddress {
+  // The address as lines a person reads, in order.
+  repeated string address_lines = 1;
+  // The place's own name, such as a building or a landmark.
+  string feature_name = 2;
+  string premises = 3;
+  // The house number and the street.
+  string sub_thoroughfare = 4;
+  string thoroughfare = 5;
+  string sub_locality = 6;
+  string locality = 7;
+  string sub_admin_area = 8;
+  string admin_area = 9;
+  string postal_code = 10;
+  // ISO 3166-1 alpha-2, upper case.
+  string country_code = 11;
+  string country_name = 12;
+  bool has_position = 13;
+  double latitude_degrees = 14;
+  double longitude_degrees = 15;
+}
+
+// Host to guest, to the agent: the answer to a GeocodeRequest. `message` says why, in words
+// for the guest's log, when the status is not OK.
+message GeocodeResult {
+  uint32 request_id = 1;
+  GeocodeStatus status = 2;
+  repeated GeocodeAddress addresses = 3;
+  string message = 4;
+}
+
+// Guest to host, from the agent's "Share on PC" target: an app shared text, links or files
+// with the host. The host shows its own share UI with the same content. Each file is read
+// with DragRead, as a drag's files are, with `share_id` as the drag's ID, and the share ends
+// with DragEnd, which gives back the guest's access to the files. The host answers with
+// ShareResult.
+message ShareToHost {
+  // Unique among the shares and drags of one connection.
+  uint32 share_id = 1;
+  // The subject or title the app gave; empty when none.
+  string title = 2;
+  // The app that shared, and its name as the guest shows it; empty when unknown.
+  string package_name = 3;
+  string app_label = 4;
+  // The text and links (`is_text`) and the files, in the order the app gave them.
+  repeated DragItem items = 5;
+}
+
+// What became of a share.
+enum ShareOutcome {
+  SHARE_OUTCOME_UNSPECIFIED = 0;
+  // The host's share UI took the content.
+  SHARE_OUTCOME_SHARED = 1;
+  // The user closed the host's share UI without sharing.
+  SHARE_OUTCOME_CANCELED = 2;
+  // It could not be shared; the message says why.
+  SHARE_OUTCOME_FAILED = 3;
+}
+
+// Host to guest, to the agent: what became of a ShareToHost.
+message ShareResult {
+  uint32 share_id = 1;
+  ShareOutcome outcome = 2;
+  string message = 3;
+}
+
 // Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 // controller's deep idle state). The host takes the device not to be in Doze when the agent
 // connects; the agent sends this on each change after that.
@@ -2607,6 +2716,212 @@ message KeyMintRootKey {
   string message = 2;
 }
 
+// Speech and spelling from the host. The agent's text-to-speech engine, speech recognition
+// service and spell checker answer apps with the host's own: the host's voices speak, the
+// host's speech recognition listens, and the host's spell checker checks. The guest keeps no
+// engine or dictionary of its own. Each request carries the agent's number for it, unique
+// among the agent's requests of its kind while its connection lasts, and every answer names
+// it. A host that cannot serve a request answers it at once with the failure, so an app never
+// waits for nothing.
+
+// Guest to host: asks for the host's voices. The host answers with SpeechVoices.
+message ListSpeechVoices {}
+
+// One of the host's voices.
+message SpeechVoice {
+  // The host's name for the voice, which SpeakText gives back. Opaque to the guest.
+  string id = 1;
+  // The voice's name as the host shows it, such as "Microsoft Heami".
+  string name = 2;
+  // The voice's language as a BCP 47 tag, such as "ko-KR".
+  string language_tag = 3;
+  // A neural voice that sounds natural, such as Windows' natural voices.
+  bool natural = 4;
+  // The voice needs the network to speak.
+  bool needs_network = 5;
+}
+
+// Host to guest: the host's voices, in answer to ListSpeechVoices, and again whenever the
+// host's speech service comes or goes. At most 512.
+message SpeechVoices {
+  repeated SpeechVoice voices = 1;
+  // The voice the host speaks with when none is named; empty when it has none.
+  string default_voice_id = 2;
+  // Whether the host can speak at all. False when it has no speech synthesis, or no session
+  // of the user's is open to run it in.
+  bool available = 3;
+}
+
+// Guest to host: speaks `text`. The host answers with SpeechAudio pieces, then SpeechDone.
+message SpeakText {
+  uint32 request_id = 1;
+  // At most 4000 characters, as Android's TextToSpeech takes.
+  string text = 2;
+  // The voice to speak with, from SpeechVoices; empty for the host's voice for the language.
+  string voice_id = 3;
+  // The language to speak in as a BCP 47 tag; empty for the host's own.
+  string language_tag = 4;
+  // How fast and how high, where 1 is the voice's own. The host keeps them in the range its
+  // voices can take.
+  float rate = 5;
+  float pitch = 6;
+}
+
+// Host to guest: a piece of the spoken text's sound, as 16-bit signed little-endian PCM,
+// channels interleaved, at most 64 KiB. Every piece of a request has the same format. A host
+// whose speech service plays the sound itself and gives programs none sends no piece, only
+// SpeechDone once the sound has played.
+message SpeechAudio {
+  uint32 request_id = 1;
+  uint32 sample_rate_hz = 2;
+  uint32 channel_count = 3;
+  bytes pcm = 4;
+}
+
+// How a SpeakText ended.
+enum SpeechOutcome {
+  SPEECH_OUTCOME_UNSPECIFIED = 0;
+  // Every piece of the sound was sent.
+  SPEECH_OUTCOME_DONE = 1;
+  // StopSpeaking stopped it.
+  SPEECH_OUTCOME_STOPPED = 2;
+  // The host has no voice for the language, or no speech synthesis.
+  SPEECH_OUTCOME_UNAVAILABLE = 3;
+  // The host's speech service failed; the message says why.
+  SPEECH_OUTCOME_FAILED = 4;
+}
+
+// Host to guest: a SpeakText is over. No SpeechAudio of it follows.
+message SpeechDone {
+  uint32 request_id = 1;
+  SpeechOutcome outcome = 2;
+  string message = 3;
+}
+
+// Guest to host: stops a SpeakText. The host answers with SpeechDone (STOPPED), unless the
+// request was already over.
+message StopSpeaking {
+  uint32 request_id = 1;
+}
+
+// Guest to host: listens to the host's microphone and recognises what is said. The host
+// answers with RecognitionEvent messages until one of kind FINAL or ERROR. The guest sends it
+// only for an app that holds Android's microphone permission; the host's own microphone
+// privacy settings apply as well.
+message StartRecognition {
+  uint32 request_id = 1;
+  // The language to recognise as a BCP 47 tag; empty for the host's own.
+  string language_tag = 2;
+  // Whether the app wants what is recognised while the user still speaks (PARTIAL events).
+  bool partial_results = 3;
+  // The most alternatives a FINAL event carries; 0 is 1.
+  uint32 max_results = 4;
+  // Whether the app prefers recognition that stays on the computer.
+  bool prefer_offline = 5;
+}
+
+// Guest to host: the user has stopped speaking; the host stops listening and sends what it
+// recognised as the FINAL event.
+message StopRecognition {
+  uint32 request_id = 1;
+}
+
+// Guest to host: drops a recognition. The host stops listening and sends nothing more for it.
+message CancelRecognition {
+  uint32 request_id = 1;
+}
+
+// What a RecognitionEvent says.
+enum RecognitionEventKind {
+  RECOGNITION_EVENT_KIND_UNSPECIFIED = 0;
+  // The host listens: the user may speak.
+  RECOGNITION_EVENT_KIND_READY = 1;
+  // The host hears speech.
+  RECOGNITION_EVENT_KIND_SPEECH_BEGAN = 2;
+  // The speech has stopped.
+  RECOGNITION_EVENT_KIND_SPEECH_ENDED = 3;
+  // What is recognised so far, while the user still speaks.
+  RECOGNITION_EVENT_KIND_PARTIAL = 4;
+  // What was recognised, best first. The recognition is over.
+  RECOGNITION_EVENT_KIND_FINAL = 5;
+  // The recognition failed, for `error`. It is over.
+  RECOGNITION_EVENT_KIND_ERROR = 6;
+}
+
+// Why a recognition failed.
+enum RecognitionError {
+  RECOGNITION_ERROR_UNSPECIFIED = 0;
+  // Nothing that was said was recognised.
+  RECOGNITION_ERROR_NO_MATCH = 1;
+  // Nobody spoke before the host stopped waiting.
+  RECOGNITION_ERROR_SPEECH_TIMEOUT = 2;
+  // The host's privacy settings keep DSA from the microphone, or from speech recognition.
+  RECOGNITION_ERROR_DENIED = 3;
+  // The host has no microphone, or it could not be opened.
+  RECOGNITION_ERROR_NO_MICROPHONE = 4;
+  // The host does not recognise the language.
+  RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED = 5;
+  // The host has no speech recognition, or no session of the user's is open to run it in.
+  RECOGNITION_ERROR_UNAVAILABLE = 6;
+  // The host's recognition needs the network, which failed.
+  RECOGNITION_ERROR_NETWORK = 7;
+  // The host is already recognising for another request.
+  RECOGNITION_ERROR_BUSY = 8;
+  // Anything else; the message says what.
+  RECOGNITION_ERROR_OTHER = 9;
+}
+
+// Host to guest: what became of a StartRecognition so far.
+message RecognitionEvent {
+  uint32 request_id = 1;
+  RecognitionEventKind kind = 2;
+  // For PARTIAL, the text so far; for FINAL, the alternatives, best first.
+  repeated string texts = 3;
+  // For FINAL, how sure the host is of each alternative, from 0 to 1, in the same order;
+  // empty when the host does not say.
+  repeated float confidences = 4;
+  // For ERROR.
+  RecognitionError error = 5;
+  string message = 6;
+}
+
+// Guest to host: checks the spelling of each of `texts`, at most 64 of at most 4096
+// characters each. The host answers with SpellingResult.
+message CheckSpelling {
+  uint32 request_id = 1;
+  // The language as a BCP 47 tag, such as "en-US".
+  string language_tag = 2;
+  repeated string texts = 3;
+  // The most suggestions for each mistake; 0 is 5.
+  uint32 max_suggestions = 4;
+}
+
+// A word the host's spell checker finds wrong.
+message SpellingMistake {
+  // Where the word is in its text, in UTF-16 code units, as Android counts.
+  uint32 start = 1;
+  uint32 length = 2;
+  // What to write instead, best first. An empty suggestion means the word is to be deleted,
+  // as a word written twice.
+  repeated string suggestions = 3;
+  // The host is sure of its first suggestion, as when it would correct the word itself.
+  bool recommended = 4;
+}
+
+// The mistakes in one text, in order.
+message SpellingText {
+  repeated SpellingMistake mistakes = 1;
+}
+
+// Host to guest: the mistakes in each text of a CheckSpelling, one SpellingText each, in the
+// same order.
+message SpellingResult {
+  uint32 request_id = 1;
+  repeated SpellingText texts = 2;
+  // False when the host has no spell checker for the language; `texts` is empty then.
+  bool supported = 3;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
@@ -2761,22 +3076,38 @@ message Envelope {
     ReinstallApp reinstall_app = 380;
     ReinstallResult reinstall_result = 381;
     NativeLibraryCrash native_library_crash = 382;
-    BackupUpload backup_upload = 620;
-    BackupCommit backup_commit = 621;
-    BackupDiscard backup_discard = 622;
-    BackupClear backup_clear = 623;
-    BackupAnswer backup_answer = 624;
-    BackupQuery backup_query = 625;
-    BackupContents backup_contents = 626;
-    BackupFetch backup_fetch = 627;
-    BackupFetchData backup_fetch_data = 628;
-    BackupRun backup_run = 629;
-    BackupRestore backup_restore = 630;
-    BackupRunResult backup_run_result = 631;
-    PasskeyRequest passkey_request = 632;
-    PasskeyResponse passkey_response = 633;
-    KeyMintRootKeyRequest keymint_root_key_request = 634;
-    KeyMintRootKey keymint_root_key = 635;
-    BackupSetting backup_setting = 636;
+    ListSpeechVoices list_speech_voices = 620;
+    SpeechVoices speech_voices = 621;
+    SpeakText speak_text = 622;
+    SpeechAudio speech_audio = 623;
+    SpeechDone speech_done = 624;
+    StopSpeaking stop_speaking = 625;
+    StartRecognition start_recognition = 626;
+    StopRecognition stop_recognition = 627;
+    CancelRecognition cancel_recognition = 628;
+    RecognitionEvent recognition_event = 629;
+    CheckSpelling check_spelling = 630;
+    SpellingResult spelling_result = 631;
+    GeocodeRequest geocode_request = 470;
+    GeocodeResult geocode_result = 471;
+    ShareToHost share_to_host = 472;
+    ShareResult share_result = 473;
+    BackupUpload backup_upload = 640;
+    BackupCommit backup_commit = 641;
+    BackupDiscard backup_discard = 642;
+    BackupClear backup_clear = 643;
+    BackupAnswer backup_answer = 644;
+    BackupQuery backup_query = 645;
+    BackupContents backup_contents = 646;
+    BackupFetch backup_fetch = 647;
+    BackupFetchData backup_fetch_data = 648;
+    BackupRun backup_run = 649;
+    BackupRestore backup_restore = 650;
+    BackupRunResult backup_run_result = 651;
+    PasskeyRequest passkey_request = 652;
+    PasskeyResponse passkey_response = 653;
+    KeyMintRootKeyRequest keymint_root_key_request = 654;
+    KeyMintRootKey keymint_root_key = 655;
+    BackupSetting backup_setting = 656;
   }
 }
