@@ -26,7 +26,7 @@ use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::input::InputEvent;
 use dsa_host_core::native_abi::in_user_language;
 use dsa_host_core::notifications::{NotificationAction, NotificationEvent};
-use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
+use dsa_host_core::tasks::{AppInfo, PinShortcutRequest, TaskEvent, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_transport::Connector;
 
@@ -41,6 +41,7 @@ use crate::renderer::client::RendererClient;
 use crate::shell::dbus::{Notifier, Signal};
 use crate::shell::desktop_entry::{self, Folders};
 use crate::shell::notifications::{Shown as ShownNotifications, UPDATE_PAGE_ARGUMENTS};
+use crate::shell::pin_shortcuts::{self, Questions};
 use dsa_host_core::renderer::{spawn_supervisor, RendererHandler};
 use dsa_host_core::update::alerts::is_update_key;
 use dsa_host_unix::renderer_launch::{CurrentFds, UnixLauncher};
@@ -365,6 +366,135 @@ fn sync_clipboard(to_main: ToMain, outgoing: Receiver<String>) {
     });
 }
 
+/// What the thread that asks about pin requests works on.
+enum PinWork {
+    Ask(PinShortcutRequest),
+    Signal(Signal),
+}
+
+/// Asks the user about each app's request to pin a shortcut that arrives on the returned
+/// sender, on threads of their own so the compositor never waits on the notification
+/// service. The answer goes to Android; on yes the shortcut's entry goes on the desktop in
+/// `folders`. A question left unanswered is declined after [`pin_shortcuts::ASK_FOR`].
+fn ask_pins(folders: Folders) -> Sender<PinShortcutRequest> {
+    let (sender, requests) = mpsc::channel::<PinShortcutRequest>();
+    let (work, todo) = mpsc::channel::<PinWork>();
+    {
+        let work = work.clone();
+        std::thread::spawn(move || {
+            for request in requests {
+                if work.send(PinWork::Ask(request)).is_err() {
+                    return;
+                }
+            }
+        });
+    }
+    let icons = folders.icons.join("notifications");
+    {
+        let icons = icons.clone();
+        std::thread::spawn(move || loop {
+            match Notifier::connect(icons.clone()) {
+                Ok(notifier) => {
+                    let watched = notifier.watch(|signal| {
+                        let _ = work.send(PinWork::Signal(signal));
+                    });
+                    if let Err(why) = watched {
+                        log(&why);
+                    }
+                }
+                Err(why) => log(&why),
+            }
+            std::thread::sleep(Duration::from_secs(10));
+        });
+    }
+    std::thread::spawn(move || {
+        let mut questions = Questions::new();
+        let mut notifier: Option<Notifier> = None;
+        let answer = |request: &PinShortcutRequest, accepted: bool| {
+            let answered = connect().and_then(|mut client| {
+                client
+                    .answer_pin_shortcut(request.request_id, accepted)
+                    .map_err(|error| error.to_string())
+            });
+            if let Err(why) = answered {
+                log(&format!(
+                    "{} did not hear the answer about its shortcut: {why}",
+                    request.package_name
+                ));
+            }
+            if !accepted {
+                return;
+            }
+            let placed = std::env::current_exe()
+                .map_err(|e| format!("this program's place is not known: {e}"))
+                .and_then(|program| {
+                    desktop_entry::place_pinned_in(
+                        &folders,
+                        &request.package_name,
+                        &request.shortcut,
+                        &program,
+                    )
+                });
+            match placed {
+                Ok(path) => log(&format!(
+                    "put a shortcut on the desktop: {}",
+                    path.display()
+                )),
+                Err(why) => log(&format!("the shortcut is not on the desktop: {why}")),
+            }
+        };
+        loop {
+            let next = todo.recv_timeout(Duration::from_secs(1));
+            match next {
+                Ok(PinWork::Ask(request)) => {
+                    if notifier.is_none() {
+                        notifier = Notifier::connect(icons.clone())
+                            .map_err(|why| log(&why))
+                            .ok();
+                    }
+                    let question = pin_shortcuts::question(&request, reads_korean());
+                    let shown = notifier
+                        .as_ref()
+                        .ok_or_else(|| "the notification service cannot be reached".to_string())
+                        .and_then(|notifier| {
+                            notifier.notify(&question, &request.shortcut.icon_png)
+                        });
+                    match shown {
+                        Ok(id) => questions.asked(id, request, Instant::now()),
+                        Err(why) => {
+                            log(&format!("could not ask about a shortcut to pin: {why}"));
+                            notifier = None;
+                            answer(&request, false);
+                        }
+                    }
+                }
+                Ok(PinWork::Signal(Signal::ActionInvoked { id, action })) => {
+                    if let Some((request, accepted)) = questions.action(id, &action) {
+                        if let Some(notifier) = &notifier {
+                            notifier.close(id);
+                        }
+                        answer(&request, accepted);
+                    }
+                }
+                Ok(PinWork::Signal(Signal::Closed { id, .. })) => {
+                    if let Some(request) = questions.closed(id) {
+                        answer(&request, false);
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+            }
+            for (id, request) in questions.expired(Instant::now()) {
+                if let Some(notifier) = &notifier {
+                    notifier.close(id);
+                }
+                answer(&request, false);
+            }
+        }
+    });
+    sender
+}
+
 fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
     let shown = Arc::new(Mutex::new(ShownNotifications::new()));
     {
@@ -570,6 +700,8 @@ struct Main {
     accessibility: Arc<Accessibility>,
     /// What each window last told its accessibility tree of itself.
     accessible: HashMap<i32, WindowFacts>,
+    /// Where the apps' requests to pin a shortcut go to be asked about.
+    pins: Option<Sender<PinShortcutRequest>>,
 }
 
 impl Main {
@@ -682,6 +814,16 @@ impl Main {
                 }
                 self.sync_entries();
             }
+            TaskEvent::PinShortcut(request) => match &self.pins {
+                Some(pins) => {
+                    let _ = pins.send(request.clone());
+                }
+                // With no folders to put the shortcut in, the app hears no at once.
+                None => self.request(TaskRequest::AnswerPinShortcut {
+                    request_id: request.request_id,
+                    accepted: false,
+                }),
+            },
             TaskEvent::App(app) => {
                 let changed = self.apps.get(&app.package_name) != Some(app);
                 if changed {
@@ -893,6 +1035,7 @@ pub fn run() -> Result<(), String> {
     if let Some(folders) = &folders {
         show_notifications(requests.clone(), folders.icons.join("notifications"));
     }
+    let pins = folders.clone().map(ask_pins);
     follow_gamepads(active.clone());
     let images = desktop
         .state
@@ -918,6 +1061,7 @@ pub fn run() -> Result<(), String> {
         to_main,
         accessibility,
         accessible: HashMap::new(),
+        pins,
     };
     if let Ok(mut client) = connect() {
         if let Ok(settings) = client.app_window_settings() {
@@ -938,6 +1082,18 @@ pub fn run() -> Result<(), String> {
         main.tick(Instant::now());
         main.desktop.flush();
     }
+}
+
+/// `--launch-shortcut <package> <id>`, a shortcut action of an app's launcher entry or a
+/// pinned shortcut on the desktop: starts Android when it is off, then the shortcut.
+pub fn launch_shortcut(package: &str, id: &str) -> Result<(), String> {
+    let mut client = connect()?;
+    client
+        .ensure_running(Duration::from_secs(120), Duration::from_millis(500), |_| {})
+        .map_err(|error| error.to_string())?;
+    client
+        .launch_shortcut(package, id)
+        .map_err(|error| error.to_string())
 }
 
 /// `--launch <package>` and the launcher entry's actions: one request, then exit.
