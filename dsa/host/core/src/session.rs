@@ -101,6 +101,10 @@
 //! [`Session::watch_print_jobs`] watcher, which prints them on the host. Its outcome
 //! ([`Session::print_result`]) goes back to the guest. A job canceled in the guest, or one the
 //! guest's agent no longer has because it went away, is withdrawn from the watcher.
+//!
+//! The requests of the agent's text-to-speech engine, speech recognition service and spell
+//! checker go to the first [`Session::serve_language`] client, which answers them with the
+//! host's own services ([`crate::language`]); a request nobody serves fails at once.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -142,6 +146,7 @@ use crate::guest_log::{
 use crate::ime::{ImeCursor, ImeEditor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};
 use crate::keys::KeyEvent;
+use crate::language;
 use crate::links::{self, LinkGate};
 use crate::location::{LocationEvent, LocationHub, Wanted};
 use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
@@ -728,6 +733,8 @@ struct Shared {
     power_hint_watchers: Mutex<Vec<Sender<GuestPower>>>,
     /// Whether the guest wants the host's location, and who hears of it.
     location: Mutex<LocationHub>,
+    /// Who serves the guest's speech and spelling, and which of its requests each one has.
+    language: Mutex<language::relay::Relay>,
     /// Whether the user's developer mode is on, which each agent that connects is told.
     developer_mode: AtomicBool,
     /// Who reads the guest's log, its recent records, and the dumps and diagnostics under way.
@@ -1254,6 +1261,10 @@ impl Shared {
             .retain(|watcher| watcher.send(PrintEvent::Withdrawn { job_id }).is_ok());
     }
 
+    fn language(&self) -> std::sync::MutexGuard<'_, language::relay::Relay> {
+        self.language.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// What the guest wants of the host's location now; every watcher hears a change.
     fn set_location(&self, wanted: Wanted) {
         self.location
@@ -1365,6 +1376,7 @@ impl Session {
             accessibility: Mutex::new(AccessibilityHub::default()),
             power_hint_watchers: Mutex::new(Vec::new()),
             location: Mutex::new(LocationHub::default()),
+            language: Mutex::new(language::relay::Relay::new()),
             developer_mode: AtomicBool::new(false),
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
@@ -2561,6 +2573,35 @@ impl Session {
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(Body::PrintJobResult(outcome.to_control(guest_id))),
         }))
+    }
+
+    /// Serves the guest's speech and spelling from now on: its requests come to the returned
+    /// watch while no client that came before still serves them. The watch lasts across
+    /// restarts of the guest. Each answer goes back through [`Session::language_answer`], and
+    /// [`Session::language_server_gone`] says when the client has gone.
+    pub fn serve_language(&self) -> language::relay::Served {
+        self.shared.language().serve()
+    }
+
+    /// Passes an answer of client `server`'s to the guest, if it answers a request the client
+    /// has. Anything that is no answer is an error, and reaches nobody.
+    pub fn language_answer(&self, server: u64, envelope: control::Envelope) -> Result<(), String> {
+        let Some(body) = envelope.body else {
+            return Err("an empty message".into());
+        };
+        if let Some(answer) = self.shared.language().answer(server, body)? {
+            send_quietly(&self.shared, &self.commands, answer);
+        }
+        Ok(())
+    }
+
+    /// Client `server` no longer serves the guest's speech and spelling: what it had not
+    /// answered fails in the guest.
+    pub fn language_server_gone(&self, server: u64) {
+        let failures = self.shared.language().server_gone(server);
+        for failure in failures {
+            send_quietly(&self.shared, &self.commands, failure);
+        }
     }
 
     /// The address lookups of the guest's apps from now on, each to one watcher only, which
@@ -6230,6 +6271,29 @@ impl Worker {
                 self.shared.set_location(Wanted::from_control(&request))
             }
             Some(Body::SuRequest(request)) => self.su_request(request),
+            Some(
+                body @ (Body::ListSpeechVoices(_)
+                | Body::SpeakText(_)
+                | Body::StopSpeaking(_)
+                | Body::StartRecognition(_)
+                | Body::StopRecognition(_)
+                | Body::CancelRecognition(_)
+                | Body::CheckSpelling(_)),
+            ) => {
+                let replies = self.shared.language().from_guest(body);
+                for reply in replies {
+                    self.send_body(reply);
+                }
+            }
+            Some(Body::SpeechVoices(_))
+            | Some(Body::SpeechAudio(_))
+            | Some(Body::SpeechDone(_))
+            | Some(Body::RecognitionEvent(_))
+            | Some(Body::SpellingResult(_)) => {
+                eprintln!(
+                    "control channel: dropping a speech or spelling answer only the host sends"
+                );
+            }
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::DisplayRefresh(_))
@@ -6393,6 +6457,8 @@ impl Worker {
         self.shared.publish_power(GuestPower::Stopped);
         // And its wish for the host's location, so the host's location service stops.
         self.shared.set_location(Wanted::NONE);
+        // And what it asked of the host's speech and spelling.
+        self.shared.language().guest_gone();
         self.shared.set_guest_memory(None);
         // A dump or diagnostics under way gets no more from this guest.
         self.shared

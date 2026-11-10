@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! dsa-devices [--socket <path>] [--no-location] [--no-print] [--no-links]
-//!             [--no-settings] [--no-gamepads] [--no-geocoding] [--no-share] [--no-device-ports]
+//!             [--no-settings] [--no-gamepads] [--no-language] [--no-geocoding] [--no-share]
+//!             [--no-device-ports]
 //! dsa-devices version
 //! ```
 //!
@@ -50,7 +51,8 @@ fn main() -> std::process::ExitCode {
     use objc2::runtime::AnyObject;
 
     const HELP: &str = "usage: dsa-devices [--socket <path>] [--no-location] [--no-print] \
-                        [--no-links] [--no-settings] [--no-gamepads] [--no-geocoding] [--no-share] [--no-device-ports] \
+                        [--no-links] [--no-settings] [--no-gamepads] [--no-language] [--no-geocoding] \
+                        [--no-share] [--no-device-ports] \
                         | version";
 
     static STOP: OnceLock<Arc<AtomicBool>> = OnceLock::new();
@@ -78,6 +80,7 @@ fn main() -> std::process::ExitCode {
             "--no-links" => which.links = false,
             "--no-settings" => which.settings = false,
             "--no-gamepads" => which.gamepads = false,
+            "--no-language" => which.language = false,
             "--no-geocoding" => which.geocoding = false,
             "--no-share" => which.share = false,
             "--no-device-ports" => ports = false,

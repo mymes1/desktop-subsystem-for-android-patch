@@ -46,6 +46,8 @@ import io.github.thisisthepy.dsa.agent.files.FileReceiver
 import io.github.thisisthepy.dsa.agent.files.MediaScan
 import io.github.thisisthepy.dsa.agent.files.SharedFolders
 import io.github.thisisthepy.dsa.agent.files.TransferStore
+import io.github.thisisthepy.dsa.agent.language.HostLanguage
+import io.github.thisisthepy.dsa.agent.language.LanguageServicesSetup
 import io.github.thisisthepy.dsa.agent.links.BrowserRole
 import io.github.thisisthepy.dsa.agent.links.GuestBrowser
 import io.github.thisisthepy.dsa.agent.links.Links
@@ -130,6 +132,9 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
  * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
+ * The agent's text-to-speech engine, speech recognition service and spell checker, the guest's
+ * defaults, answer apps with the host's voices, speech recognition and spell checker
+ * ([HostLanguage]).
  * With Google Play installed, the parts of Play services a desktop does not use stay off,
  * across Play services' updates ([DesktopPlayServices]).
  * The host's location is also the guest's network location ([NetworkLocation]), the guest's
@@ -191,6 +196,7 @@ class Agent(
     private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
     private val unhandledKeys: UnhandledKeys = UnhandledKeys.NONE,
     private val editorFocused: () -> Boolean = { false },
+    private val languageSetup: LanguageServicesSetup = LanguageServicesSetup.NONE,
     componentStates: ComponentStates = ComponentStates.NONE,
     /** Tells the user that a share did not reach the PC (the host's reason, or empty). */
     shareNotice: (String) -> Unit = {},
@@ -295,6 +301,13 @@ class Agent(
         log,
         isConnected = { channel.connected },
         post = { work -> scheduler.post(work) },
+    )
+    /** Speech and spelling from the host, for the agent's speech and spelling services. */
+    val language = HostLanguage(
+        { frame -> channel.send(frame) },
+        post = { work -> scheduler.post(work) },
+        isConnected = { channel.connected },
+        log = log,
     )
     private val packageQueries = PackageQueries(packages, { frame -> channel.send(frame) }, log)
     private val googleDeviceIds = GoogleDeviceIds(googleDeviceId, { frame -> channel.send(frame) }, log)
@@ -405,6 +418,11 @@ class Agent(
                 network.joinHostNetwork()
             } catch (e: Exception) {
                 log.warn("could not join the host's network; apps have no network until Wi-Fi joins it", e)
+            }
+            try {
+                languageSetup.useHostServices()
+            } catch (e: Exception) {
+                log.warn("could not make the agent's speech and spelling services the guest's defaults", e)
             }
             try {
                 touchSounds.turnOff()
@@ -543,6 +561,7 @@ class Agent(
         widgetManager.connected()
         apkInstaller.connected()
         printer.connected()
+        language.connected()
         networkLocation.connected()
         installed.resend()
         memoryReporter?.connected()
@@ -639,6 +658,7 @@ class Agent(
         if (googleDeviceIds.handle(envelope)) return true
         if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
+        if (language.handle(envelope)) return true
         if (networkLocation.handle(envelope)) return true
         if (geocoder.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true

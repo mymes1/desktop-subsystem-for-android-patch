@@ -166,6 +166,19 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   the service with the agent's `DEVICE_POWER` permission, which they check; they need no
   shell or debuggable build. The image's `sepolicy/agent.cil` lets system_server use the
   descriptors the call hands it.
+- **Speech and spelling.** The agent is the guest's text-to-speech engine
+  (`HostTextToSpeechService`), speech recognition service (`HostRecognitionService`) and spell
+  checker (`HostSpellCheckerService`), and makes them the defaults at boot
+  (`tts_default_synth`, `voice_recognition_service`, `selected_spell_checker`,
+  `spell_checker_enabled`) unless the user picked another one that is still installed. None
+  keeps an engine or a dictionary in the guest: the engine lists the host's voices
+  (`ListSpeechVoices`) and speaks with them (`SpeakText`, the sound back as `SpeechAudio`
+  pieces and `SpeechDone`), the recognizer asks the host to listen (`StartRecognition`, then
+  `RecognitionEvent`s with partial and final results), and the spell checker sends each
+  sentence an editor asks about (`CheckSpelling`, answered by `SpellingResult`). An app
+  without the permission to record gets the recognizer's permission error before the host
+  is asked; the host's own microphone privacy settings apply there. A host that cannot
+  answer fails the request at once, so no app waits.
 - **The channel.** It reaches the host through the control daemon's binder service,
   `io.github.thisisthepy.dsa.channel.IChannel/default` (`dsa/guest/aidl/`). It looks for
   the service every second until the daemon is up, subscribes, and sends every app task

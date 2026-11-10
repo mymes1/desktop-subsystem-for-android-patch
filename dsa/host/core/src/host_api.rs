@@ -353,6 +353,20 @@ pub trait UserAndroid: Send + Sync {
     fn host_location(&self, event: LocationEvent) {
         let _ = event;
     }
+    /// Serves this Android's speech and spelling from now on. `None` when it takes none from
+    /// the host.
+    fn serve_language(&self) -> Option<crate::language::relay::Served> {
+        None
+    }
+    /// An answer of client `server`'s for this Android's speech and spelling.
+    fn language_answer(&self, server: u64, envelope: control::Envelope) -> Result<(), String> {
+        let _ = (server, envelope);
+        Err("this Android takes no speech or spelling from the host".into())
+    }
+    /// Client `server` no longer serves this Android's speech and spelling.
+    fn language_server_gone(&self, server: u64) {
+        let _ = server;
+    }
     /// The user's host system settings, which this Android follows: its time zone, languages,
     /// regional format, theme and accent color.
     fn set_system_settings(&self, settings: SystemSettings) {
@@ -816,6 +830,15 @@ impl UserAndroid for Session {
     }
     fn host_location(&self, event: LocationEvent) {
         Session::host_location(self, event)
+    }
+    fn serve_language(&self) -> Option<crate::language::relay::Served> {
+        Some(Session::serve_language(self))
+    }
+    fn language_answer(&self, server: u64, envelope: control::Envelope) -> Result<(), String> {
+        Session::language_answer(self, server, envelope)
+    }
+    fn language_server_gone(&self, server: u64) {
+        Session::language_server_gone(self, server)
     }
     fn set_system_settings(&self, settings: SystemSettings) {
         Session::set_system_settings(self, settings)
@@ -1610,6 +1633,77 @@ const WATCH_POLL: Duration = Duration::from_millis(100);
 /// for text from Android again.
 const CLIPBOARD_POLL: Duration = Duration::from_millis(50);
 
+/// How long a connection that serves speech and spelling waits for the client's answers
+/// before it passes on the Android's next requests: a spelling request waits at most this.
+const LANGUAGE_POLL: Duration = Duration::from_millis(10);
+
+/// Carries the speech and spelling of `android` between it and the client on `connection`,
+/// until either goes away.
+fn carry_language(
+    connection: &mut dyn Connection,
+    peer: &Peer,
+    android: &dyn UserAndroid,
+    served: &crate::language::relay::Served,
+) {
+    loop {
+        loop {
+            match served.requests.try_recv() {
+                Ok(request) => {
+                    let frame = Body::LanguageServiceFrame(types::LanguageServiceFrame {
+                        control: dsa_protocol::encode(&request),
+                    });
+                    if send(connection, frame).is_err() {
+                        return;
+                    }
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    connection.close();
+                    return;
+                }
+            }
+        }
+        let frame = match connection.recv(Some(LANGUAGE_POLL)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => continue,
+            Err(_) => return,
+        };
+        let carried = match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::LanguageServiceFrame(frame)),
+            }) => dsa_protocol::decode(&frame.control).map_err(|e| e.to_string()),
+            Ok(_) => {
+                eprintln!(
+                    "local API: a client of {} sent something other than speech or spelling on a \
+                     connection that serves them; closing its connection",
+                    peer.user
+                );
+                connection.close();
+                return;
+            }
+            Err(error) => Err(error.to_string()),
+        };
+        match carried {
+            Ok(envelope) => {
+                if let Err(why) = android.language_answer(served.id, envelope) {
+                    eprintln!(
+                        "local API: a client of {} sent what Android did not ask for ({why}); \
+                         closing its connection",
+                        peer.user
+                    );
+                    connection.close();
+                    return;
+                }
+            }
+            Err(why) => eprintln!(
+                "local API: a client of {} sent an unreadable frame on a connection that serves \
+                 speech and spelling ({why}); dropping it",
+                peer.user
+            ),
+        }
+    }
+}
+
 /// How long the service waits for the next piece of an APK a client sends. A client reads the
 /// file as it sends it, so a gap this long means it is stuck or gone.
 const APK_CHUNK_WAIT: Duration = Duration::from_secs(30);
@@ -2325,6 +2419,9 @@ impl HostApiService {
             }
             if let Some(request::Body::WatchLocation(_)) = request.body {
                 return self.watch_location(connection, &peer, request.id);
+            }
+            if let Some(request::Body::ServeLanguageServices(_)) = request.body {
+                return self.serve_language(connection, &peer, request.id);
             }
             if let Some(request::Body::WatchGeocoding(_)) = request.body {
                 return self.watch_geocoding(connection, &peer, request.id);
@@ -3119,6 +3216,44 @@ impl HostApiService {
                 }
             }
         }
+    }
+
+    /// Answers a ServeLanguageServices request, then passes the speech and spelling requests
+    /// of the client's Android to it and its answers to the Android, until the client goes
+    /// away. What it had not answered then fails in the Android. A frame that cannot be read is
+    /// dropped; one that is no answer closes the connection.
+    fn serve_language(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let served = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.serve_language() {
+                Some(served) => Ok((android, served)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android takes no speech or spelling from the host".into(),
+                )),
+            },
+        };
+        let (android, served) = match served {
+            Ok(served) => served,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_ok() {
+            carry_language(&mut *connection, peer, &*android, &served);
+        }
+        android.language_server_gone(served.id);
     }
 
     /// Answers a WatchNotifications request, then passes the notifications of the client's
@@ -4699,6 +4834,7 @@ impl HostApiService {
                         | request::Body::CollectDiagnostics(_)
                         | request::Body::StopApp(_)
                         | request::Body::WatchLocation(_)
+                        | request::Body::ServeLanguageServices(_)
                         | request::Body::SetSystemSettings(_)
                         | request::Body::WatchGamepads(_)
                         | request::Body::ListAppWindowSettings(_)
@@ -6976,6 +7112,23 @@ impl HostApiClient {
         }
     }
 
+    /// Serves the speech and spelling of the caller's Android: the client hears each request
+    /// of its text-to-speech engine, speech recognition service and spell checker, and sends
+    /// the answers. The connection carries nothing else from here on, so the client is used up.
+    pub fn serve_language_services(mut self) -> Result<LanguageServiceStream, ClientError> {
+        match self.exchange(
+            request::Body::ServeLanguageServices(types::ServeLanguageServices {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(LanguageServiceStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that speech and spelling are served".into(),
+            )),
+        }
+    }
+
     /// Gives the caller's Android the system settings of the caller's host session.
     pub fn set_system_settings(&mut self, settings: &SystemSettings) -> Result<(), ClientError> {
         self.done(request::Body::SetSystemSettings(types::SetSystemSettings {
@@ -7846,6 +7999,44 @@ fn app_windows_report(body: response::Body) -> Result<Vec<AppWindowSettings>, Cl
         _ => Err(ClientError::Malformed(
             "expected the window settings of the apps".into(),
         )),
+    }
+}
+
+/// A connection that serves the speech and spelling of the caller's Android, from
+/// [`HostApiClient::serve_language_services`].
+pub struct LanguageServiceStream {
+    connection: Box<dyn Connection>,
+}
+
+impl LanguageServiceStream {
+    /// The Android's next request, waiting at most `timeout`. `Ok(None)` means none came in
+    /// time; an error means the connection has ended.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<control::Envelope>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::LanguageServiceFrame(frame)),
+            }) => dsa_protocol::decode(&frame.control)
+                .map(Some)
+                .map_err(|error| ClientError::Malformed(error.to_string())),
+            Ok(_) => Err(ClientError::Malformed(
+                "expected a speech or spelling request".into(),
+            )),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+
+    /// Sends an answer to the Android. Nothing is awaited. An error means the connection has
+    /// ended, and a new one is needed.
+    pub fn send(&mut self, answer: &control::Envelope) -> Result<(), ClientError> {
+        let frame = Body::LanguageServiceFrame(types::LanguageServiceFrame {
+            control: dsa_protocol::encode(answer),
+        });
+        send(&mut *self.connection, frame).map_err(ClientError::Transport)
     }
 }
 

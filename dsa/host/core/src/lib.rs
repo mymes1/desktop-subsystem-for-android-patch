@@ -105,6 +105,7 @@ pub mod ime;
 pub mod input;
 pub mod input_trace;
 pub mod keys;
+pub mod language;
 pub mod links;
 pub mod location;
 pub mod memory;
