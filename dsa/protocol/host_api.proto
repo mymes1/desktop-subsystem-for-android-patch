@@ -431,6 +431,26 @@ message LocationFix {
   uint64 unix_time_ms = 11;
 }
 
+// Turns the connection into the speech and spelling of the caller's Android: after the
+// answer (Done), the service sends a LanguageServiceFrame for each request the Android's
+// text-to-speech engine, speech recognition service or spell checker makes (ListSpeechVoices,
+// SpeakText, StopSpeaking, StartRecognition, StopRecognition, CancelRecognition and
+// CheckSpelling), and the client answers each with LanguageServiceFrame messages of its own
+// (SpeechVoices, SpeechAudio, SpeechDone, RecognitionEvent and SpellingResult), which the
+// service passes to the Android. The client runs the host's speech synthesis, speech
+// recognition and spell checker in the user's session, where the user's voices, dictionaries
+// and privacy settings are. Requests go to the first client still connected; when its
+// connection ends, every request it had not finished fails in the Android. The connection
+// lasts across restarts of the Android.
+message ServeLanguageServices {}
+
+// One message of control.proto (an encoded Envelope of dsa.control.v1), on a connection that
+// serves speech and spelling. The service checks each one the client sends is an answer and
+// passes it on unchanged, so the messages are defined once, where the Android reads them.
+message LanguageServiceFrame {
+  bytes control = 1;
+}
+
 // A notification of the caller's Android, on a connection that watches them
 // (WatchNotifications). One with the key of an earlier one replaces it.
 message Notification {
@@ -2342,6 +2362,7 @@ message Request {
     SetRunAsArm set_run_as_arm = 340;
     SetAppRoot set_app_root = 341;
     ReportTouchGestures report_touch_gestures = 350;
+    ServeLanguageServices serve_language_services = 620;
     WatchGeocoding watch_geocoding = 470;
     ReportGeocode report_geocode = 471;
     WatchShares watch_shares = 472;
@@ -2420,6 +2441,7 @@ message Envelope {
     BackgroundAppEvent background_app_event = 21;
     GamepadEvent gamepad_event = 300;
     GamepadRumble gamepad_rumble = 301;
+    LanguageServiceFrame language_service_frame = 620;
     GeocodeQuery geocode_query = 470;
     ShareOffer share_offer = 471;
   }

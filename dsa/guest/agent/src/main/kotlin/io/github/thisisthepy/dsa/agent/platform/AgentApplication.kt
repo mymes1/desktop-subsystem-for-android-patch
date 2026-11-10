@@ -102,6 +102,7 @@ class AgentApplication : Application() {
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
             dragCatcher = dragCatcher,
+            languageSetup = AndroidLanguageServicesSetup(this),
             shareNotice = { reason ->
                 val main = android.os.Handler(mainLooper)
                 main.post {

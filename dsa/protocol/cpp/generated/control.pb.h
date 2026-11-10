@@ -156,6 +156,12 @@ extern CameraStopDefaultTypeInternal _CameraStop_default_instance_;
 class CancelInstall;
 struct CancelInstallDefaultTypeInternal;
 extern CancelInstallDefaultTypeInternal _CancelInstall_default_instance_;
+class CancelRecognition;
+struct CancelRecognitionDefaultTypeInternal;
+extern CancelRecognitionDefaultTypeInternal _CancelRecognition_default_instance_;
+class CheckSpelling;
+struct CheckSpellingDefaultTypeInternal;
+extern CheckSpellingDefaultTypeInternal _CheckSpelling_default_instance_;
 class ClipboardSharing;
 struct ClipboardSharingDefaultTypeInternal;
 extern ClipboardSharingDefaultTypeInternal _ClipboardSharing_default_instance_;
@@ -336,6 +342,9 @@ extern LaunchAppDefaultTypeInternal _LaunchApp_default_instance_;
 class LinkHandling;
 struct LinkHandlingDefaultTypeInternal;
 extern LinkHandlingDefaultTypeInternal _LinkHandling_default_instance_;
+class ListSpeechVoices;
+struct ListSpeechVoicesDefaultTypeInternal;
+extern ListSpeechVoicesDefaultTypeInternal _ListSpeechVoices_default_instance_;
 class ListWidgetProviders;
 struct ListWidgetProvidersDefaultTypeInternal;
 extern ListWidgetProvidersDefaultTypeInternal _ListWidgetProviders_default_instance_;
@@ -426,6 +435,9 @@ extern ProcessMemoryDefaultTypeInternal _ProcessMemory_default_instance_;
 class QueryPackage;
 struct QueryPackageDefaultTypeInternal;
 extern QueryPackageDefaultTypeInternal _QueryPackage_default_instance_;
+class RecognitionEvent;
+struct RecognitionEventDefaultTypeInternal;
+extern RecognitionEventDefaultTypeInternal _RecognitionEvent_default_instance_;
 class Rect;
 struct RectDefaultTypeInternal;
 extern RectDefaultTypeInternal _Rect_default_instance_;
@@ -486,9 +498,42 @@ extern ShareResultDefaultTypeInternal _ShareResult_default_instance_;
 class ShareToHost;
 struct ShareToHostDefaultTypeInternal;
 extern ShareToHostDefaultTypeInternal _ShareToHost_default_instance_;
+class SpeakText;
+struct SpeakTextDefaultTypeInternal;
+extern SpeakTextDefaultTypeInternal _SpeakText_default_instance_;
+class SpeechAudio;
+struct SpeechAudioDefaultTypeInternal;
+extern SpeechAudioDefaultTypeInternal _SpeechAudio_default_instance_;
+class SpeechDone;
+struct SpeechDoneDefaultTypeInternal;
+extern SpeechDoneDefaultTypeInternal _SpeechDone_default_instance_;
+class SpeechVoice;
+struct SpeechVoiceDefaultTypeInternal;
+extern SpeechVoiceDefaultTypeInternal _SpeechVoice_default_instance_;
+class SpeechVoices;
+struct SpeechVoicesDefaultTypeInternal;
+extern SpeechVoicesDefaultTypeInternal _SpeechVoices_default_instance_;
+class SpellingMistake;
+struct SpellingMistakeDefaultTypeInternal;
+extern SpellingMistakeDefaultTypeInternal _SpellingMistake_default_instance_;
+class SpellingResult;
+struct SpellingResultDefaultTypeInternal;
+extern SpellingResultDefaultTypeInternal _SpellingResult_default_instance_;
+class SpellingText;
+struct SpellingTextDefaultTypeInternal;
+extern SpellingTextDefaultTypeInternal _SpellingText_default_instance_;
+class StartRecognition;
+struct StartRecognitionDefaultTypeInternal;
+extern StartRecognitionDefaultTypeInternal _StartRecognition_default_instance_;
 class StopApp;
 struct StopAppDefaultTypeInternal;
 extern StopAppDefaultTypeInternal _StopApp_default_instance_;
+class StopRecognition;
+struct StopRecognitionDefaultTypeInternal;
+extern StopRecognitionDefaultTypeInternal _StopRecognition_default_instance_;
+class StopSpeaking;
+struct StopSpeakingDefaultTypeInternal;
+extern StopSpeakingDefaultTypeInternal _StopSpeaking_default_instance_;
 class SuDecision;
 struct SuDecisionDefaultTypeInternal;
 extern SuDecisionDefaultTypeInternal _SuDecision_default_instance_;
@@ -602,6 +647,8 @@ template<> ::dsa::control::v1::CameraStill* Arena::CreateMaybeMessage<::dsa::con
 template<> ::dsa::control::v1::CameraStillTaken* Arena::CreateMaybeMessage<::dsa::control::v1::CameraStillTaken>(Arena*);
 template<> ::dsa::control::v1::CameraStop* Arena::CreateMaybeMessage<::dsa::control::v1::CameraStop>(Arena*);
 template<> ::dsa::control::v1::CancelInstall* Arena::CreateMaybeMessage<::dsa::control::v1::CancelInstall>(Arena*);
+template<> ::dsa::control::v1::CancelRecognition* Arena::CreateMaybeMessage<::dsa::control::v1::CancelRecognition>(Arena*);
+template<> ::dsa::control::v1::CheckSpelling* Arena::CreateMaybeMessage<::dsa::control::v1::CheckSpelling>(Arena*);
 template<> ::dsa::control::v1::ClipboardSharing* Arena::CreateMaybeMessage<::dsa::control::v1::ClipboardSharing>(Arena*);
 template<> ::dsa::control::v1::ClipboardText* Arena::CreateMaybeMessage<::dsa::control::v1::ClipboardText>(Arena*);
 template<> ::dsa::control::v1::ClockAnswer* Arena::CreateMaybeMessage<::dsa::control::v1::ClockAnswer>(Arena*);
@@ -662,6 +709,7 @@ template<> ::dsa::control::v1::InstalledApps* Arena::CreateMaybeMessage<::dsa::c
 template<> ::dsa::control::v1::KeyEvent* Arena::CreateMaybeMessage<::dsa::control::v1::KeyEvent>(Arena*);
 template<> ::dsa::control::v1::LaunchApp* Arena::CreateMaybeMessage<::dsa::control::v1::LaunchApp>(Arena*);
 template<> ::dsa::control::v1::LinkHandling* Arena::CreateMaybeMessage<::dsa::control::v1::LinkHandling>(Arena*);
+template<> ::dsa::control::v1::ListSpeechVoices* Arena::CreateMaybeMessage<::dsa::control::v1::ListSpeechVoices>(Arena*);
 template<> ::dsa::control::v1::ListWidgetProviders* Arena::CreateMaybeMessage<::dsa::control::v1::ListWidgetProviders>(Arena*);
 template<> ::dsa::control::v1::LocationFix* Arena::CreateMaybeMessage<::dsa::control::v1::LocationFix>(Arena*);
 template<> ::dsa::control::v1::LocationRequest* Arena::CreateMaybeMessage<::dsa::control::v1::LocationRequest>(Arena*);
@@ -692,6 +740,7 @@ template<> ::dsa::control::v1::PrintJobChunk* Arena::CreateMaybeMessage<::dsa::c
 template<> ::dsa::control::v1::PrintJobResult* Arena::CreateMaybeMessage<::dsa::control::v1::PrintJobResult>(Arena*);
 template<> ::dsa::control::v1::ProcessMemory* Arena::CreateMaybeMessage<::dsa::control::v1::ProcessMemory>(Arena*);
 template<> ::dsa::control::v1::QueryPackage* Arena::CreateMaybeMessage<::dsa::control::v1::QueryPackage>(Arena*);
+template<> ::dsa::control::v1::RecognitionEvent* Arena::CreateMaybeMessage<::dsa::control::v1::RecognitionEvent>(Arena*);
 template<> ::dsa::control::v1::Rect* Arena::CreateMaybeMessage<::dsa::control::v1::Rect>(Arena*);
 template<> ::dsa::control::v1::RefreshApps* Arena::CreateMaybeMessage<::dsa::control::v1::RefreshApps>(Arena*);
 template<> ::dsa::control::v1::ReinstallApp* Arena::CreateMaybeMessage<::dsa::control::v1::ReinstallApp>(Arena*);
@@ -712,7 +761,18 @@ template<> ::dsa::control::v1::SetTaskCaption* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
 template<> ::dsa::control::v1::ShareResult* Arena::CreateMaybeMessage<::dsa::control::v1::ShareResult>(Arena*);
 template<> ::dsa::control::v1::ShareToHost* Arena::CreateMaybeMessage<::dsa::control::v1::ShareToHost>(Arena*);
+template<> ::dsa::control::v1::SpeakText* Arena::CreateMaybeMessage<::dsa::control::v1::SpeakText>(Arena*);
+template<> ::dsa::control::v1::SpeechAudio* Arena::CreateMaybeMessage<::dsa::control::v1::SpeechAudio>(Arena*);
+template<> ::dsa::control::v1::SpeechDone* Arena::CreateMaybeMessage<::dsa::control::v1::SpeechDone>(Arena*);
+template<> ::dsa::control::v1::SpeechVoice* Arena::CreateMaybeMessage<::dsa::control::v1::SpeechVoice>(Arena*);
+template<> ::dsa::control::v1::SpeechVoices* Arena::CreateMaybeMessage<::dsa::control::v1::SpeechVoices>(Arena*);
+template<> ::dsa::control::v1::SpellingMistake* Arena::CreateMaybeMessage<::dsa::control::v1::SpellingMistake>(Arena*);
+template<> ::dsa::control::v1::SpellingResult* Arena::CreateMaybeMessage<::dsa::control::v1::SpellingResult>(Arena*);
+template<> ::dsa::control::v1::SpellingText* Arena::CreateMaybeMessage<::dsa::control::v1::SpellingText>(Arena*);
+template<> ::dsa::control::v1::StartRecognition* Arena::CreateMaybeMessage<::dsa::control::v1::StartRecognition>(Arena*);
 template<> ::dsa::control::v1::StopApp* Arena::CreateMaybeMessage<::dsa::control::v1::StopApp>(Arena*);
+template<> ::dsa::control::v1::StopRecognition* Arena::CreateMaybeMessage<::dsa::control::v1::StopRecognition>(Arena*);
+template<> ::dsa::control::v1::StopSpeaking* Arena::CreateMaybeMessage<::dsa::control::v1::StopSpeaking>(Arena*);
 template<> ::dsa::control::v1::SuDecision* Arena::CreateMaybeMessage<::dsa::control::v1::SuDecision>(Arena*);
 template<> ::dsa::control::v1::SuRequest* Arena::CreateMaybeMessage<::dsa::control::v1::SuRequest>(Arena*);
 template<> ::dsa::control::v1::SystemSettings* Arena::CreateMaybeMessage<::dsa::control::v1::SystemSettings>(Arena*);
@@ -1524,6 +1584,85 @@ inline const std::string& GamepadButton_Name(T enum_t_value) {
 }
 bool GamepadButton_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, GamepadButton* value);
+enum SpeechOutcome : int {
+  SPEECH_OUTCOME_UNSPECIFIED = 0,
+  SPEECH_OUTCOME_DONE = 1,
+  SPEECH_OUTCOME_STOPPED = 2,
+  SPEECH_OUTCOME_UNAVAILABLE = 3,
+  SPEECH_OUTCOME_FAILED = 4,
+  SpeechOutcome_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  SpeechOutcome_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool SpeechOutcome_IsValid(int value);
+constexpr SpeechOutcome SpeechOutcome_MIN = SPEECH_OUTCOME_UNSPECIFIED;
+constexpr SpeechOutcome SpeechOutcome_MAX = SPEECH_OUTCOME_FAILED;
+constexpr int SpeechOutcome_ARRAYSIZE = SpeechOutcome_MAX + 1;
+
+const std::string& SpeechOutcome_Name(SpeechOutcome value);
+template<typename T>
+inline const std::string& SpeechOutcome_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, SpeechOutcome>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function SpeechOutcome_Name.");
+  return SpeechOutcome_Name(static_cast<SpeechOutcome>(enum_t_value));
+}
+bool SpeechOutcome_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, SpeechOutcome* value);
+enum RecognitionEventKind : int {
+  RECOGNITION_EVENT_KIND_UNSPECIFIED = 0,
+  RECOGNITION_EVENT_KIND_READY = 1,
+  RECOGNITION_EVENT_KIND_SPEECH_BEGAN = 2,
+  RECOGNITION_EVENT_KIND_SPEECH_ENDED = 3,
+  RECOGNITION_EVENT_KIND_PARTIAL = 4,
+  RECOGNITION_EVENT_KIND_FINAL = 5,
+  RECOGNITION_EVENT_KIND_ERROR = 6,
+  RecognitionEventKind_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  RecognitionEventKind_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool RecognitionEventKind_IsValid(int value);
+constexpr RecognitionEventKind RecognitionEventKind_MIN = RECOGNITION_EVENT_KIND_UNSPECIFIED;
+constexpr RecognitionEventKind RecognitionEventKind_MAX = RECOGNITION_EVENT_KIND_ERROR;
+constexpr int RecognitionEventKind_ARRAYSIZE = RecognitionEventKind_MAX + 1;
+
+const std::string& RecognitionEventKind_Name(RecognitionEventKind value);
+template<typename T>
+inline const std::string& RecognitionEventKind_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, RecognitionEventKind>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function RecognitionEventKind_Name.");
+  return RecognitionEventKind_Name(static_cast<RecognitionEventKind>(enum_t_value));
+}
+bool RecognitionEventKind_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, RecognitionEventKind* value);
+enum RecognitionError : int {
+  RECOGNITION_ERROR_UNSPECIFIED = 0,
+  RECOGNITION_ERROR_NO_MATCH = 1,
+  RECOGNITION_ERROR_SPEECH_TIMEOUT = 2,
+  RECOGNITION_ERROR_DENIED = 3,
+  RECOGNITION_ERROR_NO_MICROPHONE = 4,
+  RECOGNITION_ERROR_LANGUAGE_UNSUPPORTED = 5,
+  RECOGNITION_ERROR_UNAVAILABLE = 6,
+  RECOGNITION_ERROR_NETWORK = 7,
+  RECOGNITION_ERROR_BUSY = 8,
+  RECOGNITION_ERROR_OTHER = 9,
+  RecognitionError_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  RecognitionError_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool RecognitionError_IsValid(int value);
+constexpr RecognitionError RecognitionError_MIN = RECOGNITION_ERROR_UNSPECIFIED;
+constexpr RecognitionError RecognitionError_MAX = RECOGNITION_ERROR_OTHER;
+constexpr int RecognitionError_ARRAYSIZE = RecognitionError_MAX + 1;
+
+const std::string& RecognitionError_Name(RecognitionError value);
+template<typename T>
+inline const std::string& RecognitionError_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, RecognitionError>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function RecognitionError_Name.");
+  return RecognitionError_Name(static_cast<RecognitionError>(enum_t_value));
+}
+bool RecognitionError_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, RecognitionError* value);
 // ===================================================================
 
 class Hello final :
@@ -30003,6 +30142,2451 @@ class GamepadRumble final :
 };
 // -------------------------------------------------------------------
 
+class ListSpeechVoices final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ListSpeechVoices) */ {
+ public:
+  inline ListSpeechVoices() : ListSpeechVoices(nullptr) {}
+  ~ListSpeechVoices() override;
+  explicit PROTOBUF_CONSTEXPR ListSpeechVoices(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ListSpeechVoices(const ListSpeechVoices& from);
+  ListSpeechVoices(ListSpeechVoices&& from) noexcept
+    : ListSpeechVoices() {
+    *this = ::std::move(from);
+  }
+
+  inline ListSpeechVoices& operator=(const ListSpeechVoices& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListSpeechVoices& operator=(ListSpeechVoices&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ListSpeechVoices& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ListSpeechVoices* internal_default_instance() {
+    return reinterpret_cast<const ListSpeechVoices*>(
+               &_ListSpeechVoices_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    171;
+
+  friend void swap(ListSpeechVoices& a, ListSpeechVoices& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ListSpeechVoices* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListSpeechVoices* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ListSpeechVoices* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ListSpeechVoices>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ListSpeechVoices& from);
+  void MergeFrom(const ListSpeechVoices& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ListSpeechVoices* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.ListSpeechVoices";
+  }
+  protected:
+  explicit ListSpeechVoices(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.ListSpeechVoices)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpeechVoice final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpeechVoice) */ {
+ public:
+  inline SpeechVoice() : SpeechVoice(nullptr) {}
+  ~SpeechVoice() override;
+  explicit PROTOBUF_CONSTEXPR SpeechVoice(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpeechVoice(const SpeechVoice& from);
+  SpeechVoice(SpeechVoice&& from) noexcept
+    : SpeechVoice() {
+    *this = ::std::move(from);
+  }
+
+  inline SpeechVoice& operator=(const SpeechVoice& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpeechVoice& operator=(SpeechVoice&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpeechVoice& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpeechVoice* internal_default_instance() {
+    return reinterpret_cast<const SpeechVoice*>(
+               &_SpeechVoice_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    172;
+
+  friend void swap(SpeechVoice& a, SpeechVoice& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpeechVoice* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpeechVoice* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpeechVoice* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpeechVoice>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpeechVoice& from);
+  void MergeFrom(const SpeechVoice& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpeechVoice* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpeechVoice";
+  }
+  protected:
+  explicit SpeechVoice(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kIdFieldNumber = 1,
+    kNameFieldNumber = 2,
+    kLanguageTagFieldNumber = 3,
+    kNaturalFieldNumber = 4,
+    kNeedsNetworkFieldNumber = 5,
+  };
+  // string id = 1;
+  void clear_id();
+  const std::string& id() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_id(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_id();
+  PROTOBUF_NODISCARD std::string* release_id();
+  void set_allocated_id(std::string* id);
+  private:
+  const std::string& _internal_id() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_id(const std::string& value);
+  std::string* _internal_mutable_id();
+  public:
+
+  // string name = 2;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // string language_tag = 3;
+  void clear_language_tag();
+  const std::string& language_tag() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_language_tag(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_language_tag();
+  PROTOBUF_NODISCARD std::string* release_language_tag();
+  void set_allocated_language_tag(std::string* language_tag);
+  private:
+  const std::string& _internal_language_tag() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_language_tag(const std::string& value);
+  std::string* _internal_mutable_language_tag();
+  public:
+
+  // bool natural = 4;
+  void clear_natural();
+  bool natural() const;
+  void set_natural(bool value);
+  private:
+  bool _internal_natural() const;
+  void _internal_set_natural(bool value);
+  public:
+
+  // bool needs_network = 5;
+  void clear_needs_network();
+  bool needs_network() const;
+  void set_needs_network(bool value);
+  private:
+  bool _internal_needs_network() const;
+  void _internal_set_needs_network(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpeechVoice)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr id_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr language_tag_;
+    bool natural_;
+    bool needs_network_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpeechVoices final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpeechVoices) */ {
+ public:
+  inline SpeechVoices() : SpeechVoices(nullptr) {}
+  ~SpeechVoices() override;
+  explicit PROTOBUF_CONSTEXPR SpeechVoices(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpeechVoices(const SpeechVoices& from);
+  SpeechVoices(SpeechVoices&& from) noexcept
+    : SpeechVoices() {
+    *this = ::std::move(from);
+  }
+
+  inline SpeechVoices& operator=(const SpeechVoices& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpeechVoices& operator=(SpeechVoices&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpeechVoices& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpeechVoices* internal_default_instance() {
+    return reinterpret_cast<const SpeechVoices*>(
+               &_SpeechVoices_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    173;
+
+  friend void swap(SpeechVoices& a, SpeechVoices& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpeechVoices* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpeechVoices* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpeechVoices* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpeechVoices>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpeechVoices& from);
+  void MergeFrom(const SpeechVoices& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpeechVoices* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpeechVoices";
+  }
+  protected:
+  explicit SpeechVoices(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kVoicesFieldNumber = 1,
+    kDefaultVoiceIdFieldNumber = 2,
+    kAvailableFieldNumber = 3,
+  };
+  // repeated .dsa.control.v1.SpeechVoice voices = 1;
+  int voices_size() const;
+  private:
+  int _internal_voices_size() const;
+  public:
+  void clear_voices();
+  ::dsa::control::v1::SpeechVoice* mutable_voices(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpeechVoice >*
+      mutable_voices();
+  private:
+  const ::dsa::control::v1::SpeechVoice& _internal_voices(int index) const;
+  ::dsa::control::v1::SpeechVoice* _internal_add_voices();
+  public:
+  const ::dsa::control::v1::SpeechVoice& voices(int index) const;
+  ::dsa::control::v1::SpeechVoice* add_voices();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpeechVoice >&
+      voices() const;
+
+  // string default_voice_id = 2;
+  void clear_default_voice_id();
+  const std::string& default_voice_id() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_default_voice_id(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_default_voice_id();
+  PROTOBUF_NODISCARD std::string* release_default_voice_id();
+  void set_allocated_default_voice_id(std::string* default_voice_id);
+  private:
+  const std::string& _internal_default_voice_id() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_default_voice_id(const std::string& value);
+  std::string* _internal_mutable_default_voice_id();
+  public:
+
+  // bool available = 3;
+  void clear_available();
+  bool available() const;
+  void set_available(bool value);
+  private:
+  bool _internal_available() const;
+  void _internal_set_available(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpeechVoices)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpeechVoice > voices_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr default_voice_id_;
+    bool available_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpeakText final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpeakText) */ {
+ public:
+  inline SpeakText() : SpeakText(nullptr) {}
+  ~SpeakText() override;
+  explicit PROTOBUF_CONSTEXPR SpeakText(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpeakText(const SpeakText& from);
+  SpeakText(SpeakText&& from) noexcept
+    : SpeakText() {
+    *this = ::std::move(from);
+  }
+
+  inline SpeakText& operator=(const SpeakText& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpeakText& operator=(SpeakText&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpeakText& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpeakText* internal_default_instance() {
+    return reinterpret_cast<const SpeakText*>(
+               &_SpeakText_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    174;
+
+  friend void swap(SpeakText& a, SpeakText& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpeakText* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpeakText* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpeakText* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpeakText>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpeakText& from);
+  void MergeFrom(const SpeakText& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpeakText* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpeakText";
+  }
+  protected:
+  explicit SpeakText(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTextFieldNumber = 2,
+    kVoiceIdFieldNumber = 3,
+    kLanguageTagFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kRateFieldNumber = 5,
+    kPitchFieldNumber = 6,
+  };
+  // string text = 2;
+  void clear_text();
+  const std::string& text() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_text(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_text();
+  PROTOBUF_NODISCARD std::string* release_text();
+  void set_allocated_text(std::string* text);
+  private:
+  const std::string& _internal_text() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_text(const std::string& value);
+  std::string* _internal_mutable_text();
+  public:
+
+  // string voice_id = 3;
+  void clear_voice_id();
+  const std::string& voice_id() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_voice_id(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_voice_id();
+  PROTOBUF_NODISCARD std::string* release_voice_id();
+  void set_allocated_voice_id(std::string* voice_id);
+  private:
+  const std::string& _internal_voice_id() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_voice_id(const std::string& value);
+  std::string* _internal_mutable_voice_id();
+  public:
+
+  // string language_tag = 4;
+  void clear_language_tag();
+  const std::string& language_tag() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_language_tag(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_language_tag();
+  PROTOBUF_NODISCARD std::string* release_language_tag();
+  void set_allocated_language_tag(std::string* language_tag);
+  private:
+  const std::string& _internal_language_tag() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_language_tag(const std::string& value);
+  std::string* _internal_mutable_language_tag();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // float rate = 5;
+  void clear_rate();
+  float rate() const;
+  void set_rate(float value);
+  private:
+  float _internal_rate() const;
+  void _internal_set_rate(float value);
+  public:
+
+  // float pitch = 6;
+  void clear_pitch();
+  float pitch() const;
+  void set_pitch(float value);
+  private:
+  float _internal_pitch() const;
+  void _internal_set_pitch(float value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpeakText)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr text_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr voice_id_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr language_tag_;
+    uint32_t request_id_;
+    float rate_;
+    float pitch_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpeechAudio final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpeechAudio) */ {
+ public:
+  inline SpeechAudio() : SpeechAudio(nullptr) {}
+  ~SpeechAudio() override;
+  explicit PROTOBUF_CONSTEXPR SpeechAudio(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpeechAudio(const SpeechAudio& from);
+  SpeechAudio(SpeechAudio&& from) noexcept
+    : SpeechAudio() {
+    *this = ::std::move(from);
+  }
+
+  inline SpeechAudio& operator=(const SpeechAudio& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpeechAudio& operator=(SpeechAudio&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpeechAudio& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpeechAudio* internal_default_instance() {
+    return reinterpret_cast<const SpeechAudio*>(
+               &_SpeechAudio_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    175;
+
+  friend void swap(SpeechAudio& a, SpeechAudio& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpeechAudio* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpeechAudio* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpeechAudio* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpeechAudio>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpeechAudio& from);
+  void MergeFrom(const SpeechAudio& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpeechAudio* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpeechAudio";
+  }
+  protected:
+  explicit SpeechAudio(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPcmFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kSampleRateHzFieldNumber = 2,
+    kChannelCountFieldNumber = 3,
+  };
+  // bytes pcm = 4;
+  void clear_pcm();
+  const std::string& pcm() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_pcm(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_pcm();
+  PROTOBUF_NODISCARD std::string* release_pcm();
+  void set_allocated_pcm(std::string* pcm);
+  private:
+  const std::string& _internal_pcm() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_pcm(const std::string& value);
+  std::string* _internal_mutable_pcm();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // uint32 sample_rate_hz = 2;
+  void clear_sample_rate_hz();
+  uint32_t sample_rate_hz() const;
+  void set_sample_rate_hz(uint32_t value);
+  private:
+  uint32_t _internal_sample_rate_hz() const;
+  void _internal_set_sample_rate_hz(uint32_t value);
+  public:
+
+  // uint32 channel_count = 3;
+  void clear_channel_count();
+  uint32_t channel_count() const;
+  void set_channel_count(uint32_t value);
+  private:
+  uint32_t _internal_channel_count() const;
+  void _internal_set_channel_count(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpeechAudio)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr pcm_;
+    uint32_t request_id_;
+    uint32_t sample_rate_hz_;
+    uint32_t channel_count_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpeechDone final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpeechDone) */ {
+ public:
+  inline SpeechDone() : SpeechDone(nullptr) {}
+  ~SpeechDone() override;
+  explicit PROTOBUF_CONSTEXPR SpeechDone(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpeechDone(const SpeechDone& from);
+  SpeechDone(SpeechDone&& from) noexcept
+    : SpeechDone() {
+    *this = ::std::move(from);
+  }
+
+  inline SpeechDone& operator=(const SpeechDone& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpeechDone& operator=(SpeechDone&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpeechDone& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpeechDone* internal_default_instance() {
+    return reinterpret_cast<const SpeechDone*>(
+               &_SpeechDone_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    176;
+
+  friend void swap(SpeechDone& a, SpeechDone& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpeechDone* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpeechDone* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpeechDone* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpeechDone>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpeechDone& from);
+  void MergeFrom(const SpeechDone& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpeechDone* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpeechDone";
+  }
+  protected:
+  explicit SpeechDone(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kMessageFieldNumber = 3,
+    kRequestIdFieldNumber = 1,
+    kOutcomeFieldNumber = 2,
+  };
+  // string message = 3;
+  void clear_message();
+  const std::string& message() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_message(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_message();
+  PROTOBUF_NODISCARD std::string* release_message();
+  void set_allocated_message(std::string* message);
+  private:
+  const std::string& _internal_message() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
+  std::string* _internal_mutable_message();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // .dsa.control.v1.SpeechOutcome outcome = 2;
+  void clear_outcome();
+  ::dsa::control::v1::SpeechOutcome outcome() const;
+  void set_outcome(::dsa::control::v1::SpeechOutcome value);
+  private:
+  ::dsa::control::v1::SpeechOutcome _internal_outcome() const;
+  void _internal_set_outcome(::dsa::control::v1::SpeechOutcome value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpeechDone)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
+    uint32_t request_id_;
+    int outcome_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class StopSpeaking final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.StopSpeaking) */ {
+ public:
+  inline StopSpeaking() : StopSpeaking(nullptr) {}
+  ~StopSpeaking() override;
+  explicit PROTOBUF_CONSTEXPR StopSpeaking(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  StopSpeaking(const StopSpeaking& from);
+  StopSpeaking(StopSpeaking&& from) noexcept
+    : StopSpeaking() {
+    *this = ::std::move(from);
+  }
+
+  inline StopSpeaking& operator=(const StopSpeaking& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StopSpeaking& operator=(StopSpeaking&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const StopSpeaking& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const StopSpeaking* internal_default_instance() {
+    return reinterpret_cast<const StopSpeaking*>(
+               &_StopSpeaking_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    177;
+
+  friend void swap(StopSpeaking& a, StopSpeaking& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(StopSpeaking* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StopSpeaking* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  StopSpeaking* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<StopSpeaking>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const StopSpeaking& from);
+  void MergeFrom(const StopSpeaking& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(StopSpeaking* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.StopSpeaking";
+  }
+  protected:
+  explicit StopSpeaking(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.StopSpeaking)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class StartRecognition final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.StartRecognition) */ {
+ public:
+  inline StartRecognition() : StartRecognition(nullptr) {}
+  ~StartRecognition() override;
+  explicit PROTOBUF_CONSTEXPR StartRecognition(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  StartRecognition(const StartRecognition& from);
+  StartRecognition(StartRecognition&& from) noexcept
+    : StartRecognition() {
+    *this = ::std::move(from);
+  }
+
+  inline StartRecognition& operator=(const StartRecognition& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartRecognition& operator=(StartRecognition&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const StartRecognition& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const StartRecognition* internal_default_instance() {
+    return reinterpret_cast<const StartRecognition*>(
+               &_StartRecognition_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    178;
+
+  friend void swap(StartRecognition& a, StartRecognition& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(StartRecognition* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartRecognition* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  StartRecognition* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<StartRecognition>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const StartRecognition& from);
+  void MergeFrom(const StartRecognition& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(StartRecognition* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.StartRecognition";
+  }
+  protected:
+  explicit StartRecognition(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kLanguageTagFieldNumber = 2,
+    kRequestIdFieldNumber = 1,
+    kMaxResultsFieldNumber = 4,
+    kPartialResultsFieldNumber = 3,
+    kPreferOfflineFieldNumber = 5,
+  };
+  // string language_tag = 2;
+  void clear_language_tag();
+  const std::string& language_tag() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_language_tag(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_language_tag();
+  PROTOBUF_NODISCARD std::string* release_language_tag();
+  void set_allocated_language_tag(std::string* language_tag);
+  private:
+  const std::string& _internal_language_tag() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_language_tag(const std::string& value);
+  std::string* _internal_mutable_language_tag();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // uint32 max_results = 4;
+  void clear_max_results();
+  uint32_t max_results() const;
+  void set_max_results(uint32_t value);
+  private:
+  uint32_t _internal_max_results() const;
+  void _internal_set_max_results(uint32_t value);
+  public:
+
+  // bool partial_results = 3;
+  void clear_partial_results();
+  bool partial_results() const;
+  void set_partial_results(bool value);
+  private:
+  bool _internal_partial_results() const;
+  void _internal_set_partial_results(bool value);
+  public:
+
+  // bool prefer_offline = 5;
+  void clear_prefer_offline();
+  bool prefer_offline() const;
+  void set_prefer_offline(bool value);
+  private:
+  bool _internal_prefer_offline() const;
+  void _internal_set_prefer_offline(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.StartRecognition)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr language_tag_;
+    uint32_t request_id_;
+    uint32_t max_results_;
+    bool partial_results_;
+    bool prefer_offline_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class StopRecognition final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.StopRecognition) */ {
+ public:
+  inline StopRecognition() : StopRecognition(nullptr) {}
+  ~StopRecognition() override;
+  explicit PROTOBUF_CONSTEXPR StopRecognition(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  StopRecognition(const StopRecognition& from);
+  StopRecognition(StopRecognition&& from) noexcept
+    : StopRecognition() {
+    *this = ::std::move(from);
+  }
+
+  inline StopRecognition& operator=(const StopRecognition& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StopRecognition& operator=(StopRecognition&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const StopRecognition& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const StopRecognition* internal_default_instance() {
+    return reinterpret_cast<const StopRecognition*>(
+               &_StopRecognition_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    179;
+
+  friend void swap(StopRecognition& a, StopRecognition& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(StopRecognition* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StopRecognition* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  StopRecognition* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<StopRecognition>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const StopRecognition& from);
+  void MergeFrom(const StopRecognition& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(StopRecognition* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.StopRecognition";
+  }
+  protected:
+  explicit StopRecognition(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.StopRecognition)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class CancelRecognition final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.CancelRecognition) */ {
+ public:
+  inline CancelRecognition() : CancelRecognition(nullptr) {}
+  ~CancelRecognition() override;
+  explicit PROTOBUF_CONSTEXPR CancelRecognition(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  CancelRecognition(const CancelRecognition& from);
+  CancelRecognition(CancelRecognition&& from) noexcept
+    : CancelRecognition() {
+    *this = ::std::move(from);
+  }
+
+  inline CancelRecognition& operator=(const CancelRecognition& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CancelRecognition& operator=(CancelRecognition&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const CancelRecognition& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const CancelRecognition* internal_default_instance() {
+    return reinterpret_cast<const CancelRecognition*>(
+               &_CancelRecognition_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    180;
+
+  friend void swap(CancelRecognition& a, CancelRecognition& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(CancelRecognition* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CancelRecognition* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CancelRecognition* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<CancelRecognition>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const CancelRecognition& from);
+  void MergeFrom(const CancelRecognition& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(CancelRecognition* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.CancelRecognition";
+  }
+  protected:
+  explicit CancelRecognition(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.CancelRecognition)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class RecognitionEvent final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.RecognitionEvent) */ {
+ public:
+  inline RecognitionEvent() : RecognitionEvent(nullptr) {}
+  ~RecognitionEvent() override;
+  explicit PROTOBUF_CONSTEXPR RecognitionEvent(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  RecognitionEvent(const RecognitionEvent& from);
+  RecognitionEvent(RecognitionEvent&& from) noexcept
+    : RecognitionEvent() {
+    *this = ::std::move(from);
+  }
+
+  inline RecognitionEvent& operator=(const RecognitionEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RecognitionEvent& operator=(RecognitionEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const RecognitionEvent& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const RecognitionEvent* internal_default_instance() {
+    return reinterpret_cast<const RecognitionEvent*>(
+               &_RecognitionEvent_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    181;
+
+  friend void swap(RecognitionEvent& a, RecognitionEvent& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(RecognitionEvent* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RecognitionEvent* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  RecognitionEvent* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<RecognitionEvent>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const RecognitionEvent& from);
+  void MergeFrom(const RecognitionEvent& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(RecognitionEvent* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.RecognitionEvent";
+  }
+  protected:
+  explicit RecognitionEvent(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTextsFieldNumber = 3,
+    kConfidencesFieldNumber = 4,
+    kMessageFieldNumber = 6,
+    kRequestIdFieldNumber = 1,
+    kKindFieldNumber = 2,
+    kErrorFieldNumber = 5,
+  };
+  // repeated string texts = 3;
+  int texts_size() const;
+  private:
+  int _internal_texts_size() const;
+  public:
+  void clear_texts();
+  const std::string& texts(int index) const;
+  std::string* mutable_texts(int index);
+  void set_texts(int index, const std::string& value);
+  void set_texts(int index, std::string&& value);
+  void set_texts(int index, const char* value);
+  void set_texts(int index, const char* value, size_t size);
+  std::string* add_texts();
+  void add_texts(const std::string& value);
+  void add_texts(std::string&& value);
+  void add_texts(const char* value);
+  void add_texts(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& texts() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_texts();
+  private:
+  const std::string& _internal_texts(int index) const;
+  std::string* _internal_add_texts();
+  public:
+
+  // repeated float confidences = 4;
+  int confidences_size() const;
+  private:
+  int _internal_confidences_size() const;
+  public:
+  void clear_confidences();
+  private:
+  float _internal_confidences(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+      _internal_confidences() const;
+  void _internal_add_confidences(float value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+      _internal_mutable_confidences();
+  public:
+  float confidences(int index) const;
+  void set_confidences(int index, float value);
+  void add_confidences(float value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+      confidences() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+      mutable_confidences();
+
+  // string message = 6;
+  void clear_message();
+  const std::string& message() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_message(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_message();
+  PROTOBUF_NODISCARD std::string* release_message();
+  void set_allocated_message(std::string* message);
+  private:
+  const std::string& _internal_message() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
+  std::string* _internal_mutable_message();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // .dsa.control.v1.RecognitionEventKind kind = 2;
+  void clear_kind();
+  ::dsa::control::v1::RecognitionEventKind kind() const;
+  void set_kind(::dsa::control::v1::RecognitionEventKind value);
+  private:
+  ::dsa::control::v1::RecognitionEventKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::RecognitionEventKind value);
+  public:
+
+  // .dsa.control.v1.RecognitionError error = 5;
+  void clear_error();
+  ::dsa::control::v1::RecognitionError error() const;
+  void set_error(::dsa::control::v1::RecognitionError value);
+  private:
+  ::dsa::control::v1::RecognitionError _internal_error() const;
+  void _internal_set_error(::dsa::control::v1::RecognitionError value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.RecognitionEvent)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> texts_;
+    ::PROTOBUF_NAMESPACE_ID::RepeatedField< float > confidences_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
+    uint32_t request_id_;
+    int kind_;
+    int error_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class CheckSpelling final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.CheckSpelling) */ {
+ public:
+  inline CheckSpelling() : CheckSpelling(nullptr) {}
+  ~CheckSpelling() override;
+  explicit PROTOBUF_CONSTEXPR CheckSpelling(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  CheckSpelling(const CheckSpelling& from);
+  CheckSpelling(CheckSpelling&& from) noexcept
+    : CheckSpelling() {
+    *this = ::std::move(from);
+  }
+
+  inline CheckSpelling& operator=(const CheckSpelling& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheckSpelling& operator=(CheckSpelling&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const CheckSpelling& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const CheckSpelling* internal_default_instance() {
+    return reinterpret_cast<const CheckSpelling*>(
+               &_CheckSpelling_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    182;
+
+  friend void swap(CheckSpelling& a, CheckSpelling& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(CheckSpelling* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheckSpelling* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  CheckSpelling* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<CheckSpelling>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const CheckSpelling& from);
+  void MergeFrom(const CheckSpelling& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(CheckSpelling* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.CheckSpelling";
+  }
+  protected:
+  explicit CheckSpelling(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTextsFieldNumber = 3,
+    kLanguageTagFieldNumber = 2,
+    kRequestIdFieldNumber = 1,
+    kMaxSuggestionsFieldNumber = 4,
+  };
+  // repeated string texts = 3;
+  int texts_size() const;
+  private:
+  int _internal_texts_size() const;
+  public:
+  void clear_texts();
+  const std::string& texts(int index) const;
+  std::string* mutable_texts(int index);
+  void set_texts(int index, const std::string& value);
+  void set_texts(int index, std::string&& value);
+  void set_texts(int index, const char* value);
+  void set_texts(int index, const char* value, size_t size);
+  std::string* add_texts();
+  void add_texts(const std::string& value);
+  void add_texts(std::string&& value);
+  void add_texts(const char* value);
+  void add_texts(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& texts() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_texts();
+  private:
+  const std::string& _internal_texts(int index) const;
+  std::string* _internal_add_texts();
+  public:
+
+  // string language_tag = 2;
+  void clear_language_tag();
+  const std::string& language_tag() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_language_tag(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_language_tag();
+  PROTOBUF_NODISCARD std::string* release_language_tag();
+  void set_allocated_language_tag(std::string* language_tag);
+  private:
+  const std::string& _internal_language_tag() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_language_tag(const std::string& value);
+  std::string* _internal_mutable_language_tag();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // uint32 max_suggestions = 4;
+  void clear_max_suggestions();
+  uint32_t max_suggestions() const;
+  void set_max_suggestions(uint32_t value);
+  private:
+  uint32_t _internal_max_suggestions() const;
+  void _internal_set_max_suggestions(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.CheckSpelling)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> texts_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr language_tag_;
+    uint32_t request_id_;
+    uint32_t max_suggestions_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpellingMistake final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpellingMistake) */ {
+ public:
+  inline SpellingMistake() : SpellingMistake(nullptr) {}
+  ~SpellingMistake() override;
+  explicit PROTOBUF_CONSTEXPR SpellingMistake(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpellingMistake(const SpellingMistake& from);
+  SpellingMistake(SpellingMistake&& from) noexcept
+    : SpellingMistake() {
+    *this = ::std::move(from);
+  }
+
+  inline SpellingMistake& operator=(const SpellingMistake& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpellingMistake& operator=(SpellingMistake&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpellingMistake& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpellingMistake* internal_default_instance() {
+    return reinterpret_cast<const SpellingMistake*>(
+               &_SpellingMistake_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    183;
+
+  friend void swap(SpellingMistake& a, SpellingMistake& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpellingMistake* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpellingMistake* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpellingMistake* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpellingMistake>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpellingMistake& from);
+  void MergeFrom(const SpellingMistake& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpellingMistake* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpellingMistake";
+  }
+  protected:
+  explicit SpellingMistake(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSuggestionsFieldNumber = 3,
+    kStartFieldNumber = 1,
+    kLengthFieldNumber = 2,
+    kRecommendedFieldNumber = 4,
+  };
+  // repeated string suggestions = 3;
+  int suggestions_size() const;
+  private:
+  int _internal_suggestions_size() const;
+  public:
+  void clear_suggestions();
+  const std::string& suggestions(int index) const;
+  std::string* mutable_suggestions(int index);
+  void set_suggestions(int index, const std::string& value);
+  void set_suggestions(int index, std::string&& value);
+  void set_suggestions(int index, const char* value);
+  void set_suggestions(int index, const char* value, size_t size);
+  std::string* add_suggestions();
+  void add_suggestions(const std::string& value);
+  void add_suggestions(std::string&& value);
+  void add_suggestions(const char* value);
+  void add_suggestions(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& suggestions() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_suggestions();
+  private:
+  const std::string& _internal_suggestions(int index) const;
+  std::string* _internal_add_suggestions();
+  public:
+
+  // uint32 start = 1;
+  void clear_start();
+  uint32_t start() const;
+  void set_start(uint32_t value);
+  private:
+  uint32_t _internal_start() const;
+  void _internal_set_start(uint32_t value);
+  public:
+
+  // uint32 length = 2;
+  void clear_length();
+  uint32_t length() const;
+  void set_length(uint32_t value);
+  private:
+  uint32_t _internal_length() const;
+  void _internal_set_length(uint32_t value);
+  public:
+
+  // bool recommended = 4;
+  void clear_recommended();
+  bool recommended() const;
+  void set_recommended(bool value);
+  private:
+  bool _internal_recommended() const;
+  void _internal_set_recommended(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpellingMistake)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> suggestions_;
+    uint32_t start_;
+    uint32_t length_;
+    bool recommended_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpellingText final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpellingText) */ {
+ public:
+  inline SpellingText() : SpellingText(nullptr) {}
+  ~SpellingText() override;
+  explicit PROTOBUF_CONSTEXPR SpellingText(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpellingText(const SpellingText& from);
+  SpellingText(SpellingText&& from) noexcept
+    : SpellingText() {
+    *this = ::std::move(from);
+  }
+
+  inline SpellingText& operator=(const SpellingText& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpellingText& operator=(SpellingText&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpellingText& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpellingText* internal_default_instance() {
+    return reinterpret_cast<const SpellingText*>(
+               &_SpellingText_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    184;
+
+  friend void swap(SpellingText& a, SpellingText& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpellingText* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpellingText* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpellingText* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpellingText>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpellingText& from);
+  void MergeFrom(const SpellingText& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpellingText* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpellingText";
+  }
+  protected:
+  explicit SpellingText(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kMistakesFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.SpellingMistake mistakes = 1;
+  int mistakes_size() const;
+  private:
+  int _internal_mistakes_size() const;
+  public:
+  void clear_mistakes();
+  ::dsa::control::v1::SpellingMistake* mutable_mistakes(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingMistake >*
+      mutable_mistakes();
+  private:
+  const ::dsa::control::v1::SpellingMistake& _internal_mistakes(int index) const;
+  ::dsa::control::v1::SpellingMistake* _internal_add_mistakes();
+  public:
+  const ::dsa::control::v1::SpellingMistake& mistakes(int index) const;
+  ::dsa::control::v1::SpellingMistake* add_mistakes();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingMistake >&
+      mistakes() const;
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpellingText)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingMistake > mistakes_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SpellingResult final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SpellingResult) */ {
+ public:
+  inline SpellingResult() : SpellingResult(nullptr) {}
+  ~SpellingResult() override;
+  explicit PROTOBUF_CONSTEXPR SpellingResult(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SpellingResult(const SpellingResult& from);
+  SpellingResult(SpellingResult&& from) noexcept
+    : SpellingResult() {
+    *this = ::std::move(from);
+  }
+
+  inline SpellingResult& operator=(const SpellingResult& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpellingResult& operator=(SpellingResult&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SpellingResult& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SpellingResult* internal_default_instance() {
+    return reinterpret_cast<const SpellingResult*>(
+               &_SpellingResult_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    185;
+
+  friend void swap(SpellingResult& a, SpellingResult& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SpellingResult* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpellingResult* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SpellingResult* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SpellingResult>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SpellingResult& from);
+  void MergeFrom(const SpellingResult& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SpellingResult* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SpellingResult";
+  }
+  protected:
+  explicit SpellingResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTextsFieldNumber = 2,
+    kRequestIdFieldNumber = 1,
+    kSupportedFieldNumber = 3,
+  };
+  // repeated .dsa.control.v1.SpellingText texts = 2;
+  int texts_size() const;
+  private:
+  int _internal_texts_size() const;
+  public:
+  void clear_texts();
+  ::dsa::control::v1::SpellingText* mutable_texts(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingText >*
+      mutable_texts();
+  private:
+  const ::dsa::control::v1::SpellingText& _internal_texts(int index) const;
+  ::dsa::control::v1::SpellingText* _internal_add_texts();
+  public:
+  const ::dsa::control::v1::SpellingText& texts(int index) const;
+  ::dsa::control::v1::SpellingText* add_texts();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingText >&
+      texts() const;
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // bool supported = 3;
+  void clear_supported();
+  bool supported() const;
+  void set_supported(bool value);
+  private:
+  bool _internal_supported() const;
+  void _internal_set_supported(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SpellingResult)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingText > texts_;
+    uint32_t request_id_;
+    bool supported_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class Envelope final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.Envelope) */ {
  public:
@@ -30189,6 +32773,18 @@ class Envelope final :
     kReinstallApp = 380,
     kReinstallResult = 381,
     kNativeLibraryCrash = 382,
+    kListSpeechVoices = 620,
+    kSpeechVoices = 621,
+    kSpeakText = 622,
+    kSpeechAudio = 623,
+    kSpeechDone = 624,
+    kStopSpeaking = 625,
+    kStartRecognition = 626,
+    kStopRecognition = 627,
+    kCancelRecognition = 628,
+    kRecognitionEvent = 629,
+    kCheckSpelling = 630,
+    kSpellingResult = 631,
     kGeocodeRequest = 470,
     kGeocodeResult = 471,
     kShareToHost = 472,
@@ -30201,7 +32797,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    171;
+    186;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -30416,6 +33012,18 @@ class Envelope final :
     kReinstallAppFieldNumber = 380,
     kReinstallResultFieldNumber = 381,
     kNativeLibraryCrashFieldNumber = 382,
+    kListSpeechVoicesFieldNumber = 620,
+    kSpeechVoicesFieldNumber = 621,
+    kSpeakTextFieldNumber = 622,
+    kSpeechAudioFieldNumber = 623,
+    kSpeechDoneFieldNumber = 624,
+    kStopSpeakingFieldNumber = 625,
+    kStartRecognitionFieldNumber = 626,
+    kStopRecognitionFieldNumber = 627,
+    kCancelRecognitionFieldNumber = 628,
+    kRecognitionEventFieldNumber = 629,
+    kCheckSpellingFieldNumber = 630,
+    kSpellingResultFieldNumber = 631,
     kGeocodeRequestFieldNumber = 470,
     kGeocodeResultFieldNumber = 471,
     kShareToHostFieldNumber = 472,
@@ -33139,6 +35747,222 @@ class Envelope final :
       ::dsa::control::v1::NativeLibraryCrash* native_library_crash);
   ::dsa::control::v1::NativeLibraryCrash* unsafe_arena_release_native_library_crash();
 
+  // .dsa.control.v1.ListSpeechVoices list_speech_voices = 620;
+  bool has_list_speech_voices() const;
+  private:
+  bool _internal_has_list_speech_voices() const;
+  public:
+  void clear_list_speech_voices();
+  const ::dsa::control::v1::ListSpeechVoices& list_speech_voices() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::ListSpeechVoices* release_list_speech_voices();
+  ::dsa::control::v1::ListSpeechVoices* mutable_list_speech_voices();
+  void set_allocated_list_speech_voices(::dsa::control::v1::ListSpeechVoices* list_speech_voices);
+  private:
+  const ::dsa::control::v1::ListSpeechVoices& _internal_list_speech_voices() const;
+  ::dsa::control::v1::ListSpeechVoices* _internal_mutable_list_speech_voices();
+  public:
+  void unsafe_arena_set_allocated_list_speech_voices(
+      ::dsa::control::v1::ListSpeechVoices* list_speech_voices);
+  ::dsa::control::v1::ListSpeechVoices* unsafe_arena_release_list_speech_voices();
+
+  // .dsa.control.v1.SpeechVoices speech_voices = 621;
+  bool has_speech_voices() const;
+  private:
+  bool _internal_has_speech_voices() const;
+  public:
+  void clear_speech_voices();
+  const ::dsa::control::v1::SpeechVoices& speech_voices() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SpeechVoices* release_speech_voices();
+  ::dsa::control::v1::SpeechVoices* mutable_speech_voices();
+  void set_allocated_speech_voices(::dsa::control::v1::SpeechVoices* speech_voices);
+  private:
+  const ::dsa::control::v1::SpeechVoices& _internal_speech_voices() const;
+  ::dsa::control::v1::SpeechVoices* _internal_mutable_speech_voices();
+  public:
+  void unsafe_arena_set_allocated_speech_voices(
+      ::dsa::control::v1::SpeechVoices* speech_voices);
+  ::dsa::control::v1::SpeechVoices* unsafe_arena_release_speech_voices();
+
+  // .dsa.control.v1.SpeakText speak_text = 622;
+  bool has_speak_text() const;
+  private:
+  bool _internal_has_speak_text() const;
+  public:
+  void clear_speak_text();
+  const ::dsa::control::v1::SpeakText& speak_text() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SpeakText* release_speak_text();
+  ::dsa::control::v1::SpeakText* mutable_speak_text();
+  void set_allocated_speak_text(::dsa::control::v1::SpeakText* speak_text);
+  private:
+  const ::dsa::control::v1::SpeakText& _internal_speak_text() const;
+  ::dsa::control::v1::SpeakText* _internal_mutable_speak_text();
+  public:
+  void unsafe_arena_set_allocated_speak_text(
+      ::dsa::control::v1::SpeakText* speak_text);
+  ::dsa::control::v1::SpeakText* unsafe_arena_release_speak_text();
+
+  // .dsa.control.v1.SpeechAudio speech_audio = 623;
+  bool has_speech_audio() const;
+  private:
+  bool _internal_has_speech_audio() const;
+  public:
+  void clear_speech_audio();
+  const ::dsa::control::v1::SpeechAudio& speech_audio() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SpeechAudio* release_speech_audio();
+  ::dsa::control::v1::SpeechAudio* mutable_speech_audio();
+  void set_allocated_speech_audio(::dsa::control::v1::SpeechAudio* speech_audio);
+  private:
+  const ::dsa::control::v1::SpeechAudio& _internal_speech_audio() const;
+  ::dsa::control::v1::SpeechAudio* _internal_mutable_speech_audio();
+  public:
+  void unsafe_arena_set_allocated_speech_audio(
+      ::dsa::control::v1::SpeechAudio* speech_audio);
+  ::dsa::control::v1::SpeechAudio* unsafe_arena_release_speech_audio();
+
+  // .dsa.control.v1.SpeechDone speech_done = 624;
+  bool has_speech_done() const;
+  private:
+  bool _internal_has_speech_done() const;
+  public:
+  void clear_speech_done();
+  const ::dsa::control::v1::SpeechDone& speech_done() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SpeechDone* release_speech_done();
+  ::dsa::control::v1::SpeechDone* mutable_speech_done();
+  void set_allocated_speech_done(::dsa::control::v1::SpeechDone* speech_done);
+  private:
+  const ::dsa::control::v1::SpeechDone& _internal_speech_done() const;
+  ::dsa::control::v1::SpeechDone* _internal_mutable_speech_done();
+  public:
+  void unsafe_arena_set_allocated_speech_done(
+      ::dsa::control::v1::SpeechDone* speech_done);
+  ::dsa::control::v1::SpeechDone* unsafe_arena_release_speech_done();
+
+  // .dsa.control.v1.StopSpeaking stop_speaking = 625;
+  bool has_stop_speaking() const;
+  private:
+  bool _internal_has_stop_speaking() const;
+  public:
+  void clear_stop_speaking();
+  const ::dsa::control::v1::StopSpeaking& stop_speaking() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::StopSpeaking* release_stop_speaking();
+  ::dsa::control::v1::StopSpeaking* mutable_stop_speaking();
+  void set_allocated_stop_speaking(::dsa::control::v1::StopSpeaking* stop_speaking);
+  private:
+  const ::dsa::control::v1::StopSpeaking& _internal_stop_speaking() const;
+  ::dsa::control::v1::StopSpeaking* _internal_mutable_stop_speaking();
+  public:
+  void unsafe_arena_set_allocated_stop_speaking(
+      ::dsa::control::v1::StopSpeaking* stop_speaking);
+  ::dsa::control::v1::StopSpeaking* unsafe_arena_release_stop_speaking();
+
+  // .dsa.control.v1.StartRecognition start_recognition = 626;
+  bool has_start_recognition() const;
+  private:
+  bool _internal_has_start_recognition() const;
+  public:
+  void clear_start_recognition();
+  const ::dsa::control::v1::StartRecognition& start_recognition() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::StartRecognition* release_start_recognition();
+  ::dsa::control::v1::StartRecognition* mutable_start_recognition();
+  void set_allocated_start_recognition(::dsa::control::v1::StartRecognition* start_recognition);
+  private:
+  const ::dsa::control::v1::StartRecognition& _internal_start_recognition() const;
+  ::dsa::control::v1::StartRecognition* _internal_mutable_start_recognition();
+  public:
+  void unsafe_arena_set_allocated_start_recognition(
+      ::dsa::control::v1::StartRecognition* start_recognition);
+  ::dsa::control::v1::StartRecognition* unsafe_arena_release_start_recognition();
+
+  // .dsa.control.v1.StopRecognition stop_recognition = 627;
+  bool has_stop_recognition() const;
+  private:
+  bool _internal_has_stop_recognition() const;
+  public:
+  void clear_stop_recognition();
+  const ::dsa::control::v1::StopRecognition& stop_recognition() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::StopRecognition* release_stop_recognition();
+  ::dsa::control::v1::StopRecognition* mutable_stop_recognition();
+  void set_allocated_stop_recognition(::dsa::control::v1::StopRecognition* stop_recognition);
+  private:
+  const ::dsa::control::v1::StopRecognition& _internal_stop_recognition() const;
+  ::dsa::control::v1::StopRecognition* _internal_mutable_stop_recognition();
+  public:
+  void unsafe_arena_set_allocated_stop_recognition(
+      ::dsa::control::v1::StopRecognition* stop_recognition);
+  ::dsa::control::v1::StopRecognition* unsafe_arena_release_stop_recognition();
+
+  // .dsa.control.v1.CancelRecognition cancel_recognition = 628;
+  bool has_cancel_recognition() const;
+  private:
+  bool _internal_has_cancel_recognition() const;
+  public:
+  void clear_cancel_recognition();
+  const ::dsa::control::v1::CancelRecognition& cancel_recognition() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::CancelRecognition* release_cancel_recognition();
+  ::dsa::control::v1::CancelRecognition* mutable_cancel_recognition();
+  void set_allocated_cancel_recognition(::dsa::control::v1::CancelRecognition* cancel_recognition);
+  private:
+  const ::dsa::control::v1::CancelRecognition& _internal_cancel_recognition() const;
+  ::dsa::control::v1::CancelRecognition* _internal_mutable_cancel_recognition();
+  public:
+  void unsafe_arena_set_allocated_cancel_recognition(
+      ::dsa::control::v1::CancelRecognition* cancel_recognition);
+  ::dsa::control::v1::CancelRecognition* unsafe_arena_release_cancel_recognition();
+
+  // .dsa.control.v1.RecognitionEvent recognition_event = 629;
+  bool has_recognition_event() const;
+  private:
+  bool _internal_has_recognition_event() const;
+  public:
+  void clear_recognition_event();
+  const ::dsa::control::v1::RecognitionEvent& recognition_event() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::RecognitionEvent* release_recognition_event();
+  ::dsa::control::v1::RecognitionEvent* mutable_recognition_event();
+  void set_allocated_recognition_event(::dsa::control::v1::RecognitionEvent* recognition_event);
+  private:
+  const ::dsa::control::v1::RecognitionEvent& _internal_recognition_event() const;
+  ::dsa::control::v1::RecognitionEvent* _internal_mutable_recognition_event();
+  public:
+  void unsafe_arena_set_allocated_recognition_event(
+      ::dsa::control::v1::RecognitionEvent* recognition_event);
+  ::dsa::control::v1::RecognitionEvent* unsafe_arena_release_recognition_event();
+
+  // .dsa.control.v1.CheckSpelling check_spelling = 630;
+  bool has_check_spelling() const;
+  private:
+  bool _internal_has_check_spelling() const;
+  public:
+  void clear_check_spelling();
+  const ::dsa::control::v1::CheckSpelling& check_spelling() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::CheckSpelling* release_check_spelling();
+  ::dsa::control::v1::CheckSpelling* mutable_check_spelling();
+  void set_allocated_check_spelling(::dsa::control::v1::CheckSpelling* check_spelling);
+  private:
+  const ::dsa::control::v1::CheckSpelling& _internal_check_spelling() const;
+  ::dsa::control::v1::CheckSpelling* _internal_mutable_check_spelling();
+  public:
+  void unsafe_arena_set_allocated_check_spelling(
+      ::dsa::control::v1::CheckSpelling* check_spelling);
+  ::dsa::control::v1::CheckSpelling* unsafe_arena_release_check_spelling();
+
+  // .dsa.control.v1.SpellingResult spelling_result = 631;
+  bool has_spelling_result() const;
+  private:
+  bool _internal_has_spelling_result() const;
+  public:
+  void clear_spelling_result();
+  const ::dsa::control::v1::SpellingResult& spelling_result() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SpellingResult* release_spelling_result();
+  ::dsa::control::v1::SpellingResult* mutable_spelling_result();
+  void set_allocated_spelling_result(::dsa::control::v1::SpellingResult* spelling_result);
+  private:
+  const ::dsa::control::v1::SpellingResult& _internal_spelling_result() const;
+  ::dsa::control::v1::SpellingResult* _internal_mutable_spelling_result();
+  public:
+  void unsafe_arena_set_allocated_spelling_result(
+      ::dsa::control::v1::SpellingResult* spelling_result);
+  ::dsa::control::v1::SpellingResult* unsafe_arena_release_spelling_result();
+
   // .dsa.control.v1.GeocodeRequest geocode_request = 470;
   bool has_geocode_request() const;
   private:
@@ -33367,6 +36191,18 @@ class Envelope final :
   void set_has_reinstall_app();
   void set_has_reinstall_result();
   void set_has_native_library_crash();
+  void set_has_list_speech_voices();
+  void set_has_speech_voices();
+  void set_has_speak_text();
+  void set_has_speech_audio();
+  void set_has_speech_done();
+  void set_has_stop_speaking();
+  void set_has_start_recognition();
+  void set_has_stop_recognition();
+  void set_has_cancel_recognition();
+  void set_has_recognition_event();
+  void set_has_check_spelling();
+  void set_has_spelling_result();
   void set_has_geocode_request();
   void set_has_geocode_result();
   void set_has_share_to_host();
@@ -33533,6 +36369,18 @@ class Envelope final :
       ::dsa::control::v1::ReinstallApp* reinstall_app_;
       ::dsa::control::v1::ReinstallResult* reinstall_result_;
       ::dsa::control::v1::NativeLibraryCrash* native_library_crash_;
+      ::dsa::control::v1::ListSpeechVoices* list_speech_voices_;
+      ::dsa::control::v1::SpeechVoices* speech_voices_;
+      ::dsa::control::v1::SpeakText* speak_text_;
+      ::dsa::control::v1::SpeechAudio* speech_audio_;
+      ::dsa::control::v1::SpeechDone* speech_done_;
+      ::dsa::control::v1::StopSpeaking* stop_speaking_;
+      ::dsa::control::v1::StartRecognition* start_recognition_;
+      ::dsa::control::v1::StopRecognition* stop_recognition_;
+      ::dsa::control::v1::CancelRecognition* cancel_recognition_;
+      ::dsa::control::v1::RecognitionEvent* recognition_event_;
+      ::dsa::control::v1::CheckSpelling* check_spelling_;
+      ::dsa::control::v1::SpellingResult* spelling_result_;
       ::dsa::control::v1::GeocodeRequest* geocode_request_;
       ::dsa::control::v1::GeocodeResult* geocode_result_;
       ::dsa::control::v1::ShareToHost* share_to_host_;
@@ -53056,6 +55904,1618 @@ inline void GamepadRumble::set_duration_ms(uint32_t value) {
 
 // -------------------------------------------------------------------
 
+// ListSpeechVoices
+
+// -------------------------------------------------------------------
+
+// SpeechVoice
+
+// string id = 1;
+inline void SpeechVoice::clear_id() {
+  _impl_.id_.ClearToEmpty();
+}
+inline const std::string& SpeechVoice::id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoice.id)
+  return _internal_id();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechVoice::set_id(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.id_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoice.id)
+}
+inline std::string* SpeechVoice::mutable_id() {
+  std::string* _s = _internal_mutable_id();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechVoice.id)
+  return _s;
+}
+inline const std::string& SpeechVoice::_internal_id() const {
+  return _impl_.id_.Get();
+}
+inline void SpeechVoice::_internal_set_id(const std::string& value) {
+  
+  _impl_.id_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::_internal_mutable_id() {
+  
+  return _impl_.id_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::release_id() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechVoice.id)
+  return _impl_.id_.Release();
+}
+inline void SpeechVoice::set_allocated_id(std::string* id) {
+  if (id != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.id_.SetAllocated(id, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.id_.IsDefault()) {
+    _impl_.id_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechVoice.id)
+}
+
+// string name = 2;
+inline void SpeechVoice::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& SpeechVoice::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoice.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechVoice::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoice.name)
+}
+inline std::string* SpeechVoice::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechVoice.name)
+  return _s;
+}
+inline const std::string& SpeechVoice::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void SpeechVoice::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechVoice.name)
+  return _impl_.name_.Release();
+}
+inline void SpeechVoice::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechVoice.name)
+}
+
+// string language_tag = 3;
+inline void SpeechVoice::clear_language_tag() {
+  _impl_.language_tag_.ClearToEmpty();
+}
+inline const std::string& SpeechVoice::language_tag() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoice.language_tag)
+  return _internal_language_tag();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechVoice::set_language_tag(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.language_tag_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoice.language_tag)
+}
+inline std::string* SpeechVoice::mutable_language_tag() {
+  std::string* _s = _internal_mutable_language_tag();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechVoice.language_tag)
+  return _s;
+}
+inline const std::string& SpeechVoice::_internal_language_tag() const {
+  return _impl_.language_tag_.Get();
+}
+inline void SpeechVoice::_internal_set_language_tag(const std::string& value) {
+  
+  _impl_.language_tag_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::_internal_mutable_language_tag() {
+  
+  return _impl_.language_tag_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechVoice::release_language_tag() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechVoice.language_tag)
+  return _impl_.language_tag_.Release();
+}
+inline void SpeechVoice::set_allocated_language_tag(std::string* language_tag) {
+  if (language_tag != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.language_tag_.SetAllocated(language_tag, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.language_tag_.IsDefault()) {
+    _impl_.language_tag_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechVoice.language_tag)
+}
+
+// bool natural = 4;
+inline void SpeechVoice::clear_natural() {
+  _impl_.natural_ = false;
+}
+inline bool SpeechVoice::_internal_natural() const {
+  return _impl_.natural_;
+}
+inline bool SpeechVoice::natural() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoice.natural)
+  return _internal_natural();
+}
+inline void SpeechVoice::_internal_set_natural(bool value) {
+  
+  _impl_.natural_ = value;
+}
+inline void SpeechVoice::set_natural(bool value) {
+  _internal_set_natural(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoice.natural)
+}
+
+// bool needs_network = 5;
+inline void SpeechVoice::clear_needs_network() {
+  _impl_.needs_network_ = false;
+}
+inline bool SpeechVoice::_internal_needs_network() const {
+  return _impl_.needs_network_;
+}
+inline bool SpeechVoice::needs_network() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoice.needs_network)
+  return _internal_needs_network();
+}
+inline void SpeechVoice::_internal_set_needs_network(bool value) {
+  
+  _impl_.needs_network_ = value;
+}
+inline void SpeechVoice::set_needs_network(bool value) {
+  _internal_set_needs_network(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoice.needs_network)
+}
+
+// -------------------------------------------------------------------
+
+// SpeechVoices
+
+// repeated .dsa.control.v1.SpeechVoice voices = 1;
+inline int SpeechVoices::_internal_voices_size() const {
+  return _impl_.voices_.size();
+}
+inline int SpeechVoices::voices_size() const {
+  return _internal_voices_size();
+}
+inline void SpeechVoices::clear_voices() {
+  _impl_.voices_.Clear();
+}
+inline ::dsa::control::v1::SpeechVoice* SpeechVoices::mutable_voices(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechVoices.voices)
+  return _impl_.voices_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpeechVoice >*
+SpeechVoices::mutable_voices() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SpeechVoices.voices)
+  return &_impl_.voices_;
+}
+inline const ::dsa::control::v1::SpeechVoice& SpeechVoices::_internal_voices(int index) const {
+  return _impl_.voices_.Get(index);
+}
+inline const ::dsa::control::v1::SpeechVoice& SpeechVoices::voices(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoices.voices)
+  return _internal_voices(index);
+}
+inline ::dsa::control::v1::SpeechVoice* SpeechVoices::_internal_add_voices() {
+  return _impl_.voices_.Add();
+}
+inline ::dsa::control::v1::SpeechVoice* SpeechVoices::add_voices() {
+  ::dsa::control::v1::SpeechVoice* _add = _internal_add_voices();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SpeechVoices.voices)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpeechVoice >&
+SpeechVoices::voices() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SpeechVoices.voices)
+  return _impl_.voices_;
+}
+
+// string default_voice_id = 2;
+inline void SpeechVoices::clear_default_voice_id() {
+  _impl_.default_voice_id_.ClearToEmpty();
+}
+inline const std::string& SpeechVoices::default_voice_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoices.default_voice_id)
+  return _internal_default_voice_id();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechVoices::set_default_voice_id(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.default_voice_id_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoices.default_voice_id)
+}
+inline std::string* SpeechVoices::mutable_default_voice_id() {
+  std::string* _s = _internal_mutable_default_voice_id();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechVoices.default_voice_id)
+  return _s;
+}
+inline const std::string& SpeechVoices::_internal_default_voice_id() const {
+  return _impl_.default_voice_id_.Get();
+}
+inline void SpeechVoices::_internal_set_default_voice_id(const std::string& value) {
+  
+  _impl_.default_voice_id_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechVoices::_internal_mutable_default_voice_id() {
+  
+  return _impl_.default_voice_id_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechVoices::release_default_voice_id() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechVoices.default_voice_id)
+  return _impl_.default_voice_id_.Release();
+}
+inline void SpeechVoices::set_allocated_default_voice_id(std::string* default_voice_id) {
+  if (default_voice_id != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.default_voice_id_.SetAllocated(default_voice_id, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.default_voice_id_.IsDefault()) {
+    _impl_.default_voice_id_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechVoices.default_voice_id)
+}
+
+// bool available = 3;
+inline void SpeechVoices::clear_available() {
+  _impl_.available_ = false;
+}
+inline bool SpeechVoices::_internal_available() const {
+  return _impl_.available_;
+}
+inline bool SpeechVoices::available() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechVoices.available)
+  return _internal_available();
+}
+inline void SpeechVoices::_internal_set_available(bool value) {
+  
+  _impl_.available_ = value;
+}
+inline void SpeechVoices::set_available(bool value) {
+  _internal_set_available(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechVoices.available)
+}
+
+// -------------------------------------------------------------------
+
+// SpeakText
+
+// uint32 request_id = 1;
+inline void SpeakText::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t SpeakText::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t SpeakText::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.request_id)
+  return _internal_request_id();
+}
+inline void SpeakText::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void SpeakText::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.request_id)
+}
+
+// string text = 2;
+inline void SpeakText::clear_text() {
+  _impl_.text_.ClearToEmpty();
+}
+inline const std::string& SpeakText::text() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.text)
+  return _internal_text();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeakText::set_text(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.text_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.text)
+}
+inline std::string* SpeakText::mutable_text() {
+  std::string* _s = _internal_mutable_text();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeakText.text)
+  return _s;
+}
+inline const std::string& SpeakText::_internal_text() const {
+  return _impl_.text_.Get();
+}
+inline void SpeakText::_internal_set_text(const std::string& value) {
+  
+  _impl_.text_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeakText::_internal_mutable_text() {
+  
+  return _impl_.text_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeakText::release_text() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeakText.text)
+  return _impl_.text_.Release();
+}
+inline void SpeakText::set_allocated_text(std::string* text) {
+  if (text != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.text_.SetAllocated(text, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.text_.IsDefault()) {
+    _impl_.text_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeakText.text)
+}
+
+// string voice_id = 3;
+inline void SpeakText::clear_voice_id() {
+  _impl_.voice_id_.ClearToEmpty();
+}
+inline const std::string& SpeakText::voice_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.voice_id)
+  return _internal_voice_id();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeakText::set_voice_id(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.voice_id_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.voice_id)
+}
+inline std::string* SpeakText::mutable_voice_id() {
+  std::string* _s = _internal_mutable_voice_id();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeakText.voice_id)
+  return _s;
+}
+inline const std::string& SpeakText::_internal_voice_id() const {
+  return _impl_.voice_id_.Get();
+}
+inline void SpeakText::_internal_set_voice_id(const std::string& value) {
+  
+  _impl_.voice_id_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeakText::_internal_mutable_voice_id() {
+  
+  return _impl_.voice_id_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeakText::release_voice_id() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeakText.voice_id)
+  return _impl_.voice_id_.Release();
+}
+inline void SpeakText::set_allocated_voice_id(std::string* voice_id) {
+  if (voice_id != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.voice_id_.SetAllocated(voice_id, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.voice_id_.IsDefault()) {
+    _impl_.voice_id_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeakText.voice_id)
+}
+
+// string language_tag = 4;
+inline void SpeakText::clear_language_tag() {
+  _impl_.language_tag_.ClearToEmpty();
+}
+inline const std::string& SpeakText::language_tag() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.language_tag)
+  return _internal_language_tag();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeakText::set_language_tag(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.language_tag_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.language_tag)
+}
+inline std::string* SpeakText::mutable_language_tag() {
+  std::string* _s = _internal_mutable_language_tag();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeakText.language_tag)
+  return _s;
+}
+inline const std::string& SpeakText::_internal_language_tag() const {
+  return _impl_.language_tag_.Get();
+}
+inline void SpeakText::_internal_set_language_tag(const std::string& value) {
+  
+  _impl_.language_tag_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeakText::_internal_mutable_language_tag() {
+  
+  return _impl_.language_tag_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeakText::release_language_tag() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeakText.language_tag)
+  return _impl_.language_tag_.Release();
+}
+inline void SpeakText::set_allocated_language_tag(std::string* language_tag) {
+  if (language_tag != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.language_tag_.SetAllocated(language_tag, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.language_tag_.IsDefault()) {
+    _impl_.language_tag_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeakText.language_tag)
+}
+
+// float rate = 5;
+inline void SpeakText::clear_rate() {
+  _impl_.rate_ = 0;
+}
+inline float SpeakText::_internal_rate() const {
+  return _impl_.rate_;
+}
+inline float SpeakText::rate() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.rate)
+  return _internal_rate();
+}
+inline void SpeakText::_internal_set_rate(float value) {
+  
+  _impl_.rate_ = value;
+}
+inline void SpeakText::set_rate(float value) {
+  _internal_set_rate(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.rate)
+}
+
+// float pitch = 6;
+inline void SpeakText::clear_pitch() {
+  _impl_.pitch_ = 0;
+}
+inline float SpeakText::_internal_pitch() const {
+  return _impl_.pitch_;
+}
+inline float SpeakText::pitch() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeakText.pitch)
+  return _internal_pitch();
+}
+inline void SpeakText::_internal_set_pitch(float value) {
+  
+  _impl_.pitch_ = value;
+}
+inline void SpeakText::set_pitch(float value) {
+  _internal_set_pitch(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeakText.pitch)
+}
+
+// -------------------------------------------------------------------
+
+// SpeechAudio
+
+// uint32 request_id = 1;
+inline void SpeechAudio::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t SpeechAudio::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t SpeechAudio::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechAudio.request_id)
+  return _internal_request_id();
+}
+inline void SpeechAudio::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void SpeechAudio::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechAudio.request_id)
+}
+
+// uint32 sample_rate_hz = 2;
+inline void SpeechAudio::clear_sample_rate_hz() {
+  _impl_.sample_rate_hz_ = 0u;
+}
+inline uint32_t SpeechAudio::_internal_sample_rate_hz() const {
+  return _impl_.sample_rate_hz_;
+}
+inline uint32_t SpeechAudio::sample_rate_hz() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechAudio.sample_rate_hz)
+  return _internal_sample_rate_hz();
+}
+inline void SpeechAudio::_internal_set_sample_rate_hz(uint32_t value) {
+  
+  _impl_.sample_rate_hz_ = value;
+}
+inline void SpeechAudio::set_sample_rate_hz(uint32_t value) {
+  _internal_set_sample_rate_hz(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechAudio.sample_rate_hz)
+}
+
+// uint32 channel_count = 3;
+inline void SpeechAudio::clear_channel_count() {
+  _impl_.channel_count_ = 0u;
+}
+inline uint32_t SpeechAudio::_internal_channel_count() const {
+  return _impl_.channel_count_;
+}
+inline uint32_t SpeechAudio::channel_count() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechAudio.channel_count)
+  return _internal_channel_count();
+}
+inline void SpeechAudio::_internal_set_channel_count(uint32_t value) {
+  
+  _impl_.channel_count_ = value;
+}
+inline void SpeechAudio::set_channel_count(uint32_t value) {
+  _internal_set_channel_count(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechAudio.channel_count)
+}
+
+// bytes pcm = 4;
+inline void SpeechAudio::clear_pcm() {
+  _impl_.pcm_.ClearToEmpty();
+}
+inline const std::string& SpeechAudio::pcm() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechAudio.pcm)
+  return _internal_pcm();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechAudio::set_pcm(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.pcm_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechAudio.pcm)
+}
+inline std::string* SpeechAudio::mutable_pcm() {
+  std::string* _s = _internal_mutable_pcm();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechAudio.pcm)
+  return _s;
+}
+inline const std::string& SpeechAudio::_internal_pcm() const {
+  return _impl_.pcm_.Get();
+}
+inline void SpeechAudio::_internal_set_pcm(const std::string& value) {
+  
+  _impl_.pcm_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechAudio::_internal_mutable_pcm() {
+  
+  return _impl_.pcm_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechAudio::release_pcm() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechAudio.pcm)
+  return _impl_.pcm_.Release();
+}
+inline void SpeechAudio::set_allocated_pcm(std::string* pcm) {
+  if (pcm != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.pcm_.SetAllocated(pcm, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.pcm_.IsDefault()) {
+    _impl_.pcm_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechAudio.pcm)
+}
+
+// -------------------------------------------------------------------
+
+// SpeechDone
+
+// uint32 request_id = 1;
+inline void SpeechDone::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t SpeechDone::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t SpeechDone::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechDone.request_id)
+  return _internal_request_id();
+}
+inline void SpeechDone::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void SpeechDone::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechDone.request_id)
+}
+
+// .dsa.control.v1.SpeechOutcome outcome = 2;
+inline void SpeechDone::clear_outcome() {
+  _impl_.outcome_ = 0;
+}
+inline ::dsa::control::v1::SpeechOutcome SpeechDone::_internal_outcome() const {
+  return static_cast< ::dsa::control::v1::SpeechOutcome >(_impl_.outcome_);
+}
+inline ::dsa::control::v1::SpeechOutcome SpeechDone::outcome() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechDone.outcome)
+  return _internal_outcome();
+}
+inline void SpeechDone::_internal_set_outcome(::dsa::control::v1::SpeechOutcome value) {
+  
+  _impl_.outcome_ = value;
+}
+inline void SpeechDone::set_outcome(::dsa::control::v1::SpeechOutcome value) {
+  _internal_set_outcome(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechDone.outcome)
+}
+
+// string message = 3;
+inline void SpeechDone::clear_message() {
+  _impl_.message_.ClearToEmpty();
+}
+inline const std::string& SpeechDone::message() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpeechDone.message)
+  return _internal_message();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SpeechDone::set_message(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.message_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpeechDone.message)
+}
+inline std::string* SpeechDone::mutable_message() {
+  std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpeechDone.message)
+  return _s;
+}
+inline const std::string& SpeechDone::_internal_message() const {
+  return _impl_.message_.Get();
+}
+inline void SpeechDone::_internal_set_message(const std::string& value) {
+  
+  _impl_.message_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SpeechDone::_internal_mutable_message() {
+  
+  return _impl_.message_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SpeechDone::release_message() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SpeechDone.message)
+  return _impl_.message_.Release();
+}
+inline void SpeechDone::set_allocated_message(std::string* message) {
+  if (message != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SpeechDone.message)
+}
+
+// -------------------------------------------------------------------
+
+// StopSpeaking
+
+// uint32 request_id = 1;
+inline void StopSpeaking::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t StopSpeaking::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t StopSpeaking::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StopSpeaking.request_id)
+  return _internal_request_id();
+}
+inline void StopSpeaking::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void StopSpeaking::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StopSpeaking.request_id)
+}
+
+// -------------------------------------------------------------------
+
+// StartRecognition
+
+// uint32 request_id = 1;
+inline void StartRecognition::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t StartRecognition::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t StartRecognition::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StartRecognition.request_id)
+  return _internal_request_id();
+}
+inline void StartRecognition::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void StartRecognition::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StartRecognition.request_id)
+}
+
+// string language_tag = 2;
+inline void StartRecognition::clear_language_tag() {
+  _impl_.language_tag_.ClearToEmpty();
+}
+inline const std::string& StartRecognition::language_tag() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StartRecognition.language_tag)
+  return _internal_language_tag();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void StartRecognition::set_language_tag(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.language_tag_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StartRecognition.language_tag)
+}
+inline std::string* StartRecognition::mutable_language_tag() {
+  std::string* _s = _internal_mutable_language_tag();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.StartRecognition.language_tag)
+  return _s;
+}
+inline const std::string& StartRecognition::_internal_language_tag() const {
+  return _impl_.language_tag_.Get();
+}
+inline void StartRecognition::_internal_set_language_tag(const std::string& value) {
+  
+  _impl_.language_tag_.Set(value, GetArenaForAllocation());
+}
+inline std::string* StartRecognition::_internal_mutable_language_tag() {
+  
+  return _impl_.language_tag_.Mutable(GetArenaForAllocation());
+}
+inline std::string* StartRecognition::release_language_tag() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.StartRecognition.language_tag)
+  return _impl_.language_tag_.Release();
+}
+inline void StartRecognition::set_allocated_language_tag(std::string* language_tag) {
+  if (language_tag != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.language_tag_.SetAllocated(language_tag, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.language_tag_.IsDefault()) {
+    _impl_.language_tag_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.StartRecognition.language_tag)
+}
+
+// bool partial_results = 3;
+inline void StartRecognition::clear_partial_results() {
+  _impl_.partial_results_ = false;
+}
+inline bool StartRecognition::_internal_partial_results() const {
+  return _impl_.partial_results_;
+}
+inline bool StartRecognition::partial_results() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StartRecognition.partial_results)
+  return _internal_partial_results();
+}
+inline void StartRecognition::_internal_set_partial_results(bool value) {
+  
+  _impl_.partial_results_ = value;
+}
+inline void StartRecognition::set_partial_results(bool value) {
+  _internal_set_partial_results(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StartRecognition.partial_results)
+}
+
+// uint32 max_results = 4;
+inline void StartRecognition::clear_max_results() {
+  _impl_.max_results_ = 0u;
+}
+inline uint32_t StartRecognition::_internal_max_results() const {
+  return _impl_.max_results_;
+}
+inline uint32_t StartRecognition::max_results() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StartRecognition.max_results)
+  return _internal_max_results();
+}
+inline void StartRecognition::_internal_set_max_results(uint32_t value) {
+  
+  _impl_.max_results_ = value;
+}
+inline void StartRecognition::set_max_results(uint32_t value) {
+  _internal_set_max_results(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StartRecognition.max_results)
+}
+
+// bool prefer_offline = 5;
+inline void StartRecognition::clear_prefer_offline() {
+  _impl_.prefer_offline_ = false;
+}
+inline bool StartRecognition::_internal_prefer_offline() const {
+  return _impl_.prefer_offline_;
+}
+inline bool StartRecognition::prefer_offline() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StartRecognition.prefer_offline)
+  return _internal_prefer_offline();
+}
+inline void StartRecognition::_internal_set_prefer_offline(bool value) {
+  
+  _impl_.prefer_offline_ = value;
+}
+inline void StartRecognition::set_prefer_offline(bool value) {
+  _internal_set_prefer_offline(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StartRecognition.prefer_offline)
+}
+
+// -------------------------------------------------------------------
+
+// StopRecognition
+
+// uint32 request_id = 1;
+inline void StopRecognition::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t StopRecognition::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t StopRecognition::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.StopRecognition.request_id)
+  return _internal_request_id();
+}
+inline void StopRecognition::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void StopRecognition::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.StopRecognition.request_id)
+}
+
+// -------------------------------------------------------------------
+
+// CancelRecognition
+
+// uint32 request_id = 1;
+inline void CancelRecognition::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t CancelRecognition::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t CancelRecognition::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.CancelRecognition.request_id)
+  return _internal_request_id();
+}
+inline void CancelRecognition::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void CancelRecognition::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CancelRecognition.request_id)
+}
+
+// -------------------------------------------------------------------
+
+// RecognitionEvent
+
+// uint32 request_id = 1;
+inline void RecognitionEvent::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t RecognitionEvent::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t RecognitionEvent::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.request_id)
+  return _internal_request_id();
+}
+inline void RecognitionEvent::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void RecognitionEvent::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.request_id)
+}
+
+// .dsa.control.v1.RecognitionEventKind kind = 2;
+inline void RecognitionEvent::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::RecognitionEventKind RecognitionEvent::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::RecognitionEventKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::RecognitionEventKind RecognitionEvent::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.kind)
+  return _internal_kind();
+}
+inline void RecognitionEvent::_internal_set_kind(::dsa::control::v1::RecognitionEventKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void RecognitionEvent::set_kind(::dsa::control::v1::RecognitionEventKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.kind)
+}
+
+// repeated string texts = 3;
+inline int RecognitionEvent::_internal_texts_size() const {
+  return _impl_.texts_.size();
+}
+inline int RecognitionEvent::texts_size() const {
+  return _internal_texts_size();
+}
+inline void RecognitionEvent::clear_texts() {
+  _impl_.texts_.Clear();
+}
+inline std::string* RecognitionEvent::add_texts() {
+  std::string* _s = _internal_add_texts();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.RecognitionEvent.texts)
+  return _s;
+}
+inline const std::string& RecognitionEvent::_internal_texts(int index) const {
+  return _impl_.texts_.Get(index);
+}
+inline const std::string& RecognitionEvent::texts(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.texts)
+  return _internal_texts(index);
+}
+inline std::string* RecognitionEvent::mutable_texts(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.RecognitionEvent.texts)
+  return _impl_.texts_.Mutable(index);
+}
+inline void RecognitionEvent::set_texts(int index, const std::string& value) {
+  _impl_.texts_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::set_texts(int index, std::string&& value) {
+  _impl_.texts_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::set_texts(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.texts_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::set_texts(int index, const char* value, size_t size) {
+  _impl_.texts_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.RecognitionEvent.texts)
+}
+inline std::string* RecognitionEvent::_internal_add_texts() {
+  return _impl_.texts_.Add();
+}
+inline void RecognitionEvent::add_texts(const std::string& value) {
+  _impl_.texts_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::add_texts(std::string&& value) {
+  _impl_.texts_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::add_texts(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.texts_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.RecognitionEvent.texts)
+}
+inline void RecognitionEvent::add_texts(const char* value, size_t size) {
+  _impl_.texts_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.RecognitionEvent.texts)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+RecognitionEvent::texts() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.RecognitionEvent.texts)
+  return _impl_.texts_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+RecognitionEvent::mutable_texts() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.RecognitionEvent.texts)
+  return &_impl_.texts_;
+}
+
+// repeated float confidences = 4;
+inline int RecognitionEvent::_internal_confidences_size() const {
+  return _impl_.confidences_.size();
+}
+inline int RecognitionEvent::confidences_size() const {
+  return _internal_confidences_size();
+}
+inline void RecognitionEvent::clear_confidences() {
+  _impl_.confidences_.Clear();
+}
+inline float RecognitionEvent::_internal_confidences(int index) const {
+  return _impl_.confidences_.Get(index);
+}
+inline float RecognitionEvent::confidences(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.confidences)
+  return _internal_confidences(index);
+}
+inline void RecognitionEvent::set_confidences(int index, float value) {
+  _impl_.confidences_.Set(index, value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.confidences)
+}
+inline void RecognitionEvent::_internal_add_confidences(float value) {
+  _impl_.confidences_.Add(value);
+}
+inline void RecognitionEvent::add_confidences(float value) {
+  _internal_add_confidences(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.RecognitionEvent.confidences)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+RecognitionEvent::_internal_confidences() const {
+  return _impl_.confidences_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+RecognitionEvent::confidences() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.RecognitionEvent.confidences)
+  return _internal_confidences();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+RecognitionEvent::_internal_mutable_confidences() {
+  return &_impl_.confidences_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+RecognitionEvent::mutable_confidences() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.RecognitionEvent.confidences)
+  return _internal_mutable_confidences();
+}
+
+// .dsa.control.v1.RecognitionError error = 5;
+inline void RecognitionEvent::clear_error() {
+  _impl_.error_ = 0;
+}
+inline ::dsa::control::v1::RecognitionError RecognitionEvent::_internal_error() const {
+  return static_cast< ::dsa::control::v1::RecognitionError >(_impl_.error_);
+}
+inline ::dsa::control::v1::RecognitionError RecognitionEvent::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.error)
+  return _internal_error();
+}
+inline void RecognitionEvent::_internal_set_error(::dsa::control::v1::RecognitionError value) {
+  
+  _impl_.error_ = value;
+}
+inline void RecognitionEvent::set_error(::dsa::control::v1::RecognitionError value) {
+  _internal_set_error(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.error)
+}
+
+// string message = 6;
+inline void RecognitionEvent::clear_message() {
+  _impl_.message_.ClearToEmpty();
+}
+inline const std::string& RecognitionEvent::message() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.RecognitionEvent.message)
+  return _internal_message();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void RecognitionEvent::set_message(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.message_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.RecognitionEvent.message)
+}
+inline std::string* RecognitionEvent::mutable_message() {
+  std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.RecognitionEvent.message)
+  return _s;
+}
+inline const std::string& RecognitionEvent::_internal_message() const {
+  return _impl_.message_.Get();
+}
+inline void RecognitionEvent::_internal_set_message(const std::string& value) {
+  
+  _impl_.message_.Set(value, GetArenaForAllocation());
+}
+inline std::string* RecognitionEvent::_internal_mutable_message() {
+  
+  return _impl_.message_.Mutable(GetArenaForAllocation());
+}
+inline std::string* RecognitionEvent::release_message() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.RecognitionEvent.message)
+  return _impl_.message_.Release();
+}
+inline void RecognitionEvent::set_allocated_message(std::string* message) {
+  if (message != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.RecognitionEvent.message)
+}
+
+// -------------------------------------------------------------------
+
+// CheckSpelling
+
+// uint32 request_id = 1;
+inline void CheckSpelling::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t CheckSpelling::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t CheckSpelling::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.CheckSpelling.request_id)
+  return _internal_request_id();
+}
+inline void CheckSpelling::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void CheckSpelling::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CheckSpelling.request_id)
+}
+
+// string language_tag = 2;
+inline void CheckSpelling::clear_language_tag() {
+  _impl_.language_tag_.ClearToEmpty();
+}
+inline const std::string& CheckSpelling::language_tag() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.CheckSpelling.language_tag)
+  return _internal_language_tag();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void CheckSpelling::set_language_tag(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.language_tag_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CheckSpelling.language_tag)
+}
+inline std::string* CheckSpelling::mutable_language_tag() {
+  std::string* _s = _internal_mutable_language_tag();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.CheckSpelling.language_tag)
+  return _s;
+}
+inline const std::string& CheckSpelling::_internal_language_tag() const {
+  return _impl_.language_tag_.Get();
+}
+inline void CheckSpelling::_internal_set_language_tag(const std::string& value) {
+  
+  _impl_.language_tag_.Set(value, GetArenaForAllocation());
+}
+inline std::string* CheckSpelling::_internal_mutable_language_tag() {
+  
+  return _impl_.language_tag_.Mutable(GetArenaForAllocation());
+}
+inline std::string* CheckSpelling::release_language_tag() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.CheckSpelling.language_tag)
+  return _impl_.language_tag_.Release();
+}
+inline void CheckSpelling::set_allocated_language_tag(std::string* language_tag) {
+  if (language_tag != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.language_tag_.SetAllocated(language_tag, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.language_tag_.IsDefault()) {
+    _impl_.language_tag_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.CheckSpelling.language_tag)
+}
+
+// repeated string texts = 3;
+inline int CheckSpelling::_internal_texts_size() const {
+  return _impl_.texts_.size();
+}
+inline int CheckSpelling::texts_size() const {
+  return _internal_texts_size();
+}
+inline void CheckSpelling::clear_texts() {
+  _impl_.texts_.Clear();
+}
+inline std::string* CheckSpelling::add_texts() {
+  std::string* _s = _internal_add_texts();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.CheckSpelling.texts)
+  return _s;
+}
+inline const std::string& CheckSpelling::_internal_texts(int index) const {
+  return _impl_.texts_.Get(index);
+}
+inline const std::string& CheckSpelling::texts(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.CheckSpelling.texts)
+  return _internal_texts(index);
+}
+inline std::string* CheckSpelling::mutable_texts(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.CheckSpelling.texts)
+  return _impl_.texts_.Mutable(index);
+}
+inline void CheckSpelling::set_texts(int index, const std::string& value) {
+  _impl_.texts_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::set_texts(int index, std::string&& value) {
+  _impl_.texts_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::set_texts(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.texts_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::set_texts(int index, const char* value, size_t size) {
+  _impl_.texts_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.CheckSpelling.texts)
+}
+inline std::string* CheckSpelling::_internal_add_texts() {
+  return _impl_.texts_.Add();
+}
+inline void CheckSpelling::add_texts(const std::string& value) {
+  _impl_.texts_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::add_texts(std::string&& value) {
+  _impl_.texts_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::add_texts(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.texts_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.CheckSpelling.texts)
+}
+inline void CheckSpelling::add_texts(const char* value, size_t size) {
+  _impl_.texts_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.CheckSpelling.texts)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+CheckSpelling::texts() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.CheckSpelling.texts)
+  return _impl_.texts_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+CheckSpelling::mutable_texts() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.CheckSpelling.texts)
+  return &_impl_.texts_;
+}
+
+// uint32 max_suggestions = 4;
+inline void CheckSpelling::clear_max_suggestions() {
+  _impl_.max_suggestions_ = 0u;
+}
+inline uint32_t CheckSpelling::_internal_max_suggestions() const {
+  return _impl_.max_suggestions_;
+}
+inline uint32_t CheckSpelling::max_suggestions() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.CheckSpelling.max_suggestions)
+  return _internal_max_suggestions();
+}
+inline void CheckSpelling::_internal_set_max_suggestions(uint32_t value) {
+  
+  _impl_.max_suggestions_ = value;
+}
+inline void CheckSpelling::set_max_suggestions(uint32_t value) {
+  _internal_set_max_suggestions(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.CheckSpelling.max_suggestions)
+}
+
+// -------------------------------------------------------------------
+
+// SpellingMistake
+
+// uint32 start = 1;
+inline void SpellingMistake::clear_start() {
+  _impl_.start_ = 0u;
+}
+inline uint32_t SpellingMistake::_internal_start() const {
+  return _impl_.start_;
+}
+inline uint32_t SpellingMistake::start() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingMistake.start)
+  return _internal_start();
+}
+inline void SpellingMistake::_internal_set_start(uint32_t value) {
+  
+  _impl_.start_ = value;
+}
+inline void SpellingMistake::set_start(uint32_t value) {
+  _internal_set_start(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingMistake.start)
+}
+
+// uint32 length = 2;
+inline void SpellingMistake::clear_length() {
+  _impl_.length_ = 0u;
+}
+inline uint32_t SpellingMistake::_internal_length() const {
+  return _impl_.length_;
+}
+inline uint32_t SpellingMistake::length() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingMistake.length)
+  return _internal_length();
+}
+inline void SpellingMistake::_internal_set_length(uint32_t value) {
+  
+  _impl_.length_ = value;
+}
+inline void SpellingMistake::set_length(uint32_t value) {
+  _internal_set_length(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingMistake.length)
+}
+
+// repeated string suggestions = 3;
+inline int SpellingMistake::_internal_suggestions_size() const {
+  return _impl_.suggestions_.size();
+}
+inline int SpellingMistake::suggestions_size() const {
+  return _internal_suggestions_size();
+}
+inline void SpellingMistake::clear_suggestions() {
+  _impl_.suggestions_.Clear();
+}
+inline std::string* SpellingMistake::add_suggestions() {
+  std::string* _s = _internal_add_suggestions();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.SpellingMistake.suggestions)
+  return _s;
+}
+inline const std::string& SpellingMistake::_internal_suggestions(int index) const {
+  return _impl_.suggestions_.Get(index);
+}
+inline const std::string& SpellingMistake::suggestions(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingMistake.suggestions)
+  return _internal_suggestions(index);
+}
+inline std::string* SpellingMistake::mutable_suggestions(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpellingMistake.suggestions)
+  return _impl_.suggestions_.Mutable(index);
+}
+inline void SpellingMistake::set_suggestions(int index, const std::string& value) {
+  _impl_.suggestions_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::set_suggestions(int index, std::string&& value) {
+  _impl_.suggestions_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::set_suggestions(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.suggestions_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::set_suggestions(int index, const char* value, size_t size) {
+  _impl_.suggestions_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline std::string* SpellingMistake::_internal_add_suggestions() {
+  return _impl_.suggestions_.Add();
+}
+inline void SpellingMistake::add_suggestions(const std::string& value) {
+  _impl_.suggestions_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::add_suggestions(std::string&& value) {
+  _impl_.suggestions_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::add_suggestions(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.suggestions_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline void SpellingMistake::add_suggestions(const char* value, size_t size) {
+  _impl_.suggestions_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.SpellingMistake.suggestions)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+SpellingMistake::suggestions() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SpellingMistake.suggestions)
+  return _impl_.suggestions_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+SpellingMistake::mutable_suggestions() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SpellingMistake.suggestions)
+  return &_impl_.suggestions_;
+}
+
+// bool recommended = 4;
+inline void SpellingMistake::clear_recommended() {
+  _impl_.recommended_ = false;
+}
+inline bool SpellingMistake::_internal_recommended() const {
+  return _impl_.recommended_;
+}
+inline bool SpellingMistake::recommended() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingMistake.recommended)
+  return _internal_recommended();
+}
+inline void SpellingMistake::_internal_set_recommended(bool value) {
+  
+  _impl_.recommended_ = value;
+}
+inline void SpellingMistake::set_recommended(bool value) {
+  _internal_set_recommended(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingMistake.recommended)
+}
+
+// -------------------------------------------------------------------
+
+// SpellingText
+
+// repeated .dsa.control.v1.SpellingMistake mistakes = 1;
+inline int SpellingText::_internal_mistakes_size() const {
+  return _impl_.mistakes_.size();
+}
+inline int SpellingText::mistakes_size() const {
+  return _internal_mistakes_size();
+}
+inline void SpellingText::clear_mistakes() {
+  _impl_.mistakes_.Clear();
+}
+inline ::dsa::control::v1::SpellingMistake* SpellingText::mutable_mistakes(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpellingText.mistakes)
+  return _impl_.mistakes_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingMistake >*
+SpellingText::mutable_mistakes() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SpellingText.mistakes)
+  return &_impl_.mistakes_;
+}
+inline const ::dsa::control::v1::SpellingMistake& SpellingText::_internal_mistakes(int index) const {
+  return _impl_.mistakes_.Get(index);
+}
+inline const ::dsa::control::v1::SpellingMistake& SpellingText::mistakes(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingText.mistakes)
+  return _internal_mistakes(index);
+}
+inline ::dsa::control::v1::SpellingMistake* SpellingText::_internal_add_mistakes() {
+  return _impl_.mistakes_.Add();
+}
+inline ::dsa::control::v1::SpellingMistake* SpellingText::add_mistakes() {
+  ::dsa::control::v1::SpellingMistake* _add = _internal_add_mistakes();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SpellingText.mistakes)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingMistake >&
+SpellingText::mistakes() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SpellingText.mistakes)
+  return _impl_.mistakes_;
+}
+
+// -------------------------------------------------------------------
+
+// SpellingResult
+
+// uint32 request_id = 1;
+inline void SpellingResult::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t SpellingResult::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t SpellingResult::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingResult.request_id)
+  return _internal_request_id();
+}
+inline void SpellingResult::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void SpellingResult::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingResult.request_id)
+}
+
+// repeated .dsa.control.v1.SpellingText texts = 2;
+inline int SpellingResult::_internal_texts_size() const {
+  return _impl_.texts_.size();
+}
+inline int SpellingResult::texts_size() const {
+  return _internal_texts_size();
+}
+inline void SpellingResult::clear_texts() {
+  _impl_.texts_.Clear();
+}
+inline ::dsa::control::v1::SpellingText* SpellingResult::mutable_texts(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SpellingResult.texts)
+  return _impl_.texts_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingText >*
+SpellingResult::mutable_texts() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SpellingResult.texts)
+  return &_impl_.texts_;
+}
+inline const ::dsa::control::v1::SpellingText& SpellingResult::_internal_texts(int index) const {
+  return _impl_.texts_.Get(index);
+}
+inline const ::dsa::control::v1::SpellingText& SpellingResult::texts(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingResult.texts)
+  return _internal_texts(index);
+}
+inline ::dsa::control::v1::SpellingText* SpellingResult::_internal_add_texts() {
+  return _impl_.texts_.Add();
+}
+inline ::dsa::control::v1::SpellingText* SpellingResult::add_texts() {
+  ::dsa::control::v1::SpellingText* _add = _internal_add_texts();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SpellingResult.texts)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SpellingText >&
+SpellingResult::texts() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SpellingResult.texts)
+  return _impl_.texts_;
+}
+
+// bool supported = 3;
+inline void SpellingResult::clear_supported() {
+  _impl_.supported_ = false;
+}
+inline bool SpellingResult::_internal_supported() const {
+  return _impl_.supported_;
+}
+inline bool SpellingResult::supported() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SpellingResult.supported)
+  return _internal_supported();
+}
+inline void SpellingResult::_internal_set_supported(bool value) {
+  
+  _impl_.supported_ = value;
+}
+inline void SpellingResult::set_supported(bool value) {
+  _internal_set_supported(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SpellingResult.supported)
+}
+
+// -------------------------------------------------------------------
+
 // Envelope
 
 // .dsa.control.v1.Hello hello = 1;
@@ -64232,6 +68692,894 @@ inline ::dsa::control::v1::NativeLibraryCrash* Envelope::mutable_native_library_
   return _msg;
 }
 
+// .dsa.control.v1.ListSpeechVoices list_speech_voices = 620;
+inline bool Envelope::_internal_has_list_speech_voices() const {
+  return body_case() == kListSpeechVoices;
+}
+inline bool Envelope::has_list_speech_voices() const {
+  return _internal_has_list_speech_voices();
+}
+inline void Envelope::set_has_list_speech_voices() {
+  _impl_._oneof_case_[0] = kListSpeechVoices;
+}
+inline void Envelope::clear_list_speech_voices() {
+  if (_internal_has_list_speech_voices()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.list_speech_voices_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::ListSpeechVoices* Envelope::release_list_speech_voices() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.list_speech_voices)
+  if (_internal_has_list_speech_voices()) {
+    clear_has_body();
+    ::dsa::control::v1::ListSpeechVoices* temp = _impl_.body_.list_speech_voices_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.list_speech_voices_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::ListSpeechVoices& Envelope::_internal_list_speech_voices() const {
+  return _internal_has_list_speech_voices()
+      ? *_impl_.body_.list_speech_voices_
+      : reinterpret_cast< ::dsa::control::v1::ListSpeechVoices&>(::dsa::control::v1::_ListSpeechVoices_default_instance_);
+}
+inline const ::dsa::control::v1::ListSpeechVoices& Envelope::list_speech_voices() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.list_speech_voices)
+  return _internal_list_speech_voices();
+}
+inline ::dsa::control::v1::ListSpeechVoices* Envelope::unsafe_arena_release_list_speech_voices() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.list_speech_voices)
+  if (_internal_has_list_speech_voices()) {
+    clear_has_body();
+    ::dsa::control::v1::ListSpeechVoices* temp = _impl_.body_.list_speech_voices_;
+    _impl_.body_.list_speech_voices_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_list_speech_voices(::dsa::control::v1::ListSpeechVoices* list_speech_voices) {
+  clear_body();
+  if (list_speech_voices) {
+    set_has_list_speech_voices();
+    _impl_.body_.list_speech_voices_ = list_speech_voices;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.list_speech_voices)
+}
+inline ::dsa::control::v1::ListSpeechVoices* Envelope::_internal_mutable_list_speech_voices() {
+  if (!_internal_has_list_speech_voices()) {
+    clear_body();
+    set_has_list_speech_voices();
+    _impl_.body_.list_speech_voices_ = CreateMaybeMessage< ::dsa::control::v1::ListSpeechVoices >(GetArenaForAllocation());
+  }
+  return _impl_.body_.list_speech_voices_;
+}
+inline ::dsa::control::v1::ListSpeechVoices* Envelope::mutable_list_speech_voices() {
+  ::dsa::control::v1::ListSpeechVoices* _msg = _internal_mutable_list_speech_voices();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.list_speech_voices)
+  return _msg;
+}
+
+// .dsa.control.v1.SpeechVoices speech_voices = 621;
+inline bool Envelope::_internal_has_speech_voices() const {
+  return body_case() == kSpeechVoices;
+}
+inline bool Envelope::has_speech_voices() const {
+  return _internal_has_speech_voices();
+}
+inline void Envelope::set_has_speech_voices() {
+  _impl_._oneof_case_[0] = kSpeechVoices;
+}
+inline void Envelope::clear_speech_voices() {
+  if (_internal_has_speech_voices()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.speech_voices_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SpeechVoices* Envelope::release_speech_voices() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.speech_voices)
+  if (_internal_has_speech_voices()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechVoices* temp = _impl_.body_.speech_voices_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.speech_voices_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SpeechVoices& Envelope::_internal_speech_voices() const {
+  return _internal_has_speech_voices()
+      ? *_impl_.body_.speech_voices_
+      : reinterpret_cast< ::dsa::control::v1::SpeechVoices&>(::dsa::control::v1::_SpeechVoices_default_instance_);
+}
+inline const ::dsa::control::v1::SpeechVoices& Envelope::speech_voices() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.speech_voices)
+  return _internal_speech_voices();
+}
+inline ::dsa::control::v1::SpeechVoices* Envelope::unsafe_arena_release_speech_voices() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.speech_voices)
+  if (_internal_has_speech_voices()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechVoices* temp = _impl_.body_.speech_voices_;
+    _impl_.body_.speech_voices_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_speech_voices(::dsa::control::v1::SpeechVoices* speech_voices) {
+  clear_body();
+  if (speech_voices) {
+    set_has_speech_voices();
+    _impl_.body_.speech_voices_ = speech_voices;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.speech_voices)
+}
+inline ::dsa::control::v1::SpeechVoices* Envelope::_internal_mutable_speech_voices() {
+  if (!_internal_has_speech_voices()) {
+    clear_body();
+    set_has_speech_voices();
+    _impl_.body_.speech_voices_ = CreateMaybeMessage< ::dsa::control::v1::SpeechVoices >(GetArenaForAllocation());
+  }
+  return _impl_.body_.speech_voices_;
+}
+inline ::dsa::control::v1::SpeechVoices* Envelope::mutable_speech_voices() {
+  ::dsa::control::v1::SpeechVoices* _msg = _internal_mutable_speech_voices();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.speech_voices)
+  return _msg;
+}
+
+// .dsa.control.v1.SpeakText speak_text = 622;
+inline bool Envelope::_internal_has_speak_text() const {
+  return body_case() == kSpeakText;
+}
+inline bool Envelope::has_speak_text() const {
+  return _internal_has_speak_text();
+}
+inline void Envelope::set_has_speak_text() {
+  _impl_._oneof_case_[0] = kSpeakText;
+}
+inline void Envelope::clear_speak_text() {
+  if (_internal_has_speak_text()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.speak_text_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SpeakText* Envelope::release_speak_text() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.speak_text)
+  if (_internal_has_speak_text()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeakText* temp = _impl_.body_.speak_text_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.speak_text_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SpeakText& Envelope::_internal_speak_text() const {
+  return _internal_has_speak_text()
+      ? *_impl_.body_.speak_text_
+      : reinterpret_cast< ::dsa::control::v1::SpeakText&>(::dsa::control::v1::_SpeakText_default_instance_);
+}
+inline const ::dsa::control::v1::SpeakText& Envelope::speak_text() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.speak_text)
+  return _internal_speak_text();
+}
+inline ::dsa::control::v1::SpeakText* Envelope::unsafe_arena_release_speak_text() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.speak_text)
+  if (_internal_has_speak_text()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeakText* temp = _impl_.body_.speak_text_;
+    _impl_.body_.speak_text_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_speak_text(::dsa::control::v1::SpeakText* speak_text) {
+  clear_body();
+  if (speak_text) {
+    set_has_speak_text();
+    _impl_.body_.speak_text_ = speak_text;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.speak_text)
+}
+inline ::dsa::control::v1::SpeakText* Envelope::_internal_mutable_speak_text() {
+  if (!_internal_has_speak_text()) {
+    clear_body();
+    set_has_speak_text();
+    _impl_.body_.speak_text_ = CreateMaybeMessage< ::dsa::control::v1::SpeakText >(GetArenaForAllocation());
+  }
+  return _impl_.body_.speak_text_;
+}
+inline ::dsa::control::v1::SpeakText* Envelope::mutable_speak_text() {
+  ::dsa::control::v1::SpeakText* _msg = _internal_mutable_speak_text();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.speak_text)
+  return _msg;
+}
+
+// .dsa.control.v1.SpeechAudio speech_audio = 623;
+inline bool Envelope::_internal_has_speech_audio() const {
+  return body_case() == kSpeechAudio;
+}
+inline bool Envelope::has_speech_audio() const {
+  return _internal_has_speech_audio();
+}
+inline void Envelope::set_has_speech_audio() {
+  _impl_._oneof_case_[0] = kSpeechAudio;
+}
+inline void Envelope::clear_speech_audio() {
+  if (_internal_has_speech_audio()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.speech_audio_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SpeechAudio* Envelope::release_speech_audio() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.speech_audio)
+  if (_internal_has_speech_audio()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechAudio* temp = _impl_.body_.speech_audio_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.speech_audio_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SpeechAudio& Envelope::_internal_speech_audio() const {
+  return _internal_has_speech_audio()
+      ? *_impl_.body_.speech_audio_
+      : reinterpret_cast< ::dsa::control::v1::SpeechAudio&>(::dsa::control::v1::_SpeechAudio_default_instance_);
+}
+inline const ::dsa::control::v1::SpeechAudio& Envelope::speech_audio() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.speech_audio)
+  return _internal_speech_audio();
+}
+inline ::dsa::control::v1::SpeechAudio* Envelope::unsafe_arena_release_speech_audio() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.speech_audio)
+  if (_internal_has_speech_audio()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechAudio* temp = _impl_.body_.speech_audio_;
+    _impl_.body_.speech_audio_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_speech_audio(::dsa::control::v1::SpeechAudio* speech_audio) {
+  clear_body();
+  if (speech_audio) {
+    set_has_speech_audio();
+    _impl_.body_.speech_audio_ = speech_audio;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.speech_audio)
+}
+inline ::dsa::control::v1::SpeechAudio* Envelope::_internal_mutable_speech_audio() {
+  if (!_internal_has_speech_audio()) {
+    clear_body();
+    set_has_speech_audio();
+    _impl_.body_.speech_audio_ = CreateMaybeMessage< ::dsa::control::v1::SpeechAudio >(GetArenaForAllocation());
+  }
+  return _impl_.body_.speech_audio_;
+}
+inline ::dsa::control::v1::SpeechAudio* Envelope::mutable_speech_audio() {
+  ::dsa::control::v1::SpeechAudio* _msg = _internal_mutable_speech_audio();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.speech_audio)
+  return _msg;
+}
+
+// .dsa.control.v1.SpeechDone speech_done = 624;
+inline bool Envelope::_internal_has_speech_done() const {
+  return body_case() == kSpeechDone;
+}
+inline bool Envelope::has_speech_done() const {
+  return _internal_has_speech_done();
+}
+inline void Envelope::set_has_speech_done() {
+  _impl_._oneof_case_[0] = kSpeechDone;
+}
+inline void Envelope::clear_speech_done() {
+  if (_internal_has_speech_done()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.speech_done_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SpeechDone* Envelope::release_speech_done() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.speech_done)
+  if (_internal_has_speech_done()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechDone* temp = _impl_.body_.speech_done_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.speech_done_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SpeechDone& Envelope::_internal_speech_done() const {
+  return _internal_has_speech_done()
+      ? *_impl_.body_.speech_done_
+      : reinterpret_cast< ::dsa::control::v1::SpeechDone&>(::dsa::control::v1::_SpeechDone_default_instance_);
+}
+inline const ::dsa::control::v1::SpeechDone& Envelope::speech_done() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.speech_done)
+  return _internal_speech_done();
+}
+inline ::dsa::control::v1::SpeechDone* Envelope::unsafe_arena_release_speech_done() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.speech_done)
+  if (_internal_has_speech_done()) {
+    clear_has_body();
+    ::dsa::control::v1::SpeechDone* temp = _impl_.body_.speech_done_;
+    _impl_.body_.speech_done_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_speech_done(::dsa::control::v1::SpeechDone* speech_done) {
+  clear_body();
+  if (speech_done) {
+    set_has_speech_done();
+    _impl_.body_.speech_done_ = speech_done;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.speech_done)
+}
+inline ::dsa::control::v1::SpeechDone* Envelope::_internal_mutable_speech_done() {
+  if (!_internal_has_speech_done()) {
+    clear_body();
+    set_has_speech_done();
+    _impl_.body_.speech_done_ = CreateMaybeMessage< ::dsa::control::v1::SpeechDone >(GetArenaForAllocation());
+  }
+  return _impl_.body_.speech_done_;
+}
+inline ::dsa::control::v1::SpeechDone* Envelope::mutable_speech_done() {
+  ::dsa::control::v1::SpeechDone* _msg = _internal_mutable_speech_done();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.speech_done)
+  return _msg;
+}
+
+// .dsa.control.v1.StopSpeaking stop_speaking = 625;
+inline bool Envelope::_internal_has_stop_speaking() const {
+  return body_case() == kStopSpeaking;
+}
+inline bool Envelope::has_stop_speaking() const {
+  return _internal_has_stop_speaking();
+}
+inline void Envelope::set_has_stop_speaking() {
+  _impl_._oneof_case_[0] = kStopSpeaking;
+}
+inline void Envelope::clear_stop_speaking() {
+  if (_internal_has_stop_speaking()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.stop_speaking_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::StopSpeaking* Envelope::release_stop_speaking() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.stop_speaking)
+  if (_internal_has_stop_speaking()) {
+    clear_has_body();
+    ::dsa::control::v1::StopSpeaking* temp = _impl_.body_.stop_speaking_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.stop_speaking_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::StopSpeaking& Envelope::_internal_stop_speaking() const {
+  return _internal_has_stop_speaking()
+      ? *_impl_.body_.stop_speaking_
+      : reinterpret_cast< ::dsa::control::v1::StopSpeaking&>(::dsa::control::v1::_StopSpeaking_default_instance_);
+}
+inline const ::dsa::control::v1::StopSpeaking& Envelope::stop_speaking() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.stop_speaking)
+  return _internal_stop_speaking();
+}
+inline ::dsa::control::v1::StopSpeaking* Envelope::unsafe_arena_release_stop_speaking() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.stop_speaking)
+  if (_internal_has_stop_speaking()) {
+    clear_has_body();
+    ::dsa::control::v1::StopSpeaking* temp = _impl_.body_.stop_speaking_;
+    _impl_.body_.stop_speaking_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_stop_speaking(::dsa::control::v1::StopSpeaking* stop_speaking) {
+  clear_body();
+  if (stop_speaking) {
+    set_has_stop_speaking();
+    _impl_.body_.stop_speaking_ = stop_speaking;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.stop_speaking)
+}
+inline ::dsa::control::v1::StopSpeaking* Envelope::_internal_mutable_stop_speaking() {
+  if (!_internal_has_stop_speaking()) {
+    clear_body();
+    set_has_stop_speaking();
+    _impl_.body_.stop_speaking_ = CreateMaybeMessage< ::dsa::control::v1::StopSpeaking >(GetArenaForAllocation());
+  }
+  return _impl_.body_.stop_speaking_;
+}
+inline ::dsa::control::v1::StopSpeaking* Envelope::mutable_stop_speaking() {
+  ::dsa::control::v1::StopSpeaking* _msg = _internal_mutable_stop_speaking();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.stop_speaking)
+  return _msg;
+}
+
+// .dsa.control.v1.StartRecognition start_recognition = 626;
+inline bool Envelope::_internal_has_start_recognition() const {
+  return body_case() == kStartRecognition;
+}
+inline bool Envelope::has_start_recognition() const {
+  return _internal_has_start_recognition();
+}
+inline void Envelope::set_has_start_recognition() {
+  _impl_._oneof_case_[0] = kStartRecognition;
+}
+inline void Envelope::clear_start_recognition() {
+  if (_internal_has_start_recognition()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.start_recognition_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::StartRecognition* Envelope::release_start_recognition() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.start_recognition)
+  if (_internal_has_start_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::StartRecognition* temp = _impl_.body_.start_recognition_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.start_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::StartRecognition& Envelope::_internal_start_recognition() const {
+  return _internal_has_start_recognition()
+      ? *_impl_.body_.start_recognition_
+      : reinterpret_cast< ::dsa::control::v1::StartRecognition&>(::dsa::control::v1::_StartRecognition_default_instance_);
+}
+inline const ::dsa::control::v1::StartRecognition& Envelope::start_recognition() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.start_recognition)
+  return _internal_start_recognition();
+}
+inline ::dsa::control::v1::StartRecognition* Envelope::unsafe_arena_release_start_recognition() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.start_recognition)
+  if (_internal_has_start_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::StartRecognition* temp = _impl_.body_.start_recognition_;
+    _impl_.body_.start_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_start_recognition(::dsa::control::v1::StartRecognition* start_recognition) {
+  clear_body();
+  if (start_recognition) {
+    set_has_start_recognition();
+    _impl_.body_.start_recognition_ = start_recognition;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.start_recognition)
+}
+inline ::dsa::control::v1::StartRecognition* Envelope::_internal_mutable_start_recognition() {
+  if (!_internal_has_start_recognition()) {
+    clear_body();
+    set_has_start_recognition();
+    _impl_.body_.start_recognition_ = CreateMaybeMessage< ::dsa::control::v1::StartRecognition >(GetArenaForAllocation());
+  }
+  return _impl_.body_.start_recognition_;
+}
+inline ::dsa::control::v1::StartRecognition* Envelope::mutable_start_recognition() {
+  ::dsa::control::v1::StartRecognition* _msg = _internal_mutable_start_recognition();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.start_recognition)
+  return _msg;
+}
+
+// .dsa.control.v1.StopRecognition stop_recognition = 627;
+inline bool Envelope::_internal_has_stop_recognition() const {
+  return body_case() == kStopRecognition;
+}
+inline bool Envelope::has_stop_recognition() const {
+  return _internal_has_stop_recognition();
+}
+inline void Envelope::set_has_stop_recognition() {
+  _impl_._oneof_case_[0] = kStopRecognition;
+}
+inline void Envelope::clear_stop_recognition() {
+  if (_internal_has_stop_recognition()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.stop_recognition_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::StopRecognition* Envelope::release_stop_recognition() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.stop_recognition)
+  if (_internal_has_stop_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::StopRecognition* temp = _impl_.body_.stop_recognition_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.stop_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::StopRecognition& Envelope::_internal_stop_recognition() const {
+  return _internal_has_stop_recognition()
+      ? *_impl_.body_.stop_recognition_
+      : reinterpret_cast< ::dsa::control::v1::StopRecognition&>(::dsa::control::v1::_StopRecognition_default_instance_);
+}
+inline const ::dsa::control::v1::StopRecognition& Envelope::stop_recognition() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.stop_recognition)
+  return _internal_stop_recognition();
+}
+inline ::dsa::control::v1::StopRecognition* Envelope::unsafe_arena_release_stop_recognition() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.stop_recognition)
+  if (_internal_has_stop_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::StopRecognition* temp = _impl_.body_.stop_recognition_;
+    _impl_.body_.stop_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_stop_recognition(::dsa::control::v1::StopRecognition* stop_recognition) {
+  clear_body();
+  if (stop_recognition) {
+    set_has_stop_recognition();
+    _impl_.body_.stop_recognition_ = stop_recognition;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.stop_recognition)
+}
+inline ::dsa::control::v1::StopRecognition* Envelope::_internal_mutable_stop_recognition() {
+  if (!_internal_has_stop_recognition()) {
+    clear_body();
+    set_has_stop_recognition();
+    _impl_.body_.stop_recognition_ = CreateMaybeMessage< ::dsa::control::v1::StopRecognition >(GetArenaForAllocation());
+  }
+  return _impl_.body_.stop_recognition_;
+}
+inline ::dsa::control::v1::StopRecognition* Envelope::mutable_stop_recognition() {
+  ::dsa::control::v1::StopRecognition* _msg = _internal_mutable_stop_recognition();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.stop_recognition)
+  return _msg;
+}
+
+// .dsa.control.v1.CancelRecognition cancel_recognition = 628;
+inline bool Envelope::_internal_has_cancel_recognition() const {
+  return body_case() == kCancelRecognition;
+}
+inline bool Envelope::has_cancel_recognition() const {
+  return _internal_has_cancel_recognition();
+}
+inline void Envelope::set_has_cancel_recognition() {
+  _impl_._oneof_case_[0] = kCancelRecognition;
+}
+inline void Envelope::clear_cancel_recognition() {
+  if (_internal_has_cancel_recognition()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.cancel_recognition_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::CancelRecognition* Envelope::release_cancel_recognition() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.cancel_recognition)
+  if (_internal_has_cancel_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::CancelRecognition* temp = _impl_.body_.cancel_recognition_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.cancel_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::CancelRecognition& Envelope::_internal_cancel_recognition() const {
+  return _internal_has_cancel_recognition()
+      ? *_impl_.body_.cancel_recognition_
+      : reinterpret_cast< ::dsa::control::v1::CancelRecognition&>(::dsa::control::v1::_CancelRecognition_default_instance_);
+}
+inline const ::dsa::control::v1::CancelRecognition& Envelope::cancel_recognition() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.cancel_recognition)
+  return _internal_cancel_recognition();
+}
+inline ::dsa::control::v1::CancelRecognition* Envelope::unsafe_arena_release_cancel_recognition() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.cancel_recognition)
+  if (_internal_has_cancel_recognition()) {
+    clear_has_body();
+    ::dsa::control::v1::CancelRecognition* temp = _impl_.body_.cancel_recognition_;
+    _impl_.body_.cancel_recognition_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_cancel_recognition(::dsa::control::v1::CancelRecognition* cancel_recognition) {
+  clear_body();
+  if (cancel_recognition) {
+    set_has_cancel_recognition();
+    _impl_.body_.cancel_recognition_ = cancel_recognition;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.cancel_recognition)
+}
+inline ::dsa::control::v1::CancelRecognition* Envelope::_internal_mutable_cancel_recognition() {
+  if (!_internal_has_cancel_recognition()) {
+    clear_body();
+    set_has_cancel_recognition();
+    _impl_.body_.cancel_recognition_ = CreateMaybeMessage< ::dsa::control::v1::CancelRecognition >(GetArenaForAllocation());
+  }
+  return _impl_.body_.cancel_recognition_;
+}
+inline ::dsa::control::v1::CancelRecognition* Envelope::mutable_cancel_recognition() {
+  ::dsa::control::v1::CancelRecognition* _msg = _internal_mutable_cancel_recognition();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.cancel_recognition)
+  return _msg;
+}
+
+// .dsa.control.v1.RecognitionEvent recognition_event = 629;
+inline bool Envelope::_internal_has_recognition_event() const {
+  return body_case() == kRecognitionEvent;
+}
+inline bool Envelope::has_recognition_event() const {
+  return _internal_has_recognition_event();
+}
+inline void Envelope::set_has_recognition_event() {
+  _impl_._oneof_case_[0] = kRecognitionEvent;
+}
+inline void Envelope::clear_recognition_event() {
+  if (_internal_has_recognition_event()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.recognition_event_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::RecognitionEvent* Envelope::release_recognition_event() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.recognition_event)
+  if (_internal_has_recognition_event()) {
+    clear_has_body();
+    ::dsa::control::v1::RecognitionEvent* temp = _impl_.body_.recognition_event_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.recognition_event_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::RecognitionEvent& Envelope::_internal_recognition_event() const {
+  return _internal_has_recognition_event()
+      ? *_impl_.body_.recognition_event_
+      : reinterpret_cast< ::dsa::control::v1::RecognitionEvent&>(::dsa::control::v1::_RecognitionEvent_default_instance_);
+}
+inline const ::dsa::control::v1::RecognitionEvent& Envelope::recognition_event() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.recognition_event)
+  return _internal_recognition_event();
+}
+inline ::dsa::control::v1::RecognitionEvent* Envelope::unsafe_arena_release_recognition_event() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.recognition_event)
+  if (_internal_has_recognition_event()) {
+    clear_has_body();
+    ::dsa::control::v1::RecognitionEvent* temp = _impl_.body_.recognition_event_;
+    _impl_.body_.recognition_event_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_recognition_event(::dsa::control::v1::RecognitionEvent* recognition_event) {
+  clear_body();
+  if (recognition_event) {
+    set_has_recognition_event();
+    _impl_.body_.recognition_event_ = recognition_event;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.recognition_event)
+}
+inline ::dsa::control::v1::RecognitionEvent* Envelope::_internal_mutable_recognition_event() {
+  if (!_internal_has_recognition_event()) {
+    clear_body();
+    set_has_recognition_event();
+    _impl_.body_.recognition_event_ = CreateMaybeMessage< ::dsa::control::v1::RecognitionEvent >(GetArenaForAllocation());
+  }
+  return _impl_.body_.recognition_event_;
+}
+inline ::dsa::control::v1::RecognitionEvent* Envelope::mutable_recognition_event() {
+  ::dsa::control::v1::RecognitionEvent* _msg = _internal_mutable_recognition_event();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.recognition_event)
+  return _msg;
+}
+
+// .dsa.control.v1.CheckSpelling check_spelling = 630;
+inline bool Envelope::_internal_has_check_spelling() const {
+  return body_case() == kCheckSpelling;
+}
+inline bool Envelope::has_check_spelling() const {
+  return _internal_has_check_spelling();
+}
+inline void Envelope::set_has_check_spelling() {
+  _impl_._oneof_case_[0] = kCheckSpelling;
+}
+inline void Envelope::clear_check_spelling() {
+  if (_internal_has_check_spelling()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.check_spelling_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::CheckSpelling* Envelope::release_check_spelling() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.check_spelling)
+  if (_internal_has_check_spelling()) {
+    clear_has_body();
+    ::dsa::control::v1::CheckSpelling* temp = _impl_.body_.check_spelling_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.check_spelling_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::CheckSpelling& Envelope::_internal_check_spelling() const {
+  return _internal_has_check_spelling()
+      ? *_impl_.body_.check_spelling_
+      : reinterpret_cast< ::dsa::control::v1::CheckSpelling&>(::dsa::control::v1::_CheckSpelling_default_instance_);
+}
+inline const ::dsa::control::v1::CheckSpelling& Envelope::check_spelling() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.check_spelling)
+  return _internal_check_spelling();
+}
+inline ::dsa::control::v1::CheckSpelling* Envelope::unsafe_arena_release_check_spelling() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.check_spelling)
+  if (_internal_has_check_spelling()) {
+    clear_has_body();
+    ::dsa::control::v1::CheckSpelling* temp = _impl_.body_.check_spelling_;
+    _impl_.body_.check_spelling_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_check_spelling(::dsa::control::v1::CheckSpelling* check_spelling) {
+  clear_body();
+  if (check_spelling) {
+    set_has_check_spelling();
+    _impl_.body_.check_spelling_ = check_spelling;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.check_spelling)
+}
+inline ::dsa::control::v1::CheckSpelling* Envelope::_internal_mutable_check_spelling() {
+  if (!_internal_has_check_spelling()) {
+    clear_body();
+    set_has_check_spelling();
+    _impl_.body_.check_spelling_ = CreateMaybeMessage< ::dsa::control::v1::CheckSpelling >(GetArenaForAllocation());
+  }
+  return _impl_.body_.check_spelling_;
+}
+inline ::dsa::control::v1::CheckSpelling* Envelope::mutable_check_spelling() {
+  ::dsa::control::v1::CheckSpelling* _msg = _internal_mutable_check_spelling();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.check_spelling)
+  return _msg;
+}
+
+// .dsa.control.v1.SpellingResult spelling_result = 631;
+inline bool Envelope::_internal_has_spelling_result() const {
+  return body_case() == kSpellingResult;
+}
+inline bool Envelope::has_spelling_result() const {
+  return _internal_has_spelling_result();
+}
+inline void Envelope::set_has_spelling_result() {
+  _impl_._oneof_case_[0] = kSpellingResult;
+}
+inline void Envelope::clear_spelling_result() {
+  if (_internal_has_spelling_result()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.spelling_result_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SpellingResult* Envelope::release_spelling_result() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.spelling_result)
+  if (_internal_has_spelling_result()) {
+    clear_has_body();
+    ::dsa::control::v1::SpellingResult* temp = _impl_.body_.spelling_result_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.spelling_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SpellingResult& Envelope::_internal_spelling_result() const {
+  return _internal_has_spelling_result()
+      ? *_impl_.body_.spelling_result_
+      : reinterpret_cast< ::dsa::control::v1::SpellingResult&>(::dsa::control::v1::_SpellingResult_default_instance_);
+}
+inline const ::dsa::control::v1::SpellingResult& Envelope::spelling_result() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.spelling_result)
+  return _internal_spelling_result();
+}
+inline ::dsa::control::v1::SpellingResult* Envelope::unsafe_arena_release_spelling_result() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.spelling_result)
+  if (_internal_has_spelling_result()) {
+    clear_has_body();
+    ::dsa::control::v1::SpellingResult* temp = _impl_.body_.spelling_result_;
+    _impl_.body_.spelling_result_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_spelling_result(::dsa::control::v1::SpellingResult* spelling_result) {
+  clear_body();
+  if (spelling_result) {
+    set_has_spelling_result();
+    _impl_.body_.spelling_result_ = spelling_result;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.spelling_result)
+}
+inline ::dsa::control::v1::SpellingResult* Envelope::_internal_mutable_spelling_result() {
+  if (!_internal_has_spelling_result()) {
+    clear_body();
+    set_has_spelling_result();
+    _impl_.body_.spelling_result_ = CreateMaybeMessage< ::dsa::control::v1::SpellingResult >(GetArenaForAllocation());
+  }
+  return _impl_.body_.spelling_result_;
+}
+inline ::dsa::control::v1::SpellingResult* Envelope::mutable_spelling_result() {
+  ::dsa::control::v1::SpellingResult* _msg = _internal_mutable_spelling_result();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.spelling_result)
+  return _msg;
+}
+
 // .dsa.control.v1.GeocodeRequest geocode_request = 470;
 inline bool Envelope::_internal_has_geocode_request() const {
   return body_case() == kGeocodeRequest;
@@ -64882,6 +70230,36 @@ inline Envelope::BodyCase Envelope::body_case() const {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -64923,6 +70301,9 @@ template <> struct is_proto_enum< ::dsa::control::v1::LogBuffer> : ::std::true_t
 template <> struct is_proto_enum< ::dsa::control::v1::PrintOutcome> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::CameraFacing> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::GamepadButton> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::SpeechOutcome> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::RecognitionEventKind> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::RecognitionError> : ::std::true_type {};
 
 PROTOBUF_NAMESPACE_CLOSE
 
