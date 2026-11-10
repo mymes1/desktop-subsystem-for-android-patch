@@ -14,10 +14,11 @@
 //! A list is committed again only when what it shows changed, and the list of an app that is
 //! gone is deleted.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use dsa_host_core::tasks::{jump_list_shortcuts, AppShortcut};
+use serde::{Deserialize, Serialize};
 
 use crate::desktop_shortcuts::{shortcut_arguments, write_icon, CREATE_DESKTOP_SHORTCUT_ARGUMENT};
 use crate::start_menu::{app_user_model_id, MenuEntry};
@@ -129,55 +130,161 @@ pub trait JumpLists {
     fn delete(&self, app_user_model_id: &str) -> Result<(), String>;
 }
 
-/// The jump lists the window manager committed in this session, by package, so a list is
-/// committed again only when it changed.
+/// What the note keeps of one committed jump list: the AppUserModelID it is under, and a hash
+/// of what it shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommittedList {
+    pub app_user_model_id: String,
+    pub hash: String,
+}
+
+/// The note's content: the committed list of each app, by package.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct CommittedNote {
+    #[serde(default)]
+    apps: BTreeMap<String, CommittedList>,
+}
+
+/// The note of the jump lists committed: `%LOCALAPPDATA%\DSA\jump-lists.json`.
+pub fn default_note() -> Option<PathBuf> {
+    crate::paths::UserRoot::current().map(|root| root.jump_lists_note())
+}
+
+/// A hash of everything `list` shows, so a list is committed again only when it changed.
+pub fn hash_of(list: &JumpList) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(list.app_user_model_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(list.program.to_string_lossy().as_bytes());
+    for task in &list.tasks {
+        for part in [
+            task.title.as_str(),
+            task.arguments.as_str(),
+            &task.icon.0.to_string_lossy(),
+            &task.icon.1.to_string(),
+            task.description.as_str(),
+        ] {
+            hasher.update([0]);
+            hasher.update(part.as_bytes());
+        }
+    }
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// The jump lists the window manager committed, by package, kept in a note so they outlive
+/// the window manager: after a restart an unchanged list is not committed again, and the list
+/// of an app that went while it was not running is deleted.
 #[derive(Debug, Default)]
 pub struct Committed {
-    lists: BTreeMap<String, JumpList>,
+    lists: BTreeMap<String, CommittedList>,
+    /// Where they are kept; `None` keeps them in memory only.
+    note: Option<PathBuf>,
 }
 
 impl Committed {
+    /// Lists kept in memory only.
     pub fn new() -> Committed {
         Committed::default()
     }
 
+    /// The lists the note at `note` records, kept there from now on. A note that is missing
+    /// or does not read records none.
+    pub fn in_note(note: PathBuf) -> Committed {
+        let lists = std::fs::read_to_string(&note)
+            .ok()
+            .and_then(|text| serde_json::from_str::<CommittedNote>(&text).ok())
+            .map(|read| read.apps)
+            .unwrap_or_default();
+        Committed {
+            lists,
+            note: Some(note),
+        }
+    }
+
     /// The list committed for `package`, if any.
-    pub fn get(&self, package: &str) -> Option<&JumpList> {
+    pub fn get(&self, package: &str) -> Option<&CommittedList> {
         self.lists.get(package)
     }
 
+    fn save(&self) -> Result<(), String> {
+        let Some(note) = &self.note else {
+            return Ok(());
+        };
+        if let Some(dir) = note.parent() {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+        }
+        let text = serde_json::to_string_pretty(&CommittedNote {
+            apps: self.lists.clone(),
+        })
+        .unwrap_or_default();
+        let fresh = note.with_extension("json.new");
+        std::fs::write(&fresh, text)
+            .and_then(|()| std::fs::rename(&fresh, note))
+            .map_err(|e| format!("could not write {}: {e}", note.display()))
+    }
+
     /// Makes the jump lists match `lists` (by package): commits each that changed, and deletes
-    /// the list of each app committed before that is not in it. Returns what went wrong, one
-    /// sentence each; the rest is done anyway.
+    /// the list of each app committed before that is neither in it nor in `keep` (an app whose
+    /// list stays as it is for now). Returns what went wrong, one sentence each; the rest is
+    /// done anyway.
     pub fn sync(
         &mut self,
         lists: Vec<(String, JumpList)>,
+        keep: &BTreeSet<String>,
         jump_lists: &dyn JumpLists,
     ) -> Vec<String> {
         let mut problems = Vec::new();
+        let before = self.lists.clone();
         let wanted: BTreeMap<String, JumpList> = lists.into_iter().collect();
         let gone: Vec<String> = self
             .lists
             .keys()
-            .filter(|package| !wanted.contains_key(*package))
+            .filter(|package| !wanted.contains_key(*package) && !keep.contains(*package))
             .cloned()
             .collect();
         for package in gone {
-            if let Some(list) = self.lists.remove(&package) {
-                if let Err(why) = jump_lists.delete(&list.app_user_model_id) {
-                    problems.push(format!("could not remove {package}'s jump list: {why}"));
+            if let Some(list) = self.lists.get(&package) {
+                match jump_lists.delete(&list.app_user_model_id) {
+                    Ok(()) => {
+                        self.lists.remove(&package);
+                    }
+                    Err(why) => {
+                        problems.push(format!("could not remove {package}'s jump list: {why}"))
+                    }
                 }
             }
         }
         for (package, list) in wanted {
-            if self.lists.get(&package) == Some(&list) {
+            let hash = hash_of(&list);
+            if self
+                .lists
+                .get(&package)
+                .is_some_and(|kept| kept.hash == hash)
+            {
                 continue;
             }
             match jump_lists.commit(&list) {
                 Ok(()) => {
-                    self.lists.insert(package, list);
+                    self.lists.insert(
+                        package,
+                        CommittedList {
+                            app_user_model_id: list.app_user_model_id.clone(),
+                            hash,
+                        },
+                    );
                 }
                 Err(why) => problems.push(format!("could not make {package}'s jump list: {why}")),
+            }
+        }
+        if self.lists != before {
+            if let Err(why) = self.save() {
+                problems.push(why);
             }
         }
         problems
@@ -186,7 +293,8 @@ impl Committed {
 
 /// Brings the jump list of every app in `apps` in step, each with the window program the Start
 /// menu made for it in `apps_dir`, and deletes those of apps that are gone. An app whose program
-/// is not made yet waits for the next sync. Returns what went wrong, one sentence each.
+/// is not made yet keeps its list until the next sync. Returns what went wrong, one sentence
+/// each.
 pub fn sync_apps(
     apps: &[dsa_host_core::tasks::AppInfo],
     apps_dir: &Path,
@@ -195,6 +303,7 @@ pub fn sync_apps(
     jump_lists: &dyn JumpLists,
 ) -> Vec<String> {
     let mut lists = Vec::new();
+    let mut keep = BTreeSet::new();
     for app in apps {
         if !dsa_host_core::compositor::window_hosts::is_valid_package(&app.package_name) {
             continue;
@@ -206,14 +315,11 @@ pub fn sync_apps(
                 lists.push((app.package_name.clone(), list));
             }
             Err(_) => {
-                // Kept as it was until its program is there.
-                if let Some(list) = committed.get(&app.package_name) {
-                    lists.push((app.package_name.clone(), list.clone()));
-                }
+                keep.insert(app.package_name.clone());
             }
         }
     }
-    committed.sync(lists, jump_lists)
+    committed.sync(lists, &keep, jump_lists)
 }
 
 /// Jump lists through the shell's `DestinationList` object. COM must be initialised on the
