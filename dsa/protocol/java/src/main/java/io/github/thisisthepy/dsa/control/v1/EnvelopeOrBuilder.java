@@ -1669,136 +1669,48 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash();
 
   /**
-   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
-   * @return Whether the listSpeechVoices field is set.
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   * @return Whether the geocodeRequest field is set.
    */
-  boolean hasListSpeechVoices();
+  boolean hasGeocodeRequest();
   /**
-   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
-   * @return The listSpeechVoices.
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   * @return The geocodeRequest.
    */
-  io.github.thisisthepy.dsa.control.v1.ListSpeechVoices getListSpeechVoices();
+  io.github.thisisthepy.dsa.control.v1.GeocodeRequest getGeocodeRequest();
 
   /**
-   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
-   * @return Whether the speechVoices field is set.
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   * @return Whether the geocodeResult field is set.
    */
-  boolean hasSpeechVoices();
+  boolean hasGeocodeResult();
   /**
-   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
-   * @return The speechVoices.
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   * @return The geocodeResult.
    */
-  io.github.thisisthepy.dsa.control.v1.SpeechVoices getSpeechVoices();
+  io.github.thisisthepy.dsa.control.v1.GeocodeResult getGeocodeResult();
 
   /**
-   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
-   * @return Whether the speakText field is set.
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   * @return Whether the shareToHost field is set.
    */
-  boolean hasSpeakText();
+  boolean hasShareToHost();
   /**
-   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
-   * @return The speakText.
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   * @return The shareToHost.
    */
-  io.github.thisisthepy.dsa.control.v1.SpeakText getSpeakText();
+  io.github.thisisthepy.dsa.control.v1.ShareToHost getShareToHost();
 
   /**
-   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
-   * @return Whether the speechAudio field is set.
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   * @return Whether the shareResult field is set.
    */
-  boolean hasSpeechAudio();
+  boolean hasShareResult();
   /**
-   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
-   * @return The speechAudio.
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   * @return The shareResult.
    */
-  io.github.thisisthepy.dsa.control.v1.SpeechAudio getSpeechAudio();
-
-  /**
-   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
-   * @return Whether the speechDone field is set.
-   */
-  boolean hasSpeechDone();
-  /**
-   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
-   * @return The speechDone.
-   */
-  io.github.thisisthepy.dsa.control.v1.SpeechDone getSpeechDone();
-
-  /**
-   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
-   * @return Whether the stopSpeaking field is set.
-   */
-  boolean hasStopSpeaking();
-  /**
-   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
-   * @return The stopSpeaking.
-   */
-  io.github.thisisthepy.dsa.control.v1.StopSpeaking getStopSpeaking();
-
-  /**
-   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
-   * @return Whether the startRecognition field is set.
-   */
-  boolean hasStartRecognition();
-  /**
-   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
-   * @return The startRecognition.
-   */
-  io.github.thisisthepy.dsa.control.v1.StartRecognition getStartRecognition();
-
-  /**
-   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
-   * @return Whether the stopRecognition field is set.
-   */
-  boolean hasStopRecognition();
-  /**
-   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
-   * @return The stopRecognition.
-   */
-  io.github.thisisthepy.dsa.control.v1.StopRecognition getStopRecognition();
-
-  /**
-   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
-   * @return Whether the cancelRecognition field is set.
-   */
-  boolean hasCancelRecognition();
-  /**
-   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
-   * @return The cancelRecognition.
-   */
-  io.github.thisisthepy.dsa.control.v1.CancelRecognition getCancelRecognition();
-
-  /**
-   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
-   * @return Whether the recognitionEvent field is set.
-   */
-  boolean hasRecognitionEvent();
-  /**
-   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
-   * @return The recognitionEvent.
-   */
-  io.github.thisisthepy.dsa.control.v1.RecognitionEvent getRecognitionEvent();
-
-  /**
-   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
-   * @return Whether the checkSpelling field is set.
-   */
-  boolean hasCheckSpelling();
-  /**
-   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
-   * @return The checkSpelling.
-   */
-  io.github.thisisthepy.dsa.control.v1.CheckSpelling getCheckSpelling();
-
-  /**
-   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
-   * @return Whether the spellingResult field is set.
-   */
-  boolean hasSpellingResult();
-  /**
-   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
-   * @return The spellingResult.
-   */
-  io.github.thisisthepy.dsa.control.v1.SpellingResult getSpellingResult();
+  io.github.thisisthepy.dsa.control.v1.ShareResult getShareResult();
 
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

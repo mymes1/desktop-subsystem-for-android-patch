@@ -106,7 +106,7 @@
 //! checker go to the first [`Session::serve_language`] client, which answers them with the
 //! host's own services ([`crate::language`]); a request nobody serves fails at once.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -138,6 +138,7 @@ use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::gapps::GuestGapps;
+use crate::geocode::{self, GeocodeError, GeocodeErrorKind, GeocodeOutcome, GeocodeQuery};
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
@@ -156,6 +157,7 @@ use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
 use crate::root_approval::RootApproval;
 use crate::root_elevation::{AppLevel, Level};
+use crate::share::{ShareOutcome, ShareRequest};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -667,6 +669,12 @@ struct Shared {
     print_watchers: Mutex<Vec<Sender<PrintEvent>>>,
     /// The guest's print jobs on their way, and those a watcher has.
     prints: Mutex<print::Assembler>,
+    /// Who answers the address lookups of the guest's apps.
+    geocode_watchers: Mutex<Vec<Sender<GeocodeQuery>>>,
+    /// Who shows what the guest's apps share with the host.
+    share_watchers: Mutex<Vec<Sender<ShareRequest>>>,
+    /// The shares a watcher has and has not answered yet, by their ID.
+    open_shares: Mutex<HashSet<u32>>,
     /// The apps that run in the background, their media sessions, and who watches them.
     background: Mutex<BackgroundHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
@@ -1225,6 +1233,26 @@ impl Shared {
         delivered
     }
 
+    /// Hands a lookup to the first watcher still listening, and only to it. False when nobody
+    /// listens.
+    fn hand_geocode_query(&self, query: GeocodeQuery) -> bool {
+        hand_to_first(&self.geocode_watchers, query)
+    }
+
+    /// Hands a share to the first watcher still listening, and only to it, so one share UI
+    /// shows for it. False when nobody listens.
+    fn hand_share(&self, request: ShareRequest) -> bool {
+        let share_id = request.share_id;
+        let handed = hand_to_first(&self.share_watchers, request);
+        if handed {
+            self.open_shares
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(share_id);
+        }
+        handed
+    }
+
     /// Tells every watcher a print job is gone; only the one that has it acts on it.
     fn withdraw_print_job(&self, job_id: u32) {
         self.print_watchers
@@ -1318,6 +1346,9 @@ impl Session {
             notification_watchers: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
             prints: Mutex::new(print::Assembler::new()),
+            geocode_watchers: Mutex::new(Vec::new()),
+            share_watchers: Mutex::new(Vec::new()),
+            open_shares: Mutex::new(HashSet::new()),
             background: Mutex::new(BackgroundHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
@@ -2573,6 +2604,64 @@ impl Session {
         }
     }
 
+    /// The address lookups of the guest's apps from now on, each to one watcher only, which
+    /// answers it with [`Session::geocode_result`]. The watch lasts across restarts of the
+    /// guest.
+    pub fn watch_geocoding(&self) -> Receiver<GeocodeQuery> {
+        let (tx, rx) = mpsc::channel();
+        self.shared
+            .geocode_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        rx
+    }
+
+    /// Gives the guest what lookup `query_id` found. An answer for a guest that has stopped is
+    /// dropped: its app no longer waits.
+    pub fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &GeocodeOutcome,
+    ) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::GeocodeResult(geocode::result_to_control(
+                query_id, outcome,
+            ))),
+        }))
+    }
+
+    /// What the guest's apps share with the host from now on, each share to one watcher only,
+    /// which reads its files, shows the host's share UI and answers with
+    /// [`Session::share_result`]. The watch lasts across restarts of the guest.
+    pub fn watch_shares(&self) -> Receiver<ShareRequest> {
+        let (tx, rx) = mpsc::channel();
+        self.shared
+            .share_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        rx
+    }
+
+    /// Tells the guest what became of share `share_id`. A share no watcher was given is left
+    /// alone.
+    pub fn share_result(&self, share_id: u32, outcome: &ShareOutcome) -> Result<(), SessionError> {
+        let open = self
+            .shared
+            .open_shares
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&share_id);
+        if !open {
+            eprintln!("share: the outcome of share {share_id} came for no share Android has open");
+            return Ok(());
+        }
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::ShareResult(outcome.to_control(share_id))),
+        }))
+    }
+
     /// Whether the guest wants the host's location, from what it wants now on. The watch
     /// lasts across restarts of the guest, which wants no location while it is stopped.
     pub fn watch_location(&self) -> Receiver<Wanted> {
@@ -3716,6 +3805,24 @@ fn send_quietly(shared: &Shared, commands: &Sender<Command>, body: Body) {
     }
 }
 
+/// Hands `item` to the first of `watchers` still listening, and only to it, dropping those
+/// that have gone. False when nobody listens.
+fn hand_to_first<T: Clone>(watchers: &Mutex<Vec<Sender<T>>>, item: T) -> bool {
+    let mut delivered = false;
+    watchers
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|watcher| {
+            if delivered {
+                return true;
+            }
+            let sent = watcher.send(item.clone()).is_ok();
+            delivered = sent;
+            sent
+        });
+    delivered
+}
+
 /// How often an active session checks for requests while it waits on the channel.
 const POLL: Duration = Duration::from_millis(20);
 
@@ -4199,6 +4306,56 @@ impl Worker {
                 self.send_body(Body::PrintJobResult(outcome.to_control(guest_id)));
             }
             print::Step::Withdraw { job_id } => self.shared.withdraw_print_job(job_id),
+        }
+    }
+
+    /// Hands an app's address lookup to a watcher in the user's session, or answers it at
+    /// once when it cannot be looked up.
+    fn geocode_request(&mut self, request: control::GeocodeRequest) {
+        let request_id = request.request_id;
+        let refused = match GeocodeQuery::from_control(&request) {
+            Err(error) => Some(error),
+            Ok(query) => (!self.shared.hand_geocode_query(query)).then(|| {
+                GeocodeError::new(
+                    GeocodeErrorKind::Refused,
+                    "no desktop session is open to look the address up in",
+                )
+            }),
+        };
+        if let Some(error) = refused {
+            let outcome: GeocodeOutcome = Err(error);
+            self.send_body(Body::GeocodeResult(geocode::result_to_control(
+                request_id, &outcome,
+            )));
+        }
+    }
+
+    /// Hands what an app shared to a watcher in the user's session. A share that cannot be
+    /// shown fails at once, and the guest gives back its access to the files.
+    fn share_to_host(&mut self, share: control::ShareToHost) {
+        let share_id = share.share_id;
+        let failed = match ShareRequest::from_control(&share) {
+            Err(why) => Some(why),
+            Ok(request) => {
+                eprintln!(
+                    "share: an app shares {} item(s) with the host",
+                    request.items.len()
+                );
+                (!self.shared.hand_share(request))
+                    .then(|| "no desktop session is open to show the share window in".to_string())
+            }
+        };
+        if let Some(why) = failed {
+            eprintln!("share: refused share {share_id} from the guest: {why}");
+            self.send_body(Body::ShareResult(
+                ShareOutcome::Failed(why).to_control(share_id),
+            ));
+            if share_id != 0 {
+                self.send_body(Body::DragEnd(control::DragEnd {
+                    drag_id: share_id,
+                    dropped: false,
+                }));
+            }
         }
     }
 
@@ -6104,6 +6261,8 @@ impl Worker {
                 let step = self.prints().cancel(cancel.job_id);
                 self.print_step(step);
             }
+            Some(Body::GeocodeRequest(request)) => self.geocode_request(request),
+            Some(Body::ShareToHost(share)) => self.share_to_host(share),
             Some(Body::PowerHint(hint)) => match PowerHint::from_control(&hint) {
                 Ok(hint) => self.shared.publish_power(GuestPower::Hint(hint)),
                 Err(why) => eprintln!("power: dropped a hint from the guest: {why}"),
@@ -6176,6 +6335,8 @@ impl Worker {
             | Some(Body::ApkChunk(_))
             | Some(Body::CancelInstall(_))
             | Some(Body::PrintJobResult(_))
+            | Some(Body::GeocodeResult(_))
+            | Some(Body::ShareResult(_))
             | Some(Body::QueryPackage(_))
             | Some(Body::UninstallApp(_))
             | Some(Body::ReinstallApp(_))
@@ -6278,6 +6439,12 @@ impl Worker {
         self.shared.clear_tasks();
         // So do its print jobs.
         self.end_print_jobs();
+        // And its shares: an outcome that comes later is for no share the next guest has.
+        self.shared
+            .open_shares
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         // So do its notifications.
         self.clear_notifications();
         // And its background apps and media sessions.

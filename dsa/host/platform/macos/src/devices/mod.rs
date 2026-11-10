@@ -19,6 +19,8 @@
 //! speech             AVSpeechSynthesizer and          [`language`]
 //!                    SFSpeechRecognizer
 //! spelling           NSSpellChecker                   [`language`]
+//! address lookups    the boundaries in the bundle     [`geocode`]
+//! sharing            NSSharingServicePicker           [`share`]
 //! ```
 //!
 //! The devices run in the user's device lender (`dsa-devices`), a launchd agent of its own in
@@ -34,6 +36,7 @@
 pub mod camera;
 pub mod front;
 pub mod gamepads;
+pub mod geocode;
 pub mod language;
 pub mod links;
 pub mod location;
@@ -41,6 +44,7 @@ pub mod permissions;
 pub mod print_jobs;
 pub mod sensors;
 pub mod settings;
+pub mod share;
 pub mod shared_folders;
 pub mod video;
 
@@ -98,6 +102,10 @@ pub struct Followers {
     pub gamepads: bool,
     /// Speech synthesis, speech recognition and spell checking for Android.
     pub language: bool,
+    /// The address lookups of the apps in Android.
+    pub geocoding: bool,
+    /// What the apps in Android share with the Mac.
+    pub share: bool,
 }
 
 impl Default for Followers {
@@ -109,6 +117,8 @@ impl Default for Followers {
             settings: true,
             gamepads: true,
             language: true,
+            geocoding: true,
+            share: true,
         }
     }
 }
@@ -232,6 +242,18 @@ mod lender {
                 super::print_jobs::serve(connector, print, stop, log)
             }));
         }
+        if which.geocoding {
+            let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+            threads.extend(spawn("dsa-geocode", &Arc::clone(&log), move || {
+                super::geocode::serve(connector, stop, log)
+            }));
+        }
+        if which.share {
+            let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
+            threads.extend(spawn("dsa-share", &Arc::clone(&log), move || {
+                super::share::serve(connector, stop, log)
+            }));
+        }
         if which.links {
             let (connector, stop, log) = (connect(), Arc::clone(stop), Arc::clone(log));
             threads.extend(spawn("dsa-links", &Arc::clone(&log), move || {
@@ -307,6 +329,7 @@ mod tests {
         let all = Followers::default();
         assert!(all.location && all.print && all.links && all.settings && all.gamepads);
         assert!(all.language);
+        assert!(all.geocoding && all.share);
         assert!(build("camera").starts_with("dsa-devices "));
         assert!(build("camera").ends_with(" camera"));
     }

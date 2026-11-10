@@ -721,6 +721,9 @@ impl UserAndroid for UpdatingAndroid {
         self.image_restart.ask_restart_now(&version);
         Ok(Some(version))
     }
+    fn program_update(&self) -> Option<crate::host_api::ProgramProgress> {
+        UserAndroid::program_update(&*self.session)
+    }
     fn vm_id(&self) -> Option<String> {
         UserAndroid::vm_id(&*self.session)
     }

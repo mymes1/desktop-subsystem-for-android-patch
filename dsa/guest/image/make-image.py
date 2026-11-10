@@ -925,10 +925,16 @@ ANDROID_XMLNS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
 APP_XMLNS = 'xmlns:app="http://schemas.android.com/apk/res-auto"'
 
 
-def overlay_manifest(package, target, resource_map=False):
+def overlay_manifest(package, target, resource_map=False, priority=100, required_property=None):
     """The manifest of a static overlay of `target` with no code; with `resource_map`, its
-    resource map (SYSTEM_OVERLAY_MAP) names what it replaces, and only that."""
+    resource map (SYSTEM_OVERLAY_MAP) names what it replaces, and only that. With
+    `required_property` (a name and a value), the package manager applies the overlay only
+    while that read-only property has that value when it scans the packages at boot."""
     mapping = f'\n        android:resourcesMap="@xml/{SYSTEM_OVERLAY_MAP}"' if resource_map else ""
+    if required_property:
+        name, value = required_property
+        mapping += (f'\n        android:requiredSystemPropertyName="{name}"'
+                    f'\n        android:requiredSystemPropertyValue="{value}"')
     return (
         XML_HEADER
         + f'<manifest {ANDROID_XMLNS}\n'
@@ -936,7 +942,7 @@ def overlay_manifest(package, target, resource_map=False):
         # Android 14 and later refuse a package that targets an old SDK, and the default is 1.
         '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
         '    <application android:hasCode="false" />\n'
-        f'    <overlay android:targetPackage="{target}" android:isStatic="true" android:priority="100"{mapping} />\n'
+        f'    <overlay android:targetPackage="{target}" android:isStatic="true" android:priority="{priority}"{mapping} />\n'
         '</manifest>\n'
     )
 
@@ -1469,6 +1475,14 @@ def design_overlay_resources(apk):
         return ({"res/values/dsa.xml": resources_xml(
             [f'<dimen name="{key.split("/", 1)[1]}">{value}</dimen>' for key, value in INTENT_RESOLVER_DESIGN.items()])},
             {key: key for key in INTENT_RESOLVER_DESIGN})
+    if apk == GAPPS_FRAMEWORK_OVERLAY_APK:
+        lines = []
+        for key, value in GAPPS_FRAMEWORK_OVERLAY.items():
+            kind, name = key.split("/", 1)
+            text = str(value).lower() if kind == "bool" else value
+            extra = ' translatable="false"' if kind == "string" else ""
+            lines.append(f'<{kind} name="{name}"{extra}>{text}</{kind}>')
+        return {"res/values/dsa.xml": resources_xml(lines)}, {key: key for key in GAPPS_FRAMEWORK_OVERLAY}
     raise ValueError(f"{apk} is not one of the design's overlays")
 
 
@@ -1483,7 +1497,9 @@ def design_overlay_sources(dest, apk, record=None):
     overlay = system_overlay(apk)
     files, mapping = design_overlay_resources(apk)
     write_overlay_files(dest, {
-        "AndroidManifest.xml": overlay_manifest(overlay["package"], overlay["target"], resource_map=True),
+        "AndroidManifest.xml": overlay_manifest(overlay["package"], overlay["target"], resource_map=True,
+                                                priority=overlay.get("priority", 100),
+                                                required_property=overlay.get("required_property")),
         **files,
         f"res/xml/{SYSTEM_OVERLAY_MAP}.xml": overlay_map(mapping),
     })
@@ -3503,9 +3519,18 @@ FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0, "config_customizedMa
 # SystemUI's ImageWallpaper, and SystemUI is removed, so the window manager gave up only at
 # its 30 s boot timeout ("BOOT TIMEOUT: forcing display enabled"). Every boot was 30 s
 # longer, and the user's storage was unlocked, and widgets became available, 30 s later.
+#
+# The agent is the guest's network location provider, answered by the host's location, with or
+# without Google Play: with the overlay flag off, the location manager binds the package the
+# string names and no other, where Google Play's provider would otherwise win on its higher
+# service version. The agent is the geocode provider only without Google Play: these values
+# name it, and the Google apps overlay (GAPPS_FRAMEWORK_OVERLAY) names Google's geocoder instead
+# on a boot with the Google apps image.
 FRAMEWORK_OVERLAY_BOOLEANS = {
     "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
     "config_checkWallpaperAtBoot": False,
+    "config_enableNetworkLocationOverlay": False,
+    "config_enableGeocoderOverlay": False,
 }
 # The device configurator: the package the framework lets write DeviceConfig, Android's server
 # flags (WRITE_DEVICE_CONFIG and WRITE_ALLOWLISTED_DEVICE_CONFIG are "configurator"
@@ -3516,7 +3541,24 @@ FRAMEWORK_OVERLAY_BOOLEANS = {
 # times in about ten minutes, each a run of the Play services process. Without Google Play
 # no package has this name, and the framework takes the configurator to be absent, as before.
 GAPPS_CONFIGURATOR = "com.google.android.gms"
-FRAMEWORK_OVERLAY_STRINGS = {"config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR}
+FRAMEWORK_OVERLAY_STRINGS = {
+    "config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR,
+    "config_networkLocationProviderPackageName": "io.github.thisisthepy.dsa.agent",
+    "config_geocoderProviderPackageName": "io.github.thisisthepy.dsa.agent",
+}
+# Google apps: on a boot with the Google apps image (the host puts androidboot.dsa.gapps=on
+# in the bootconfig, so ro.boot.dsa.gapps is on before the package manager scans the overlays),
+# this static overlay, above the framework overlay, names Google's geocoder, and the agent is
+# not the geocode provider: Google's answers with street addresses and turns addresses into
+# positions, which the host's boundary data does not. Without the Google apps image the package
+# manager leaves the overlay out, and the agent's geocoder (the framework overlay's values)
+# stands. The network location provider stays the agent's either way.
+GAPPS_FRAMEWORK_OVERLAY_APK = "DsaFrameworkGappsOverlay.apk"
+GAPPS_GEOCODER_PACKAGE = "com.google.android.gms"
+GAPPS_FRAMEWORK_OVERLAY = {
+    "bool/config_enableGeocoderOverlay": False,
+    "string/config_geocoderProviderPackageName": GAPPS_GEOCODER_PACKAGE,
+}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'
@@ -3627,10 +3669,17 @@ SYSTEM_OVERLAYS = [
     {"apk": "DsaIntentResolverOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.intentresolver",
      "target": "com.android.intentresolver", "target_apk": "/priv-app/IntentResolver/IntentResolver.apk",
      "without": "the share sheet's headline keeps its small size"},
+    {"apk": "DsaFrameworkGappsOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.framework.gapps",
+     "target": "android", "target_apk": FRAMEWORK_RES,
+     # Above the framework overlay, whose geocoder values it replaces.
+     "priority": 101, "required_property": ("ro.boot.dsa.gapps", "on"),
+     "without": "with Google Play installed, apps' address lookups still go to DSA's geocoder instead of "
+                "Google's"},
 ]
 SYSTEM_OVERLAY_FILES = [overlay["apk"] for overlay in SYSTEM_OVERLAYS]
-# The overlays this section adds; the framework and Settings overlays are built by their own
-# functions, which other changes made first.
+# The overlays built from a resource map (design_overlay_resources): the design's, and the
+# Google apps overlay. The framework and Settings overlays are built by their own functions,
+# which other changes made first.
 DESIGN_OVERLAYS = SYSTEM_OVERLAY_FILES[2:]
 
 # The blue accent: one tonal ramp (tone 0 is white, 1000 black) for the framework's first

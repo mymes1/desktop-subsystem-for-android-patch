@@ -7,6 +7,7 @@
 #                     --repo-key <armored public key> [--repo-url <url>]
 #                     [--channel stable|prerelease]
 #                     [--arch amd64|arm64] [--no-deb] [--no-rpm]
+#                     [--geodata-dir <folder>]
 #
 # The packages install the same things:
 #
@@ -15,6 +16,8 @@
 #   /usr/bin/dsa             the command line client
 #   /usr/lib/dsa/vm/         the guest kernel (bzImage, or Image on arm64)
 #   /usr/lib/dsa/vm/image/   the Android image the first start uses, when one is given
+#   /usr/lib/dsa/geodata/    the administrative boundaries the host turns Android's positions
+#                            into addresses with, and their attribution (NOTICE.txt)
 #   /etc/dsa/dsa-hostd.json  the service's configuration
 #   systemd units            dsa-hostd.service (system) and dsa-devices.service (user)
 #   udev rules, modules      /dev/kvm and /dev/vhost-vsock for the service and the user
@@ -54,6 +57,10 @@
 # --vm-programs is the folder dsa/host/platform/linux/crosvm/build.sh filled: crosvm, passt,
 # passt-source.tar.gz and crosvm-crates.txt. --licenses is a bundle generate-licenses.py made.
 #
+# --geodata-dir is a folder dsa/host/core/geodata/build-geodata.py filled
+# (address-boundaries.bin and NOTICE.txt). Without it this script runs build-geodata.py, which
+# downloads its pinned sources once into .scratch/geodata in the repository.
+#
 # --placeholder-kernel puts an empty kernel in the package, for testing the package before a
 # kernel is built. An image folder is one made by dsa/guest/image/make-image.py, with its
 # image.json. Without one the package carries no Android image; the service then downloads
@@ -76,6 +83,7 @@ make_rpm=1
 repo_key=""
 repo_url="https://thisisthepy.github.io/desktop-subsystem-for-android"
 channel=""
+geodata_dir=""
 
 die() {
     echo "build-packages: $*" >&2
@@ -98,6 +106,7 @@ while [[ $# -gt 0 ]]; do
         --repo-key) repo_key="$2"; shift 2 ;;
         --repo-url) repo_url="${2%/}"; shift 2 ;;
         --channel) channel="$2"; shift 2 ;;
+        --geodata-dir) geodata_dir="$2"; shift 2 ;;
         *) die "unknown argument $1" ;;
     esac
 done
@@ -310,6 +319,23 @@ if [[ -n "$licenses" ]]; then
     install -m 0644 "$licenses"/* "$stage/usr/share/doc/$package/licenses/"
 fi
 
+# The address data: the administrative boundaries dsa-devices answers Android's address
+# lookups from, with no server.
+if [[ -z "$geodata_dir" ]]; then
+    geodata_dir="$out/geodata"
+    geodata_script="$repo_root/dsa/host/core/geodata/build-geodata.py"
+    if command -v uv >/dev/null; then
+        uv run "$geodata_script" --out "$geodata_dir/address-boundaries.bin"
+    else
+        python3 "$geodata_script" --out "$geodata_dir/address-boundaries.bin"
+    fi
+fi
+install -d "$stage/usr/lib/dsa/geodata"
+for file in address-boundaries.bin NOTICE.txt; do
+    [[ -f "$geodata_dir/$file" ]] || die "$geodata_dir has no $file (build-geodata.py makes it)"
+    install -m 0644 "$geodata_dir/$file" "$stage/usr/lib/dsa/geodata/"
+done
+
 # The repository entries the package scripts write. They are not package files: a conffile
 # would stay behind after a removal, and the entry must go with the package. Each comes in
 # both channels; the scripts pick one.
@@ -519,6 +545,7 @@ if [[ "$make_rpm" -eq 1 ]]; then
         echo "%dir /usr/lib/dsa"
         echo "%dir /usr/lib/dsa/bin"
         echo "%dir /usr/lib/dsa/vm"
+        echo "%dir /usr/lib/dsa/geodata"
         [[ -d usr/lib/dsa/vm/image ]] && echo "%dir /usr/lib/dsa/vm/image"
         echo "%dir /etc/dsa"
     ) > "$files_list"

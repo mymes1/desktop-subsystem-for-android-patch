@@ -35,6 +35,8 @@ fn main() {
             "--no-links" => which.links = false,
             "--no-settings" => which.settings = false,
             "--no-language" => which.language = false,
+            "--no-geocoding" => which.geocoding = false,
+            "--no-share" => which.share = false,
             "--no-device-ports" => ports = false,
             "--version" => {
                 println!("dsa-devices {}", dsa_host_linux::VERSION);
@@ -81,7 +83,8 @@ fn main() {
 
 #[cfg(target_os = "linux")]
 const HELP: &str = "usage: dsa-devices [--socket <path>] [--no-location] [--no-print] \
-                    [--no-links] [--no-settings] [--no-language] [--no-device-ports]";
+                    [--no-links] [--no-settings] [--no-language] [--no-geocoding] [--no-share] \
+                    [--no-device-ports]";
 
 #[cfg(target_os = "linux")]
 fn usage(why: &str) -> ! {

@@ -20,7 +20,9 @@
 //! ([`links`]). It shows the notifications of the user's Android as toasts, and passes the
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
-//! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
+//! printers, through the Windows print dialog ([`print`]). It answers the address lookups of
+//! the apps in Android ([`geocode`]), and shows what they share with the PC in Windows' share
+//! window ([`share`]). It plays the sound of the user's
 //! Android on their default output device ([`audio`]), and records their default capture
 //! device for its microphone ([`microphone`]). It answers the text-to-speech engine, speech
 //! recognition service and spell checker of the user's Android with Windows' own
@@ -37,6 +39,7 @@ pub mod fluent;
 pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
+pub mod geocode;
 pub mod hosts;
 pub mod language;
 pub mod links;
@@ -46,6 +49,7 @@ pub mod microphone;
 pub mod notifications;
 pub mod present;
 pub mod print;
+pub mod share;
 pub mod shutdown;
 pub mod single_instance;
 pub mod system_settings;
@@ -162,6 +166,9 @@ pub struct Compositor {
     give_location: bool,
     /// Whether the user's Android speaks, recognises speech and checks spelling with Windows.
     serve_language: bool,
+    /// Whether the address lookups of the user's Android are answered here, and what its apps
+    /// share with the PC is shown in Windows' share window.
+    host_services: bool,
     /// Whether the apps that run in the background in the user's Android are shown in the
     /// notification area, with their media sessions in Windows' media controls.
     show_background: bool,
@@ -276,6 +283,7 @@ impl Compositor {
             print_jobs: true,
             give_location: true,
             serve_language: true,
+            host_services: true,
             show_background: true,
             touch_gestures: touch_gestures::TouchGestureSetup::for_this_user(),
         }
@@ -314,6 +322,7 @@ impl Compositor {
             print_jobs: false,
             give_location: false,
             serve_language: false,
+            host_services: false,
             show_background: false,
             touch_gestures: None,
         }
@@ -442,6 +451,8 @@ impl Compositor {
         let background_thread = self.start_background(&stop);
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
+        let geocode_thread = self.start_geocoding(&stop);
+        let share_thread = self.start_shares(&stop);
         let audio_thread = self.start_audio(&stop);
         let sensors_thread = self.start_sensors(&stop);
         let camera_thread = self.start_camera(&stop);
@@ -658,6 +669,12 @@ impl Compositor {
             let _ = thread.join();
         }
         if let Some(thread) = print_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = geocode_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = share_thread {
             let _ = thread.join();
         }
         if let Some(thread) = audio_thread {
@@ -990,6 +1007,50 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the background apps' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts answering the address lookups of the user's Android, on a thread of its own that
+    /// ends with `stop`.
+    fn start_geocoding(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.host_services {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-geocode".into())
+            .spawn(move || geocode::serve(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the address lookups' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts showing what the apps in the user's Android share with the PC, on a thread of
+    /// its own that ends with `stop`. Each share window runs on a thread of its own besides.
+    fn start_shares(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.host_services {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-share".into())
+            .spawn(move || share::serve(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the shares' thread: {e}"),
                 )
             })
             .ok()

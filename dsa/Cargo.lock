@@ -537,6 +537,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "windows",
+ "windows-collections",
  "windows-core",
  "windows-future",
  "windows-numerics",

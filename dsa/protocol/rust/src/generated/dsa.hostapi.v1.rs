@@ -396,27 +396,6 @@ pub struct LocationFix {
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
 }
-/// Turns the connection into the speech and spelling of the caller's Android: after the
-/// answer (Done), the service sends a LanguageServiceFrame for each request the Android's
-/// text-to-speech engine, speech recognition service or spell checker makes (ListSpeechVoices,
-/// SpeakText, StopSpeaking, StartRecognition, StopRecognition, CancelRecognition and
-/// CheckSpelling), and the client answers each with LanguageServiceFrame messages of its own
-/// (SpeechVoices, SpeechAudio, SpeechDone, RecognitionEvent and SpellingResult), which the
-/// service passes to the Android. The client runs the host's speech synthesis, speech
-/// recognition and spell checker in the user's session, where the user's voices, dictionaries
-/// and privacy settings are. Requests go to the first client still connected; when its
-/// connection ends, every request it had not finished fails in the Android. The connection
-/// lasts across restarts of the Android.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ServeLanguageServices {}
-/// One message of control.proto (an encoded Envelope of dsa.control.v1), on a connection that
-/// serves speech and spelling. The service checks each one the client sends is an answer and
-/// passes it on unchanged, so the messages are defined once, where the Android reads them.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct LanguageServiceFrame {
-    #[prost(bytes = "vec", tag = "1")]
-    pub control: ::prost::alloc::vec::Vec<u8>,
-}
 /// A notification of the caller's Android, on a connection that watches them
 /// (WatchNotifications). One with the key of an earlier one replaces it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -525,6 +504,128 @@ pub struct ReportPrintJob {
     #[prost(uint32, tag = "1")]
     pub job_id: u32,
     #[prost(enumeration = "PrintOutcome", tag = "2")]
+    pub outcome: i32,
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Turns the connection into the geocoding of the caller's Android: after the answer (Done),
+/// the service sends a GeocodeQuery each time an app in the Android looks up an address. Each
+/// query goes to one watcher only. The client looks it up with the host's geocoding service,
+/// in the user's session, and answers each query with ReportGeocode on another connection. It
+/// sends nothing on this one. The watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchGeocoding {}
+/// One lookup of an app in the caller's Android, on a connection that watches them.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeQuery {
+    /// The service's number for the query, unique while the service runs.
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    /// True for a reverse lookup (a position to addresses), false for a forward one.
+    #[prost(bool, tag = "2")]
+    pub reverse: bool,
+    #[prost(string, tag = "3")]
+    pub query: ::prost::alloc::string::String,
+    #[prost(double, tag = "4")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "5")]
+    pub longitude_degrees: f64,
+    #[prost(bool, tag = "6")]
+    pub has_bounds: bool,
+    #[prost(double, tag = "7")]
+    pub lower_left_latitude: f64,
+    #[prost(double, tag = "8")]
+    pub lower_left_longitude: f64,
+    #[prost(double, tag = "9")]
+    pub upper_right_latitude: f64,
+    #[prost(double, tag = "10")]
+    pub upper_right_longitude: f64,
+    /// From 1.
+    #[prost(uint32, tag = "11")]
+    pub max_results: u32,
+    /// A BCP 47 tag; empty for the host's own language.
+    #[prost(string, tag = "12")]
+    pub language: ::prost::alloc::string::String,
+}
+/// One address a lookup found. Empty strings are parts the service did not give.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeocodeAddress {
+    #[prost(string, repeated, tag = "1")]
+    pub address_lines: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "2")]
+    pub feature_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub premises: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub sub_thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub thoroughfare: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub sub_locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub locality: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub sub_admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub admin_area: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub postal_code: ::prost::alloc::string::String,
+    /// ISO 3166-1 alpha-2, upper case.
+    #[prost(string, tag = "11")]
+    pub country_code: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub country_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub has_position: bool,
+    #[prost(double, tag = "14")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "15")]
+    pub longitude_degrees: f64,
+}
+/// Tells the caller's Android what a lookup found. Answered with Done, also for a query the
+/// Android no longer waits for.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReportGeocode {
+    #[prost(uint32, tag = "1")]
+    pub query_id: u32,
+    #[prost(enumeration = "GeocodeStatus", tag = "2")]
+    pub status: i32,
+    #[prost(message, repeated, tag = "3")]
+    pub addresses: ::prost::alloc::vec::Vec<GeocodeAddress>,
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Turns the connection into a watch of what apps in the caller's Android share with the
+/// host ("Share on PC" in Android's share sheet): after the answer (Done), the service sends a
+/// ShareOffer for each share. Each share goes to one watcher only. The client reads its files
+/// with ReadDrag (the share's ID is the drag's), ends it with EndDrag, shows the host's share
+/// UI, and answers with ReportShare on another connection. It sends nothing on this one. The
+/// watch lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchShares {}
+/// Content an app in the caller's Android shares with the host, on a connection that watches
+/// shares.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareOffer {
+    /// The drag ID its files are read with, unique among the Android's shares and drags.
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    /// The subject or title the app gave; empty when none.
+    #[prost(string, tag = "2")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Tells the caller's Android what became of one of its shares. Answered with Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReportShare {
+    #[prost(uint32, tag = "1")]
+    pub share_id: u32,
+    #[prost(enumeration = "ShareOutcome", tag = "2")]
     pub outcome: i32,
     #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
@@ -2403,7 +2504,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2549,8 +2650,14 @@ pub mod request {
         SetAppRoot(super::SetAppRoot),
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
-        #[prost(message, tag = "620")]
-        ServeLanguageServices(super::ServeLanguageServices),
+        #[prost(message, tag = "470")]
+        WatchGeocoding(super::WatchGeocoding),
+        #[prost(message, tag = "471")]
+        ReportGeocode(super::ReportGeocode),
+        #[prost(message, tag = "472")]
+        WatchShares(super::WatchShares),
+        #[prost(message, tag = "473")]
+        ReportShare(super::ReportShare),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2630,7 +2737,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 470, 471"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2706,8 +2813,10 @@ pub mod envelope {
         GamepadEvent(super::GamepadEvent),
         #[prost(message, tag = "301")]
         GamepadRumble(super::GamepadRumble),
-        #[prost(message, tag = "620")]
-        LanguageServiceFrame(super::LanguageServiceFrame),
+        #[prost(message, tag = "470")]
+        GeocodeQuery(super::GeocodeQuery),
+        #[prost(message, tag = "471")]
+        ShareOffer(super::ShareOffer),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -3060,6 +3169,84 @@ impl PrintOutcome {
             "PRINT_OUTCOME_PRINTED" => Some(Self::Printed),
             "PRINT_OUTCOME_CANCELED" => Some(Self::Canceled),
             "PRINT_OUTCOME_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// How a lookup ended on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GeocodeStatus {
+    Unspecified = 0,
+    Ok = 1,
+    /// No network, or the geocoding service failed.
+    Unavailable = 2,
+    /// The user turned geocoding off on the host.
+    Refused = 3,
+    /// Too many lookups in a short time.
+    Busy = 4,
+    /// The query cannot be answered as it is.
+    Invalid = 5,
+}
+impl GeocodeStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GEOCODE_STATUS_UNSPECIFIED",
+            Self::Ok => "GEOCODE_STATUS_OK",
+            Self::Unavailable => "GEOCODE_STATUS_UNAVAILABLE",
+            Self::Refused => "GEOCODE_STATUS_REFUSED",
+            Self::Busy => "GEOCODE_STATUS_BUSY",
+            Self::Invalid => "GEOCODE_STATUS_INVALID",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GEOCODE_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "GEOCODE_STATUS_OK" => Some(Self::Ok),
+            "GEOCODE_STATUS_UNAVAILABLE" => Some(Self::Unavailable),
+            "GEOCODE_STATUS_REFUSED" => Some(Self::Refused),
+            "GEOCODE_STATUS_BUSY" => Some(Self::Busy),
+            "GEOCODE_STATUS_INVALID" => Some(Self::Invalid),
+            _ => None,
+        }
+    }
+}
+/// What became of a share on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareOutcome {
+    Unspecified = 0,
+    Shared = 1,
+    /// The user closed the share UI without sharing.
+    Canceled = 2,
+    /// It could not be shared; the message says why.
+    Failed = 3,
+}
+impl ShareOutcome {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_OUTCOME_UNSPECIFIED",
+            Self::Shared => "SHARE_OUTCOME_SHARED",
+            Self::Canceled => "SHARE_OUTCOME_CANCELED",
+            Self::Failed => "SHARE_OUTCOME_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_OUTCOME_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_OUTCOME_SHARED" => Some(Self::Shared),
+            "SHARE_OUTCOME_CANCELED" => Some(Self::Canceled),
+            "SHARE_OUTCOME_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }

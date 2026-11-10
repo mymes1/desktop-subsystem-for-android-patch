@@ -814,6 +814,115 @@ message LocationFix {
   uint64 unix_time_ms = 11;
 }
 
+// Guest to host, from the agent, which is the guest's geocode provider: look up addresses
+// for an app's Geocoder. A forward lookup names a place (`query`); a reverse lookup gives a
+// position. The host answers each request with GeocodeResult, from the host's own geocoding
+// service, so the guest holds no geocoding engine or data of its own.
+message GeocodeRequest {
+  // The agent's number for the request, unique while its connection lasts.
+  uint32 request_id = 1;
+  // True for a reverse lookup (a position to addresses), false for a forward one.
+  bool reverse = 2;
+  // Forward: the name or address of the place, as the app gave it.
+  string query = 3;
+  // Reverse: the position.
+  double latitude_degrees = 4;
+  double longitude_degrees = 5;
+  // Forward: the box the app prefers results in, when `has_bounds`.
+  bool has_bounds = 6;
+  double lower_left_latitude = 7;
+  double lower_left_longitude = 8;
+  double upper_right_latitude = 9;
+  double upper_right_longitude = 10;
+  // The most addresses the app takes, from 1.
+  uint32 max_results = 11;
+  // The language the app wants the addresses in, as a BCP 47 tag ("ko-KR"); empty for the
+  // host's own.
+  string language = 12;
+}
+
+// How a geocoding request ended.
+enum GeocodeStatus {
+  GEOCODE_STATUS_UNSPECIFIED = 0;
+  // The lookup ran. No addresses means the place is not known.
+  GEOCODE_STATUS_OK = 1;
+  // The host's geocoding service cannot answer now: no network, or the service failed.
+  GEOCODE_STATUS_UNAVAILABLE = 2;
+  // The user turned the host's geocoding off, or there is no desktop session to ask.
+  GEOCODE_STATUS_REFUSED = 3;
+  // Too many lookups in a short time; the service asks the guest to wait.
+  GEOCODE_STATUS_BUSY = 4;
+  // The request itself cannot be answered: an empty name, or a position not on Earth.
+  GEOCODE_STATUS_INVALID = 5;
+}
+
+// One address a geocoding lookup found. Empty strings are parts the service did not give.
+message GeocodeAddress {
+  // The address as lines a person reads, in order.
+  repeated string address_lines = 1;
+  // The place's own name, such as a building or a landmark.
+  string feature_name = 2;
+  string premises = 3;
+  // The house number and the street.
+  string sub_thoroughfare = 4;
+  string thoroughfare = 5;
+  string sub_locality = 6;
+  string locality = 7;
+  string sub_admin_area = 8;
+  string admin_area = 9;
+  string postal_code = 10;
+  // ISO 3166-1 alpha-2, upper case.
+  string country_code = 11;
+  string country_name = 12;
+  bool has_position = 13;
+  double latitude_degrees = 14;
+  double longitude_degrees = 15;
+}
+
+// Host to guest, to the agent: the answer to a GeocodeRequest. `message` says why, in words
+// for the guest's log, when the status is not OK.
+message GeocodeResult {
+  uint32 request_id = 1;
+  GeocodeStatus status = 2;
+  repeated GeocodeAddress addresses = 3;
+  string message = 4;
+}
+
+// Guest to host, from the agent's "Share on PC" target: an app shared text, links or files
+// with the host. The host shows its own share UI with the same content. Each file is read
+// with DragRead, as a drag's files are, with `share_id` as the drag's ID, and the share ends
+// with DragEnd, which gives back the guest's access to the files. The host answers with
+// ShareResult.
+message ShareToHost {
+  // Unique among the shares and drags of one connection.
+  uint32 share_id = 1;
+  // The subject or title the app gave; empty when none.
+  string title = 2;
+  // The app that shared, and its name as the guest shows it; empty when unknown.
+  string package_name = 3;
+  string app_label = 4;
+  // The text and links (`is_text`) and the files, in the order the app gave them.
+  repeated DragItem items = 5;
+}
+
+// What became of a share.
+enum ShareOutcome {
+  SHARE_OUTCOME_UNSPECIFIED = 0;
+  // The host's share UI took the content.
+  SHARE_OUTCOME_SHARED = 1;
+  // The user closed the host's share UI without sharing.
+  SHARE_OUTCOME_CANCELED = 2;
+  // It could not be shared; the message says why.
+  SHARE_OUTCOME_FAILED = 3;
+}
+
+// Host to guest, to the agent: what became of a ShareToHost.
+message ShareResult {
+  uint32 share_id = 1;
+  ShareOutcome outcome = 2;
+  string message = 3;
+}
+
 // Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 // controller's deep idle state). The host takes the device not to be in Doze when the agent
 // connects; the agent sends this on each change after that.
@@ -2735,5 +2844,9 @@ message Envelope {
     RecognitionEvent recognition_event = 629;
     CheckSpelling check_spelling = 630;
     SpellingResult spelling_result = 631;
+    GeocodeRequest geocode_request = 470;
+    GeocodeResult geocode_result = 471;
+    ShareToHost share_to_host = 472;
+    ShareResult share_result = 473;
   }
 }
