@@ -206,6 +206,8 @@ public  final class Envelope extends
     KEYMINT_ROOT_KEY_REQUEST(654),
     KEYMINT_ROOT_KEY(655),
     BACKUP_SETTING(656),
+    RECONFIGURE_WIDGET(657),
+    WIDGET_RECONFIGURED(658),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -407,6 +409,8 @@ public  final class Envelope extends
         case 654: return KEYMINT_ROOT_KEY_REQUEST;
         case 655: return KEYMINT_ROOT_KEY;
         case 656: return BACKUP_SETTING;
+        case 657: return RECONFIGURE_WIDGET;
+        case 658: return WIDGET_RECONFIGURED;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -9728,6 +9732,106 @@ public  final class Envelope extends
     }
   }
 
+  public static final int RECONFIGURE_WIDGET_FIELD_NUMBER = 657;
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   */
+  @java.lang.Override
+  public boolean hasReconfigureWidget() {
+    return bodyCase_ == 657;
+  }
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget() {
+    if (bodyCase_ == 657) {
+       return (io.github.thisisthepy.dsa.control.v1.ReconfigureWidget) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   */
+  private void setReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 657;
+  }
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   */
+  private void mergeReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
+    value.getClass();
+  if (bodyCase_ == 657 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.newBuilder((io.github.thisisthepy.dsa.control.v1.ReconfigureWidget) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 657;
+  }
+  /**
+   * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+   */
+  private void clearReconfigureWidget() {
+    if (bodyCase_ == 657) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int WIDGET_RECONFIGURED_FIELD_NUMBER = 658;
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   */
+  @java.lang.Override
+  public boolean hasWidgetReconfigured() {
+    return bodyCase_ == 658;
+  }
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured() {
+    if (bodyCase_ == 658) {
+       return (io.github.thisisthepy.dsa.control.v1.WidgetReconfigured) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   */
+  private void setWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 658;
+  }
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   */
+  private void mergeWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
+    value.getClass();
+  if (bodyCase_ == 658 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.newBuilder((io.github.thisisthepy.dsa.control.v1.WidgetReconfigured) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 658;
+  }
+  /**
+   * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+   */
+  private void clearWidgetReconfigured() {
+    if (bodyCase_ == 658) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -18767,6 +18871,102 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    @java.lang.Override
+    public boolean hasReconfigureWidget() {
+      return instance.hasReconfigureWidget();
+    }
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ReconfigureWidget getReconfigureWidget() {
+      return instance.getReconfigureWidget();
+    }
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    public Builder setReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
+      copyOnWrite();
+      instance.setReconfigureWidget(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    public Builder setReconfigureWidget(
+        io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.Builder builderForValue) {
+      copyOnWrite();
+      instance.setReconfigureWidget(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    public Builder mergeReconfigureWidget(io.github.thisisthepy.dsa.control.v1.ReconfigureWidget value) {
+      copyOnWrite();
+      instance.mergeReconfigureWidget(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReconfigureWidget reconfigure_widget = 657;</code>
+     */
+    public Builder clearReconfigureWidget() {
+      copyOnWrite();
+      instance.clearReconfigureWidget();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    @java.lang.Override
+    public boolean hasWidgetReconfigured() {
+      return instance.hasWidgetReconfigured();
+    }
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.WidgetReconfigured getWidgetReconfigured() {
+      return instance.getWidgetReconfigured();
+    }
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    public Builder setWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
+      copyOnWrite();
+      instance.setWidgetReconfigured(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    public Builder setWidgetReconfigured(
+        io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWidgetReconfigured(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    public Builder mergeWidgetReconfigured(io.github.thisisthepy.dsa.control.v1.WidgetReconfigured value) {
+      copyOnWrite();
+      instance.mergeWidgetReconfigured(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.WidgetReconfigured widget_reconfigured = 658;</code>
+     */
+    public Builder clearWidgetReconfigured() {
+      copyOnWrite();
+      instance.clearWidgetReconfigured();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -18971,9 +19171,11 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.class,
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.class,
             io.github.thisisthepy.dsa.control.v1.BackupSetting.class,
+            io.github.thisisthepy.dsa.control.v1.ReconfigureWidget.class,
+            io.github.thisisthepy.dsa.control.v1.WidgetReconfigured.class,
           };
           java.lang.String info =
-              "\u0000\u00ba\u0001\u0000\u0001\u0290\u00ba\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00bc\u0001\u0000\u0001\u0292\u00bc\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -18998,7 +19200,8 @@ public  final class Envelope extends
               "<\u0000\u0270<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000" +
               "\u0276<\u0000\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284" +
               "<\u0000\u0285<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000" +
-              "\u028b<\u0000\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000";
+              "\u028b<\u0000\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000\u0291" +
+              "<\u0000\u0292<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
