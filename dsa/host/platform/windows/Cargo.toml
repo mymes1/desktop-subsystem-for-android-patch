@@ -31,6 +31,11 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WinSock",
     "Win32_Security",
     "Win32_Security_Authorization",
+    # Each user's backup key and KeyMint root key: DPAPI, and the TPM through NCrypt.
+    "Win32_Security_Cryptography",
+    # Passkeys through Windows Hello: webauthn.dll's structures (its functions are loaded at
+    # run time, so a Windows without it still starts).
+    "Win32_Networking_WindowsWebServices",
     "Win32_Storage_FileSystem",
     "Win32_Storage_Vhd",
     # Freeing the path of a known folder the shell gives (the shared folders).

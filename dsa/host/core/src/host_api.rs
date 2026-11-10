@@ -117,6 +117,13 @@ use crate::widgets::{
 };
 use dsa_protocol::control;
 
+use crate::backup::{BackupReport, BackupService};
+use crate::passkeys::{CeremonyResult, PasskeyEvent};
+use crate::session::{KeyMintKeyState, RestoreOutcome};
+
+mod host_services;
+pub use host_services::{BackupOutcome, PasskeyCeremonyWatch};
+
 /// How long the service waits for Android to say whether a package is installed.
 const PACKAGE_QUERY_WAIT: Duration = Duration::from_secs(10);
 
@@ -348,6 +355,52 @@ pub trait UserAndroid: Send + Sync {
     /// when it takes no location from the host.
     fn watch_location(&self) -> Option<Receiver<Wanted>> {
         None
+    }
+    /// The user's app data backup the host keeps, if this Android has one. It answers while
+    /// Android is stopped too.
+    fn backup(&self) -> Option<Arc<BackupService>> {
+        None
+    }
+    /// Has this Android back up every app now, and waits until it has.
+    fn backup_now(&self) -> Result<control::BackupRunResult, TaskRequestError> {
+        Err(TaskRequestError::Failed(
+            "this Android keeps no backups on the host".into(),
+        ))
+    }
+    /// Installs the apps of the backup this Android does not have, then restores every app's
+    /// data from the backup.
+    fn restore_backup(&self) -> Result<RestoreOutcome, TaskRequestError> {
+        Err(TaskRequestError::Failed(
+            "this Android keeps no backups on the host".into(),
+        ))
+    }
+    /// Turns this Android's backup on or off, telling Android at once; off with
+    /// `delete_backups`, removes the backups made so far and their key.
+    fn set_backup(&self, on: bool, delete_backups: bool) -> Result<BackupReport, TaskRequestError> {
+        let _ = (on, delete_backups);
+        Err(TaskRequestError::Failed(
+            "this Android keeps no backups on the host".into(),
+        ))
+    }
+    /// How this Android's KeyMint root key is protected on the host. `None` when its KeyMint
+    /// takes no root key from the host.
+    fn keymint_key_state(&self) -> Option<KeyMintKeyState> {
+        None
+    }
+    /// This Android's data was reset: its KeyMint root key goes, and the next start makes a
+    /// new one.
+    fn forget_keymint_root_key(&self) {}
+    /// The passkey ceremonies of this Android from now on. `None` when it uses no passkeys of
+    /// the host.
+    fn watch_passkeys(&self) -> Option<Receiver<PasskeyEvent>> {
+        None
+    }
+    /// Tells this Android what became of a passkey ceremony.
+    fn passkey_result(&self, id: u64, result: CeremonyResult) -> Result<(), TaskRequestError> {
+        let _ = (id, result);
+        Err(TaskRequestError::Failed(
+            "this Android uses no passkeys of the host".into(),
+        ))
     }
     /// What the host's location service reported, for this Android while it wants a location.
     fn host_location(&self, event: LocationEvent) {
@@ -893,6 +946,30 @@ impl UserAndroid for Session {
     }
     fn print_result(&self, job_id: u32, outcome: &PrintOutcome) -> Result<(), TaskRequestError> {
         Session::print_result(self, job_id, outcome).map_err(request_error)
+    }
+    fn backup(&self) -> Option<Arc<BackupService>> {
+        Session::backup(self)
+    }
+    fn backup_now(&self) -> Result<control::BackupRunResult, TaskRequestError> {
+        Session::backup_now(self).map_err(request_error)
+    }
+    fn restore_backup(&self) -> Result<RestoreOutcome, TaskRequestError> {
+        Session::restore_backup(self).map_err(request_error)
+    }
+    fn set_backup(&self, on: bool, delete_backups: bool) -> Result<BackupReport, TaskRequestError> {
+        Session::set_backup(self, on, delete_backups).map_err(request_error)
+    }
+    fn keymint_key_state(&self) -> Option<KeyMintKeyState> {
+        Session::keymint_key_state(self)
+    }
+    fn forget_keymint_root_key(&self) {
+        Session::forget_keymint_root_key(self)
+    }
+    fn watch_passkeys(&self) -> Option<Receiver<PasskeyEvent>> {
+        Session::watch_passkeys(self)
+    }
+    fn passkey_result(&self, id: u64, result: CeremonyResult) -> Result<(), TaskRequestError> {
+        Session::passkey_result(self, id, result).map_err(TaskRequestError::Failed)
     }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         Some(Session::watch_widgets(self))
@@ -2416,6 +2493,9 @@ impl HostApiService {
             }
             if let Some(request::Body::WatchPrintJobs(_)) = request.body {
                 return self.watch_print_jobs(connection, &peer, request.id);
+            }
+            if let Some(request::Body::WatchPasskeys(_)) = request.body {
+                return self.watch_passkeys(connection, &peer, request.id);
             }
             if let Some(request::Body::WatchLocation(_)) = request.body {
                 return self.watch_location(connection, &peer, request.id);
@@ -4604,6 +4684,22 @@ impl HostApiService {
                 }
             }
             Some(request::Body::ResetData(_)) => self.reset_data(peer),
+            Some(request::Body::BackupNow(_)) => self.backup_now(peer),
+            Some(request::Body::GetBackup(_)) => self.get_backup(peer),
+            Some(request::Body::RestoreBackup(_)) => self.restore_backup(peer),
+            Some(request::Body::GetBackupRecoveryKey(_)) => self.backup_recovery_key(peer),
+            Some(request::Body::SetBackupRecoveryKey(set)) => {
+                self.set_backup_recovery_key(peer, &set.key)
+            }
+            Some(request::Body::SetBackup(set)) => self.set_backup(peer, &set),
+            Some(request::Body::GetKeyProtection(_)) => self.key_protection(peer),
+            Some(request::Body::ReportPasskeyCeremony(report)) => {
+                self.report_passkey_ceremony(peer, report)
+            }
+            Some(request::Body::WatchPasskeys(_)) => error(
+                ErrorCode::UnknownRequest,
+                "passkey ceremonies are watched on a connection of their own".into(),
+            ),
             Some(request::Body::GetAndroidVersions(_)) => self.android_versions(peer, None),
             Some(request::Body::UseAndroidVersion(chosen)) => {
                 self.android_versions(peer, Some(chosen))
@@ -4845,6 +4941,15 @@ impl HostApiService {
                         | request::Body::RestartForUpdate(_)
                         | request::Body::SetRunAsArm(_)
                         | request::Body::SetAppRoot(_)
+                        | request::Body::BackupNow(_)
+                        | request::Body::GetBackup(_)
+                        | request::Body::RestoreBackup(_)
+                        | request::Body::GetBackupRecoveryKey(_)
+                        | request::Body::SetBackupRecoveryKey(_)
+                        | request::Body::SetBackup(_)
+                        | request::Body::GetKeyProtection(_)
+                        | request::Body::WatchPasskeys(_)
+                        | request::Body::ReportPasskeyCeremony(_)
                         | request::Body::ReportTouchGestures(_)
                         | request::Body::WatchGeocoding(_)
                         | request::Body::ReportGeocode(_)

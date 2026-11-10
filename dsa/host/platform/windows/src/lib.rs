@@ -8,7 +8,10 @@
 //!   that a failed start reports.
 //! - [`console_pipe`]: the named pipe that console arrives on (Windows only).
 //! - [`hvsocket`]: the control channel's transport, Hyper-V sockets (Windows only).
-//! - [`https`]: downloads for image updates, through WinHTTP (Windows only).
+//! - [`https`]: downloads for image updates and the documents a passkey check reads, through
+//!   WinHTTP (Windows only).
+//! - [`credential_store`]: each user's backup key and KeyMint root key, sealed by DPAPI and the
+//!   computer's TPM (the sealing part on Windows only).
 //! - [`pipe`]: the local API over a named pipe (Windows only).
 //! - [`gpt`]: finding and copying the partitions of a user's Android disk.
 //! - [`guid`]: the VM and service IDs those sockets are addressed by.
@@ -78,6 +81,7 @@ pub mod computer_identity;
 pub mod console_log;
 #[cfg(windows)]
 pub mod console_pipe;
+pub mod credential_store;
 #[cfg(windows)]
 pub mod data_reset;
 #[cfg(windows)]

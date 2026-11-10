@@ -54,6 +54,10 @@ internal sealed class KeyText : ITextSource
         "Background_Paused" => "paused {0}",
         "Background_Stopped" => "stopped {0}",
         "TouchGestures_Failed" => "cannot be used: {0}",
+        "Backup_Folder" => "folder {0}",
+        "Backup_Last" => "last {0}",
+        "Backup_Apps" => "{0} apps, {1}",
+        "Backup_LastError" => "problem {0}",
         _ => key,
     };
 }

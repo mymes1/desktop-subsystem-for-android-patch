@@ -60,6 +60,10 @@
 //!   which window each task and each frame goes to.
 //! - [`renderer`]: the graphics renderer in a process of its own (`dsa-gfx`), which the
 //!   window manager starts, supervises and starts again when it ends.
+//! - [`host_keys`]: the secrets the host's credential store keeps for each user, and
+//!   [`backup`], [`passkeys`] and [`keymint_root`], the system services that use them: app data
+//!   backups in an encrypted folder of the user's, passkeys through the host's authenticator,
+//!   and the root key of the guest's KeyMint.
 
 pub mod accessibility;
 pub mod adb_bridge;
@@ -73,6 +77,7 @@ pub mod apps;
 pub mod arm_translation;
 pub mod audio;
 pub mod background;
+pub mod backup;
 pub mod bootconfig;
 pub mod boundaries;
 pub mod camera;
@@ -100,10 +105,12 @@ pub mod host_api;
 #[cfg(feature = "conformance")]
 pub mod host_api_conformance;
 pub mod host_config;
+pub mod host_keys;
 pub mod host_paths;
 pub mod ime;
 pub mod input;
 pub mod input_trace;
+pub mod keymint_root;
 pub mod keys;
 pub mod language;
 pub mod links;
@@ -111,6 +118,7 @@ pub mod location;
 pub mod memory;
 pub mod native_abi;
 pub mod notifications;
+pub mod passkeys;
 pub mod power;
 pub mod power_hints;
 pub mod print;

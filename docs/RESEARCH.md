@@ -2182,3 +2182,32 @@ FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-1
 - Google apps 이미지에서 `ro.boot.dsa.gapps=on`일 때 정적 오버레이의 `requiredSystemPropertyName`이 패키지 스캔에서 적용되어 Google의 주소 변환이 묶이는지, 실제 이미지로 확인하지 않았다.
 - 단순화로 경계 근처(약 15 m, 세계는 약 1 km) 좌표가 이웃 영역으로 갈 수 있다. 행정동 경계 사이의 틈에 든 좌표는 시도와 가까운 도시로만 답한다.
 - 행정동 데이터는 해마다 바뀐다. 갱신은 스크립트의 고정 주소와 해시를 바꾸는 변경으로 한다.
+
+## R28. 게스트 KeyMint가 호스트의 루트 키를 쓰게 하는 길 (FR-36)
+
+### 확인한 자료
+
+- 두 빌드의 매니페스트(`manifest_15581820.xml`, `manifest_16373615.xml`, SHA-256이 잠금과 같다)와 거기서 고정한 커밋의 소스. 프로젝트마다 그 커밋 하나를 받았다(`git fetch --depth=1`, `.scratch/fr36-aosp/<android>/`). `hardware/interfaces`(16 `aa229558`, 17 `0162af69`), `system/keymint`(16 `748182e1`, 17 `cfeefc94`), `device/google/cuttlefish`(16 `4d368849`, 17 `283645aa`), `system/sepolicy`(16 `43e4494a`, 17 `e066568e`), `system/apex`(16 `97548ed5`, 17 `ce2bb9f7`), `system/core`(16 `e9d1fa37`의 `init`), `external/rust/crates/openssl`(16 `01a619f8`, 17 `4dcd5205`), `external/boringssl`, `frameworks/native`의 `libs/binder/rust`, `system/librustutils`, `external/rust/android-crates-io`의 상자 폴더.
+- 16 x86_64 대상 파일(`aosp_cf_x86_64_only_phone-target_files-15581820.zip`)의 `VENDOR/apex/com.android.hardware.keymint.rust_nonsecure.apex`(풀어서 `apex_payload.img`의 파일과 각 ELF의 `DT_NEEDED`), `VENDOR/etc/selinux/vendor_file_contexts`, `META/vendor_filesystem_config.txt`, `VENDOR/lib64`.
+
+### 찾은 것
+
+- 이미지의 KeyMint는 `hardware/interfaces/security/keymint/aidl/default`의 `apex` 모듈 `com.android.hardware.keymint.rust_nonsecure`다. 바이너리는 `android.hardware.security.keymint-service.nonsecure`(`rust_binary`, `main.rs`), TA는 `libkmr_ta_nonsecure`(`ta/`)다. APEX의 rc는 `service vendor.keymint-default ...`, `class early_hal`, `user nobody`이고 `group` 줄이 없다. init은 `group`이 없으면 gid를 바꾸지 않으므로(`system/core` `init/service_utils.cpp`의 `if (attr.gid)`) 위 서비스는 gid 0으로 돈다.
+- 루트 KEK는 `ta/soft.rs`의 `Keys::root_kek`가 주는 16바이트 0이고, `kek_context`는 기본값(빈 값)이다. 키 덩어리는 그 맥락을 `kek_context`로 적고(`system/keymint` `common/src/keyblob.rs`), 열 때 그 맥락으로 `root_kek`를 다시 부른다(`ta/src/lib.rs`의 `keyblob_parse_decrypt_backlevel`).
+- 갱신이 필요하다는 판단은 `ta/src/lib.rs`의 `keyblob_parse_decrypt`가 한다. 16은 OS 판과 패치 수준만 본다. 17은 `RetrieveKeyMaterial::kek_context_is_outdated`(기본 `false`)를 더해, 그것이 참이면 `KEY_REQUIRES_UPGRADE`를 답하고 `upgrade_key`(`ta/src/keys.rs`)가 새 맥락과 루트 키로 다시 싼다. 16에는 이 갈고리가 없다.
+- APEX의 `file_contexts`는 바이너리를 `hal_keymint_default_exec`으로 붙인다. `system/sepolicy`의 `vendor/hal_keymint_default.te`가 `hal_server_domain(hal_keymint_default, hal_keymint)`이므로 그 영역은 `hal_keymint_server`에 든다. Cuttlefish의 `vendor_file_contexts`는 `/vendor/bin/hw/android\.hardware\.security\.keymint-service\.nonsecure`를 `hal_keymint_rust_exec`으로 붙이므로, 같은 이름으로 vendor에 두면 다른 영역이 된다.
+- APEX의 VINTF 조각은 셋이다. `android.hardware.security.keymint-service.xml`(IKeyMintDevice 4/17은 5, IRemotelyProvisionedComponent 3), `secureclock-service.xml`, `sharedsecret-service.xml`. `kmr_hal`의 `ALL_HALS`가 이 넷을 등록한다. APEX는 `etc/permissions/android.hardware.hardware_keystore.xml`도 가진다.
+- APEX의 바이너리는 Rust 상자를 공유 라이브러리(`*.dylib.so`, APEX의 `lib64`)로 링크한다. 그 밖에 `libcrypto`, `libssl`, `libcutils`, `libbase`, `libc++`, `liblog`, `libbinder_ndk`가 필요하다. 16의 vendor에는 `libssl.so`만 없다. 17은 업스트림 바이너리가 이미 `prefer_rlib: true`다.
+- apexd는 선택 속성 값이 `none`이면 그 모듈의 APEX를 하나도 쓰지 않는다(`apexd/apex_file_repository.cpp`의 `select_filename == "none"`, 16과 17 같다).
+
+### 결정
+
+- `hardware/interfaces` 패치(16, 17 같은 내용): `ta/host_key.rs`의 `HostKeys`가 `/dev/dsa_keymint/root_key`를 처음 루트 키가 필요할 때 읽고(서비스 시작부터 최대 30 s 기다린다), 프로세스가 끝날 때까지 둔다. 키가 있으면 새 덩어리는 그 키와 맥락 `dsa-host-root-key-v1`을 쓰고, 빈 맥락의 덩어리는 0 키로 열되 오래된 것으로 답한다. 키가 없으면 업스트림과 같다. `Android.bp`에 Rust 상자를 정적으로 링크한 `dsa-keymint` 바이너리를 더하고, 트리에 키와 인증서가 없는 APEX 모듈을 뺀다.
+- `system/keymint` 패치(16만): 17의 `kek_context_is_outdated` 코드를 그대로 가져온다.
+- 이미지: `/vendor/bin/hw/dsa-keymint`를 `hal_keymint_default_exec`으로 붙여 APEX와 같은 영역에서, 같은 서비스 이름으로 돌린다(`user nobody`, `group nobody`). `libssl.so`, VINTF 조각 셋, 기능 파일을 함께 두고, `androidboot.vendor.apex.com.android.hardware.keymint=none`으로 APEX를 쓰지 않는다. APEX 파일은 이미지에 남는다.
+
+### 확인하지 못한 것
+
+- 빌드 전부. 축소 트리에서 vendor Rust 바이너리를 빌드한 적이 없다. 잠금에 더한 프로젝트와 상자는 Android.bp의 의존을 정적으로 따라가 고른 것이고, AIDL Rust 백엔드, vendor 변형의 LLNDK 스텁, `TARGET_COPY_OUT_VENDOR := vendor`의 설치 경로, 축소 트리의 clippy가 통과하는지는 Framework build가 처음 보인다.
+- 17 대상 파일의 vendor에 `libssl.so`가 없는지와 그 APEX의 내용. 16 것만 풀어 보았다. `make-image.py`가 바이너리의 `DT_NEEDED`를 vendor와 LLNDK에 대조하므로 빠진 것은 이미지 빌드가 멈춘다.
+- 실기 동작: 기존 설치의 키가 모두 갱신되는지, vold의 메타데이터 키 갱신, 키가 없는 부팅에서 호스트 키로 싼 덩어리가 실패하는 모습.

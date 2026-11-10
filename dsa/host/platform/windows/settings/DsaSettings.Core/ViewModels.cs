@@ -436,6 +436,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         await ChangeAsync(_service.SettingsAsync).ConfigureAwait(true);
         await LoadArmTranslationAsync().ConfigureAwait(true);
         await LoadGappsAsync().ConfigureAwait(true);
+        await LoadBackupAsync().ConfigureAwait(true);
         try
         {
             _gpus = await _service.GpusAsync().ConfigureAwait(true);

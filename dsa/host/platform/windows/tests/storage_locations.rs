@@ -267,6 +267,25 @@ fn fr19_uninstalling_leaves_only_the_users_android_disk() {
 }
 
 #[test]
+fn fr36_uninstalling_keeps_the_sealed_keys_with_the_disk() {
+    let dir = scratch("uninstall-keys");
+    let user = UserRoot::in_local_app_data(&dir.join("local"));
+    let programs = dir.join("programs");
+    std::fs::create_dir_all(user.keys()).unwrap();
+    std::fs::create_dir_all(&programs).unwrap();
+    std::fs::write(user.android_disk(), b"disk").unwrap();
+    std::fs::write(user.keys().join("keymint-root-key.sealed"), b"sealed").unwrap();
+    std::fs::write(user.window_manager_log(), b"log").ok();
+
+    assert_eq!(remove_user_files(&user, &programs), Vec::<String>::new());
+    assert_eq!(
+        std::fs::read(user.keys().join("keymint-root-key.sealed")).unwrap(),
+        b"sealed"
+    );
+    assert!(user.keys().starts_with(user.dir()));
+}
+
+#[test]
 fn fr19_old_trace_switch_files_become_settings() {
     let dir = scratch("markers");
     let machine = MachineRoot::at(dir.join("machine"));

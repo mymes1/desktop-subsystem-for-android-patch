@@ -1844,5 +1844,192 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.ShareResult getShareResult();
 
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   * @return Whether the backupUpload field is set.
+   */
+  boolean hasBackupUpload();
+  /**
+   * <code>.dsa.control.v1.BackupUpload backup_upload = 640;</code>
+   * @return The backupUpload.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupUpload getBackupUpload();
+
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   * @return Whether the backupCommit field is set.
+   */
+  boolean hasBackupCommit();
+  /**
+   * <code>.dsa.control.v1.BackupCommit backup_commit = 641;</code>
+   * @return The backupCommit.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupCommit getBackupCommit();
+
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   * @return Whether the backupDiscard field is set.
+   */
+  boolean hasBackupDiscard();
+  /**
+   * <code>.dsa.control.v1.BackupDiscard backup_discard = 642;</code>
+   * @return The backupDiscard.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupDiscard getBackupDiscard();
+
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   * @return Whether the backupClear field is set.
+   */
+  boolean hasBackupClear();
+  /**
+   * <code>.dsa.control.v1.BackupClear backup_clear = 643;</code>
+   * @return The backupClear.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupClear getBackupClear();
+
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   * @return Whether the backupAnswer field is set.
+   */
+  boolean hasBackupAnswer();
+  /**
+   * <code>.dsa.control.v1.BackupAnswer backup_answer = 644;</code>
+   * @return The backupAnswer.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupAnswer getBackupAnswer();
+
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   * @return Whether the backupQuery field is set.
+   */
+  boolean hasBackupQuery();
+  /**
+   * <code>.dsa.control.v1.BackupQuery backup_query = 645;</code>
+   * @return The backupQuery.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupQuery getBackupQuery();
+
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   * @return Whether the backupContents field is set.
+   */
+  boolean hasBackupContents();
+  /**
+   * <code>.dsa.control.v1.BackupContents backup_contents = 646;</code>
+   * @return The backupContents.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupContents getBackupContents();
+
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   * @return Whether the backupFetch field is set.
+   */
+  boolean hasBackupFetch();
+  /**
+   * <code>.dsa.control.v1.BackupFetch backup_fetch = 647;</code>
+   * @return The backupFetch.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupFetch getBackupFetch();
+
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   * @return Whether the backupFetchData field is set.
+   */
+  boolean hasBackupFetchData();
+  /**
+   * <code>.dsa.control.v1.BackupFetchData backup_fetch_data = 648;</code>
+   * @return The backupFetchData.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupFetchData getBackupFetchData();
+
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   * @return Whether the backupRun field is set.
+   */
+  boolean hasBackupRun();
+  /**
+   * <code>.dsa.control.v1.BackupRun backup_run = 649;</code>
+   * @return The backupRun.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupRun getBackupRun();
+
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   * @return Whether the backupRestore field is set.
+   */
+  boolean hasBackupRestore();
+  /**
+   * <code>.dsa.control.v1.BackupRestore backup_restore = 650;</code>
+   * @return The backupRestore.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupRestore getBackupRestore();
+
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   * @return Whether the backupRunResult field is set.
+   */
+  boolean hasBackupRunResult();
+  /**
+   * <code>.dsa.control.v1.BackupRunResult backup_run_result = 651;</code>
+   * @return The backupRunResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupRunResult getBackupRunResult();
+
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   * @return Whether the passkeyRequest field is set.
+   */
+  boolean hasPasskeyRequest();
+  /**
+   * <code>.dsa.control.v1.PasskeyRequest passkey_request = 652;</code>
+   * @return The passkeyRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.PasskeyRequest getPasskeyRequest();
+
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   * @return Whether the passkeyResponse field is set.
+   */
+  boolean hasPasskeyResponse();
+  /**
+   * <code>.dsa.control.v1.PasskeyResponse passkey_response = 653;</code>
+   * @return The passkeyResponse.
+   */
+  io.github.thisisthepy.dsa.control.v1.PasskeyResponse getPasskeyResponse();
+
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   * @return Whether the keymintRootKeyRequest field is set.
+   */
+  boolean hasKeymintRootKeyRequest();
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKeyRequest keymint_root_key_request = 654;</code>
+   * @return The keymintRootKeyRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest getKeymintRootKeyRequest();
+
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   * @return Whether the keymintRootKey field is set.
+   */
+  boolean hasKeymintRootKey();
+  /**
+   * <code>.dsa.control.v1.KeyMintRootKey keymint_root_key = 655;</code>
+   * @return The keymintRootKey.
+   */
+  io.github.thisisthepy.dsa.control.v1.KeyMintRootKey getKeymintRootKey();
+
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   * @return Whether the backupSetting field is set.
+   */
+  boolean hasBackupSetting();
+  /**
+   * <code>.dsa.control.v1.BackupSetting backup_setting = 656;</code>
+   * @return The backupSetting.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

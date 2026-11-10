@@ -537,6 +537,78 @@ All of it runs on a thread of its own (`dsa-splash`), not on the main thread of 
 activity. If the organizer cannot be registered, apps start without a splash screen and
 everything else works as before.
 
+## App data backups
+
+The agent is the guest's backup transport (`platform/HostBackupTransport.kt`, a
+`BackupTransport` its service `HostBackupTransportService` returns to the backup manager).
+Android's backup manager keeps each app's data with it, and the host keeps that data in the
+user's DSA Backup folder, encrypted with a key the guest never holds. A data reset replaces only
+the guest's disk, so the folder survives it, and so does a move to another computer once its
+recovery key is entered there.
+
+- **Only when the user turns it on.** Backup keeps a second copy of the apps' data on the
+  computer, so it is off until the user turns it on on the host (the settings app, or
+  `dsa backup on`). The host says which (`BackupSetting`) each time the agent connects and
+  whenever the user changes it. Until it says on, the agent keeps Android's backup manager off,
+  automatic restore too, while the host's transport, AOSP's local one or none is selected, so
+  nothing is backed up and nothing is scheduled; a transport of another app the user chose
+  (Google's) is left to that app. The host's `BackupRun` and `BackupRestore` are refused then.
+- **Which transport.** The backup manager binds a transport only of a privileged app that a
+  sysconfig file lists. The image installs `sysconfig-dsa-agent.xml` in
+  `system_ext/etc/sysconfig/`, and the service has the `android.backup.TRANSPORT_HOST` action. It
+  is not exported: only the system binds it. While backup is on, at each change and every five
+  minutes after, the agent turns backup and automatic restore on and selects its transport
+  (`backup/BackupRuns.kt`, through `IBackupManager`), so a transport another app selects (Google
+  Play services, if the user installs it) does not take the user's data elsewhere.
+- **Backing up.** A key-value backup is read from the app's `BackupDataInput` and sent as
+  records (a big-endian key length, the key, a value length, -1 for a deleted key, the value);
+  an incremental one only changes what the host holds. A full backup's tar stream goes as
+  Android writes it. Every piece is at most 256 KiB, and the next goes only once the host has
+  answered the last (`BackupUpload`, then `BackupCommit`). When the host has no APKs of the app's
+  version, it says so in its answer, and the agent sends `base.apk` and the split APKs, except of
+  an app the image carries: a new disk has those already. The quotas are the host's: 64 MiB of
+  key-value data and 4 GiB of full backup per app.
+- **Restoring.** The host offers one restore set, its backup folder (`BackupQuery`). Android
+  restores the package manager's metadata (`@pm@`) first and then each app in the order it asks,
+  as key-value records written to `BackupDataOutput` or as the full backup's tar stream, which
+  the agent reads from the host piece by piece as Android consumes it (`BackupFetch`). After a
+  data reset the host installs the apps it holds APKs of and sends `BackupRestore`; the agent
+  starts a restore session and answers `BackupRunResult` with how many apps came back. The
+  host's `BackupRun` backs up every app now, as `bmgr backupnow --all` does.
+- **Waiting.** The backup manager calls the transport on its own threads and expects the answer
+  from the call, so each call blocks until the host answers (`channel/HostCalls.kt`), at most a
+  minute or two. Without the host every call fails and the backup manager tries again later.
+  The control daemon passes backup messages only from the agent.
+
+## Passkeys
+
+The agent is a credential provider (`platform/HostCredentialProvider.kt`) offering passkeys
+only: "This computer" in Android's credential selector. Picking it opens `PasskeyActivity`,
+which shows nothing, sends the request to the host (`passkeys/HostPasskeys.kt`, `PasskeyRequest`)
+and returns the result: a `CreateCredentialResponse` with the registration JSON, a
+`GetCredentialResponse` with the authentication JSON, or the exception type an app built with
+androidx.credentials expects (canceled, `NotAllowedError`, no credential, unknown). The host
+checks the app against the relying party's Digital Asset Links and runs its own
+authenticator's prompt (Windows Hello, macOS passkeys). Its answer can take minutes, so the
+request waits on a thread of its own.
+
+The trust boundary is the caller's identity, because the host decides from it which relying
+party a request may name. It comes only from the credential manager's `CallingAppInfo`, never
+from the app: its package, the SHA-256 of each certificate it is signed with now (every signer
+of an app with several, otherwise the newest of its signing history), and an origin only as the
+credential manager reports it. Any app may hold `CREDENTIAL_MANAGER_SET_ORIGIN` (a normal
+permission) and set an origin, so an origin, and a client data hash with it, is passed on only
+for a browser on the list of privileged browsers credential providers use
+(`passkeys/PrivilegedBrowsers.kt`, by package and certificate) or a browser the image carries.
+From any other app the request is refused before it reaches the host. An origin written into the
+request JSON is never read.
+
+The provider is a system provider: the agent holds `PROVIDE_DEFAULT_ENABLED_CREDENTIAL_SERVICE`
+and its service has the system provider action, so the credential manager lists it whatever
+other providers write. The agent also keeps it in the `credential_service` setting, and makes it
+the primary provider only while none is (`AndroidCredentialSetup`), so a provider the user
+chose stays first.
+
 ## Framework interfaces outside the SDK
 
 A platform app may use framework interfaces the SDK does not publish. The agent uses:
@@ -551,6 +623,8 @@ A platform app may use framework interfaces the SDK does not publish. The agent 
 | `ServiceManager.checkService` | The control daemon's service (reflection) |
 | `ActivityManager.forceStopPackage` | Stopping an app the user stops on the host (reflection) |
 | `Binder.markVintfStability` | Marking the listener the daemon calls as a stable interface (reflection) |
+| `BackupTransport`, `RestoreSet`, `RestoreDescription`, `BackupDataInput(FileDescriptor)`, `BackupDataOutput(FileDescriptor)` | The backup transport (reflection for the two constructors) |
+| `IBackupManager`, `IRestoreSession`, `IRestoreObserver`, `IBackupObserver`, `ServiceManager.getService` | Selecting the transport, backing up every app and restoring |
 | `InputManager.injectInputEvent`, `MotionEvent.setActionButton`, `InputEvent.setDisplayId` | Injecting the host's pointer and key input (reflection) |
 | `IActivityTaskManager.setFocusedTask` | Giving a task the input focus before its keys |
 | `TaskOrganizer`, `StartingWindowInfo`, `TaskInfo.positionInParent`, `IActivityTaskManager.onSplashScreenViewCopyFinished` | Drawing starting windows and placing organized tasks' surfaces (reflection for the fields and the copy answer) |
@@ -605,8 +679,11 @@ The release APK, `build/outputs/apk/release/dsa-agent-release-unsigned.apk`, is 
 | `src/main/kotlin/.../agent/background/` | The apps that run in the background, their media sessions, and stopping them |
 | `src/main/kotlin/.../agent/widgets/` | The widgets placed on the host's desktop |
 | `src/main/kotlin/.../agent/install/` | Installing the APKs the host sends |
+| `src/main/kotlin/.../agent/backup/` | App data backups kept by the host, and restoring them |
+| `src/main/kotlin/.../agent/passkeys/` | Passkeys made and used by the host's authenticator |
 | `src/main/kotlin/.../agent/platform/` | The framework side: the application, task source, actions, windowing, input injection, the input method, binder channel, power controls |
 | `src/test/` | The unit tests |
 | `hidden-api/` | Compile-only declarations of framework classes outside the SDK |
 | `privapp-permissions-dsa-agent.xml` | The agent's privileged permissions |
 | `default-permissions-dsa-agent.xml` | The runtime permissions the image grants the agent |
+| `sysconfig-dsa-agent.xml` | The sysconfig that lets the backup manager use the agent's transport |

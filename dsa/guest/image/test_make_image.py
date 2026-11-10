@@ -97,6 +97,8 @@ class ImageLayoutTests(unittest.TestCase):
         # The elevation helper (dsa-channeld --su-relay) and the commands it starts.
         "su_helper.rs": ("dsa_su", "su.cil"),
         "su_process.rs": ("dsa_su", "su.cil"),
+        # KeyMint's root key from the host (dsa-channeld --keymint-key).
+        "keymint_key.rs": ("dsa_keymint_key", "channeld.cil"),
     }
     # The policy files the image installs together with the daemon, so a rule for one of its
     # domains may live in any of them (the daemon's root elevation rules are in su.cil).
@@ -1310,6 +1312,25 @@ class ImageLayoutTests(unittest.TestCase):
                     "system_ext/etc/permissions/privapp-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
                     fs_config,
                 )
+
+    def test_fr36_the_agents_backup_transport_is_listed_for_the_backup_manager(self):
+        # Android's backup manager uses a transport only when a sysconfig file lists it.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._target_files_with_system_ext(root)
+            agent = root / "agent.apk"
+            agent.write_bytes(b"PK agent")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, agent=agent)
+            with zipfile.ZipFile(modified) as archive:
+                listed = archive.read(make_image.AGENT_SYSCONFIG).decode()
+                fs_config = archive.read("META/system_ext_filesystem_config.txt").decode().splitlines()
+        self.assertIn('<backup-transport-whitelisted-service', listed)
+        self.assertIn('service="io.github.thisisthepy.dsa.agent/'
+                      'io.github.thisisthepy.dsa.agent.platform.HostBackupTransportService"', listed)
+        self.assertIn("system_ext/etc/sysconfig/sysconfig-dsa-agent.xml 0 0 644 capabilities=0x0", fs_config)
+        manifest = (make_image.REPO / "dsa/guest/agent/src/main/AndroidManifest.xml").read_text()
+        self.assertIn('android:name=".platform.HostBackupTransportService"', manifest)
 
     def test_fr11_the_agent_holds_the_storage_permissions_that_open_android_obb_to_it(self):
         # The agent puts the expansion files of an app the host installs in the app's folder
@@ -6479,6 +6500,231 @@ class FrameworkImageTests(unittest.TestCase):
             self.assertEqual(make_image.check_framework({"arch": "x86_64"}, [], None), [])
 
 
+class KeyMintImageTests(unittest.TestCase):
+    """DSA's KeyMint from the Framework build, whose root key of key blobs comes from the host, in
+    place of the KeyMint APEX, whose root key is a fixed all-zero key."""
+
+    MODULE = "com.android.hardware.keymint"
+    APEX = "VENDOR/apex/com.android.hardware.keymint.rust_nonsecure.apex"
+    FRAGMENTS = {
+        "VENDOR/etc/vintf/manifest/android.hardware.security.keymint-service.xml":
+            b'<manifest version="1.0" type="device">\n'
+            b'    <hal format="aidl">\n        <name>android.hardware.security.keymint</name>\n'
+            b'        <version>4</version>\n        <fqname>IKeyMintDevice/default</fqname>\n    </hal>\n'
+            b'    <hal format="aidl">\n        <name>android.hardware.security.keymint</name>\n'
+            b'        <version>3</version>\n        <fqname>IRemotelyProvisionedComponent/default</fqname>\n'
+            b'    </hal>\n</manifest>\n',
+        "VENDOR/etc/vintf/manifest/android.hardware.security.secureclock-service.xml":
+            b'<manifest version="1.0" type="device">\n    <hal format="aidl">\n'
+            b'        <name>android.hardware.security.secureclock</name>\n'
+            b'        <fqname>ISecureClock/default</fqname>\n    </hal>\n</manifest>\n',
+        "VENDOR/etc/vintf/manifest/android.hardware.security.sharedsecret-service.xml":
+            b'<manifest version="1.0" type="device">\n    <hal format="aidl">\n'
+            b'        <name>android.hardware.security.sharedsecret</name>\n'
+            b'        <fqname>ISharedSecret/default</fqname>\n    </hal>\n</manifest>\n',
+        "VENDOR/etc/permissions/android.hardware.hardware_keystore.xml":
+            b'<permissions>\n  <feature name="android.hardware.hardware_keystore" version="400" />\n'
+            b'</permissions>\n',
+    }
+    # What the nonsecure service links once its Rust crates are linked in.
+    NEEDED = ["libbinder_ndk.so", "libcrypto.so", "libssl.so", "libcutils.so", "liblog.so", "libc++.so",
+              "libc.so", "libm.so", "libdl.so"]
+    VENDOR_LIBRARIES = ["VENDOR/lib64/libcrypto.so", "VENDOR/lib64/libcutils.so", "VENDOR/lib64/libbase.so",
+                        "VENDOR/lib64/libc++.so"]
+
+    @staticmethod
+    def _elf(machine, needed=(), body=b""):
+        """A 64-bit ELF file whose dynamic section needs `needed`."""
+        strtab = b"\0"
+        offsets = []
+        for library in needed:
+            offsets.append(len(strtab))
+            strtab += library.encode() + b"\0"
+        dynamic = b"".join(struct.pack("<qQ", 1, offset) for offset in offsets) + struct.pack("<qQ", 0, 0)
+        strtab_at = 64 + len(body)
+        dynamic_at = strtab_at + len(strtab)
+        sections_at = dynamic_at + len(dynamic)
+        header = bytearray(64)
+        header[:4] = b"\x7fELF"
+        header[4] = 2
+        header[5] = 1
+        header[18:20] = machine.to_bytes(2, "little")
+        header[0x28:0x30] = sections_at.to_bytes(8, "little")
+        header[0x3A:0x3C] = (64).to_bytes(2, "little")
+        header[0x3C:0x3E] = (3).to_bytes(2, "little")
+
+        def section(kind, offset, size, link):
+            return struct.pack("<IIQQQQIIQQ", 0, kind, 0, 0, offset, size, link, 0, 0, 0)
+
+        sections = section(0, 0, 0, 0) + section(3, strtab_at, len(strtab), 0) + section(6, dynamic_at, len(dynamic), 1)
+        return bytes(header) + body + strtab + dynamic + sections
+
+    @staticmethod
+    def _vendor_apex(module, payload=b""):
+        name = module.encode()
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as apex:
+            apex.writestr("apex_manifest.pb", b"\x0a" + bytes([len(name)]) + name + b"\x10\x01")
+            apex.writestr("apex_payload.img", b"\0" * 64 + payload + b"\0" * 64)
+        return data.getvalue()
+
+    def _framework(self, root, machine=62, needed=None):
+        folder = root / "framework"
+        contents = {name: self._elf(machine, body=b"patched " + name.encode()) for name in make_image.FRAMEWORK_FILES}
+        contents[make_image.KEYMINT_BINARY] = self._elf(machine, self.NEEDED if needed is None else needed,
+                                                        b"dsa-keymint")
+        contents["VENDOR/lib64/libssl.so"] = self._elf(machine, ["libcrypto.so", "libc.so"], b"libssl")
+        contents.update(self.FRAGMENTS)
+        files = {}
+        for name, data in contents.items():
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_bytes(data)
+            files[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        (folder / "framework.json").write_text(json.dumps({
+            "android": "android16", "android_major": 16, "build_id": "15581820", "release": "bp4a",
+            "arch": "x86_64", "version": "16-0123456789ab", "files": files}))
+        return folder
+
+    def _source(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type surfaceflinger)\n")
+            archive.writestr("SYSTEM/build.prop", "ro.debuggable=1\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/hw 0 2000 751 capabilities=0x0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts",
+                             "/(vendor|system/vendor)/bin/hw/android\\.hardware\\.security\\.keymint-service"
+                             "   u:object_r:hal_keymint_default_exec:s0\n")
+            for name in make_image.FRAMEWORK_FILES:
+                archive.writestr(name, self._elf(62, body=b"published " + name.encode()))
+            for name in self.VENDOR_LIBRARIES:
+                archive.writestr(name, self._elf(62))
+            archive.writestr(self.APEX, self._vendor_apex(
+                self.MODULE, self.FRAGMENTS["VENDOR/etc/vintf/manifest/android.hardware.security.keymint-service.xml"]))
+        return source
+
+    def _image(self, root):
+        payloads, description = make_image.checked_framework(self._framework(root), "15581820", 16, "x86_64")
+        modified = root / "modified.zip"
+        make_image.modify(self._source(root), modified, framework=payloads)
+        manifest = {"arch": "x86_64", "source": {"build_id": "15581820"},
+                    "kernel_cmdline": make_image.kernel_cmdline("blkdevparts=x:1@0(misc)", keymint=True),
+                    "framework": make_image.framework_entry(description)}
+        return payloads, modified, manifest
+
+    def test_fr36_the_keymint_is_installed_as_vendor_files_in_the_apexs_domain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payloads, modified, _ = self._image(Path(tmp))
+            self.assertEqual(sorted(payloads), sorted(make_image.FRAMEWORK_FILES + make_image.KEYMINT_FILES))
+            with zipfile.ZipFile(modified) as archive:
+                for name in make_image.KEYMINT_FILES:
+                    self.assertEqual(archive.read(name), payloads[name], name)
+                rc = archive.read(make_image.KEYMINT_RC).decode()
+                contexts = archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode().splitlines()
+            # The APEX's service, started as it was, from the vendor partition; the user nobody
+            # alone may read the host's key.
+            self.assertIn("service vendor.keymint-default /vendor/bin/hw/dsa-keymint\n", rc)
+            for line in ("class early_hal", "user nobody", "group nobody"):
+                self.assertIn(f"    {line}\n", rc)
+            # The label the APEX gave its binary, so init starts it in hal_keymint_default.
+            self.assertIn("/vendor/bin/hw/dsa-keymint u:object_r:hal_keymint_default_exec:s0", contexts)
+            self.assertIn("vendor/bin/hw/dsa-keymint 0 2000 755 capabilities=0x0", fs_config)
+            self.assertIn("vendor/lib64/libssl.so 0 0 644 capabilities=0x0", fs_config)
+            self.assertIn("vendor/etc/init/dsa-keymint.rc 0 0 644 capabilities=0x0", fs_config)
+            for name in self.FRAGMENTS:
+                self.assertIn("vendor/" + name.split("/", 1)[1] + " 0 0 644 capabilities=0x0", fs_config)
+
+    def test_fr36_no_keymint_apex_is_selected_beside_the_keymint(self):
+        selected = "androidboot.vendor.apex.com.android.hardware.keymint=com.android.hardware.keymint.rust_nonsecure"
+        cmdline = make_image.kernel_cmdline("blkdevparts=x:1@0(misc)", keymint=True).split()
+        self.assertIn("androidboot.vendor.apex.com.android.hardware.keymint=none", cmdline)
+        self.assertNotIn(selected, cmdline)
+        # The other selections stay.
+        self.assertIn("androidboot.vendor.apex.com.android.hardware.gatekeeper=com.android.hardware.gatekeeper.nonsecure",
+                      cmdline)
+        # An image without the KeyMint keeps the APEX.
+        self.assertIn(selected, make_image.kernel_cmdline("blkdevparts=x:1@0(misc)").split())
+
+    def test_fr36_one_keymint_declares_each_instance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, modified, manifest = self._image(Path(tmp))
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertIn(self.APEX, names)
+                self.assertEqual(make_image.vendor_vintf_problems(names, archive.read, manifest["kernel_cmdline"]), [])
+                # Were the APEX still selected, it would declare the KeyMint a second time.
+                apex = make_image.kernel_cmdline("blkdevparts=x:1@0(misc)")
+                problems = make_image.vendor_vintf_problems(names, archive.read, apex)
+            self.assertTrue(any("IKeyMintDevice/default" in p for p in problems), problems)
+
+    def test_fr36_check_image_finds_the_keymint_in_the_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, modified, manifest = self._image(root)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(make_image.check_framework(manifest, archive.namelist(), archive.read), [])
+                # The APEX selected again on the command line.
+                selected = dict(manifest, kernel_cmdline=make_image.kernel_cmdline("blkdevparts=x:1@0(misc)"))
+                problems = make_image.check_framework(selected, archive.namelist(), archive.read)
+                self.assertTrue(any("keymint=none" in p for p in problems), problems)
+                self.assertTrue(any(self.APEX in p and "active" in p for p in problems), problems)
+            # An image without DSA's KeyMint, as the build made it.
+            with zipfile.ZipFile(self._source(root)) as archive:
+                problems = make_image.check_framework(manifest, archive.namelist(), archive.read)
+            for name in make_image.KEYMINT_FILES + [make_image.KEYMINT_RC]:
+                self.assertTrue(any(name in p for p in problems), name)
+            self.assertTrue(any("hal_keymint_default_exec" in p for p in problems), problems)
+
+    def test_fr36_check_image_finds_another_keymint_binary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, modified, manifest = self._image(Path(tmp))
+            changed = Path(tmp) / "changed.zip"
+            with zipfile.ZipFile(modified) as source, zipfile.ZipFile(changed, "w") as out:
+                for info in source.infolist():
+                    data = source.read(info.filename)
+                    if info.filename == make_image.KEYMINT_BINARY:
+                        data = self._elf(62, self.NEEDED, b"the APEX's binary")
+                    out.writestr(info, data)
+            with zipfile.ZipFile(changed) as archive:
+                problems = make_image.check_framework(manifest, archive.namelist(), archive.read)
+            self.assertTrue(any(make_image.KEYMINT_BINARY in p and "not the framework build's" in p
+                                for p in problems), problems)
+
+    def test_fr36_a_keymint_needing_a_library_the_vendor_lacks_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            framework = self._framework(root, needed=self.NEEDED + ["libkeymint_extra.so"])
+            payloads, _ = make_image.checked_framework(framework, "15581820", 16, "x86_64")
+            with self.assertRaisesRegex(ValueError, "needs libkeymint_extra.so"):
+                make_image.modify(self._source(root), root / "modified.zip", framework=payloads)
+        self.assertEqual(make_image.elf_needed(self._elf(62, ["liba.so", "libb.so"])), ["liba.so", "libb.so"])
+        self.assertIsNone(make_image.elf_needed(b"not an ELF file"))
+
+    def test_fr36_a_framework_with_part_of_the_keymint_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = self._framework(root)
+            description = json.loads((folder / "framework.json").read_text())
+            del description["files"]["VENDOR/lib64/libssl.so"]
+            (folder / "framework.json").write_text(json.dumps(description))
+            with self.assertRaisesRegex(SystemExit, "VENDOR/lib64/libssl.so"):
+                make_image.checked_framework(folder, "15581820", 16, "x86_64")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "dsa-keymint is built for ELF machine 183"):
+                make_image.checked_framework(self._framework(root, machine=183), "15581820", 16, "x86_64")
+
+    def test_fr36_the_keymint_fragments_declare_every_instance_it_registers(self):
+        # kmr_hal's ALL_HALS: the service registers these four, and servicemanager refuses an
+        # undeclared one.
+        declared = set()
+        for data in self.FRAGMENTS.values():
+            declared |= make_image.vintf_instances(data)
+        self.assertEqual(sorted(declared), sorted(make_image.KEYMINT_INSTANCES))
+        self.assertEqual(make_image.DSA_SERVED_INSTANCES[make_image.KEYMINT_BINARY],
+                         ("aidl", "android.hardware.security.keymint", "IKeyMintDevice", "default"))
+
+
 class RootElevationImageTests(unittest.TestCase):
     """The guest image's side of root elevation: the su client's label, the elevation helper's
     domain and sockets, and the su guard that hides su from every app the host did not allow."""
@@ -6762,6 +7008,89 @@ class RootElevationImageTests(unittest.TestCase):
                 or self._rules(line),
                 line,
             )
+
+
+class KeyMintKeyImageTests(unittest.TestCase):
+    """The guest image's side of KeyMint's root key from the host: the daemon's mode that
+    fetches it once each boot, the tmpfs folder it goes to, and the policy that lets only
+    KeyMint read it."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", "/system/bin/sh u:object_r:shell_exec:s0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = root / "dsa-channeld"
+        daemon.write_bytes(b"daemon")
+        client = root / "su"
+        client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _block(self, text, first_line):
+        start = text.index(first_line)
+        end = text.find("\n\n", start)
+        return [line.strip() for line in text[start:end if end >= 0 else len(text)].splitlines()]
+
+    def test_fr36_keymint_root_key_is_fetched_once_before_keymint_starts(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.KEYMINT_KEY_SERVICE)
+        for option in ["user nobody", "group nobody", "seclabel u:r:dsa_keymint_key:s0", "oneshot", "disabled"]:
+            self.assertIn(option, service)
+        script = (self.HERE / "dsa-keymint-key.rc").read_text()
+        # On init: before late-fs, where init starts KeyMint with class early_hal.
+        block = self._block(script, "on init\n")
+        self.assertEqual(block[1:], ["mkdir /dev/dsa_keymint 0700 nobody nobody", "start dsa_keymint_key"])
+        self.assertNotIn("/data", script + "\n".join(service))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.keymint_key_problems(names, archive.read), [])
+            self.assertEqual(archive.read(make_image.KEYMINT_KEY_RC).decode(), script)
+            self.assertIn("system/etc/init/dsa-keymint-key.rc 0 0 644 capabilities=0x0",
+                          archive.read(make_image.SYSTEM_FS_CONFIG).decode().splitlines())
+            self.assertIn(make_image.KEYMINT_KEY_CONTEXT,
+                          archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
+
+    def test_fr36_only_keymint_reads_its_root_key(self):
+        readers = re.findall(r"\(allow\s+(\S+)\s+dsa_keymint_key_file\s+\(\s*file\s+\(([^)]*)\)", self.POLICY)
+        self.assertTrue(readers)
+        self.assertEqual({who for who, perms in readers if "read" in perms.split()}, {"hal_keymint_server"})
+        writers = {who for who, perms in readers if {"write", "create"} & set(perms.split())}
+        self.assertEqual(writers, {"dsa_keymint_key"})
+        # The daemon proper, which talks to every client in the guest, never holds the key.
+        self.assertNotRegex(self.POLICY, r"\(allow\s+dsa_channeld\s+dsa_keymint_key_file")
+        self.assertNotIn("dsa_keymint", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertIn(make_image.KEYMINT_KEY_CONTEXT,
+                      make_image.update_vendor_file_contexts("", channeld=True).splitlines())
+
+    def test_fr36_check_image_names_what_the_root_key_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        del files[make_image.KEYMINT_KEY_RC]
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_keymint_key:s0").encode()
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
+            b"\n(allow untrusted_app dsa_keymint_key_file (file (read open)))\n")
+        files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
+        problems = make_image.keymint_key_problems(list(files), files.__getitem__)
+        expected = [
+            'lacks "seclabel u:r:dsa_keymint_key:s0"',
+            "dsa-keymint-key.rc is missing",
+            "vendor_file_contexts lacks",
+            "lets untrusted_app read KeyMint's root key",
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
 
 
 if __name__ == "__main__":

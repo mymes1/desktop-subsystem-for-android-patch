@@ -94,6 +94,24 @@ pub fn prepare_user_disk(disk: &Path, size_gb: u32, template: Option<&Path>) -> 
     }
 }
 
+/// The access list of a user's backup folder: the user, SYSTEM and Administrators, inherited
+/// by everything in it. The service writes the backup as SYSTEM, and the user still owns what
+/// is there: they can open, copy and remove it.
+pub fn backup_folder_sddl(sid: &str) -> String {
+    format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+}
+
+/// Makes sure the backup folder of the user with SID `sid` exists. A folder made here gets
+/// [`backup_folder_sddl`], so it is the user's whatever their profile folder passes down; a
+/// folder that is there already (one the user made or set up) keeps its own.
+pub fn prepare_backup_folder(folder: &Path, sid: &str) -> Result<(), String> {
+    if folder.is_dir() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(folder).map_err(|e| format!("creating {}: {e}", folder.display()))?;
+    protect_folder_as(folder, &backup_folder_sddl(sid))
+}
+
 /// Creates the folder of a user's disk, without the disk. With `protect`, for a folder in a
 /// shared `data_dir`, its access list becomes [`USER_FOLDER_SDDL`]; a folder in the user's
 /// profile keeps what it inherits from the profile.

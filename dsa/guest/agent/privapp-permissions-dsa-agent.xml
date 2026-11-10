@@ -43,5 +43,7 @@
         <permission name="android.permission.READ_DEVICE_CONFIG" />
         <permission name="android.permission.WRITE_DEVICE_CONFIG" />
         <permission name="android.permission.INSTALL_LOCATION_PROVIDER" />
+        <permission name="android.permission.BACKUP" />
+        <permission name="android.permission.PROVIDE_DEFAULT_ENABLED_CREDENTIAL_SERVICE" />
     </privapp-permissions>
 </permissions>

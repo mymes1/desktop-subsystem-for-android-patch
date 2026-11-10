@@ -763,6 +763,31 @@ impl Router {
                     ))
                 })?;
             }
+            // The host stores what the backup transport sends as the user's app data, and
+            // trusts a passkey request to name the app Android's credential manager says
+            // called; both are the agent's alone.
+            Some(
+                Body::PasskeyRequest(_)
+                | Body::BackupUpload(_)
+                | Body::BackupCommit(_)
+                | Body::BackupDiscard(_)
+                | Body::BackupClear(_)
+                | Body::BackupQuery(_)
+                | Body::BackupFetch(_)
+                | Body::BackupRunResult(_),
+            ) => {
+                (self.agent_check)(sender).map_err(|why| {
+                    SendError::NotAllowed(format!(
+                        "only the agent speaks for the guest's backups and passkeys: {why}"
+                    ))
+                })?;
+            }
+            Some(Body::KeymintRootKeyRequest(_) | Body::KeymintRootKey(_)) => {
+                return Err(SendError::NotAllowed(
+                    "KeyMint's root key is asked for on a port of its own, by the daemon alone"
+                        .to_string(),
+                ))
+            }
             Some(Body::AgentConnected(_)) => {
                 if !state.listeners.iter().any(|s| s.peer == sender) {
                     return Err(SendError::NotAllowed(

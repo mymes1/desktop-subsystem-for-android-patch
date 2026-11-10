@@ -2472,6 +2472,250 @@ message GamepadRumble {
   uint32 duration_ms = 4;
 }
 
+// What the host says of a request of the agent's backup transport.
+enum BackupStatus {
+  BACKUP_STATUS_UNSPECIFIED = 0;
+  BACKUP_STATUS_OK = 1;
+  // The host could not store or read it; the message says why.
+  BACKUP_STATUS_ERROR = 2;
+  // The package's data is larger than the host keeps for one app.
+  BACKUP_STATUS_QUOTA_EXCEEDED = 3;
+  // The host keeps no backup now: it has no credential store for the key, or the folder was
+  // made with another key. The message says which, and what to do.
+  BACKUP_STATUS_NOT_AVAILABLE = 4;
+  // The backup holds nothing of that kind for the package.
+  BACKUP_STATUS_NOT_FOUND = 5;
+}
+
+// The kinds of data a package's backup holds.
+enum BackupDataKind {
+  BACKUP_DATA_KIND_UNSPECIFIED = 0;
+  // A key-value backup: records, each a key and its value or its deletion. A record is a
+  // 32-bit big-endian key length, the key in UTF-8, a 32-bit big-endian value length (-1 for
+  // a deleted key) and the value.
+  BACKUP_DATA_KIND_KEY_VALUE = 1;
+  // A full backup: the tar stream Android's backup manager writes for the package.
+  BACKUP_DATA_KIND_FULL = 2;
+  // One APK file of the package, so a restore after a data reset can install the app first.
+  BACKUP_DATA_KIND_APK = 3;
+}
+
+// Guest to host, from the agent's backup transport: one piece of an upload, at most 256 KiB,
+// in order from offset 0. Each piece is answered with BackupAnswer before the next is sent.
+message BackupUpload {
+  // The upload's number, the agent's own, unique while the agent runs.
+  uint64 request_id = 1;
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Guest to host: the upload `request_id` is whole. The host keeps it as the package's data of
+// that kind, encrypted, and answers BackupAnswer. An upload of size 0 needs no BackupUpload.
+message BackupCommit {
+  uint64 request_id = 1;
+  string package = 2;
+  BackupDataKind kind = 3;
+  uint64 size = 4;
+  // KEY_VALUE only: the records change what the host keeps for the package, rather than
+  // replace it.
+  bool incremental = 5;
+  // The package's version code when it was backed up.
+  int64 version_code = 6;
+  // APK only: the file's name in the package's install, such as base.apk or
+  // split_config.en.apk.
+  string apk_name = 7;
+  // APK only: every APK name of the package at this version, so the host drops the files of
+  // an older version that this one no longer has.
+  repeated string apk_names = 8;
+}
+
+// Guest to host: drops the upload or the read `request_id` under way, and keeps nothing of it.
+message BackupDiscard {
+  uint64 request_id = 1;
+}
+
+// Guest to host: removes everything the backup holds for a package (the backup manager's
+// clearBackupData). Answered with BackupAnswer.
+message BackupClear {
+  uint64 request_id = 1;
+  string package = 2;
+}
+
+// Host to guest: the answer to BackupUpload, BackupCommit and BackupClear.
+message BackupAnswer {
+  uint64 request_id = 1;
+  BackupStatus status = 2;
+  // Why it failed, in words a person can act on; empty when it did not.
+  string message = 3;
+  // BackupCommit of KEY_VALUE or FULL only: the host holds no APKs of the package at this
+  // version, so the agent sends them.
+  bool apks_wanted = 4;
+}
+
+// Guest to host: what the backup holds, for a restore. Answered with BackupContents.
+message BackupQuery {
+  uint64 request_id = 1;
+}
+
+// One package in the backup.
+message BackupPackage {
+  string package = 1;
+  bool key_value = 2;
+  bool full = 3;
+  int64 version_code = 4;
+  // The APK files the backup holds for the package at version_code; empty when it holds none.
+  repeated string apk_names = 5;
+  // When its data was last backed up, in milliseconds since the Unix epoch.
+  int64 backed_up_unix_ms = 6;
+  // The bytes its data and APKs take, before encryption.
+  uint64 size = 7;
+}
+
+// Host to guest: what the backup holds. There is one restore set, the user's backup folder.
+message BackupContents {
+  uint64 request_id = 1;
+  BackupStatus status = 2;
+  string message = 3;
+  // The restore set's token: the same for the folder wherever it is moved.
+  uint64 token = 4;
+  // The restore set's name, as Android shows it: the computer it was made on.
+  string name = 5;
+  repeated BackupPackage packages = 6;
+}
+
+// Guest to host: the next piece of a package's data, from `offset`. Answered with
+// BackupFetchData. The agent asks for each piece after the last one came, so the host never
+// sends faster than the agent reads.
+message BackupFetch {
+  uint64 request_id = 1;
+  uint64 token = 2;
+  string package = 3;
+  BackupDataKind kind = 4;
+  // APK only: which file.
+  string apk_name = 5;
+  uint64 offset = 6;
+}
+
+// Host to guest: one piece of the data asked for, at most 256 KiB, or why there is none.
+message BackupFetchData {
+  uint64 request_id = 1;
+  BackupStatus status = 2;
+  string message = 3;
+  // The whole data's size.
+  uint64 size = 4;
+  uint64 offset = 5;
+  bytes data = 6;
+  // This piece reaches the end of the data.
+  bool last = 7;
+}
+
+// Host to guest, to the agent: back up every app now, as `bmgr backupnow --all` does.
+// Answered with BackupRunResult once the backup manager has finished.
+message BackupRun {
+  uint64 request_id = 1;
+}
+
+// Host to guest, to the agent: restore the packages from the restore set `token`. The host
+// has installed the apps the backup holds APKs of first. Answered with BackupRunResult.
+message BackupRestore {
+  uint64 request_id = 1;
+  uint64 token = 2;
+  repeated string packages = 3;
+}
+
+// Guest to host: how a BackupRun or a BackupRestore ended.
+message BackupRunResult {
+  uint64 request_id = 1;
+  BackupStatus status = 2;
+  string message = 3;
+  // The packages backed up or restored, and those that failed.
+  uint32 succeeded = 4;
+  uint32 failed = 5;
+}
+
+// Host to guest, to the agent: whether the user turned backup to the host on. Sent each time
+// the agent connects and whenever the user changes it. Until the agent hears it is on, it keeps
+// Android's backup manager from backing up to the host (backup off, automatic restore off),
+// so a user who never turned backup on has nothing backed up and nothing scheduled.
+message BackupSetting {
+  bool enabled = 1;
+}
+
+// Which passkey ceremony an app asks for.
+enum PasskeyOperation {
+  PASSKEY_OPERATION_UNSPECIFIED = 0;
+  // Make a new passkey (navigator.credentials.create).
+  PASSKEY_OPERATION_CREATE = 1;
+  // Sign in with a passkey (navigator.credentials.get).
+  PASSKEY_OPERATION_GET = 2;
+}
+
+// How a passkey request ended.
+enum PasskeyStatus {
+  PASSKEY_STATUS_UNSPECIFIED = 0;
+  PASSKEY_STATUS_OK = 1;
+  // The app may not use passkeys of that relying party: its signature is not in the
+  // relying party's Digital Asset Links, or the origin a browser gave does not belong to it.
+  PASSKEY_STATUS_REJECTED = 2;
+  // The person canceled the host's prompt.
+  PASSKEY_STATUS_CANCELED = 3;
+  // This computer has no passkeys, or they are turned off.
+  PASSKEY_STATUS_UNAVAILABLE = 4;
+  // The host's authenticator failed; the message says why.
+  PASSKEY_STATUS_ERROR = 5;
+  // The authenticator holds no passkey the request allows, or already holds one it excludes.
+  PASSKEY_STATUS_NOT_ALLOWED = 6;
+}
+
+// Guest to host, from the agent's credential provider: an app asks to make or use a passkey.
+// What names the app comes from Android's credential manager (CallingAppInfo), never from the
+// app itself. Answered with PasskeyResponse.
+message PasskeyRequest {
+  uint64 request_id = 1;
+  PasskeyOperation operation = 2;
+  // The app's request: WebAuthn's PublicKeyCredentialCreationOptionsJSON or
+  // PublicKeyCredentialRequestOptionsJSON, as Android's credential manager passes it.
+  string request_json = 3;
+  // The calling app's package.
+  string package = 4;
+  // The SHA-256 of each certificate the calling app is signed with now (its signing
+  // certificate, or every signer of an app with several).
+  repeated bytes signer_sha256 = 5;
+  // The web origin the credential manager reports, only for a browser the agent recognises
+  // by its package and signing certificate (a privileged browser, or one the image
+  // carries); empty for any other app, whose request is checked as an app's.
+  string origin = 6;
+  // The hash of the client data a browser made itself; empty when it gave none.
+  bytes client_data_hash = 7;
+  // The app's name, for the host's prompt.
+  string app_label = 8;
+}
+
+// Host to guest: what became of a PasskeyRequest.
+message PasskeyResponse {
+  uint64 request_id = 1;
+  PasskeyStatus status = 2;
+  // OK only: WebAuthn's RegistrationResponseJSON or AuthenticationResponseJSON.
+  string response_json = 3;
+  // Why it did not succeed, in words a person can act on.
+  string message = 4;
+}
+
+// Guest to host, on the KeyMint port, from the control daemon after the handshake: the root
+// key the guest's KeyMint wraps its keys with. Asked once each boot, before Android's storage
+// is unlocked. Answered with KeyMintRootKey.
+message KeyMintRootKeyRequest {}
+
+// Host to guest: the KeyMint root key, which the host keeps sealed by the user's credential
+// store (and the computer's TPM where it has one), so the guest's disk alone never holds it.
+message KeyMintRootKey {
+  // 32 bytes; empty when the host has no root key to give, and KeyMint then keeps the keys
+  // it made without one.
+  bytes key = 1;
+  // Why it is empty.
+  string message = 2;
+}
+
 // Speech and spelling from the host. The agent's text-to-speech engine, speech recognition
 // service and spell checker answer apps with the host's own: the host's voices speak, the
 // host's speech recognition listens, and the host's spell checker checks. The guest keeps no
@@ -2848,5 +3092,22 @@ message Envelope {
     GeocodeResult geocode_result = 471;
     ShareToHost share_to_host = 472;
     ShareResult share_result = 473;
+    BackupUpload backup_upload = 640;
+    BackupCommit backup_commit = 641;
+    BackupDiscard backup_discard = 642;
+    BackupClear backup_clear = 643;
+    BackupAnswer backup_answer = 644;
+    BackupQuery backup_query = 645;
+    BackupContents backup_contents = 646;
+    BackupFetch backup_fetch = 647;
+    BackupFetchData backup_fetch_data = 648;
+    BackupRun backup_run = 649;
+    BackupRestore backup_restore = 650;
+    BackupRunResult backup_run_result = 651;
+    PasskeyRequest passkey_request = 652;
+    PasskeyResponse passkey_response = 653;
+    KeyMintRootKeyRequest keymint_root_key_request = 654;
+    KeyMintRootKey keymint_root_key = 655;
+    BackupSetting backup_setting = 656;
   }
 }

@@ -1,12 +1,14 @@
 //! `dsa-channeld`: the guest's control channel daemon, as init starts it.
 //!
 //!     dsa-channeld [--port <port>] [--log-port <port>] [--bootconfig <path>] [--cid <cid>]
+//!     dsa-channeld --keymint-key
 //!
 //! It reads the boot's secret from the kernel's bootconfig, connects to the host over
 //! vsock, and keeps the connection, connecting again whenever it is lost. While the host
 //! asks for Android's log, it reads logd and sends the records on the log port, a vsock port
 //! of its own. It exits only
 //! when it cannot work at all: no secret, or a host that refuses this guest for good.
+//! With `--keymint-key` it only fetches KeyMint's root key from the host and exits.
 //! Messages go to standard error, which init sends to the kernel log.
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -574,6 +576,31 @@ mod daemon {
         }
     }
 
+    /// `--keymint-key`: KeyMint's root key from the host, into the tmpfs file only KeyMint
+    /// reads. init runs it once, early in boot, as KeyMint's user (`dsa-channeld.rc`).
+    fn keymint_key() -> i32 {
+        use dsa_guest_channeld::keymint_key::{self, Retry};
+        let secret = std::fs::read_to_string(DEFAULT_BOOTCONFIG)
+            .ok()
+            .and_then(|text| secret_from_bootconfig(&text));
+        let hello = local_hello(
+            Role::Guest,
+            concat!("dsa-channeld ", env!("CARGO_PKG_VERSION"), " (keymint)"),
+        );
+        let mut connector = VsockConnector {
+            cid: VMADDR_CID_HOST,
+            port: keymint_key::PORT,
+        };
+        keymint_key::run(
+            &mut connector,
+            &hello,
+            secret.as_ref(),
+            std::path::Path::new(keymint_key::DIR),
+            &Retry::default(),
+            &|line: &str| say!("{line}"),
+        )
+    }
+
     pub fn run() -> i32 {
         // The two jobs init runs this program for besides the daemon: mounting the host's
         // folders (as root), and serving the shared storage to the host (as media_rw).
@@ -592,6 +619,9 @@ mod daemon {
         }
         if std::env::args().nth(1).as_deref() == Some("--android-files") {
             return dsa_guest_channeld::android_files::run(&read_property, &say_line);
+        }
+        if std::env::args().nth(1).as_deref() == Some("--keymint-key") {
+            return keymint_key();
         }
         let options = match options() {
             Ok(options) => options,
