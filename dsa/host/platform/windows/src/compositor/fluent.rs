@@ -566,6 +566,13 @@ pub mod text {
     /// before it. Both put the same glyphs at the same code points.
     pub const ICON_FACES: [&str; 2] = ["Segoe Fluent Icons", "Segoe MDL2 Assets"];
 
+    /// The faces of a title: Segoe UI Variable at its display size, then Segoe UI.
+    pub const TITLE_FACES: [&str; 2] = ["Segoe UI Variable Display", "Segoe UI"];
+
+    /// The weights text is drawn at: WinUI's body text, and its titles' semibold.
+    pub const REGULAR: i32 = 400;
+    pub const SEMIBOLD: i32 = 600;
+
     /// Where text sits in its box: at the left, cut with an ellipsis where it runs past the
     /// box, or in the middle, as a glyph is.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -576,12 +583,12 @@ pub mod text {
 
     /// The first face of `faces` that is installed at `em` pixels, selected into nothing;
     /// the last one when none is. Null when GDI could make none.
-    unsafe fn font(dc: HDC, faces: &[&str], em: i32) -> HFONT {
+    unsafe fn font(dc: HDC, faces: &[&str], em: i32, weight: i32) -> HFONT {
         for (index, face) in faces.iter().enumerate() {
             let mut font: LOGFONTW = std::mem::zeroed();
             // A negative height is the em size, as WinUI gives font sizes.
             font.lfHeight = -em.max(1);
-            font.lfWeight = 400;
+            font.lfWeight = weight;
             font.lfCharSet = DEFAULT_CHARSET as _;
             // Gray antialiasing: the text is drawn as coverage.
             font.lfQuality = ANTIALIASED_QUALITY as _;
@@ -612,6 +619,11 @@ pub mod text {
 
     /// How wide `text` is in the first installed face of `faces` at `em` pixels.
     pub fn measure(text: &str, faces: &[&str], em: i32) -> i32 {
+        measure_weighted(text, faces, em, REGULAR)
+    }
+
+    /// How wide `text` is in the first installed face of `faces` at `em` pixels and `weight`.
+    pub fn measure_weighted(text: &str, faces: &[&str], em: i32, weight: i32) -> i32 {
         if text.is_empty() {
             return 0;
         }
@@ -622,7 +634,7 @@ pub mod text {
             if dc.is_null() {
                 return 0;
             }
-            let font = font(dc, faces, em);
+            let font = font(dc, faces, em, weight);
             let old = (!font.is_null()).then(|| SelectObject(dc, font));
             let units: Vec<u16> = text.encode_utf16().collect();
             let mut size = SIZE { cx: 0, cy: 0 };
@@ -643,6 +655,18 @@ pub mod text {
         text: &str,
         faces: &[&str],
         em: i32,
+        size: (usize, usize),
+        align: Align,
+    ) -> Option<Vec<u8>> {
+        mask_weighted(text, faces, em, REGULAR, size, align)
+    }
+
+    /// As [`mask`], at `weight` ([`REGULAR`] or [`SEMIBOLD`]).
+    pub fn mask_weighted(
+        text: &str,
+        faces: &[&str],
+        em: i32,
+        weight: i32,
         size: (usize, usize),
         align: Align,
     ) -> Option<Vec<u8>> {
@@ -685,7 +709,7 @@ pub mod text {
                 return None;
             }
             let old_bitmap = SelectObject(dc, bitmap);
-            let font = font(dc, faces, em);
+            let font = font(dc, faces, em, weight);
             let old_font = (!font.is_null()).then(|| SelectObject(dc, font));
             SetBkMode(dc, TRANSPARENT as _);
             SetTextColor(dc, 0x00FF_FFFF);

@@ -36,6 +36,7 @@ pub mod committed;
 pub mod device_recovery;
 pub mod display_gpu;
 pub mod fluent;
+pub mod fluent_dialog;
 pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
