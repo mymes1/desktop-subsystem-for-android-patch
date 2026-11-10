@@ -171,6 +171,18 @@ public  final class Envelope extends
     REINSTALL_APP(380),
     REINSTALL_RESULT(381),
     NATIVE_LIBRARY_CRASH(382),
+    LIST_SPEECH_VOICES(620),
+    SPEECH_VOICES(621),
+    SPEAK_TEXT(622),
+    SPEECH_AUDIO(623),
+    SPEECH_DONE(624),
+    STOP_SPEAKING(625),
+    START_RECOGNITION(626),
+    STOP_RECOGNITION(627),
+    CANCEL_RECOGNITION(628),
+    RECOGNITION_EVENT(629),
+    CHECK_SPELLING(630),
+    SPELLING_RESULT(631),
     GEOCODE_REQUEST(470),
     GEOCODE_RESULT(471),
     SHARE_TO_HOST(472),
@@ -341,6 +353,18 @@ public  final class Envelope extends
         case 380: return REINSTALL_APP;
         case 381: return REINSTALL_RESULT;
         case 382: return NATIVE_LIBRARY_CRASH;
+        case 620: return LIST_SPEECH_VOICES;
+        case 621: return SPEECH_VOICES;
+        case 622: return SPEAK_TEXT;
+        case 623: return SPEECH_AUDIO;
+        case 624: return SPEECH_DONE;
+        case 625: return STOP_SPEAKING;
+        case 626: return START_RECOGNITION;
+        case 627: return STOP_RECOGNITION;
+        case 628: return CANCEL_RECOGNITION;
+        case 629: return RECOGNITION_EVENT;
+        case 630: return CHECK_SPELLING;
+        case 631: return SPELLING_RESULT;
         case 470: return GEOCODE_REQUEST;
         case 471: return GEOCODE_RESULT;
         case 472: return SHARE_TO_HOST;
@@ -7916,6 +7940,606 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_SPEECH_VOICES_FIELD_NUMBER = 620;
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   */
+  @java.lang.Override
+  public boolean hasListSpeechVoices() {
+    return bodyCase_ == 620;
+  }
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ListSpeechVoices getListSpeechVoices() {
+    if (bodyCase_ == 620) {
+       return (io.github.thisisthepy.dsa.control.v1.ListSpeechVoices) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   */
+  private void setListSpeechVoices(io.github.thisisthepy.dsa.control.v1.ListSpeechVoices value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 620;
+  }
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   */
+  private void mergeListSpeechVoices(io.github.thisisthepy.dsa.control.v1.ListSpeechVoices value) {
+    value.getClass();
+  if (bodyCase_ == 620 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.newBuilder((io.github.thisisthepy.dsa.control.v1.ListSpeechVoices) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 620;
+  }
+  /**
+   * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+   */
+  private void clearListSpeechVoices() {
+    if (bodyCase_ == 620) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SPEECH_VOICES_FIELD_NUMBER = 621;
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   */
+  @java.lang.Override
+  public boolean hasSpeechVoices() {
+    return bodyCase_ == 621;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SpeechVoices getSpeechVoices() {
+    if (bodyCase_ == 621) {
+       return (io.github.thisisthepy.dsa.control.v1.SpeechVoices) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SpeechVoices.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   */
+  private void setSpeechVoices(io.github.thisisthepy.dsa.control.v1.SpeechVoices value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 621;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   */
+  private void mergeSpeechVoices(io.github.thisisthepy.dsa.control.v1.SpeechVoices value) {
+    value.getClass();
+  if (bodyCase_ == 621 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SpeechVoices.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SpeechVoices.newBuilder((io.github.thisisthepy.dsa.control.v1.SpeechVoices) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 621;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+   */
+  private void clearSpeechVoices() {
+    if (bodyCase_ == 621) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SPEAK_TEXT_FIELD_NUMBER = 622;
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   */
+  @java.lang.Override
+  public boolean hasSpeakText() {
+    return bodyCase_ == 622;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SpeakText getSpeakText() {
+    if (bodyCase_ == 622) {
+       return (io.github.thisisthepy.dsa.control.v1.SpeakText) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SpeakText.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   */
+  private void setSpeakText(io.github.thisisthepy.dsa.control.v1.SpeakText value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 622;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   */
+  private void mergeSpeakText(io.github.thisisthepy.dsa.control.v1.SpeakText value) {
+    value.getClass();
+  if (bodyCase_ == 622 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SpeakText.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SpeakText.newBuilder((io.github.thisisthepy.dsa.control.v1.SpeakText) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 622;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+   */
+  private void clearSpeakText() {
+    if (bodyCase_ == 622) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SPEECH_AUDIO_FIELD_NUMBER = 623;
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   */
+  @java.lang.Override
+  public boolean hasSpeechAudio() {
+    return bodyCase_ == 623;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SpeechAudio getSpeechAudio() {
+    if (bodyCase_ == 623) {
+       return (io.github.thisisthepy.dsa.control.v1.SpeechAudio) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SpeechAudio.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   */
+  private void setSpeechAudio(io.github.thisisthepy.dsa.control.v1.SpeechAudio value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 623;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   */
+  private void mergeSpeechAudio(io.github.thisisthepy.dsa.control.v1.SpeechAudio value) {
+    value.getClass();
+  if (bodyCase_ == 623 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SpeechAudio.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SpeechAudio.newBuilder((io.github.thisisthepy.dsa.control.v1.SpeechAudio) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 623;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+   */
+  private void clearSpeechAudio() {
+    if (bodyCase_ == 623) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SPEECH_DONE_FIELD_NUMBER = 624;
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   */
+  @java.lang.Override
+  public boolean hasSpeechDone() {
+    return bodyCase_ == 624;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SpeechDone getSpeechDone() {
+    if (bodyCase_ == 624) {
+       return (io.github.thisisthepy.dsa.control.v1.SpeechDone) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SpeechDone.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   */
+  private void setSpeechDone(io.github.thisisthepy.dsa.control.v1.SpeechDone value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 624;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   */
+  private void mergeSpeechDone(io.github.thisisthepy.dsa.control.v1.SpeechDone value) {
+    value.getClass();
+  if (bodyCase_ == 624 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SpeechDone.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SpeechDone.newBuilder((io.github.thisisthepy.dsa.control.v1.SpeechDone) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 624;
+  }
+  /**
+   * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+   */
+  private void clearSpeechDone() {
+    if (bodyCase_ == 624) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int STOP_SPEAKING_FIELD_NUMBER = 625;
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   */
+  @java.lang.Override
+  public boolean hasStopSpeaking() {
+    return bodyCase_ == 625;
+  }
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.StopSpeaking getStopSpeaking() {
+    if (bodyCase_ == 625) {
+       return (io.github.thisisthepy.dsa.control.v1.StopSpeaking) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.StopSpeaking.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   */
+  private void setStopSpeaking(io.github.thisisthepy.dsa.control.v1.StopSpeaking value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 625;
+  }
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   */
+  private void mergeStopSpeaking(io.github.thisisthepy.dsa.control.v1.StopSpeaking value) {
+    value.getClass();
+  if (bodyCase_ == 625 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.StopSpeaking.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.StopSpeaking.newBuilder((io.github.thisisthepy.dsa.control.v1.StopSpeaking) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 625;
+  }
+  /**
+   * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+   */
+  private void clearStopSpeaking() {
+    if (bodyCase_ == 625) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int START_RECOGNITION_FIELD_NUMBER = 626;
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   */
+  @java.lang.Override
+  public boolean hasStartRecognition() {
+    return bodyCase_ == 626;
+  }
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.StartRecognition getStartRecognition() {
+    if (bodyCase_ == 626) {
+       return (io.github.thisisthepy.dsa.control.v1.StartRecognition) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.StartRecognition.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   */
+  private void setStartRecognition(io.github.thisisthepy.dsa.control.v1.StartRecognition value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 626;
+  }
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   */
+  private void mergeStartRecognition(io.github.thisisthepy.dsa.control.v1.StartRecognition value) {
+    value.getClass();
+  if (bodyCase_ == 626 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.StartRecognition.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.StartRecognition.newBuilder((io.github.thisisthepy.dsa.control.v1.StartRecognition) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 626;
+  }
+  /**
+   * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+   */
+  private void clearStartRecognition() {
+    if (bodyCase_ == 626) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int STOP_RECOGNITION_FIELD_NUMBER = 627;
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   */
+  @java.lang.Override
+  public boolean hasStopRecognition() {
+    return bodyCase_ == 627;
+  }
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.StopRecognition getStopRecognition() {
+    if (bodyCase_ == 627) {
+       return (io.github.thisisthepy.dsa.control.v1.StopRecognition) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.StopRecognition.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   */
+  private void setStopRecognition(io.github.thisisthepy.dsa.control.v1.StopRecognition value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 627;
+  }
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   */
+  private void mergeStopRecognition(io.github.thisisthepy.dsa.control.v1.StopRecognition value) {
+    value.getClass();
+  if (bodyCase_ == 627 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.StopRecognition.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.StopRecognition.newBuilder((io.github.thisisthepy.dsa.control.v1.StopRecognition) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 627;
+  }
+  /**
+   * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+   */
+  private void clearStopRecognition() {
+    if (bodyCase_ == 627) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CANCEL_RECOGNITION_FIELD_NUMBER = 628;
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   */
+  @java.lang.Override
+  public boolean hasCancelRecognition() {
+    return bodyCase_ == 628;
+  }
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CancelRecognition getCancelRecognition() {
+    if (bodyCase_ == 628) {
+       return (io.github.thisisthepy.dsa.control.v1.CancelRecognition) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CancelRecognition.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   */
+  private void setCancelRecognition(io.github.thisisthepy.dsa.control.v1.CancelRecognition value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 628;
+  }
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   */
+  private void mergeCancelRecognition(io.github.thisisthepy.dsa.control.v1.CancelRecognition value) {
+    value.getClass();
+  if (bodyCase_ == 628 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CancelRecognition.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CancelRecognition.newBuilder((io.github.thisisthepy.dsa.control.v1.CancelRecognition) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 628;
+  }
+  /**
+   * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+   */
+  private void clearCancelRecognition() {
+    if (bodyCase_ == 628) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int RECOGNITION_EVENT_FIELD_NUMBER = 629;
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   */
+  @java.lang.Override
+  public boolean hasRecognitionEvent() {
+    return bodyCase_ == 629;
+  }
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.RecognitionEvent getRecognitionEvent() {
+    if (bodyCase_ == 629) {
+       return (io.github.thisisthepy.dsa.control.v1.RecognitionEvent) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.RecognitionEvent.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   */
+  private void setRecognitionEvent(io.github.thisisthepy.dsa.control.v1.RecognitionEvent value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 629;
+  }
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   */
+  private void mergeRecognitionEvent(io.github.thisisthepy.dsa.control.v1.RecognitionEvent value) {
+    value.getClass();
+  if (bodyCase_ == 629 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.RecognitionEvent.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.RecognitionEvent.newBuilder((io.github.thisisthepy.dsa.control.v1.RecognitionEvent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 629;
+  }
+  /**
+   * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+   */
+  private void clearRecognitionEvent() {
+    if (bodyCase_ == 629) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CHECK_SPELLING_FIELD_NUMBER = 630;
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   */
+  @java.lang.Override
+  public boolean hasCheckSpelling() {
+    return bodyCase_ == 630;
+  }
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CheckSpelling getCheckSpelling() {
+    if (bodyCase_ == 630) {
+       return (io.github.thisisthepy.dsa.control.v1.CheckSpelling) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CheckSpelling.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   */
+  private void setCheckSpelling(io.github.thisisthepy.dsa.control.v1.CheckSpelling value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 630;
+  }
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   */
+  private void mergeCheckSpelling(io.github.thisisthepy.dsa.control.v1.CheckSpelling value) {
+    value.getClass();
+  if (bodyCase_ == 630 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CheckSpelling.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CheckSpelling.newBuilder((io.github.thisisthepy.dsa.control.v1.CheckSpelling) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 630;
+  }
+  /**
+   * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+   */
+  private void clearCheckSpelling() {
+    if (bodyCase_ == 630) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SPELLING_RESULT_FIELD_NUMBER = 631;
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   */
+  @java.lang.Override
+  public boolean hasSpellingResult() {
+    return bodyCase_ == 631;
+  }
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SpellingResult getSpellingResult() {
+    if (bodyCase_ == 631) {
+       return (io.github.thisisthepy.dsa.control.v1.SpellingResult) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SpellingResult.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   */
+  private void setSpellingResult(io.github.thisisthepy.dsa.control.v1.SpellingResult value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 631;
+  }
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   */
+  private void mergeSpellingResult(io.github.thisisthepy.dsa.control.v1.SpellingResult value) {
+    value.getClass();
+  if (bodyCase_ == 631 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SpellingResult.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SpellingResult.newBuilder((io.github.thisisthepy.dsa.control.v1.SpellingResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 631;
+  }
+  /**
+   * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+   */
+  private void clearSpellingResult() {
+    if (bodyCase_ == 631) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static final int GEOCODE_REQUEST_FIELD_NUMBER = 470;
   /**
    * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
@@ -15476,6 +16100,582 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    @java.lang.Override
+    public boolean hasListSpeechVoices() {
+      return instance.hasListSpeechVoices();
+    }
+    /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ListSpeechVoices getListSpeechVoices() {
+      return instance.getListSpeechVoices();
+    }
+    /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    public Builder setListSpeechVoices(io.github.thisisthepy.dsa.control.v1.ListSpeechVoices value) {
+      copyOnWrite();
+      instance.setListSpeechVoices(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    public Builder setListSpeechVoices(
+        io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListSpeechVoices(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    public Builder mergeListSpeechVoices(io.github.thisisthepy.dsa.control.v1.ListSpeechVoices value) {
+      copyOnWrite();
+      instance.mergeListSpeechVoices(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ListSpeechVoices list_speech_voices = 620;</code>
+     */
+    public Builder clearListSpeechVoices() {
+      copyOnWrite();
+      instance.clearListSpeechVoices();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    @java.lang.Override
+    public boolean hasSpeechVoices() {
+      return instance.hasSpeechVoices();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SpeechVoices getSpeechVoices() {
+      return instance.getSpeechVoices();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    public Builder setSpeechVoices(io.github.thisisthepy.dsa.control.v1.SpeechVoices value) {
+      copyOnWrite();
+      instance.setSpeechVoices(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    public Builder setSpeechVoices(
+        io.github.thisisthepy.dsa.control.v1.SpeechVoices.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSpeechVoices(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    public Builder mergeSpeechVoices(io.github.thisisthepy.dsa.control.v1.SpeechVoices value) {
+      copyOnWrite();
+      instance.mergeSpeechVoices(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechVoices speech_voices = 621;</code>
+     */
+    public Builder clearSpeechVoices() {
+      copyOnWrite();
+      instance.clearSpeechVoices();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    @java.lang.Override
+    public boolean hasSpeakText() {
+      return instance.hasSpeakText();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SpeakText getSpeakText() {
+      return instance.getSpeakText();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    public Builder setSpeakText(io.github.thisisthepy.dsa.control.v1.SpeakText value) {
+      copyOnWrite();
+      instance.setSpeakText(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    public Builder setSpeakText(
+        io.github.thisisthepy.dsa.control.v1.SpeakText.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSpeakText(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    public Builder mergeSpeakText(io.github.thisisthepy.dsa.control.v1.SpeakText value) {
+      copyOnWrite();
+      instance.mergeSpeakText(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeakText speak_text = 622;</code>
+     */
+    public Builder clearSpeakText() {
+      copyOnWrite();
+      instance.clearSpeakText();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    @java.lang.Override
+    public boolean hasSpeechAudio() {
+      return instance.hasSpeechAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SpeechAudio getSpeechAudio() {
+      return instance.getSpeechAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    public Builder setSpeechAudio(io.github.thisisthepy.dsa.control.v1.SpeechAudio value) {
+      copyOnWrite();
+      instance.setSpeechAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    public Builder setSpeechAudio(
+        io.github.thisisthepy.dsa.control.v1.SpeechAudio.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSpeechAudio(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    public Builder mergeSpeechAudio(io.github.thisisthepy.dsa.control.v1.SpeechAudio value) {
+      copyOnWrite();
+      instance.mergeSpeechAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechAudio speech_audio = 623;</code>
+     */
+    public Builder clearSpeechAudio() {
+      copyOnWrite();
+      instance.clearSpeechAudio();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    @java.lang.Override
+    public boolean hasSpeechDone() {
+      return instance.hasSpeechDone();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SpeechDone getSpeechDone() {
+      return instance.getSpeechDone();
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    public Builder setSpeechDone(io.github.thisisthepy.dsa.control.v1.SpeechDone value) {
+      copyOnWrite();
+      instance.setSpeechDone(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    public Builder setSpeechDone(
+        io.github.thisisthepy.dsa.control.v1.SpeechDone.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSpeechDone(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    public Builder mergeSpeechDone(io.github.thisisthepy.dsa.control.v1.SpeechDone value) {
+      copyOnWrite();
+      instance.mergeSpeechDone(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpeechDone speech_done = 624;</code>
+     */
+    public Builder clearSpeechDone() {
+      copyOnWrite();
+      instance.clearSpeechDone();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    @java.lang.Override
+    public boolean hasStopSpeaking() {
+      return instance.hasStopSpeaking();
+    }
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.StopSpeaking getStopSpeaking() {
+      return instance.getStopSpeaking();
+    }
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    public Builder setStopSpeaking(io.github.thisisthepy.dsa.control.v1.StopSpeaking value) {
+      copyOnWrite();
+      instance.setStopSpeaking(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    public Builder setStopSpeaking(
+        io.github.thisisthepy.dsa.control.v1.StopSpeaking.Builder builderForValue) {
+      copyOnWrite();
+      instance.setStopSpeaking(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    public Builder mergeStopSpeaking(io.github.thisisthepy.dsa.control.v1.StopSpeaking value) {
+      copyOnWrite();
+      instance.mergeStopSpeaking(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopSpeaking stop_speaking = 625;</code>
+     */
+    public Builder clearStopSpeaking() {
+      copyOnWrite();
+      instance.clearStopSpeaking();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    @java.lang.Override
+    public boolean hasStartRecognition() {
+      return instance.hasStartRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.StartRecognition getStartRecognition() {
+      return instance.getStartRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    public Builder setStartRecognition(io.github.thisisthepy.dsa.control.v1.StartRecognition value) {
+      copyOnWrite();
+      instance.setStartRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    public Builder setStartRecognition(
+        io.github.thisisthepy.dsa.control.v1.StartRecognition.Builder builderForValue) {
+      copyOnWrite();
+      instance.setStartRecognition(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    public Builder mergeStartRecognition(io.github.thisisthepy.dsa.control.v1.StartRecognition value) {
+      copyOnWrite();
+      instance.mergeStartRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StartRecognition start_recognition = 626;</code>
+     */
+    public Builder clearStartRecognition() {
+      copyOnWrite();
+      instance.clearStartRecognition();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    @java.lang.Override
+    public boolean hasStopRecognition() {
+      return instance.hasStopRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.StopRecognition getStopRecognition() {
+      return instance.getStopRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    public Builder setStopRecognition(io.github.thisisthepy.dsa.control.v1.StopRecognition value) {
+      copyOnWrite();
+      instance.setStopRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    public Builder setStopRecognition(
+        io.github.thisisthepy.dsa.control.v1.StopRecognition.Builder builderForValue) {
+      copyOnWrite();
+      instance.setStopRecognition(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    public Builder mergeStopRecognition(io.github.thisisthepy.dsa.control.v1.StopRecognition value) {
+      copyOnWrite();
+      instance.mergeStopRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopRecognition stop_recognition = 627;</code>
+     */
+    public Builder clearStopRecognition() {
+      copyOnWrite();
+      instance.clearStopRecognition();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    @java.lang.Override
+    public boolean hasCancelRecognition() {
+      return instance.hasCancelRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CancelRecognition getCancelRecognition() {
+      return instance.getCancelRecognition();
+    }
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    public Builder setCancelRecognition(io.github.thisisthepy.dsa.control.v1.CancelRecognition value) {
+      copyOnWrite();
+      instance.setCancelRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    public Builder setCancelRecognition(
+        io.github.thisisthepy.dsa.control.v1.CancelRecognition.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCancelRecognition(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    public Builder mergeCancelRecognition(io.github.thisisthepy.dsa.control.v1.CancelRecognition value) {
+      copyOnWrite();
+      instance.mergeCancelRecognition(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CancelRecognition cancel_recognition = 628;</code>
+     */
+    public Builder clearCancelRecognition() {
+      copyOnWrite();
+      instance.clearCancelRecognition();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    @java.lang.Override
+    public boolean hasRecognitionEvent() {
+      return instance.hasRecognitionEvent();
+    }
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.RecognitionEvent getRecognitionEvent() {
+      return instance.getRecognitionEvent();
+    }
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    public Builder setRecognitionEvent(io.github.thisisthepy.dsa.control.v1.RecognitionEvent value) {
+      copyOnWrite();
+      instance.setRecognitionEvent(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    public Builder setRecognitionEvent(
+        io.github.thisisthepy.dsa.control.v1.RecognitionEvent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRecognitionEvent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    public Builder mergeRecognitionEvent(io.github.thisisthepy.dsa.control.v1.RecognitionEvent value) {
+      copyOnWrite();
+      instance.mergeRecognitionEvent(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RecognitionEvent recognition_event = 629;</code>
+     */
+    public Builder clearRecognitionEvent() {
+      copyOnWrite();
+      instance.clearRecognitionEvent();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    @java.lang.Override
+    public boolean hasCheckSpelling() {
+      return instance.hasCheckSpelling();
+    }
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CheckSpelling getCheckSpelling() {
+      return instance.getCheckSpelling();
+    }
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    public Builder setCheckSpelling(io.github.thisisthepy.dsa.control.v1.CheckSpelling value) {
+      copyOnWrite();
+      instance.setCheckSpelling(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    public Builder setCheckSpelling(
+        io.github.thisisthepy.dsa.control.v1.CheckSpelling.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCheckSpelling(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    public Builder mergeCheckSpelling(io.github.thisisthepy.dsa.control.v1.CheckSpelling value) {
+      copyOnWrite();
+      instance.mergeCheckSpelling(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CheckSpelling check_spelling = 630;</code>
+     */
+    public Builder clearCheckSpelling() {
+      copyOnWrite();
+      instance.clearCheckSpelling();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    @java.lang.Override
+    public boolean hasSpellingResult() {
+      return instance.hasSpellingResult();
+    }
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SpellingResult getSpellingResult() {
+      return instance.getSpellingResult();
+    }
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    public Builder setSpellingResult(io.github.thisisthepy.dsa.control.v1.SpellingResult value) {
+      copyOnWrite();
+      instance.setSpellingResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    public Builder setSpellingResult(
+        io.github.thisisthepy.dsa.control.v1.SpellingResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSpellingResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    public Builder mergeSpellingResult(io.github.thisisthepy.dsa.control.v1.SpellingResult value) {
+      copyOnWrite();
+      instance.mergeSpellingResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SpellingResult spelling_result = 631;</code>
+     */
+    public Builder clearSpellingResult() {
+      copyOnWrite();
+      instance.clearSpellingResult();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
      */
     @java.lang.Override
@@ -15840,9 +17040,21 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GeocodeResult.class,
             io.github.thisisthepy.dsa.control.v1.ShareToHost.class,
             io.github.thisisthepy.dsa.control.v1.ShareResult.class,
+            io.github.thisisthepy.dsa.control.v1.ListSpeechVoices.class,
+            io.github.thisisthepy.dsa.control.v1.SpeechVoices.class,
+            io.github.thisisthepy.dsa.control.v1.SpeakText.class,
+            io.github.thisisthepy.dsa.control.v1.SpeechAudio.class,
+            io.github.thisisthepy.dsa.control.v1.SpeechDone.class,
+            io.github.thisisthepy.dsa.control.v1.StopSpeaking.class,
+            io.github.thisisthepy.dsa.control.v1.StartRecognition.class,
+            io.github.thisisthepy.dsa.control.v1.StopRecognition.class,
+            io.github.thisisthepy.dsa.control.v1.CancelRecognition.class,
+            io.github.thisisthepy.dsa.control.v1.RecognitionEvent.class,
+            io.github.thisisthepy.dsa.control.v1.CheckSpelling.class,
+            io.github.thisisthepy.dsa.control.v1.SpellingResult.class,
           };
           java.lang.String info =
-              "\u0000\u009b\u0001\u0000\u0001\u01d9\u009b\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00a7\u0001\u0000\u0001\u0277\u00a7\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -15863,7 +17075,9 @@ public  final class Envelope extends
               "<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
               "\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b" +
               "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000\u01d7<\u0000" +
-              "\u01d8<\u0000\u01d9<\u0000";
+              "\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f<\u0000\u0270" +
+              "<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000" +
+              "\u0277<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

@@ -396,6 +396,27 @@ pub struct LocationFix {
     #[prost(uint64, tag = "11")]
     pub unix_time_ms: u64,
 }
+/// Turns the connection into the speech and spelling of the caller's Android: after the
+/// answer (Done), the service sends a LanguageServiceFrame for each request the Android's
+/// text-to-speech engine, speech recognition service or spell checker makes (ListSpeechVoices,
+/// SpeakText, StopSpeaking, StartRecognition, StopRecognition, CancelRecognition and
+/// CheckSpelling), and the client answers each with LanguageServiceFrame messages of its own
+/// (SpeechVoices, SpeechAudio, SpeechDone, RecognitionEvent and SpellingResult), which the
+/// service passes to the Android. The client runs the host's speech synthesis, speech
+/// recognition and spell checker in the user's session, where the user's voices, dictionaries
+/// and privacy settings are. Requests go to the first client still connected; when its
+/// connection ends, every request it had not finished fails in the Android. The connection
+/// lasts across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ServeLanguageServices {}
+/// One message of control.proto (an encoded Envelope of dsa.control.v1), on a connection that
+/// serves speech and spelling. The service checks each one the client sends is an answer and
+/// passes it on unchanged, so the messages are defined once, where the Android reads them.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LanguageServiceFrame {
+    #[prost(bytes = "vec", tag = "1")]
+    pub control: ::prost::alloc::vec::Vec<u8>,
+}
 /// A notification of the caller's Android, on a connection that watches them
 /// (WatchNotifications). One with the key of an earlier one replaces it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2504,7 +2525,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 470, 471, 472, 473"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2650,6 +2671,8 @@ pub mod request {
         SetAppRoot(super::SetAppRoot),
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
+        #[prost(message, tag = "620")]
+        ServeLanguageServices(super::ServeLanguageServices),
         #[prost(message, tag = "470")]
         WatchGeocoding(super::WatchGeocoding),
         #[prost(message, tag = "471")]
@@ -2737,7 +2760,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 470, 471"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620, 470, 471"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2813,6 +2836,8 @@ pub mod envelope {
         GamepadEvent(super::GamepadEvent),
         #[prost(message, tag = "301")]
         GamepadRumble(super::GamepadRumble),
+        #[prost(message, tag = "620")]
+        LanguageServiceFrame(super::LanguageServiceFrame),
         #[prost(message, tag = "470")]
         GeocodeQuery(super::GeocodeQuery),
         #[prost(message, tag = "471")]
