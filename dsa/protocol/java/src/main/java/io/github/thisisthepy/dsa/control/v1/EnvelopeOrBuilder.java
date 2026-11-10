@@ -2031,5 +2031,49 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.BackupSetting getBackupSetting();
 
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * @return Whether the appShortcuts field is set.
+   */
+  boolean hasAppShortcuts();
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   * @return The appShortcuts.
+   */
+  io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts();
+
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * @return Whether the launchShortcut field is set.
+   */
+  boolean hasLaunchShortcut();
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   * @return The launchShortcut.
+   */
+  io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut();
+
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   * @return Whether the pinShortcutRequest field is set.
+   */
+  boolean hasPinShortcutRequest();
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   * @return The pinShortcutRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest();
+
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   * @return Whether the pinShortcutAnswer field is set.
+   */
+  boolean hasPinShortcutAnswer();
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   * @return The pinShortcutAnswer.
+   */
+  io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

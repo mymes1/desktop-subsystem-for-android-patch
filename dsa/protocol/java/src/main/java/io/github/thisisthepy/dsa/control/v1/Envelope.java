@@ -204,6 +204,10 @@ public  final class Envelope extends
     KEYMINT_ROOT_KEY_REQUEST(654),
     KEYMINT_ROOT_KEY(655),
     BACKUP_SETTING(656),
+    APP_SHORTCUTS(680),
+    LAUNCH_SHORTCUT(681),
+    PIN_SHORTCUT_REQUEST(682),
+    PIN_SHORTCUT_ANSWER(683),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -403,6 +407,10 @@ public  final class Envelope extends
         case 654: return KEYMINT_ROOT_KEY_REQUEST;
         case 655: return KEYMINT_ROOT_KEY;
         case 656: return BACKUP_SETTING;
+        case 680: return APP_SHORTCUTS;
+        case 681: return LAUNCH_SHORTCUT;
+        case 682: return PIN_SHORTCUT_REQUEST;
+        case 683: return PIN_SHORTCUT_ANSWER;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -9624,6 +9632,206 @@ public  final class Envelope extends
     }
   }
 
+  public static final int APP_SHORTCUTS_FIELD_NUMBER = 680;
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   */
+  @java.lang.Override
+  public boolean hasAppShortcuts() {
+    return bodyCase_ == 680;
+  }
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts() {
+    if (bodyCase_ == 680) {
+       return (io.github.thisisthepy.dsa.control.v1.AppShortcuts) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AppShortcuts.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   */
+  private void setAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 680;
+  }
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   */
+  private void mergeAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+    value.getClass();
+  if (bodyCase_ == 680 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AppShortcuts.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AppShortcuts.newBuilder((io.github.thisisthepy.dsa.control.v1.AppShortcuts) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 680;
+  }
+  /**
+   * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+   */
+  private void clearAppShortcuts() {
+    if (bodyCase_ == 680) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LAUNCH_SHORTCUT_FIELD_NUMBER = 681;
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   */
+  @java.lang.Override
+  public boolean hasLaunchShortcut() {
+    return bodyCase_ == 681;
+  }
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut() {
+    if (bodyCase_ == 681) {
+       return (io.github.thisisthepy.dsa.control.v1.LaunchShortcut) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.LaunchShortcut.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   */
+  private void setLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 681;
+  }
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   */
+  private void mergeLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+    value.getClass();
+  if (bodyCase_ == 681 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.LaunchShortcut.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.LaunchShortcut.newBuilder((io.github.thisisthepy.dsa.control.v1.LaunchShortcut) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 681;
+  }
+  /**
+   * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+   */
+  private void clearLaunchShortcut() {
+    if (bodyCase_ == 681) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PIN_SHORTCUT_REQUEST_FIELD_NUMBER = 682;
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   */
+  @java.lang.Override
+  public boolean hasPinShortcutRequest() {
+    return bodyCase_ == 682;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest() {
+    if (bodyCase_ == 682) {
+       return (io.github.thisisthepy.dsa.control.v1.PinShortcutRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   */
+  private void setPinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 682;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   */
+  private void mergePinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
+    value.getClass();
+  if (bodyCase_ == 682 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.PinShortcutRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 682;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+   */
+  private void clearPinShortcutRequest() {
+    if (bodyCase_ == 682) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PIN_SHORTCUT_ANSWER_FIELD_NUMBER = 683;
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   */
+  @java.lang.Override
+  public boolean hasPinShortcutAnswer() {
+    return bodyCase_ == 683;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer() {
+    if (bodyCase_ == 683) {
+       return (io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   */
+  private void setPinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 683;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   */
+  private void mergePinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
+    value.getClass();
+  if (bodyCase_ == 683 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.newBuilder((io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 683;
+  }
+  /**
+   * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+   */
+  private void clearPinShortcutAnswer() {
+    if (bodyCase_ == 683) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -18567,6 +18775,198 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    @java.lang.Override
+    public boolean hasAppShortcuts() {
+      return instance.hasAppShortcuts();
+    }
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AppShortcuts getAppShortcuts() {
+      return instance.getAppShortcuts();
+    }
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    public Builder setAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+      copyOnWrite();
+      instance.setAppShortcuts(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    public Builder setAppShortcuts(
+        io.github.thisisthepy.dsa.control.v1.AppShortcuts.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAppShortcuts(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    public Builder mergeAppShortcuts(io.github.thisisthepy.dsa.control.v1.AppShortcuts value) {
+      copyOnWrite();
+      instance.mergeAppShortcuts(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppShortcuts app_shortcuts = 680;</code>
+     */
+    public Builder clearAppShortcuts() {
+      copyOnWrite();
+      instance.clearAppShortcuts();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    @java.lang.Override
+    public boolean hasLaunchShortcut() {
+      return instance.hasLaunchShortcut();
+    }
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.LaunchShortcut getLaunchShortcut() {
+      return instance.getLaunchShortcut();
+    }
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    public Builder setLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+      copyOnWrite();
+      instance.setLaunchShortcut(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    public Builder setLaunchShortcut(
+        io.github.thisisthepy.dsa.control.v1.LaunchShortcut.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLaunchShortcut(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    public Builder mergeLaunchShortcut(io.github.thisisthepy.dsa.control.v1.LaunchShortcut value) {
+      copyOnWrite();
+      instance.mergeLaunchShortcut(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LaunchShortcut launch_shortcut = 681;</code>
+     */
+    public Builder clearLaunchShortcut() {
+      copyOnWrite();
+      instance.clearLaunchShortcut();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    @java.lang.Override
+    public boolean hasPinShortcutRequest() {
+      return instance.hasPinShortcutRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PinShortcutRequest getPinShortcutRequest() {
+      return instance.getPinShortcutRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    public Builder setPinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
+      copyOnWrite();
+      instance.setPinShortcutRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    public Builder setPinShortcutRequest(
+        io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPinShortcutRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    public Builder mergePinShortcutRequest(io.github.thisisthepy.dsa.control.v1.PinShortcutRequest value) {
+      copyOnWrite();
+      instance.mergePinShortcutRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutRequest pin_shortcut_request = 682;</code>
+     */
+    public Builder clearPinShortcutRequest() {
+      copyOnWrite();
+      instance.clearPinShortcutRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    @java.lang.Override
+    public boolean hasPinShortcutAnswer() {
+      return instance.hasPinShortcutAnswer();
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer getPinShortcutAnswer() {
+      return instance.getPinShortcutAnswer();
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    public Builder setPinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
+      copyOnWrite();
+      instance.setPinShortcutAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    public Builder setPinShortcutAnswer(
+        io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPinShortcutAnswer(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    public Builder mergePinShortcutAnswer(io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer value) {
+      copyOnWrite();
+      instance.mergePinShortcutAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PinShortcutAnswer pin_shortcut_answer = 683;</code>
+     */
+    public Builder clearPinShortcutAnswer() {
+      copyOnWrite();
+      instance.clearPinShortcutAnswer();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -18769,9 +19169,13 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKeyRequest.class,
             io.github.thisisthepy.dsa.control.v1.KeyMintRootKey.class,
             io.github.thisisthepy.dsa.control.v1.BackupSetting.class,
+            io.github.thisisthepy.dsa.control.v1.AppShortcuts.class,
+            io.github.thisisthepy.dsa.control.v1.LaunchShortcut.class,
+            io.github.thisisthepy.dsa.control.v1.PinShortcutRequest.class,
+            io.github.thisisthepy.dsa.control.v1.PinShortcutAnswer.class,
           };
           java.lang.String info =
-              "\u0000\u00b8\u0001\u0000\u0001\u0290\u00b8\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00bc\u0001\u0000\u0001\u02ab\u00bc\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -18796,7 +19200,8 @@ public  final class Envelope extends
               "<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000" +
               "\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284<\u0000\u0285" +
               "<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000\u028b<\u0000" +
-              "\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000";
+              "\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000\u02a8<\u0000\u02a9" +
+              "<\u0000\u02aa<\u0000\u02ab<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
