@@ -3227,8 +3227,8 @@ class TouchLatencyTests(unittest.TestCase):
         # WRITE_DEVICE_CONFIG is a "configurator" permission. With no configurator named, Play
         # services' platform configurator could never write the flags it syncs, and retried
         # about once a second after boot (its RETRY_UPDATE alarm).
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS,
-                         {"config_deviceConfiguratorPackageName": "com.google.android.gms"})
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS["config_deviceConfiguratorPackageName"],
+                         "com.google.android.gms")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_image.framework_overlay_sources(root / "src")
@@ -3238,6 +3238,54 @@ class TouchLatencyTests(unittest.TestCase):
         # The overlay is checked against the image's framework-res, so a renamed resource fails
         # the image check instead of leaving Play services without the permission again.
         self.assertIn("string/config_deviceConfiguratorPackageName", make_image.framework_overlaid())
+
+    def test_fr36_the_agent_is_the_network_location_provider_and_without_play_the_geocode_provider(self):
+        # With the overlay flags on, the location manager picks the provider of the highest
+        # service version, which is Google Play's once it is installed.
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableNetworkLocationOverlay"], False)
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableGeocoderOverlay"], False)
+        agent = "io.github.thisisthepy.dsa.agent"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = (root / "src/res/values/dsa.xml").read_text()
+        self.assertIn(
+            f'<string name="config_networkLocationProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn(
+            f'<string name="config_geocoderProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn('<bool name="config_enableGeocoderOverlay">false</bool>', values)
+        self.assertIn("string/config_geocoderProviderPackageName", make_image.framework_overlaid())
+
+    def test_fr36_network_location_and_geocoder_come_from_the_host_and_google_plays_geocoder_wins_with_play(self):
+        # The Google apps overlay applies only on a boot with the Google apps image: the property
+        # is the one the host's bootconfig sets and the image's own Google apps import reads.
+        overlay = make_image.system_overlay(make_image.GAPPS_FRAMEWORK_OVERLAY_APK)
+        self.assertEqual(overlay["target"], "android")
+        self.assertEqual(overlay["required_property"], ("ro.boot.dsa.gapps", "on"))
+        self.assertIn("${ro.boot.dsa.gapps:-off}", make_image.GAPPS_IMPORT)
+        self.assertIn(make_image.GAPPS_FRAMEWORK_OVERLAY_APK, make_image.DESIGN_OVERLAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.design_overlay_sources(root / "src", make_image.GAPPS_FRAMEWORK_OVERLAY_APK)
+            manifest = ET.fromstring((root / "src/AndroidManifest.xml").read_text())
+            values = (root / "src/res/values/dsa.xml").read_text()
+        element = manifest.find("overlay")
+        self.assertEqual(element.get(NS + "requiredSystemPropertyName"), "ro.boot.dsa.gapps")
+        self.assertEqual(element.get(NS + "requiredSystemPropertyValue"), "on")
+        self.assertEqual(element.get(NS + "isStatic"), "true")
+        # Above the framework overlay, whose geocoder values it replaces.
+        base = ET.fromstring(make_image.overlay_manifest(make_image.FRAMEWORK_OVERLAY_PACKAGE, "android"))
+        self.assertGreater(int(element.get(NS + "priority")), int(base.find("overlay").get(NS + "priority")))
+        self.assertIsNone(base.find("overlay").get(NS + "requiredSystemPropertyName"))
+        # With Google Play the location manager binds Google's geocoder and no other, so DSA is
+        # not the geocode provider.
+        self.assertIn('<bool name="config_enableGeocoderOverlay">false</bool>', values)
+        self.assertIn('<string name="config_geocoderProviderPackageName" translatable="false">'
+                      'com.google.android.gms</string>', values)
+        # The network location provider is not touched: the host's stays, with or without Play.
+        self.assertNotIn("NetworkLocation", values)
+        self.assertEqual(set(make_image.overlaid_resources(make_image.GAPPS_FRAMEWORK_OVERLAY_APK)),
+                         {"bool/config_enableGeocoderOverlay", "string/config_geocoderProviderPackageName"})
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"

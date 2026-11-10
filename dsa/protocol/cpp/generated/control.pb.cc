@@ -738,6 +738,105 @@ struct LocationFixDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LocationFixDefaultTypeInternal _LocationFix_default_instance_;
+PROTOBUF_CONSTEXPR GeocodeRequest::GeocodeRequest(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.query_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.language_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.reverse_)*/false
+  , /*decltype(_impl_.has_bounds_)*/false
+  , /*decltype(_impl_.latitude_degrees_)*/0
+  , /*decltype(_impl_.longitude_degrees_)*/0
+  , /*decltype(_impl_.lower_left_latitude_)*/0
+  , /*decltype(_impl_.lower_left_longitude_)*/0
+  , /*decltype(_impl_.upper_right_latitude_)*/0
+  , /*decltype(_impl_.upper_right_longitude_)*/0
+  , /*decltype(_impl_.max_results_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GeocodeRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GeocodeRequestDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GeocodeRequestDefaultTypeInternal() {}
+  union {
+    GeocodeRequest _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GeocodeRequestDefaultTypeInternal _GeocodeRequest_default_instance_;
+PROTOBUF_CONSTEXPR GeocodeAddress::GeocodeAddress(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.address_lines_)*/{}
+  , /*decltype(_impl_.feature_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.premises_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.sub_thoroughfare_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.thoroughfare_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.sub_locality_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.locality_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.sub_admin_area_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.admin_area_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.postal_code_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.country_code_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.country_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.latitude_degrees_)*/0
+  , /*decltype(_impl_.longitude_degrees_)*/0
+  , /*decltype(_impl_.has_position_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GeocodeAddressDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GeocodeAddressDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GeocodeAddressDefaultTypeInternal() {}
+  union {
+    GeocodeAddress _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GeocodeAddressDefaultTypeInternal _GeocodeAddress_default_instance_;
+PROTOBUF_CONSTEXPR GeocodeResult::GeocodeResult(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.addresses_)*/{}
+  , /*decltype(_impl_.message_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.status_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GeocodeResultDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GeocodeResultDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GeocodeResultDefaultTypeInternal() {}
+  union {
+    GeocodeResult _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GeocodeResultDefaultTypeInternal _GeocodeResult_default_instance_;
+PROTOBUF_CONSTEXPR ShareToHost::ShareToHost(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.items_)*/{}
+  , /*decltype(_impl_.title_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.app_label_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.share_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct ShareToHostDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ShareToHostDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ShareToHostDefaultTypeInternal() {}
+  union {
+    ShareToHost _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ShareToHostDefaultTypeInternal _ShareToHost_default_instance_;
+PROTOBUF_CONSTEXPR ShareResult::ShareResult(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.message_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.share_id_)*/0u
+  , /*decltype(_impl_.outcome_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct ShareResultDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ShareResultDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ShareResultDefaultTypeInternal() {}
+  union {
+    ShareResult _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ShareResultDefaultTypeInternal _ShareResult_default_instance_;
 PROTOBUF_CONSTEXPR DeviceIdle::DeviceIdle(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.idle_)*/false
@@ -3521,6 +3620,132 @@ bool LocationAccess_Parse(
       LocationAccess_entries, 4, name, &int_value);
   if (success) {
     *value = static_cast<LocationAccess>(int_value);
+  }
+  return success;
+}
+bool GeocodeStatus_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> GeocodeStatus_strings[6] = {};
+
+static const char GeocodeStatus_names[] =
+  "GEOCODE_STATUS_BUSY"
+  "GEOCODE_STATUS_INVALID"
+  "GEOCODE_STATUS_OK"
+  "GEOCODE_STATUS_REFUSED"
+  "GEOCODE_STATUS_UNAVAILABLE"
+  "GEOCODE_STATUS_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry GeocodeStatus_entries[] = {
+  { {GeocodeStatus_names + 0, 19}, 4 },
+  { {GeocodeStatus_names + 19, 22}, 5 },
+  { {GeocodeStatus_names + 41, 17}, 1 },
+  { {GeocodeStatus_names + 58, 22}, 3 },
+  { {GeocodeStatus_names + 80, 26}, 2 },
+  { {GeocodeStatus_names + 106, 26}, 0 },
+};
+
+static const int GeocodeStatus_entries_by_number[] = {
+  5, // 0 -> GEOCODE_STATUS_UNSPECIFIED
+  2, // 1 -> GEOCODE_STATUS_OK
+  4, // 2 -> GEOCODE_STATUS_UNAVAILABLE
+  3, // 3 -> GEOCODE_STATUS_REFUSED
+  0, // 4 -> GEOCODE_STATUS_BUSY
+  1, // 5 -> GEOCODE_STATUS_INVALID
+};
+
+const std::string& GeocodeStatus_Name(
+    GeocodeStatus value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          GeocodeStatus_entries,
+          GeocodeStatus_entries_by_number,
+          6, GeocodeStatus_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      GeocodeStatus_entries,
+      GeocodeStatus_entries_by_number,
+      6, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     GeocodeStatus_strings[idx].get();
+}
+bool GeocodeStatus_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, GeocodeStatus* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      GeocodeStatus_entries, 6, name, &int_value);
+  if (success) {
+    *value = static_cast<GeocodeStatus>(int_value);
+  }
+  return success;
+}
+bool ShareOutcome_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> ShareOutcome_strings[4] = {};
+
+static const char ShareOutcome_names[] =
+  "SHARE_OUTCOME_CANCELED"
+  "SHARE_OUTCOME_FAILED"
+  "SHARE_OUTCOME_SHARED"
+  "SHARE_OUTCOME_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry ShareOutcome_entries[] = {
+  { {ShareOutcome_names + 0, 22}, 2 },
+  { {ShareOutcome_names + 22, 20}, 3 },
+  { {ShareOutcome_names + 42, 20}, 1 },
+  { {ShareOutcome_names + 62, 25}, 0 },
+};
+
+static const int ShareOutcome_entries_by_number[] = {
+  3, // 0 -> SHARE_OUTCOME_UNSPECIFIED
+  2, // 1 -> SHARE_OUTCOME_SHARED
+  0, // 2 -> SHARE_OUTCOME_CANCELED
+  1, // 3 -> SHARE_OUTCOME_FAILED
+};
+
+const std::string& ShareOutcome_Name(
+    ShareOutcome value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          ShareOutcome_entries,
+          ShareOutcome_entries_by_number,
+          4, ShareOutcome_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      ShareOutcome_entries,
+      ShareOutcome_entries_by_number,
+      4, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     ShareOutcome_strings[idx].get();
+}
+bool ShareOutcome_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ShareOutcome* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      ShareOutcome_entries, 4, name, &int_value);
+  if (success) {
+    *value = static_cast<ShareOutcome>(int_value);
   }
   return success;
 }
@@ -17146,6 +17371,2373 @@ void LocationFix::InternalSwap(LocationFix* other) {
 
 std::string LocationFix::GetTypeName() const {
   return "dsa.control.v1.LocationFix";
+}
+
+
+// ===================================================================
+
+class GeocodeRequest::_Internal {
+ public:
+};
+
+GeocodeRequest::GeocodeRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GeocodeRequest)
+}
+GeocodeRequest::GeocodeRequest(const GeocodeRequest& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GeocodeRequest* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.query_){}
+    , decltype(_impl_.language_){}
+    , decltype(_impl_.request_id_){}
+    , decltype(_impl_.reverse_){}
+    , decltype(_impl_.has_bounds_){}
+    , decltype(_impl_.latitude_degrees_){}
+    , decltype(_impl_.longitude_degrees_){}
+    , decltype(_impl_.lower_left_latitude_){}
+    , decltype(_impl_.lower_left_longitude_){}
+    , decltype(_impl_.upper_right_latitude_){}
+    , decltype(_impl_.upper_right_longitude_){}
+    , decltype(_impl_.max_results_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.query_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.query_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_query().empty()) {
+    _this->_impl_.query_.Set(from._internal_query(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.language_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.language_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_language().empty()) {
+    _this->_impl_.language_.Set(from._internal_language(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.max_results_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.max_results_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GeocodeRequest)
+}
+
+inline void GeocodeRequest::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.query_){}
+    , decltype(_impl_.language_){}
+    , decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.reverse_){false}
+    , decltype(_impl_.has_bounds_){false}
+    , decltype(_impl_.latitude_degrees_){0}
+    , decltype(_impl_.longitude_degrees_){0}
+    , decltype(_impl_.lower_left_latitude_){0}
+    , decltype(_impl_.lower_left_longitude_){0}
+    , decltype(_impl_.upper_right_latitude_){0}
+    , decltype(_impl_.upper_right_longitude_){0}
+    , decltype(_impl_.max_results_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.query_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.query_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.language_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.language_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+GeocodeRequest::~GeocodeRequest() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GeocodeRequest)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GeocodeRequest::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.query_.Destroy();
+  _impl_.language_.Destroy();
+}
+
+void GeocodeRequest::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GeocodeRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GeocodeRequest)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.query_.ClearToEmpty();
+  _impl_.language_.ClearToEmpty();
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.max_results_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.max_results_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GeocodeRequest::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool reverse = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.reverse_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string query = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_query();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // double latitude_degrees = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 33)) {
+          _impl_.latitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double longitude_degrees = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 41)) {
+          _impl_.longitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool has_bounds = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.has_bounds_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // double lower_left_latitude = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 57)) {
+          _impl_.lower_left_latitude_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double lower_left_longitude = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 65)) {
+          _impl_.lower_left_longitude_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double upper_right_latitude = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 73)) {
+          _impl_.upper_right_latitude_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double upper_right_longitude = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 81)) {
+          _impl_.upper_right_longitude_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 max_results = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.max_results_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string language = 12;
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
+          auto str = _internal_mutable_language();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GeocodeRequest::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GeocodeRequest)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // bool reverse = 2;
+  if (this->_internal_reverse() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(2, this->_internal_reverse(), target);
+  }
+
+  // string query = 3;
+  if (!this->_internal_query().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_query().data(), static_cast<int>(this->_internal_query().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeRequest.query");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_query(), target);
+  }
+
+  // double latitude_degrees = 4;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(4, this->_internal_latitude_degrees(), target);
+  }
+
+  // double longitude_degrees = 5;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(5, this->_internal_longitude_degrees(), target);
+  }
+
+  // bool has_bounds = 6;
+  if (this->_internal_has_bounds() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(6, this->_internal_has_bounds(), target);
+  }
+
+  // double lower_left_latitude = 7;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_latitude = this->_internal_lower_left_latitude();
+  uint64_t raw_lower_left_latitude;
+  memcpy(&raw_lower_left_latitude, &tmp_lower_left_latitude, sizeof(tmp_lower_left_latitude));
+  if (raw_lower_left_latitude != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(7, this->_internal_lower_left_latitude(), target);
+  }
+
+  // double lower_left_longitude = 8;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_longitude = this->_internal_lower_left_longitude();
+  uint64_t raw_lower_left_longitude;
+  memcpy(&raw_lower_left_longitude, &tmp_lower_left_longitude, sizeof(tmp_lower_left_longitude));
+  if (raw_lower_left_longitude != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(8, this->_internal_lower_left_longitude(), target);
+  }
+
+  // double upper_right_latitude = 9;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_latitude = this->_internal_upper_right_latitude();
+  uint64_t raw_upper_right_latitude;
+  memcpy(&raw_upper_right_latitude, &tmp_upper_right_latitude, sizeof(tmp_upper_right_latitude));
+  if (raw_upper_right_latitude != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(9, this->_internal_upper_right_latitude(), target);
+  }
+
+  // double upper_right_longitude = 10;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_longitude = this->_internal_upper_right_longitude();
+  uint64_t raw_upper_right_longitude;
+  memcpy(&raw_upper_right_longitude, &tmp_upper_right_longitude, sizeof(tmp_upper_right_longitude));
+  if (raw_upper_right_longitude != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(10, this->_internal_upper_right_longitude(), target);
+  }
+
+  // uint32 max_results = 11;
+  if (this->_internal_max_results() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(11, this->_internal_max_results(), target);
+  }
+
+  // string language = 12;
+  if (!this->_internal_language().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_language().data(), static_cast<int>(this->_internal_language().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeRequest.language");
+    target = stream->WriteStringMaybeAliased(
+        12, this->_internal_language(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GeocodeRequest)
+  return target;
+}
+
+size_t GeocodeRequest::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GeocodeRequest)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string query = 3;
+  if (!this->_internal_query().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_query());
+  }
+
+  // string language = 12;
+  if (!this->_internal_language().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_language());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // bool reverse = 2;
+  if (this->_internal_reverse() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool has_bounds = 6;
+  if (this->_internal_has_bounds() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // double latitude_degrees = 4;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double longitude_degrees = 5;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double lower_left_latitude = 7;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_latitude = this->_internal_lower_left_latitude();
+  uint64_t raw_lower_left_latitude;
+  memcpy(&raw_lower_left_latitude, &tmp_lower_left_latitude, sizeof(tmp_lower_left_latitude));
+  if (raw_lower_left_latitude != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double lower_left_longitude = 8;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_longitude = this->_internal_lower_left_longitude();
+  uint64_t raw_lower_left_longitude;
+  memcpy(&raw_lower_left_longitude, &tmp_lower_left_longitude, sizeof(tmp_lower_left_longitude));
+  if (raw_lower_left_longitude != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double upper_right_latitude = 9;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_latitude = this->_internal_upper_right_latitude();
+  uint64_t raw_upper_right_latitude;
+  memcpy(&raw_upper_right_latitude, &tmp_upper_right_latitude, sizeof(tmp_upper_right_latitude));
+  if (raw_upper_right_latitude != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double upper_right_longitude = 10;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_longitude = this->_internal_upper_right_longitude();
+  uint64_t raw_upper_right_longitude;
+  memcpy(&raw_upper_right_longitude, &tmp_upper_right_longitude, sizeof(tmp_upper_right_longitude));
+  if (raw_upper_right_longitude != 0) {
+    total_size += 1 + 8;
+  }
+
+  // uint32 max_results = 11;
+  if (this->_internal_max_results() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_max_results());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GeocodeRequest::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GeocodeRequest*>(
+      &from));
+}
+
+void GeocodeRequest::MergeFrom(const GeocodeRequest& from) {
+  GeocodeRequest* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GeocodeRequest)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_query().empty()) {
+    _this->_internal_set_query(from._internal_query());
+  }
+  if (!from._internal_language().empty()) {
+    _this->_internal_set_language(from._internal_language());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_reverse() != 0) {
+    _this->_internal_set_reverse(from._internal_reverse());
+  }
+  if (from._internal_has_bounds() != 0) {
+    _this->_internal_set_has_bounds(from._internal_has_bounds());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = from._internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    _this->_internal_set_latitude_degrees(from._internal_latitude_degrees());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = from._internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    _this->_internal_set_longitude_degrees(from._internal_longitude_degrees());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_latitude = from._internal_lower_left_latitude();
+  uint64_t raw_lower_left_latitude;
+  memcpy(&raw_lower_left_latitude, &tmp_lower_left_latitude, sizeof(tmp_lower_left_latitude));
+  if (raw_lower_left_latitude != 0) {
+    _this->_internal_set_lower_left_latitude(from._internal_lower_left_latitude());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_lower_left_longitude = from._internal_lower_left_longitude();
+  uint64_t raw_lower_left_longitude;
+  memcpy(&raw_lower_left_longitude, &tmp_lower_left_longitude, sizeof(tmp_lower_left_longitude));
+  if (raw_lower_left_longitude != 0) {
+    _this->_internal_set_lower_left_longitude(from._internal_lower_left_longitude());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_latitude = from._internal_upper_right_latitude();
+  uint64_t raw_upper_right_latitude;
+  memcpy(&raw_upper_right_latitude, &tmp_upper_right_latitude, sizeof(tmp_upper_right_latitude));
+  if (raw_upper_right_latitude != 0) {
+    _this->_internal_set_upper_right_latitude(from._internal_upper_right_latitude());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_upper_right_longitude = from._internal_upper_right_longitude();
+  uint64_t raw_upper_right_longitude;
+  memcpy(&raw_upper_right_longitude, &tmp_upper_right_longitude, sizeof(tmp_upper_right_longitude));
+  if (raw_upper_right_longitude != 0) {
+    _this->_internal_set_upper_right_longitude(from._internal_upper_right_longitude());
+  }
+  if (from._internal_max_results() != 0) {
+    _this->_internal_set_max_results(from._internal_max_results());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GeocodeRequest::CopyFrom(const GeocodeRequest& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GeocodeRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GeocodeRequest::IsInitialized() const {
+  return true;
+}
+
+void GeocodeRequest::InternalSwap(GeocodeRequest* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.query_, lhs_arena,
+      &other->_impl_.query_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.language_, lhs_arena,
+      &other->_impl_.language_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GeocodeRequest, _impl_.max_results_)
+      + sizeof(GeocodeRequest::_impl_.max_results_)
+      - PROTOBUF_FIELD_OFFSET(GeocodeRequest, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string GeocodeRequest::GetTypeName() const {
+  return "dsa.control.v1.GeocodeRequest";
+}
+
+
+// ===================================================================
+
+class GeocodeAddress::_Internal {
+ public:
+};
+
+GeocodeAddress::GeocodeAddress(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GeocodeAddress)
+}
+GeocodeAddress::GeocodeAddress(const GeocodeAddress& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GeocodeAddress* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.address_lines_){from._impl_.address_lines_}
+    , decltype(_impl_.feature_name_){}
+    , decltype(_impl_.premises_){}
+    , decltype(_impl_.sub_thoroughfare_){}
+    , decltype(_impl_.thoroughfare_){}
+    , decltype(_impl_.sub_locality_){}
+    , decltype(_impl_.locality_){}
+    , decltype(_impl_.sub_admin_area_){}
+    , decltype(_impl_.admin_area_){}
+    , decltype(_impl_.postal_code_){}
+    , decltype(_impl_.country_code_){}
+    , decltype(_impl_.country_name_){}
+    , decltype(_impl_.latitude_degrees_){}
+    , decltype(_impl_.longitude_degrees_){}
+    , decltype(_impl_.has_position_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.feature_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.feature_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_feature_name().empty()) {
+    _this->_impl_.feature_name_.Set(from._internal_feature_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.premises_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.premises_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_premises().empty()) {
+    _this->_impl_.premises_.Set(from._internal_premises(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.sub_thoroughfare_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_thoroughfare_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_sub_thoroughfare().empty()) {
+    _this->_impl_.sub_thoroughfare_.Set(from._internal_sub_thoroughfare(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.thoroughfare_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.thoroughfare_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_thoroughfare().empty()) {
+    _this->_impl_.thoroughfare_.Set(from._internal_thoroughfare(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.sub_locality_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_locality_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_sub_locality().empty()) {
+    _this->_impl_.sub_locality_.Set(from._internal_sub_locality(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.locality_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.locality_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_locality().empty()) {
+    _this->_impl_.locality_.Set(from._internal_locality(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.sub_admin_area_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_admin_area_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_sub_admin_area().empty()) {
+    _this->_impl_.sub_admin_area_.Set(from._internal_sub_admin_area(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.admin_area_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.admin_area_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_admin_area().empty()) {
+    _this->_impl_.admin_area_.Set(from._internal_admin_area(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.postal_code_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.postal_code_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_postal_code().empty()) {
+    _this->_impl_.postal_code_.Set(from._internal_postal_code(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.country_code_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.country_code_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_country_code().empty()) {
+    _this->_impl_.country_code_.Set(from._internal_country_code(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.country_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.country_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_country_name().empty()) {
+    _this->_impl_.country_name_.Set(from._internal_country_name(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.latitude_degrees_, &from._impl_.latitude_degrees_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.has_position_) -
+    reinterpret_cast<char*>(&_impl_.latitude_degrees_)) + sizeof(_impl_.has_position_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GeocodeAddress)
+}
+
+inline void GeocodeAddress::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.address_lines_){arena}
+    , decltype(_impl_.feature_name_){}
+    , decltype(_impl_.premises_){}
+    , decltype(_impl_.sub_thoroughfare_){}
+    , decltype(_impl_.thoroughfare_){}
+    , decltype(_impl_.sub_locality_){}
+    , decltype(_impl_.locality_){}
+    , decltype(_impl_.sub_admin_area_){}
+    , decltype(_impl_.admin_area_){}
+    , decltype(_impl_.postal_code_){}
+    , decltype(_impl_.country_code_){}
+    , decltype(_impl_.country_name_){}
+    , decltype(_impl_.latitude_degrees_){0}
+    , decltype(_impl_.longitude_degrees_){0}
+    , decltype(_impl_.has_position_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.feature_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.feature_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.premises_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.premises_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.sub_thoroughfare_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_thoroughfare_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.thoroughfare_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.thoroughfare_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.sub_locality_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_locality_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.locality_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.locality_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.sub_admin_area_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sub_admin_area_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.admin_area_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.admin_area_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.postal_code_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.postal_code_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.country_code_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.country_code_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.country_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.country_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+GeocodeAddress::~GeocodeAddress() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GeocodeAddress)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GeocodeAddress::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.address_lines_.~RepeatedPtrField();
+  _impl_.feature_name_.Destroy();
+  _impl_.premises_.Destroy();
+  _impl_.sub_thoroughfare_.Destroy();
+  _impl_.thoroughfare_.Destroy();
+  _impl_.sub_locality_.Destroy();
+  _impl_.locality_.Destroy();
+  _impl_.sub_admin_area_.Destroy();
+  _impl_.admin_area_.Destroy();
+  _impl_.postal_code_.Destroy();
+  _impl_.country_code_.Destroy();
+  _impl_.country_name_.Destroy();
+}
+
+void GeocodeAddress::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GeocodeAddress::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GeocodeAddress)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.address_lines_.Clear();
+  _impl_.feature_name_.ClearToEmpty();
+  _impl_.premises_.ClearToEmpty();
+  _impl_.sub_thoroughfare_.ClearToEmpty();
+  _impl_.thoroughfare_.ClearToEmpty();
+  _impl_.sub_locality_.ClearToEmpty();
+  _impl_.locality_.ClearToEmpty();
+  _impl_.sub_admin_area_.ClearToEmpty();
+  _impl_.admin_area_.ClearToEmpty();
+  _impl_.postal_code_.ClearToEmpty();
+  _impl_.country_code_.ClearToEmpty();
+  _impl_.country_name_.ClearToEmpty();
+  ::memset(&_impl_.latitude_degrees_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.has_position_) -
+      reinterpret_cast<char*>(&_impl_.latitude_degrees_)) + sizeof(_impl_.has_position_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GeocodeAddress::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // repeated string address_lines = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            auto str = _internal_add_address_lines();
+            ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+            CHK_(ptr);
+            CHK_(::_pbi::VerifyUTF8(str, nullptr));
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<10>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string feature_name = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_feature_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string premises = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_premises();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string sub_thoroughfare = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_sub_thoroughfare();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string thoroughfare = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          auto str = _internal_mutable_thoroughfare();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string sub_locality = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          auto str = _internal_mutable_sub_locality();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string locality = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          auto str = _internal_mutable_locality();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string sub_admin_area = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          auto str = _internal_mutable_sub_admin_area();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string admin_area = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          auto str = _internal_mutable_admin_area();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string postal_code = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
+          auto str = _internal_mutable_postal_code();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string country_code = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
+          auto str = _internal_mutable_country_code();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string country_name = 12;
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
+          auto str = _internal_mutable_country_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // bool has_position = 13;
+      case 13:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 104)) {
+          _impl_.has_position_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // double latitude_degrees = 14;
+      case 14:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 113)) {
+          _impl_.latitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double longitude_degrees = 15;
+      case 15:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 121)) {
+          _impl_.longitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GeocodeAddress::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GeocodeAddress)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // repeated string address_lines = 1;
+  for (int i = 0, n = this->_internal_address_lines_size(); i < n; i++) {
+    const auto& s = this->_internal_address_lines(i);
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      s.data(), static_cast<int>(s.length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.address_lines");
+    target = stream->WriteString(1, s, target);
+  }
+
+  // string feature_name = 2;
+  if (!this->_internal_feature_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_feature_name().data(), static_cast<int>(this->_internal_feature_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.feature_name");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_feature_name(), target);
+  }
+
+  // string premises = 3;
+  if (!this->_internal_premises().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_premises().data(), static_cast<int>(this->_internal_premises().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.premises");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_premises(), target);
+  }
+
+  // string sub_thoroughfare = 4;
+  if (!this->_internal_sub_thoroughfare().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_sub_thoroughfare().data(), static_cast<int>(this->_internal_sub_thoroughfare().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.sub_thoroughfare");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_sub_thoroughfare(), target);
+  }
+
+  // string thoroughfare = 5;
+  if (!this->_internal_thoroughfare().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_thoroughfare().data(), static_cast<int>(this->_internal_thoroughfare().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.thoroughfare");
+    target = stream->WriteStringMaybeAliased(
+        5, this->_internal_thoroughfare(), target);
+  }
+
+  // string sub_locality = 6;
+  if (!this->_internal_sub_locality().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_sub_locality().data(), static_cast<int>(this->_internal_sub_locality().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.sub_locality");
+    target = stream->WriteStringMaybeAliased(
+        6, this->_internal_sub_locality(), target);
+  }
+
+  // string locality = 7;
+  if (!this->_internal_locality().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_locality().data(), static_cast<int>(this->_internal_locality().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.locality");
+    target = stream->WriteStringMaybeAliased(
+        7, this->_internal_locality(), target);
+  }
+
+  // string sub_admin_area = 8;
+  if (!this->_internal_sub_admin_area().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_sub_admin_area().data(), static_cast<int>(this->_internal_sub_admin_area().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.sub_admin_area");
+    target = stream->WriteStringMaybeAliased(
+        8, this->_internal_sub_admin_area(), target);
+  }
+
+  // string admin_area = 9;
+  if (!this->_internal_admin_area().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_admin_area().data(), static_cast<int>(this->_internal_admin_area().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.admin_area");
+    target = stream->WriteStringMaybeAliased(
+        9, this->_internal_admin_area(), target);
+  }
+
+  // string postal_code = 10;
+  if (!this->_internal_postal_code().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_postal_code().data(), static_cast<int>(this->_internal_postal_code().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.postal_code");
+    target = stream->WriteStringMaybeAliased(
+        10, this->_internal_postal_code(), target);
+  }
+
+  // string country_code = 11;
+  if (!this->_internal_country_code().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_country_code().data(), static_cast<int>(this->_internal_country_code().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.country_code");
+    target = stream->WriteStringMaybeAliased(
+        11, this->_internal_country_code(), target);
+  }
+
+  // string country_name = 12;
+  if (!this->_internal_country_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_country_name().data(), static_cast<int>(this->_internal_country_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeAddress.country_name");
+    target = stream->WriteStringMaybeAliased(
+        12, this->_internal_country_name(), target);
+  }
+
+  // bool has_position = 13;
+  if (this->_internal_has_position() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(13, this->_internal_has_position(), target);
+  }
+
+  // double latitude_degrees = 14;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(14, this->_internal_latitude_degrees(), target);
+  }
+
+  // double longitude_degrees = 15;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(15, this->_internal_longitude_degrees(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GeocodeAddress)
+  return target;
+}
+
+size_t GeocodeAddress::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GeocodeAddress)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated string address_lines = 1;
+  total_size += 1 *
+      ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(_impl_.address_lines_.size());
+  for (int i = 0, n = _impl_.address_lines_.size(); i < n; i++) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+      _impl_.address_lines_.Get(i));
+  }
+
+  // string feature_name = 2;
+  if (!this->_internal_feature_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_feature_name());
+  }
+
+  // string premises = 3;
+  if (!this->_internal_premises().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_premises());
+  }
+
+  // string sub_thoroughfare = 4;
+  if (!this->_internal_sub_thoroughfare().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_sub_thoroughfare());
+  }
+
+  // string thoroughfare = 5;
+  if (!this->_internal_thoroughfare().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_thoroughfare());
+  }
+
+  // string sub_locality = 6;
+  if (!this->_internal_sub_locality().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_sub_locality());
+  }
+
+  // string locality = 7;
+  if (!this->_internal_locality().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_locality());
+  }
+
+  // string sub_admin_area = 8;
+  if (!this->_internal_sub_admin_area().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_sub_admin_area());
+  }
+
+  // string admin_area = 9;
+  if (!this->_internal_admin_area().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_admin_area());
+  }
+
+  // string postal_code = 10;
+  if (!this->_internal_postal_code().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_postal_code());
+  }
+
+  // string country_code = 11;
+  if (!this->_internal_country_code().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_country_code());
+  }
+
+  // string country_name = 12;
+  if (!this->_internal_country_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_country_name());
+  }
+
+  // double latitude_degrees = 14;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double longitude_degrees = 15;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // bool has_position = 13;
+  if (this->_internal_has_position() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GeocodeAddress::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GeocodeAddress*>(
+      &from));
+}
+
+void GeocodeAddress::MergeFrom(const GeocodeAddress& from) {
+  GeocodeAddress* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GeocodeAddress)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.address_lines_.MergeFrom(from._impl_.address_lines_);
+  if (!from._internal_feature_name().empty()) {
+    _this->_internal_set_feature_name(from._internal_feature_name());
+  }
+  if (!from._internal_premises().empty()) {
+    _this->_internal_set_premises(from._internal_premises());
+  }
+  if (!from._internal_sub_thoroughfare().empty()) {
+    _this->_internal_set_sub_thoroughfare(from._internal_sub_thoroughfare());
+  }
+  if (!from._internal_thoroughfare().empty()) {
+    _this->_internal_set_thoroughfare(from._internal_thoroughfare());
+  }
+  if (!from._internal_sub_locality().empty()) {
+    _this->_internal_set_sub_locality(from._internal_sub_locality());
+  }
+  if (!from._internal_locality().empty()) {
+    _this->_internal_set_locality(from._internal_locality());
+  }
+  if (!from._internal_sub_admin_area().empty()) {
+    _this->_internal_set_sub_admin_area(from._internal_sub_admin_area());
+  }
+  if (!from._internal_admin_area().empty()) {
+    _this->_internal_set_admin_area(from._internal_admin_area());
+  }
+  if (!from._internal_postal_code().empty()) {
+    _this->_internal_set_postal_code(from._internal_postal_code());
+  }
+  if (!from._internal_country_code().empty()) {
+    _this->_internal_set_country_code(from._internal_country_code());
+  }
+  if (!from._internal_country_name().empty()) {
+    _this->_internal_set_country_name(from._internal_country_name());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = from._internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    _this->_internal_set_latitude_degrees(from._internal_latitude_degrees());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = from._internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    _this->_internal_set_longitude_degrees(from._internal_longitude_degrees());
+  }
+  if (from._internal_has_position() != 0) {
+    _this->_internal_set_has_position(from._internal_has_position());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GeocodeAddress::CopyFrom(const GeocodeAddress& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GeocodeAddress)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GeocodeAddress::IsInitialized() const {
+  return true;
+}
+
+void GeocodeAddress::InternalSwap(GeocodeAddress* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.address_lines_.InternalSwap(&other->_impl_.address_lines_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.feature_name_, lhs_arena,
+      &other->_impl_.feature_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.premises_, lhs_arena,
+      &other->_impl_.premises_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.sub_thoroughfare_, lhs_arena,
+      &other->_impl_.sub_thoroughfare_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.thoroughfare_, lhs_arena,
+      &other->_impl_.thoroughfare_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.sub_locality_, lhs_arena,
+      &other->_impl_.sub_locality_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.locality_, lhs_arena,
+      &other->_impl_.locality_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.sub_admin_area_, lhs_arena,
+      &other->_impl_.sub_admin_area_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.admin_area_, lhs_arena,
+      &other->_impl_.admin_area_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.postal_code_, lhs_arena,
+      &other->_impl_.postal_code_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.country_code_, lhs_arena,
+      &other->_impl_.country_code_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.country_name_, lhs_arena,
+      &other->_impl_.country_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GeocodeAddress, _impl_.has_position_)
+      + sizeof(GeocodeAddress::_impl_.has_position_)
+      - PROTOBUF_FIELD_OFFSET(GeocodeAddress, _impl_.latitude_degrees_)>(
+          reinterpret_cast<char*>(&_impl_.latitude_degrees_),
+          reinterpret_cast<char*>(&other->_impl_.latitude_degrees_));
+}
+
+std::string GeocodeAddress::GetTypeName() const {
+  return "dsa.control.v1.GeocodeAddress";
+}
+
+
+// ===================================================================
+
+class GeocodeResult::_Internal {
+ public:
+};
+
+GeocodeResult::GeocodeResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GeocodeResult)
+}
+GeocodeResult::GeocodeResult(const GeocodeResult& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GeocodeResult* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.addresses_){from._impl_.addresses_}
+    , decltype(_impl_.message_){}
+    , decltype(_impl_.request_id_){}
+    , decltype(_impl_.status_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_message().empty()) {
+    _this->_impl_.message_.Set(from._internal_message(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.status_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.status_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GeocodeResult)
+}
+
+inline void GeocodeResult::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.addresses_){arena}
+    , decltype(_impl_.message_){}
+    , decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.status_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+GeocodeResult::~GeocodeResult() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GeocodeResult)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GeocodeResult::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.addresses_.~RepeatedPtrField();
+  _impl_.message_.Destroy();
+}
+
+void GeocodeResult::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GeocodeResult::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GeocodeResult)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.addresses_.Clear();
+  _impl_.message_.ClearToEmpty();
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.status_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.status_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GeocodeResult::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GeocodeStatus status = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_status(static_cast<::dsa::control::v1::GeocodeStatus>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .dsa.control.v1.GeocodeAddress addresses = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_addresses(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<26>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string message = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_message();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GeocodeResult::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GeocodeResult)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // .dsa.control.v1.GeocodeStatus status = 2;
+  if (this->_internal_status() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      2, this->_internal_status(), target);
+  }
+
+  // repeated .dsa.control.v1.GeocodeAddress addresses = 3;
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_addresses_size()); i < n; i++) {
+    const auto& repfield = this->_internal_addresses(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(3, repfield, repfield.GetCachedSize(), target, stream);
+  }
+
+  // string message = 4;
+  if (!this->_internal_message().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_message().data(), static_cast<int>(this->_internal_message().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GeocodeResult.message");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_message(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GeocodeResult)
+  return target;
+}
+
+size_t GeocodeResult::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GeocodeResult)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.GeocodeAddress addresses = 3;
+  total_size += 1UL * this->_internal_addresses_size();
+  for (const auto& msg : this->_impl_.addresses_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // string message = 4;
+  if (!this->_internal_message().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_message());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // .dsa.control.v1.GeocodeStatus status = 2;
+  if (this->_internal_status() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_status());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GeocodeResult::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GeocodeResult*>(
+      &from));
+}
+
+void GeocodeResult::MergeFrom(const GeocodeResult& from) {
+  GeocodeResult* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GeocodeResult)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.addresses_.MergeFrom(from._impl_.addresses_);
+  if (!from._internal_message().empty()) {
+    _this->_internal_set_message(from._internal_message());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_status() != 0) {
+    _this->_internal_set_status(from._internal_status());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GeocodeResult::CopyFrom(const GeocodeResult& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GeocodeResult)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GeocodeResult::IsInitialized() const {
+  return true;
+}
+
+void GeocodeResult::InternalSwap(GeocodeResult* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.addresses_.InternalSwap(&other->_impl_.addresses_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.message_, lhs_arena,
+      &other->_impl_.message_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GeocodeResult, _impl_.status_)
+      + sizeof(GeocodeResult::_impl_.status_)
+      - PROTOBUF_FIELD_OFFSET(GeocodeResult, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string GeocodeResult::GetTypeName() const {
+  return "dsa.control.v1.GeocodeResult";
+}
+
+
+// ===================================================================
+
+class ShareToHost::_Internal {
+ public:
+};
+
+ShareToHost::ShareToHost(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.ShareToHost)
+}
+ShareToHost::ShareToHost(const ShareToHost& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  ShareToHost* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.items_){from._impl_.items_}
+    , decltype(_impl_.title_){}
+    , decltype(_impl_.package_name_){}
+    , decltype(_impl_.app_label_){}
+    , decltype(_impl_.share_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.title_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.title_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_title().empty()) {
+    _this->_impl_.title_.Set(from._internal_title(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_package_name().empty()) {
+    _this->_impl_.package_name_.Set(from._internal_package_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.app_label_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_app_label().empty()) {
+    _this->_impl_.app_label_.Set(from._internal_app_label(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.share_id_ = from._impl_.share_id_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ShareToHost)
+}
+
+inline void ShareToHost::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.items_){arena}
+    , decltype(_impl_.title_){}
+    , decltype(_impl_.package_name_){}
+    , decltype(_impl_.app_label_){}
+    , decltype(_impl_.share_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.title_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.title_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.app_label_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+ShareToHost::~ShareToHost() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.ShareToHost)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void ShareToHost::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.items_.~RepeatedPtrField();
+  _impl_.title_.Destroy();
+  _impl_.package_name_.Destroy();
+  _impl_.app_label_.Destroy();
+}
+
+void ShareToHost::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void ShareToHost::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.ShareToHost)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.items_.Clear();
+  _impl_.title_.ClearToEmpty();
+  _impl_.package_name_.ClearToEmpty();
+  _impl_.app_label_.ClearToEmpty();
+  _impl_.share_id_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ShareToHost::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 share_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.share_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string title = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_title();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string package_name = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_package_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string app_label = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_app_label();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .dsa.control.v1.DragItem items = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_items(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<42>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ShareToHost::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.ShareToHost)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 share_id = 1;
+  if (this->_internal_share_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_share_id(), target);
+  }
+
+  // string title = 2;
+  if (!this->_internal_title().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_title().data(), static_cast<int>(this->_internal_title().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.ShareToHost.title");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_title(), target);
+  }
+
+  // string package_name = 3;
+  if (!this->_internal_package_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_package_name().data(), static_cast<int>(this->_internal_package_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.ShareToHost.package_name");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_package_name(), target);
+  }
+
+  // string app_label = 4;
+  if (!this->_internal_app_label().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_app_label().data(), static_cast<int>(this->_internal_app_label().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.ShareToHost.app_label");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_app_label(), target);
+  }
+
+  // repeated .dsa.control.v1.DragItem items = 5;
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_items_size()); i < n; i++) {
+    const auto& repfield = this->_internal_items(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(5, repfield, repfield.GetCachedSize(), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.ShareToHost)
+  return target;
+}
+
+size_t ShareToHost::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.ShareToHost)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.DragItem items = 5;
+  total_size += 1UL * this->_internal_items_size();
+  for (const auto& msg : this->_impl_.items_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // string title = 2;
+  if (!this->_internal_title().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_title());
+  }
+
+  // string package_name = 3;
+  if (!this->_internal_package_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_package_name());
+  }
+
+  // string app_label = 4;
+  if (!this->_internal_app_label().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_app_label());
+  }
+
+  // uint32 share_id = 1;
+  if (this->_internal_share_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_share_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ShareToHost::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const ShareToHost*>(
+      &from));
+}
+
+void ShareToHost::MergeFrom(const ShareToHost& from) {
+  ShareToHost* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.ShareToHost)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.items_.MergeFrom(from._impl_.items_);
+  if (!from._internal_title().empty()) {
+    _this->_internal_set_title(from._internal_title());
+  }
+  if (!from._internal_package_name().empty()) {
+    _this->_internal_set_package_name(from._internal_package_name());
+  }
+  if (!from._internal_app_label().empty()) {
+    _this->_internal_set_app_label(from._internal_app_label());
+  }
+  if (from._internal_share_id() != 0) {
+    _this->_internal_set_share_id(from._internal_share_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ShareToHost::CopyFrom(const ShareToHost& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.ShareToHost)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ShareToHost::IsInitialized() const {
+  return true;
+}
+
+void ShareToHost::InternalSwap(ShareToHost* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.title_, lhs_arena,
+      &other->_impl_.title_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.package_name_, lhs_arena,
+      &other->_impl_.package_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.app_label_, lhs_arena,
+      &other->_impl_.app_label_, rhs_arena
+  );
+  swap(_impl_.share_id_, other->_impl_.share_id_);
+}
+
+std::string ShareToHost::GetTypeName() const {
+  return "dsa.control.v1.ShareToHost";
+}
+
+
+// ===================================================================
+
+class ShareResult::_Internal {
+ public:
+};
+
+ShareResult::ShareResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.ShareResult)
+}
+ShareResult::ShareResult(const ShareResult& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  ShareResult* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.message_){}
+    , decltype(_impl_.share_id_){}
+    , decltype(_impl_.outcome_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_message().empty()) {
+    _this->_impl_.message_.Set(from._internal_message(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.share_id_, &from._impl_.share_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.outcome_) -
+    reinterpret_cast<char*>(&_impl_.share_id_)) + sizeof(_impl_.outcome_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ShareResult)
+}
+
+inline void ShareResult::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.message_){}
+    , decltype(_impl_.share_id_){0u}
+    , decltype(_impl_.outcome_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+ShareResult::~ShareResult() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.ShareResult)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void ShareResult::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.message_.Destroy();
+}
+
+void ShareResult::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void ShareResult::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.ShareResult)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.message_.ClearToEmpty();
+  ::memset(&_impl_.share_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.outcome_) -
+      reinterpret_cast<char*>(&_impl_.share_id_)) + sizeof(_impl_.outcome_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ShareResult::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 share_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.share_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.ShareOutcome outcome = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_outcome(static_cast<::dsa::control::v1::ShareOutcome>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // string message = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_message();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ShareResult::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.ShareResult)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 share_id = 1;
+  if (this->_internal_share_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_share_id(), target);
+  }
+
+  // .dsa.control.v1.ShareOutcome outcome = 2;
+  if (this->_internal_outcome() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      2, this->_internal_outcome(), target);
+  }
+
+  // string message = 3;
+  if (!this->_internal_message().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_message().data(), static_cast<int>(this->_internal_message().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.ShareResult.message");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_message(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.ShareResult)
+  return target;
+}
+
+size_t ShareResult::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.ShareResult)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string message = 3;
+  if (!this->_internal_message().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_message());
+  }
+
+  // uint32 share_id = 1;
+  if (this->_internal_share_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_share_id());
+  }
+
+  // .dsa.control.v1.ShareOutcome outcome = 2;
+  if (this->_internal_outcome() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_outcome());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ShareResult::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const ShareResult*>(
+      &from));
+}
+
+void ShareResult::MergeFrom(const ShareResult& from) {
+  ShareResult* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.ShareResult)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_message().empty()) {
+    _this->_internal_set_message(from._internal_message());
+  }
+  if (from._internal_share_id() != 0) {
+    _this->_internal_set_share_id(from._internal_share_id());
+  }
+  if (from._internal_outcome() != 0) {
+    _this->_internal_set_outcome(from._internal_outcome());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ShareResult::CopyFrom(const ShareResult& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.ShareResult)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ShareResult::IsInitialized() const {
+  return true;
+}
+
+void ShareResult::InternalSwap(ShareResult* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.message_, lhs_arena,
+      &other->_impl_.message_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ShareResult, _impl_.outcome_)
+      + sizeof(ShareResult::_impl_.outcome_)
+      - PROTOBUF_FIELD_OFFSET(ShareResult, _impl_.share_id_)>(
+          reinterpret_cast<char*>(&_impl_.share_id_),
+          reinterpret_cast<char*>(&other->_impl_.share_id_));
+}
+
+std::string ShareResult::GetTypeName() const {
+  return "dsa.control.v1.ShareResult";
 }
 
 
@@ -50162,6 +52754,10 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::ReinstallApp& reinstall_app(const Envelope* msg);
   static const ::dsa::control::v1::ReinstallResult& reinstall_result(const Envelope* msg);
   static const ::dsa::control::v1::NativeLibraryCrash& native_library_crash(const Envelope* msg);
+  static const ::dsa::control::v1::GeocodeRequest& geocode_request(const Envelope* msg);
+  static const ::dsa::control::v1::GeocodeResult& geocode_result(const Envelope* msg);
+  static const ::dsa::control::v1::ShareToHost& share_to_host(const Envelope* msg);
+  static const ::dsa::control::v1::ShareResult& share_result(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -50767,6 +53363,22 @@ Envelope::_Internal::reinstall_result(const Envelope* msg) {
 const ::dsa::control::v1::NativeLibraryCrash&
 Envelope::_Internal::native_library_crash(const Envelope* msg) {
   return *msg->_impl_.body_.native_library_crash_;
+}
+const ::dsa::control::v1::GeocodeRequest&
+Envelope::_Internal::geocode_request(const Envelope* msg) {
+  return *msg->_impl_.body_.geocode_request_;
+}
+const ::dsa::control::v1::GeocodeResult&
+Envelope::_Internal::geocode_result(const Envelope* msg) {
+  return *msg->_impl_.body_.geocode_result_;
+}
+const ::dsa::control::v1::ShareToHost&
+Envelope::_Internal::share_to_host(const Envelope* msg) {
+  return *msg->_impl_.body_.share_to_host_;
+}
+const ::dsa::control::v1::ShareResult&
+Envelope::_Internal::share_result(const Envelope* msg) {
+  return *msg->_impl_.body_.share_result_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -53033,6 +55645,66 @@ void Envelope::set_allocated_native_library_crash(::dsa::control::v1::NativeLibr
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.native_library_crash)
 }
+void Envelope::set_allocated_geocode_request(::dsa::control::v1::GeocodeRequest* geocode_request) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (geocode_request) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(geocode_request);
+    if (message_arena != submessage_arena) {
+      geocode_request = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, geocode_request, submessage_arena);
+    }
+    set_has_geocode_request();
+    _impl_.body_.geocode_request_ = geocode_request;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.geocode_request)
+}
+void Envelope::set_allocated_geocode_result(::dsa::control::v1::GeocodeResult* geocode_result) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (geocode_result) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(geocode_result);
+    if (message_arena != submessage_arena) {
+      geocode_result = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, geocode_result, submessage_arena);
+    }
+    set_has_geocode_result();
+    _impl_.body_.geocode_result_ = geocode_result;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.geocode_result)
+}
+void Envelope::set_allocated_share_to_host(::dsa::control::v1::ShareToHost* share_to_host) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (share_to_host) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(share_to_host);
+    if (message_arena != submessage_arena) {
+      share_to_host = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, share_to_host, submessage_arena);
+    }
+    set_has_share_to_host();
+    _impl_.body_.share_to_host_ = share_to_host;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.share_to_host)
+}
+void Envelope::set_allocated_share_result(::dsa::control::v1::ShareResult* share_result) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (share_result) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(share_result);
+    if (message_arena != submessage_arena) {
+      share_result = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, share_result, submessage_arena);
+    }
+    set_has_share_result();
+    _impl_.body_.share_result_ = share_result;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.share_result)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -53803,6 +56475,26 @@ Envelope::Envelope(const Envelope& from)
     case kNativeLibraryCrash: {
       _this->_internal_mutable_native_library_crash()->::dsa::control::v1::NativeLibraryCrash::MergeFrom(
           from._internal_native_library_crash());
+      break;
+    }
+    case kGeocodeRequest: {
+      _this->_internal_mutable_geocode_request()->::dsa::control::v1::GeocodeRequest::MergeFrom(
+          from._internal_geocode_request());
+      break;
+    }
+    case kGeocodeResult: {
+      _this->_internal_mutable_geocode_result()->::dsa::control::v1::GeocodeResult::MergeFrom(
+          from._internal_geocode_result());
+      break;
+    }
+    case kShareToHost: {
+      _this->_internal_mutable_share_to_host()->::dsa::control::v1::ShareToHost::MergeFrom(
+          from._internal_share_to_host());
+      break;
+    }
+    case kShareResult: {
+      _this->_internal_mutable_share_result()->::dsa::control::v1::ShareResult::MergeFrom(
+          from._internal_share_result());
       break;
     }
     case BODY_NOT_SET: {
@@ -54750,6 +57442,30 @@ void Envelope::clear_body() {
     case kNativeLibraryCrash: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.native_library_crash_;
+      }
+      break;
+    }
+    case kGeocodeRequest: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.geocode_request_;
+      }
+      break;
+    }
+    case kGeocodeResult: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.geocode_result_;
+      }
+      break;
+    }
+    case kShareToHost: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.share_to_host_;
+      }
+      break;
+    }
+    case kShareResult: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.share_result_;
       }
       break;
     }
@@ -55985,6 +58701,38 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.GeocodeRequest geocode_request = 470;
+      case 470:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
+          ptr = ctx->ParseMessage(_internal_mutable_geocode_request(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GeocodeResult geocode_result = 471;
+      case 471:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
+          ptr = ctx->ParseMessage(_internal_mutable_geocode_result(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.ShareToHost share_to_host = 472;
+      case 472:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
+          ptr = ctx->ParseMessage(_internal_mutable_share_to_host(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.ShareResult share_result = 473;
+      case 473:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
+          ptr = ctx->ParseMessage(_internal_mutable_share_result(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -57071,6 +59819,34 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::addon_image_part(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.GeocodeRequest geocode_request = 470;
+  if (_internal_has_geocode_request()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(470, _Internal::geocode_request(this),
+        _Internal::geocode_request(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.GeocodeResult geocode_result = 471;
+  if (_internal_has_geocode_result()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(471, _Internal::geocode_result(this),
+        _Internal::geocode_result(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.ShareToHost share_to_host = 472;
+  if (_internal_has_share_to_host()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(472, _Internal::share_to_host(this),
+        _Internal::share_to_host(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.ShareResult share_result = 473;
+  if (_internal_has_share_result()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(473, _Internal::share_result(this),
+        _Internal::share_result(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -58145,6 +60921,34 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.native_library_crash_);
       break;
     }
+    // .dsa.control.v1.GeocodeRequest geocode_request = 470;
+    case kGeocodeRequest: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.geocode_request_);
+      break;
+    }
+    // .dsa.control.v1.GeocodeResult geocode_result = 471;
+    case kGeocodeResult: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.geocode_result_);
+      break;
+    }
+    // .dsa.control.v1.ShareToHost share_to_host = 472;
+    case kShareToHost: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.share_to_host_);
+      break;
+    }
+    // .dsa.control.v1.ShareResult share_result = 473;
+    case kShareResult: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.share_result_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -58926,6 +61730,26 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_native_library_crash());
       break;
     }
+    case kGeocodeRequest: {
+      _this->_internal_mutable_geocode_request()->::dsa::control::v1::GeocodeRequest::MergeFrom(
+          from._internal_geocode_request());
+      break;
+    }
+    case kGeocodeResult: {
+      _this->_internal_mutable_geocode_result()->::dsa::control::v1::GeocodeResult::MergeFrom(
+          from._internal_geocode_result());
+      break;
+    }
+    case kShareToHost: {
+      _this->_internal_mutable_share_to_host()->::dsa::control::v1::ShareToHost::MergeFrom(
+          from._internal_share_to_host());
+      break;
+    }
+    case kShareResult: {
+      _this->_internal_mutable_share_result()->::dsa::control::v1::ShareResult::MergeFrom(
+          from._internal_share_result());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -59144,6 +61968,26 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::LocationStatus >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::LocationFix*
 Arena::CreateMaybeMessage< ::dsa::control::v1::LocationFix >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::LocationFix >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GeocodeRequest*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GeocodeRequest >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GeocodeRequest >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GeocodeAddress*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GeocodeAddress >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GeocodeAddress >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GeocodeResult*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GeocodeResult >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GeocodeResult >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::ShareToHost*
+Arena::CreateMaybeMessage< ::dsa::control::v1::ShareToHost >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::ShareToHost >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::ShareResult*
+Arena::CreateMaybeMessage< ::dsa::control::v1::ShareResult >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::ShareResult >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::DeviceIdle*
 Arena::CreateMaybeMessage< ::dsa::control::v1::DeviceIdle >(Arena* arena) {

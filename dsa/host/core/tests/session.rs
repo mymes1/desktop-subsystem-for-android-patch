@@ -5673,3 +5673,400 @@ fn fr35_letting_an_app_keep_root_is_asked_through_the_sessions_prompt() {
         vec!["com.keep.app".to_string(), "com.keep.app".to_string()]
     );
 }
+
+/// The local API service over `session`, for every user, and a connector to it.
+fn service_over(
+    session: &Arc<Session>,
+) -> (
+    dsa_host_core::host_api_conformance::RunningService,
+    dsa_transport::local::MemoryLocalConnector,
+) {
+    use dsa_host_core::host_api::{PerUser, UserAndroid};
+    let (listener, connector) = dsa_transport::local::pair();
+    let session = Arc::clone(session);
+    let androids = Arc::new(PerUser::new(move |_: &str| {
+        Ok(Arc::clone(&session) as Arc<dyn UserAndroid>)
+    }));
+    let service =
+        dsa_host_core::host_api_conformance::RunningService::start(Box::new(listener), androids);
+    (service, connector)
+}
+
+/// The next message for the guest that `pick` takes, past any other.
+fn next_matching<T>(agent: &mut Box<dyn Connection>, pick: impl Fn(Body) -> Option<T>) -> T {
+    loop {
+        if let Some(found) = pick(next_body(agent)) {
+            return found;
+        }
+    }
+}
+
+/// The host's geocoder over the boundary fixture (tests/data, written by
+/// dsa/host/core/geodata/test_build_geodata.py), recording the lookups it is given.
+struct RecordingGeocoder {
+    seen: Arc<Mutex<Vec<dsa_host_core::geocode::GeocodeQuery>>>,
+    inner: dsa_host_core::geocode::BoundaryGeocoder,
+}
+
+impl dsa_host_core::geocode::Geocoder for RecordingGeocoder {
+    fn geocode(
+        &mut self,
+        query: &dsa_host_core::geocode::GeocodeQuery,
+    ) -> dsa_host_core::geocode::GeocodeOutcome {
+        self.seen.lock().unwrap().push(query.clone());
+        dsa_host_core::geocode::Geocoder::geocode(&mut self.inner, query)
+    }
+}
+
+fn boundary_fixture() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("data")
+        .join("address-boundaries-fixture.bin")
+}
+
+/// Sends `request` until a watcher has it (one that comes before the watcher has connected is
+/// refused at once), and returns the result.
+fn geocode_until_answered(
+    agent: &mut Box<dyn Connection>,
+    request: dsa_protocol::control::GeocodeRequest,
+) -> dsa_protocol::control::GeocodeResult {
+    use dsa_protocol::control::GeocodeStatus;
+    let deadline = std::time::Instant::now() + WAIT;
+    loop {
+        send_body(agent, Body::GeocodeRequest(request.clone()));
+        let result = next_matching(agent, |body| match body {
+            Body::GeocodeResult(result) => Some(result),
+            _ => None,
+        });
+        assert_eq!(result.request_id, request.request_id);
+        if result.status != GeocodeStatus::Refused as i32 || std::time::Instant::now() > deadline {
+            return result;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn fr36_network_location_and_geocoder_come_from_the_host() {
+    use dsa_host_core::geocode;
+    use dsa_protocol::control::{GeocodeRequest, GeocodeStatus, LocationRequest};
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (session, mut agent, _launcher) = lifecycle_session(None);
+    let session = Arc::new(session);
+
+    // The agent's network location provider asks for the host's location, and the host's
+    // position reaches it as the network location.
+    let wanted = session.watch_location();
+    assert_eq!(wanted.recv_timeout(WAIT), Ok(Wanted::NONE));
+    send_body(
+        &mut agent,
+        Body::LocationRequest(LocationRequest {
+            active: true,
+            interval_ms: 5000,
+        }),
+    );
+    assert_eq!(
+        wanted.recv_timeout(WAIT),
+        Ok(Wanted::every(Duration::from_secs(5)))
+    );
+    session.host_location(LocationEvent::Fix(seoul()));
+    assert_eq!(
+        next_location(&mut agent),
+        Body::LocationFix(seoul().to_control())
+    );
+
+    // Without Google Play the host's geocoder answers, through a watcher in the user's
+    // session, from the boundary data the host keeps.
+    let (_service, connector) = service_over(&session);
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let (seen, stop) = (Arc::clone(&seen), Arc::clone(&stop));
+        thread::spawn(move || {
+            let mut connector = connector;
+            let mut geocoder = RecordingGeocoder {
+                seen,
+                inner: geocode::BoundaryGeocoder::new(boundary_fixture()),
+            };
+            geocode::serve(
+                &mut connector,
+                "test geocoder",
+                &mut geocoder,
+                &stop,
+                &|_: &str| {},
+            );
+        })
+    };
+
+    let forward = geocode_until_answered(
+        &mut agent,
+        GeocodeRequest {
+            request_id: 7,
+            query: "Seoul City Hall".into(),
+            max_results: 3,
+            language: "ko-KR".into(),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        forward.status,
+        GeocodeStatus::Ok as i32,
+        "{}",
+        forward.message
+    );
+    // An address is not turned into positions: the lookup runs and finds nothing.
+    assert!(forward.addresses.is_empty(), "{:?}", forward.addresses);
+
+    let reverse = geocode_until_answered(
+        &mut agent,
+        GeocodeRequest {
+            request_id: 8,
+            reverse: true,
+            latitude_degrees: 37.5663,
+            longitude_degrees: 126.9779,
+            max_results: 1,
+            language: "ko-KR".into(),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        reverse.status,
+        GeocodeStatus::Ok as i32,
+        "{}",
+        reverse.message
+    );
+    // A known position comes back as its city, district and dong.
+    assert_eq!(reverse.addresses.len(), 1);
+    let address = &reverse.addresses[0];
+    assert_eq!(address.country_code, "KR");
+    assert_eq!(address.admin_area, "서울특별시");
+    assert_eq!(address.locality, "서울특별시");
+    assert_eq!(address.sub_locality, "중구");
+    assert_eq!(address.thoroughfare, "명동");
+    assert_eq!(address.address_lines, vec!["대한민국 서울특별시 중구 명동"]);
+    assert!(address.has_position);
+
+    let seen = seen.lock().unwrap().clone();
+    let forward_seen = seen
+        .iter()
+        .find(|q| q.query_id == 7)
+        .expect("the forward lookup");
+    assert_eq!(
+        forward_seen.lookup,
+        geocode::Lookup::Forward {
+            query: "Seoul City Hall".into(),
+            bounds: None
+        }
+    );
+    assert_eq!(forward_seen.max_results, 3);
+    assert_eq!(forward_seen.language, "ko-KR");
+    let reverse_seen = seen
+        .iter()
+        .find(|q| q.query_id == 8)
+        .expect("the reverse lookup");
+    assert_eq!(
+        reverse_seen.lookup,
+        geocode::Lookup::Reverse {
+            latitude: 37.5663,
+            longitude: 126.9779
+        }
+    );
+
+    // A lookup that cannot be answered is answered at once, as invalid.
+    send_body(
+        &mut agent,
+        Body::GeocodeRequest(GeocodeRequest {
+            request_id: 9,
+            reverse: true,
+            latitude_degrees: 120.0,
+            ..Default::default()
+        }),
+    );
+    let invalid = next_matching(&mut agent, |body| match body {
+        Body::GeocodeResult(result) => Some(result),
+        _ => None,
+    });
+    assert_eq!(invalid.request_id, 9);
+    assert_eq!(invalid.status, GeocodeStatus::Invalid as i32);
+
+    stop.store(true, Ordering::Relaxed);
+    watcher.join().unwrap();
+}
+
+#[test]
+fn fr36_a_lookup_with_no_desktop_session_is_refused_at_once() {
+    use dsa_protocol::control::{GeocodeRequest, GeocodeStatus};
+    let (_session, mut agent, _launcher) = lifecycle_session(None);
+    send_body(
+        &mut agent,
+        Body::GeocodeRequest(GeocodeRequest {
+            request_id: 1,
+            query: "Busan".into(),
+            max_results: 1,
+            ..Default::default()
+        }),
+    );
+    let result = next_matching(&mut agent, |body| match body {
+        Body::GeocodeResult(result) => Some(result),
+        _ => None,
+    });
+    assert_eq!(result.status, GeocodeStatus::Refused as i32);
+}
+
+/// What a share UI was given: the content, and each file's name and bytes.
+type SharedContent = (dsa_host_core::share::ShareContent, Vec<(String, Vec<u8>)>);
+
+/// A share UI that records what it was given, with each file's content, and shares it.
+struct FakeShareUi {
+    seen: Arc<Mutex<Vec<SharedContent>>>,
+}
+
+impl dsa_host_core::share::ShareUi for FakeShareUi {
+    fn share(
+        &mut self,
+        content: &dsa_host_core::share::ShareContent,
+    ) -> dsa_host_core::share::ShareOutcome {
+        let files = content
+            .files
+            .iter()
+            .map(|path| {
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                (name, std::fs::read(path).unwrap())
+            })
+            .collect();
+        self.seen.lock().unwrap().push((content.clone(), files));
+        dsa_host_core::share::ShareOutcome::Shared
+    }
+}
+
+fn shared_item(name: &str, size: u64, mime: &str) -> dsa_protocol::control::DragItem {
+    dsa_protocol::control::DragItem {
+        name: name.into(),
+        size,
+        size_known: true,
+        mime_type: mime.into(),
+        ..Default::default()
+    }
+}
+
+fn shared_text(text: &str) -> dsa_protocol::control::DragItem {
+    dsa_protocol::control::DragItem {
+        mime_type: "text/plain".into(),
+        is_text: true,
+        text: text.into(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn fr36_sharing_hands_content_to_the_host_share_ui() {
+    use dsa_protocol::control::{DragData, DragEnd, ShareOutcome, ShareToHost};
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let (session, mut agent, _launcher) = lifecycle_session(None);
+    let session = Arc::new(session);
+    let (_service, connector) = service_over(&session);
+    let spool = std::env::temp_dir().join(format!("dsa-share-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&spool);
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let stop = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let (seen, stop, spool) = (Arc::clone(&seen), Arc::clone(&stop), spool.clone());
+        thread::spawn(move || {
+            let mut connector = connector;
+            let mut ui = FakeShareUi { seen };
+            dsa_host_core::share::serve(
+                &mut connector,
+                "test share",
+                &mut ui,
+                &spool,
+                &stop,
+                &|_: &str| {},
+            );
+        })
+    };
+
+    let photo = b"JPEG photo bytes".to_vec();
+    let share = |share_id| ShareToHost {
+        share_id,
+        title: "Our trip".into(),
+        package_name: "com.example.gallery".into(),
+        app_label: "Gallery".into(),
+        items: vec![
+            shared_text("Look at this"),
+            shared_text("https://example.com/trip"),
+            shared_item("photo.jpg", photo.len() as u64, "image/jpeg"),
+        ],
+    };
+
+    // A share that comes before the watcher has connected fails at once and gives the
+    // access back; the next one is taken.
+    let mut share_id = 1;
+    let read = loop {
+        send_body(&mut agent, Body::ShareToHost(share(share_id)));
+        let next = next_matching(&mut agent, |body| match body {
+            Body::DragRead(read) => Some(Ok(read)),
+            Body::ShareResult(result) => Some(Err(result)),
+            _ => None,
+        });
+        match next {
+            Ok(read) => break read,
+            Err(result) => {
+                assert_eq!(result.share_id, share_id);
+                assert_eq!(result.outcome, ShareOutcome::Failed as i32);
+                let end = next_matching(&mut agent, |body| match body {
+                    Body::DragEnd(end) => Some(end),
+                    _ => None,
+                });
+                assert_eq!(end.drag_id, share_id);
+                share_id += 1;
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    };
+
+    // The file is read as a drag's files are, under the share's ID.
+    assert_eq!(read.drag_id, share_id);
+    assert_eq!(read.item, 2);
+    assert_eq!(read.offset, 0);
+    send_body(
+        &mut agent,
+        Body::DragData(DragData {
+            request_id: read.request_id,
+            data: photo.clone(),
+            end: true,
+            error: String::new(),
+        }),
+    );
+    let end = next_matching(&mut agent, |body| match body {
+        Body::DragEnd(end) => Some(end),
+        _ => None,
+    });
+    assert_eq!(
+        end,
+        DragEnd {
+            drag_id: share_id,
+            dropped: true
+        }
+    );
+    let result = next_matching(&mut agent, |body| match body {
+        Body::ShareResult(result) => Some(result),
+        _ => None,
+    });
+    assert_eq!(result.share_id, share_id);
+    assert_eq!(result.outcome, ShareOutcome::Shared as i32);
+
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 1);
+    let (content, files) = &seen[0];
+    assert_eq!(content.title, "Our trip");
+    assert_eq!(content.text.as_deref(), Some("Look at this"));
+    assert_eq!(content.links, vec!["https://example.com/trip".to_string()]);
+    assert_eq!(files, &vec![("photo.jpg".to_string(), photo)]);
+
+    stop.store(true, Ordering::Relaxed);
+    watcher.join().unwrap();
+    let _ = std::fs::remove_dir_all(&spool);
+}

@@ -42,6 +42,11 @@
 #
 # -ReleaseTag names the GitHub release this build is published as (v<version>); the licence
 # bundle points at the kernel source asset of that release.
+#
+# -GeodataDir names a folder that dsa/host/core/geodata/build-geodata.py filled (its
+# address-boundaries.bin and NOTICE.txt): the boundaries the window manager turns positions
+# into addresses with. Without it this script runs build-geodata.py, which downloads its pinned
+# sources once into .scratch\geodata in the repository.
 param(
     [string]$Version = "0.1.0",
     [string]$Kernel,
@@ -60,6 +65,7 @@ param(
     [int]$AndroidMajor,
     [string]$GfxstreamBackend,
     [string]$ReleaseTag,
+    [string]$GeodataDir,
     [ValidateSet("x64", "arm64")]
     [string]$Arch
 )
@@ -119,6 +125,27 @@ $generateScript = Join-Path $installer "generate-licenses.py"
 $releaseTagArgs = if ($ReleaseTag) { @("--release-tag", $ReleaseTag) } else { @() }
 & $python $generateScript --workspace $dsa --out-dir $licensesDir --master-notice $masterNotice @releaseTagArgs
 if ($LASTEXITCODE -ne 0) { throw "generating the licence bundle failed" }
+
+# The address data: the administrative boundaries the window manager answers Android's
+# address lookups from, with no server.
+$stageGeodata = Join-Path $stage "geodata"
+New-Item -ItemType Directory -Force $stageGeodata | Out-Null
+if (-not $GeodataDir) {
+    $GeodataDir = Join-Path $out "geodata"
+    $geodataScript = Join-Path $dsa "host\core\geodata\build-geodata.py"
+    $geodataArgs = @($geodataScript, "--out", (Join-Path $GeodataDir "address-boundaries.bin"))
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        uv run @geodataArgs
+    } else {
+        & $python @geodataArgs
+    }
+    if ($LASTEXITCODE -ne 0) { throw "building the address data failed" }
+}
+foreach ($name in @("address-boundaries.bin", "NOTICE.txt")) {
+    $file = Join-Path $GeodataDir $name
+    if (-not (Test-Path $file)) { throw "$GeodataDir has no $name (build-geodata.py makes it)" }
+    Copy-Item $file $stageGeodata
+}
 
 # Reject Microsoft WSA binaries or components in the payload.
 $checkNoWsaScript = Join-Path $installer "check-no-wsa.py"

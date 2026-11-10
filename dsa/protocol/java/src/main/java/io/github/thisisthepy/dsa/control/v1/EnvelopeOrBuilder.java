@@ -1668,5 +1668,49 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash();
 
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   * @return Whether the geocodeRequest field is set.
+   */
+  boolean hasGeocodeRequest();
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   * @return The geocodeRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.GeocodeRequest getGeocodeRequest();
+
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   * @return Whether the geocodeResult field is set.
+   */
+  boolean hasGeocodeResult();
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   * @return The geocodeResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.GeocodeResult getGeocodeResult();
+
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   * @return Whether the shareToHost field is set.
+   */
+  boolean hasShareToHost();
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   * @return The shareToHost.
+   */
+  io.github.thisisthepy.dsa.control.v1.ShareToHost getShareToHost();
+
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   * @return Whether the shareResult field is set.
+   */
+  boolean hasShareResult();
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   * @return The shareResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.ShareResult getShareResult();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

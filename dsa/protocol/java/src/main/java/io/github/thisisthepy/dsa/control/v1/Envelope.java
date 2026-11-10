@@ -171,6 +171,10 @@ public  final class Envelope extends
     REINSTALL_APP(380),
     REINSTALL_RESULT(381),
     NATIVE_LIBRARY_CRASH(382),
+    GEOCODE_REQUEST(470),
+    GEOCODE_RESULT(471),
+    SHARE_TO_HOST(472),
+    SHARE_RESULT(473),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -337,6 +341,10 @@ public  final class Envelope extends
         case 380: return REINSTALL_APP;
         case 381: return REINSTALL_RESULT;
         case 382: return NATIVE_LIBRARY_CRASH;
+        case 470: return GEOCODE_REQUEST;
+        case 471: return GEOCODE_RESULT;
+        case 472: return SHARE_TO_HOST;
+        case 473: return SHARE_RESULT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7908,6 +7916,206 @@ public  final class Envelope extends
     }
   }
 
+  public static final int GEOCODE_REQUEST_FIELD_NUMBER = 470;
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   */
+  @java.lang.Override
+  public boolean hasGeocodeRequest() {
+    return bodyCase_ == 470;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GeocodeRequest getGeocodeRequest() {
+    if (bodyCase_ == 470) {
+       return (io.github.thisisthepy.dsa.control.v1.GeocodeRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GeocodeRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   */
+  private void setGeocodeRequest(io.github.thisisthepy.dsa.control.v1.GeocodeRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 470;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   */
+  private void mergeGeocodeRequest(io.github.thisisthepy.dsa.control.v1.GeocodeRequest value) {
+    value.getClass();
+  if (bodyCase_ == 470 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GeocodeRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GeocodeRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.GeocodeRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 470;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+   */
+  private void clearGeocodeRequest() {
+    if (bodyCase_ == 470) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GEOCODE_RESULT_FIELD_NUMBER = 471;
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   */
+  @java.lang.Override
+  public boolean hasGeocodeResult() {
+    return bodyCase_ == 471;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GeocodeResult getGeocodeResult() {
+    if (bodyCase_ == 471) {
+       return (io.github.thisisthepy.dsa.control.v1.GeocodeResult) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GeocodeResult.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   */
+  private void setGeocodeResult(io.github.thisisthepy.dsa.control.v1.GeocodeResult value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 471;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   */
+  private void mergeGeocodeResult(io.github.thisisthepy.dsa.control.v1.GeocodeResult value) {
+    value.getClass();
+  if (bodyCase_ == 471 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GeocodeResult.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GeocodeResult.newBuilder((io.github.thisisthepy.dsa.control.v1.GeocodeResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 471;
+  }
+  /**
+   * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+   */
+  private void clearGeocodeResult() {
+    if (bodyCase_ == 471) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SHARE_TO_HOST_FIELD_NUMBER = 472;
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   */
+  @java.lang.Override
+  public boolean hasShareToHost() {
+    return bodyCase_ == 472;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ShareToHost getShareToHost() {
+    if (bodyCase_ == 472) {
+       return (io.github.thisisthepy.dsa.control.v1.ShareToHost) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ShareToHost.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   */
+  private void setShareToHost(io.github.thisisthepy.dsa.control.v1.ShareToHost value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 472;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   */
+  private void mergeShareToHost(io.github.thisisthepy.dsa.control.v1.ShareToHost value) {
+    value.getClass();
+  if (bodyCase_ == 472 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ShareToHost.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ShareToHost.newBuilder((io.github.thisisthepy.dsa.control.v1.ShareToHost) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 472;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+   */
+  private void clearShareToHost() {
+    if (bodyCase_ == 472) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SHARE_RESULT_FIELD_NUMBER = 473;
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   */
+  @java.lang.Override
+  public boolean hasShareResult() {
+    return bodyCase_ == 473;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ShareResult getShareResult() {
+    if (bodyCase_ == 473) {
+       return (io.github.thisisthepy.dsa.control.v1.ShareResult) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ShareResult.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   */
+  private void setShareResult(io.github.thisisthepy.dsa.control.v1.ShareResult value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 473;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   */
+  private void mergeShareResult(io.github.thisisthepy.dsa.control.v1.ShareResult value) {
+    value.getClass();
+  if (bodyCase_ == 473 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ShareResult.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ShareResult.newBuilder((io.github.thisisthepy.dsa.control.v1.ShareResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 473;
+  }
+  /**
+   * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+   */
+  private void clearShareResult() {
+    if (bodyCase_ == 473) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -15267,6 +15475,198 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    @java.lang.Override
+    public boolean hasGeocodeRequest() {
+      return instance.hasGeocodeRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GeocodeRequest getGeocodeRequest() {
+      return instance.getGeocodeRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    public Builder setGeocodeRequest(io.github.thisisthepy.dsa.control.v1.GeocodeRequest value) {
+      copyOnWrite();
+      instance.setGeocodeRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    public Builder setGeocodeRequest(
+        io.github.thisisthepy.dsa.control.v1.GeocodeRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGeocodeRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    public Builder mergeGeocodeRequest(io.github.thisisthepy.dsa.control.v1.GeocodeRequest value) {
+      copyOnWrite();
+      instance.mergeGeocodeRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeRequest geocode_request = 470;</code>
+     */
+    public Builder clearGeocodeRequest() {
+      copyOnWrite();
+      instance.clearGeocodeRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    @java.lang.Override
+    public boolean hasGeocodeResult() {
+      return instance.hasGeocodeResult();
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GeocodeResult getGeocodeResult() {
+      return instance.getGeocodeResult();
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    public Builder setGeocodeResult(io.github.thisisthepy.dsa.control.v1.GeocodeResult value) {
+      copyOnWrite();
+      instance.setGeocodeResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    public Builder setGeocodeResult(
+        io.github.thisisthepy.dsa.control.v1.GeocodeResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGeocodeResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    public Builder mergeGeocodeResult(io.github.thisisthepy.dsa.control.v1.GeocodeResult value) {
+      copyOnWrite();
+      instance.mergeGeocodeResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GeocodeResult geocode_result = 471;</code>
+     */
+    public Builder clearGeocodeResult() {
+      copyOnWrite();
+      instance.clearGeocodeResult();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    @java.lang.Override
+    public boolean hasShareToHost() {
+      return instance.hasShareToHost();
+    }
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ShareToHost getShareToHost() {
+      return instance.getShareToHost();
+    }
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    public Builder setShareToHost(io.github.thisisthepy.dsa.control.v1.ShareToHost value) {
+      copyOnWrite();
+      instance.setShareToHost(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    public Builder setShareToHost(
+        io.github.thisisthepy.dsa.control.v1.ShareToHost.Builder builderForValue) {
+      copyOnWrite();
+      instance.setShareToHost(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    public Builder mergeShareToHost(io.github.thisisthepy.dsa.control.v1.ShareToHost value) {
+      copyOnWrite();
+      instance.mergeShareToHost(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareToHost share_to_host = 472;</code>
+     */
+    public Builder clearShareToHost() {
+      copyOnWrite();
+      instance.clearShareToHost();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    @java.lang.Override
+    public boolean hasShareResult() {
+      return instance.hasShareResult();
+    }
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ShareResult getShareResult() {
+      return instance.getShareResult();
+    }
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    public Builder setShareResult(io.github.thisisthepy.dsa.control.v1.ShareResult value) {
+      copyOnWrite();
+      instance.setShareResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    public Builder setShareResult(
+        io.github.thisisthepy.dsa.control.v1.ShareResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setShareResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    public Builder mergeShareResult(io.github.thisisthepy.dsa.control.v1.ShareResult value) {
+      copyOnWrite();
+      instance.mergeShareResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ShareResult share_result = 473;</code>
+     */
+    public Builder clearShareResult() {
+      copyOnWrite();
+      instance.clearShareResult();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -15436,9 +15836,13 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.SuDecision.class,
             io.github.thisisthepy.dsa.control.v1.AddonImageRead.class,
             io.github.thisisthepy.dsa.control.v1.AddonImagePart.class,
+            io.github.thisisthepy.dsa.control.v1.GeocodeRequest.class,
+            io.github.thisisthepy.dsa.control.v1.GeocodeResult.class,
+            io.github.thisisthepy.dsa.control.v1.ShareToHost.class,
+            io.github.thisisthepy.dsa.control.v1.ShareResult.class,
           };
           java.lang.String info =
-              "\u0000\u0097\u0001\u0000\u0001\u019f\u0097\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u009b\u0001\u0000\u0001\u01d9\u009b\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -15458,7 +15862,8 @@ public  final class Envelope extends
               "\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179<\u0000\u017c" +
               "<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
               "\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b" +
-              "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000";
+              "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000\u01d7<\u0000" +
+              "\u01d8<\u0000\u01d9<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
