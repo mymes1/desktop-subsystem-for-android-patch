@@ -2764,6 +2764,23 @@ message BackupSetting {
   bool enabled = 1;
 }
 
+// Host to guest, to the control daemon: the root certificates a user or an administrator added
+// to the host's trust store (the host leaves out those its operating system ships), which
+// Android trusts as system certificates beside its own. Internet filters and company proxies
+// that inspect HTTPS install such a root on the computer, and apps reach the internet there only
+// if Android trusts it too. The daemon adds them to Android's system certificate folders without
+// a restart and takes away those it added before that are no longer named; Android's own
+// certificates are never touched. With `enabled` false it takes away every one it added. The
+// agent hears it too, once the folders are in step, and has every running app forget the trust
+// anchors it has looked up, so a root taken away stops being trusted at once. The host sends
+// it each time the daemon connects, again when the agent connects, and whenever the host's
+// store or the user's setting changes. A guest boots trusting none of them.
+message HostCertificates {
+  bool enabled = 1;
+  // Each certificate, DER-encoded X.509. Empty while `enabled` is false.
+  repeated bytes certificates = 2;
+}
+
 // Which passkey ceremony an app asks for.
 enum PasskeyOperation {
   PASSKEY_OPERATION_UNSPECIFIED = 0;
@@ -3240,5 +3257,6 @@ message Envelope {
     LaunchShortcut launch_shortcut = 681;
     PinShortcutRequest pin_shortcut_request = 682;
     PinShortcutAnswer pin_shortcut_answer = 683;
+    HostCertificates host_certificates = 684;
   }
 }
