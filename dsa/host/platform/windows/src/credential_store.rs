@@ -28,6 +28,7 @@
 //! cleared (or a disk moved to another computer) says the key is gone with it. The key is never
 //! replaced, since Android's keys are wrapped under it; a data reset lets it go.
 
+#[cfg(any(windows, test))]
 use std::path::Path;
 use std::sync::Arc;
 
