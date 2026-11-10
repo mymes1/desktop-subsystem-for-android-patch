@@ -7,7 +7,16 @@
 //! (the system tray) instead. The icon is the app's, and its tooltip is the title and text of
 //! the notification the service keeps shown. A left click opens the app's window; the right
 //! click menu has Open, the notification's actions (Pause and Next for music) and Stop, which
-//! ends the app after the user confirms it, unless they chose not to be asked again.
+//! ends the app after the user confirms it, unless they chose not to be asked again. The menu
+//! is a Windows 11 menu, as the window manager draws for its widgets
+//! ([`crate::compositor::fluent_menu`]): rounded, with the system's shadow and acrylic, the
+//! user's theme or high contrast colours, Segoe UI Variable text and a Segoe Fluent Icons glyph
+//! for each item that has one, hover and keyboard navigation, and it closes when it loses the
+//! foreground. It is never Windows' plain popup menu.
+//!
+//! While an app with a media session has a window open, the window's taskbar preview has
+//! previous, play or pause and next buttons ([`WithWindowMedia`] carries the session to the
+//! app's windows and their presses back).
 //!
 //! Each icon has a GUID of its own, made from the app's package ([`tray_guid`]), so Windows
 //! remembers for each app whether its icon shows on the taskbar or in the overflow, as it
@@ -17,10 +26,6 @@
 //! (SystemMediaTransportControls): the media keys, and the media flyout with the title,
 //! artist and album art. Each session has a hidden window of its own that carries the app's
 //! AppUserModelID, so the flyout names the app rather than the window manager.
-//!
-//! While an app with a media session has a window open, the window's taskbar preview has
-//! previous, play or pause and next buttons ([`WithWindowMedia`] carries the session to the
-//! app's windows and their presses back).
 //!
 //! The window manager watches the service ([`sync`]); what the user does goes back to it on
 //! new connections. The Win32 side is [`WindowsTray`]; a test's [`Tray`] records what it is
@@ -41,6 +46,8 @@ use dsa_host_core::host_api::HostApiClient;
 use dsa_transport::Connector;
 use sha2::{Digest, Sha256};
 
+use crate::compositor::fluent::glyph;
+use crate::compositor::fluent_menu::{Anchor, MenuEntry, MenuItem};
 use crate::compositor::log::{note, CompositorLogger};
 
 /// What the window manager calls itself to the service.
@@ -157,46 +164,74 @@ impl Texts {
     }
 }
 
-/// One entry of an icon's right click menu: its ID and its text. ID 0 is a separator.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MenuEntry {
-    pub id: u32,
-    pub text: String,
+/// The Segoe Fluent Icons glyph of a notification action, read from its title as a media
+/// notification names its actions (in English or Korean): play, pause, previous, next, stop.
+/// `None` for any other action, which shows no icon.
+pub fn action_glyph(title: &str) -> Option<char> {
+    let title = title.trim().to_lowercase();
+    let is = |words: &[&str]| words.iter().any(|word| title == *word);
+    if is(&["pause", "일시 정지", "일시정지"]) {
+        Some(glyph::PAUSE)
+    } else if is(&["play", "resume", "재생", "다시 재생"]) {
+        Some(glyph::PLAY)
+    } else if is(&["previous", "prev", "skip to previous", "이전", "이전 곡"]) {
+        Some(glyph::PREVIOUS)
+    } else if is(&["next", "skip", "skip to next", "다음", "다음 곡"]) {
+        Some(glyph::NEXT)
+    } else if is(&["stop", "중지", "정지"]) {
+        Some(glyph::STOP)
+    } else {
+        None
+    }
 }
 
-/// The right click menu of `app`'s icon: Open, the notification's actions, and Stop.
+/// The right click menu of `app`'s icon: Open, the notification's actions, and Stop, as a
+/// Windows 11 menu draws them: each with its Segoe Fluent Icons glyph where it has one, Open
+/// and Stop with their access keys, and the groups apart by separators.
 pub fn menu_entries(app: &BackgroundApp, texts: &Texts) -> Vec<MenuEntry> {
-    let mut entries = vec![MenuEntry {
-        id: MENU_OPEN,
-        text: texts.open.to_string(),
-    }];
+    let open = MenuItem::new(MENU_OPEN, texts.open)
+        .with_glyph(glyph::OPEN_WINDOW)
+        .with_access_key('O');
+    let mut entries = vec![MenuEntry::Item(open)];
     let actions: Vec<MenuEntry> = app
         .actions
         .iter()
         .enumerate()
         .filter(|(_, title)| !title.trim().is_empty())
-        .map(|(index, title)| MenuEntry {
-            id: MENU_FIRST_ACTION + index as u32,
-            // An ampersand would mark the next letter as the item's access key.
-            text: title.trim().replace('&', "&&"),
+        .map(|(index, title)| {
+            let item = MenuItem::new(MENU_FIRST_ACTION + index as u32, title.trim());
+            MenuEntry::Item(match action_glyph(title) {
+                Some(symbol) => item.with_glyph(symbol),
+                None => item,
+            })
         })
         .collect();
     if !actions.is_empty() {
-        entries.push(MenuEntry {
-            id: 0,
-            text: String::new(),
-        });
+        entries.push(MenuEntry::Separator);
         entries.extend(actions);
     }
-    entries.push(MenuEntry {
-        id: 0,
-        text: String::new(),
-    });
-    entries.push(MenuEntry {
-        id: MENU_STOP,
-        text: texts.stop.to_string(),
-    });
+    entries.push(MenuEntry::Separator);
+    let stop = MenuItem::new(MENU_STOP, texts.stop)
+        .with_glyph(glyph::STOP)
+        .with_access_key('S');
+    entries.push(MenuEntry::Item(stop));
     entries
+}
+
+/// Where an icon's menu opens for the point the notification area gives: at the point, as
+/// the system's tray menus open, so on a taskbar at the bottom the menu sits on top of it at
+/// the pointer, on one at the top just below it, and on one at a side beside it (the menu is
+/// kept to the work area, which leaves the taskbar out).
+pub fn tray_anchor(x: i32, y: i32) -> Anchor {
+    Anchor::Point { x, y }
+}
+
+/// Whether the keyboard opened an icon's menu: the notification area then gives the icon's
+/// place, not the pointer's, so the two lie apart. A menu the keyboard opened starts on its
+/// first item with its access keys underlined.
+pub fn opened_by_keyboard(at: (i32, i32), pointer: (i32, i32)) -> bool {
+    const SLACK: i32 = 4;
+    (at.0 - pointer.0).abs() > SLACK || (at.1 - pointer.1).abs() > SLACK
 }
 
 /// What the user chose in a menu, as a request for the service: `None` for nothing.
@@ -611,19 +646,17 @@ mod win {
         NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICONDATAW, NOTIFYICON_VERSION_4,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        AppendMenuW, CreateIconIndirect, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
-        DestroyIcon, DestroyMenu, DestroyWindow, DialogBoxIndirectParamW, DispatchMessageW,
-        EndDialog, GetCursorPos, GetMessageW, LoadIconW, PostMessageW, PostQuitMessage,
-        RegisterClassExW, RegisterWindowMessageW, SetForegroundWindow, SetMenuDefaultItem,
-        TrackPopupMenuEx, TranslateMessage, HICON, ICONINFO, IDI_APPLICATION, MF_SEPARATOR,
-        MF_STRING, MSG, SM_CXSMICON, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP,
-        WM_CLOSE, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_INITDIALOG, WM_NULL, WM_SETTINGCHANGE,
+        CreateIconIndirect, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyWindow,
+        DialogBoxIndirectParamW, DispatchMessageW, EndDialog, GetCursorPos, GetMessageW, LoadIconW,
+        PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
+        SetForegroundWindow, TranslateMessage, HICON, ICONINFO, IDI_APPLICATION, MSG, SM_CXSMICON,
+        WM_APP, WM_CLOSE, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_INITDIALOG, WM_SETTINGCHANGE,
         WNDCLASSEXW, WS_POPUP,
     };
 
     use super::{
-        app_name, chosen, menu_entries, stop_dialog_template, tooltip, tray_guid, Texts,
-        TrayCommand, TrayReport, CANCEL_ID, DO_NOT_ASK_ID, STOP_ID,
+        app_name, chosen, menu_entries, opened_by_keyboard, stop_dialog_template, tooltip,
+        tray_anchor, tray_guid, Texts, TrayCommand, TrayReport, CANCEL_ID, DO_NOT_ASK_ID, STOP_ID,
     };
     use crate::compositor::log::{note, CompositorLogger};
 
@@ -841,7 +874,11 @@ mod win {
                         WM_CONTEXTMENU => {
                             let x = (wparam & 0xffff) as u16 as i16 as i32;
                             let y = ((wparam >> 16) & 0xffff) as u16 as i16 as i32;
-                            show_menu(hwnd, &package, x, y);
+                            let mut pointer = POINT { x: 0, y: 0 };
+                            // SAFETY: a plain read of the pointer's position.
+                            unsafe { GetCursorPos(&mut pointer) };
+                            let keyboard = opened_by_keyboard((x, y), (pointer.x, pointer.y));
+                            show_menu(hwnd, &package, x, y, keyboard);
                         }
                         _ => {}
                     }
@@ -1198,8 +1235,12 @@ mod win {
         }
     }
 
-    /// Shows the icon's menu at (`x`, `y`) and acts on what the user picks.
-    fn show_menu(hwnd: HWND, package: &str, x: i32, y: i32) {
+    /// Shows the icon's menu at (`x`, `y`), the place the notification area gives (the
+    /// pointer, or the icon when the keyboard opened it), and acts on what the user picks.
+    /// The menu is a Windows 11 menu ([`crate::compositor::fluent_menu`]): it opens beside the
+    /// point, above the taskbar when the taskbar is below, as the system's own tray menus do,
+    /// and closes when it loses the foreground.
+    fn show_menu(hwnd: HWND, package: &str, x: i32, y: i32, keyboard: bool) {
         let Some(Some((app, texts))) = with_state(|s| {
             s.icons
                 .get(package)
@@ -1208,42 +1249,25 @@ mod win {
             return;
         };
         let entries = menu_entries(&app, &texts);
-        // SAFETY: a menu made, shown and destroyed here, with NUL-terminated texts that
-        // outlive the calls.
-        let picked = unsafe {
-            let menu = CreatePopupMenu();
-            if menu.is_null() {
-                return;
-            }
-            for entry in &entries {
-                if entry.id == 0 {
-                    AppendMenuW(menu, MF_SEPARATOR, 0, null());
-                } else {
-                    let text = wide(&entry.text);
-                    AppendMenuW(menu, MF_STRING, entry.id as usize, text.as_ptr());
-                }
-            }
-            SetMenuDefaultItem(menu, super::MENU_OPEN, 0);
-            let (x, y) = if x == 0 && y == 0 {
-                let mut point = POINT { x: 0, y: 0 };
-                GetCursorPos(&mut point);
-                (point.x, point.y)
-            } else {
-                (x, y)
-            };
-            // The menu closes when the user clicks elsewhere only if its window is in front.
-            SetForegroundWindow(hwnd);
-            let picked = TrackPopupMenuEx(
-                menu,
-                TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
-                x,
-                y,
-                hwnd,
-                null(),
-            );
-            PostMessageW(hwnd, WM_NULL, 0, 0);
-            DestroyMenu(menu);
-            picked as u32
+        let (x, y) = if x == 0 && y == 0 {
+            let mut point = POINT { x: 0, y: 0 };
+            // SAFETY: a plain read of the pointer's position.
+            unsafe { GetCursorPos(&mut point) };
+            (point.x, point.y)
+        } else {
+            (x, y)
+        };
+        // No state is borrowed while the menu is open: it runs this thread's messages.
+        let picked =
+            crate::compositor::fluent_menu::show(crate::compositor::fluent_menu::Request {
+                owner: hwnd as isize,
+                anchor: tray_anchor(x, y),
+                entries: &entries,
+                name: app_name(&app),
+                keyboard,
+            });
+        let Some(picked) = picked else {
+            return;
         };
         match chosen(picked) {
             Some(BackgroundCommand::Stop) => {
@@ -1657,25 +1681,113 @@ mod tests {
         assert_eq!(tooltip(&unnamed), "com.example.music");
     }
 
+    /// The menu's IDs in order, 0 for a separator.
+    fn ids(entries: &[MenuEntry]) -> Vec<u32> {
+        entries
+            .iter()
+            .map(|entry| entry.item().map_or(0, |item| item.id))
+            .collect()
+    }
+
     #[test]
     fn fr24_the_menu_is_open_the_actions_and_stop() {
         let texts = Texts::english();
         let entries = menu_entries(&music(&["Pause", "Next", "R&B"]), &texts);
-        let ids: Vec<u32> = entries.iter().map(|e| e.id).collect();
-        assert_eq!(ids, vec![MENU_OPEN, 0, 100, 101, 102, 0, MENU_STOP]);
-        assert_eq!(entries[0].text, "Open");
-        assert_eq!(entries[4].text, "R&&B");
-        assert_eq!(entries[6].text, "Stop");
-        let plain = menu_entries(&music(&[]), &texts);
         assert_eq!(
-            plain.iter().map(|e| e.id).collect::<Vec<_>>(),
-            vec![MENU_OPEN, 0, MENU_STOP]
+            ids(&entries),
+            vec![MENU_OPEN, 0, 100, 101, 102, 0, MENU_STOP]
         );
+        let label = |index: usize| entries[index].item().unwrap().label.clone();
+        assert_eq!(label(0), "Open");
+        // A label is drawn as it is: an ampersand marks no access key.
+        assert_eq!(label(4), "R&B");
+        assert_eq!(label(6), "Stop");
+        let plain = menu_entries(&music(&[]), &texts);
+        assert_eq!(ids(&plain), vec![MENU_OPEN, 0, MENU_STOP]);
         assert_eq!(chosen(MENU_OPEN), Some(BackgroundCommand::Open));
         assert_eq!(chosen(101), Some(BackgroundCommand::Action(1)));
         assert_eq!(chosen(MENU_STOP), Some(BackgroundCommand::Stop));
         assert_eq!(chosen(0), None);
         assert_eq!(chosen(999), None);
+    }
+
+    #[test]
+    fn fr24_the_tray_menu_looks_like_windows_11() {
+        use crate::compositor::fluent_menu::{layout, metrics, place};
+        use crate::compositor::widgets::px_of_dip;
+
+        // Each item has its Segoe Fluent Icons glyph where it has one, and Open and Stop
+        // their access keys.
+        let entries = menu_entries(&music(&["Pause", "Next", "R&B"]), &Texts::english());
+        let item = |index: usize| entries[index].item().unwrap().clone();
+        assert_eq!(item(0).glyph, Some(glyph::OPEN_WINDOW));
+        assert_eq!(item(0).access_key, Some('O'));
+        assert_eq!(item(2).glyph, Some(glyph::PAUSE));
+        assert_eq!(item(3).glyph, Some(glyph::NEXT));
+        assert_eq!(item(4).glyph, None);
+        assert_eq!(item(6).glyph, Some(glyph::STOP));
+        assert_eq!(item(6).access_key, Some('S'));
+        assert_eq!(entries[1], MenuEntry::Separator);
+        assert_eq!(entries[5], MenuEntry::Separator);
+        assert!(entries
+            .iter()
+            .filter_map(MenuEntry::item)
+            .all(|i| i.enabled));
+        // The same in Korean, with a Korean media action's glyph.
+        let korean = menu_entries(&music(&["일시 정지", "다음"]), &Texts::korean());
+        let labels: Vec<&str> = korean
+            .iter()
+            .filter_map(MenuEntry::item)
+            .map(|i| i.label.as_str())
+            .collect();
+        assert_eq!(labels, ["열기", "일시 정지", "다음", "중지"]);
+        assert_eq!(korean[2].item().unwrap().glyph, Some(glyph::PAUSE));
+        assert_eq!(action_glyph(" Previous "), Some(glyph::PREVIOUS));
+        assert_eq!(action_glyph("Play"), Some(glyph::PLAY));
+        assert_eq!(action_glyph("Like"), None);
+
+        // Laid out at WinUI's MenuFlyout metrics at any scale: every label starts after the
+        // icon column, so the labels line up, and each item is a rounded highlight's height.
+        for dpi in [96, 144, 192] {
+            let widths = vec![40; entries.len()];
+            let laid = layout(&entries, &widths, dpi);
+            let px = |dip: u32| px_of_dip(dip, dpi);
+            assert!(laid.width >= px(metrics::MIN_WIDTH));
+            let items: Vec<_> = laid.rows.iter().filter(|row| !row.separator).collect();
+            assert_eq!(items.len(), 5);
+            assert!(items.iter().all(|row| row.glyph.is_some()));
+            assert!(items.iter().all(|row| row.text.x == items[0].text.x));
+            assert!(items
+                .iter()
+                .all(|row| row.highlight.h == px(metrics::ITEM_HEIGHT)));
+            assert!(items[0].text.x >= px(metrics::GLYPH_COLUMN));
+        }
+
+        // It opens at the pointer, as the system's tray menus do, and stays on the work area:
+        // above a taskbar at the bottom, below one at the top, beside one at the right.
+        let size = (200, 150);
+        let bottom = place(tray_anchor(1800, 1050), size, (0, 0, 1920, 1032), 4);
+        assert_eq!(bottom, (1600, 1032 - 150));
+        let top = place(tray_anchor(1800, 20), size, (0, 48, 1920, 1080), 4);
+        assert_eq!(top, (1600, 48));
+        let right = place(tray_anchor(1890, 1000), size, (0, 0, 1872, 1080), 4);
+        assert_eq!(right, (1672, 850));
+
+        // The keyboard opens it at the icon, away from the pointer.
+        assert!(!opened_by_keyboard((100, 100), (102, 99)));
+        assert!(opened_by_keyboard((100, 100), (400, 90)));
+
+        // Never Windows' plain popup menu: the tray calls none of its functions.
+        let calls = [
+            ["Track", "PopupMenu"].concat(),
+            ["Create", "PopupMenu"].concat(),
+            ["Append", "MenuW"].concat(),
+            ["SetMenu", "DefaultItem"].concat(),
+        ];
+        let source = include_str!("background.rs");
+        for call in &calls {
+            assert!(!source.contains(call.as_str()), "the tray calls {call}");
+        }
     }
 
     #[test]
