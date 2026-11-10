@@ -25,6 +25,7 @@
 
 #include "channel_messages.h"
 #include "compose_request.h"
+#include "cpu_upload.h"
 #include "frame_pipeline.h"
 #include "host_renderer.h"
 #include "resize_trace.h"
@@ -48,6 +49,15 @@ struct FrameLayer {
     float alpha = 1.0f;
     uint8_t color[4] = {0, 0, 0, 255};
     int32_t transform = 0;
+};
+
+// A layer whose buffer a CPU writes, for the copy of its picture up to the host.
+struct CpuLayer {
+    int64_t id = 0;
+    BufferRef buffer;
+    // The layer's buffer changed since the last copy pass: it holds a new picture.
+    bool fresh = false;
+    UniqueFd acquireFence;
 };
 
 struct Frame {
@@ -89,6 +99,10 @@ class TaskComposer {
     // gives a buffer back to its app only when the present after the one that showed it
     // returns, so none needs a release fence.
     void present(Frame& frame);
+    // Copies what a CPU wrote into these layers' buffers up to their host ColorBuffers, and
+    // returns once the host holds it: SurfaceFlinger draws its client layers from them next,
+    // and the host composes the others.
+    void uploadCpuWritten(std::vector<CpuLayer>& layers);
     // Returns once the host has finished with every frame handed over.
     void drain();
 
@@ -133,6 +147,10 @@ class TaskComposer {
     std::map<int32_t, Output> mOutputs;
     // Shared ColorBuffers this process holds open, by gralloc buffer ID.
     std::map<uint32_t, uint32_t> mShared;
+    // Buffers copied up for a frame not yet composed: a frame still being composed does not
+    // know them, and must not let go of their ColorBuffers.
+    std::set<uint32_t> mUploadedAhead;
+    CpuUploads mUploads;
     bool mWarnedNoDisplay = false;
 
     std::mutex mCallbackMutex;

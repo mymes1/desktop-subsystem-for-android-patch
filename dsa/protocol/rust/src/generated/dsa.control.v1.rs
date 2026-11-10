@@ -2227,6 +2227,44 @@ pub struct AudioOutputControl {
     #[prost(enumeration = "AudioOutputCommand", tag = "1")]
     pub command: i32,
 }
+/// One output of the audio module, and the app it plays.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppAudioStream {
+    /// The output, as its AudioOutputOpen names it on the audio port ("app 0", "primary").
+    #[prost(string, tag = "1")]
+    pub stream: ::prost::alloc::string::String,
+    /// The app that plays on it. Empty for the shared output.
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    /// The app's name as a launcher shows it. Empty for the shared output.
+    #[prost(string, tag = "3")]
+    pub app_label: ::prost::alloc::string::String,
+    /// The app's volume, from 0 (silent) to 1 (full): Android's media volume index over its
+    /// largest index, while the app is the one Android's media volume stands for.
+    #[prost(float, tag = "4")]
+    pub volume: f32,
+    #[prost(bool, tag = "5")]
+    pub muted: bool,
+}
+/// Guest to host, from the agent: the outputs and the apps they play, the whole list. Sent on
+/// each connection and whenever any of it changes.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppAudio {
+    #[prost(message, repeated, tag = "1")]
+    pub streams: ::prost::alloc::vec::Vec<AppAudioStream>,
+}
+/// Host to guest: the user set an app's volume or mute on the host. Empty `package_name` is the
+/// shared output. The agent keeps it as the app's volume, and makes it Android's media volume
+/// while that app is the one it stands for.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetAppVolume {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(float, tag = "2")]
+    pub volume: f32,
+    #[prost(bool, tag = "3")]
+    pub muted: bool,
+}
 /// Host to guest, to the channel daemon: what the guest's log stream carries from now on.
 /// While `on`, the daemon reads logd and sends the records that pass on the log port (a
 /// vsock port of its own, so a busy log never delays input or window messages). With `on`
@@ -3088,7 +3126,7 @@ pub struct SpellingResult {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 152, 153, 154, 402, 403, 404, 405, 406, 411, 412, 413, 414, 415, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 106, 107, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382, 620, 621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 654, 655, 656"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3296,6 +3334,10 @@ pub mod envelope {
         AudioInputOpen(super::AudioInputOpen),
         #[prost(message, tag = "105")]
         AudioInputOpened(super::AudioInputOpened),
+        #[prost(message, tag = "106")]
+        AppAudio(super::AppAudio),
+        #[prost(message, tag = "107")]
+        SetAppVolume(super::SetAppVolume),
         #[prost(message, tag = "120")]
         VideoCapabilities(super::VideoCapabilities),
         #[prost(message, tag = "121")]

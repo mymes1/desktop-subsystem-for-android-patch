@@ -32,6 +32,10 @@ mkdir -p "$out"
     "$here/cpu_readback_test.cpp" -o "$out/cpu_readback_test"
 "$out/cpu_readback_test"
 
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/cpu_upload_test.cpp" -o "$out/cpu_upload_test"
+"$out/cpu_upload_test"
+
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../host" \
     "$here/frame_crop_test.cpp" -o "$out/frame_crop_test"
 "$out/frame_crop_test"
