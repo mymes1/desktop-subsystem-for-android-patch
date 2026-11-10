@@ -38,6 +38,8 @@ pub mod glyph {
     pub const RESIZE: char = '\u{E740}';
     /// "Unpin": taking something off where it was put.
     pub const UNPIN: char = '\u{E77A}';
+    /// "Setting": a gear, for an item's own settings.
+    pub const SETTINGS: char = '\u{E713}';
 }
 
 /// The system colors of a high contrast theme that a menu and a button are drawn in.

@@ -15,14 +15,23 @@
 //! right click opens it at the pointer ([`super::widget_menu`]).
 //!
 //! A press, a move and a release inside the widget go to the widget's view in Android, so its
-//! buttons and lists work and an app it opens shows as a window. The window is moved by
-//! dragging its More button, or by pressing anywhere on the widget and holding still for
-//! [`HOLD_TO_MOVE`] before dragging, as a widget is moved on a phone's home screen; a press
-//! that moves sooner is the widget's own (a list scrolls), and a tap stays a tap
-//! ([`Gesture`]). The window is resized by its edges ([`hit_test`]). When the user lets go,
-//! the service is told where the window is and how large, in its monitor's pixels and
-//! density; the service remembers it and tells Android, which draws the widget at that size
-//! and tells the widget's app its size in dp, so the app can pick the layout that fits.
+//! buttons and lists work and an app it opens shows as a window. A press that moves before
+//! [`HOLD_TO_MOVE`] is the widget's own (a list scrolls), and a tap stays a tap ([`Gesture`]).
+//!
+//! A long press edits the widget as Android's home screen does: a finger or a pen held on it,
+//! or the mouse's left button held, for [`HOLD_TO_MOVE`] without moving past the drag
+//! threshold. Android's press is cancelled then, so the long press never also clicks. The
+//! widget lifts: it grows a little over a soft shadow, with a border in the accent color and a
+//! handle on each edge it may be resized along ([`edit_layout`], [`draw_edit`]). Dragging on
+//! moves it; letting go without moving opens its menu under it (Widget settings, Resize,
+//! Remove). While it is edited, dragging it moves it, a click on it opens the menu again, its
+//! handles and edges resize it within what the widget allows ([`edit_hit_test`]), and Esc, a
+//! click anywhere else, or the end of a move or a resize ends the edit. The window is also
+//! moved by dragging its More button, and resized by its edges when it is not edited
+//! ([`hit_test`]). When the user lets go, the service is told where the window is and how
+//! large, in its monitor's pixels and density; the service remembers it and tells Android,
+//! which draws the widget at that size and tells the widget's app its size in dp, so the app
+//! can pick the layout that fits.
 //!
 //! The window manager starts at sign-in, and it starts Android then when it is not running
 //! ([`starts_android_at_sign_in`]): the first app opened after the computer starts does not
@@ -71,9 +80,34 @@ pub const MORE_GLYPH_DIP: u32 = 16;
 /// How long the More button takes to fade in or out: WinUI's `ControlFastAnimationDuration`.
 pub const FADE: Duration = Duration::from_millis(167);
 
-/// How long a press on the widget is held still before dragging it moves the window, as a
-/// long press does on a phone's home screen.
+/// How long a press on the widget is held still before it is a long press, which edits the
+/// widget as a long press does on a phone's home screen.
 pub const HOLD_TO_MOVE: Duration = Duration::from_millis(500);
+
+/// How far a finger or a pen may wander, at least, before its press is a drag rather than a
+/// long press, in device-independent pixels: about Android's touch slop, as a finger is never
+/// as still as a mouse.
+pub const TOUCH_SLOP_DIP: u32 = 8;
+
+/// The room around a widget being edited, for its shadow and its handles, in
+/// device-independent pixels.
+pub const EDIT_MARGIN_DIP: u32 = 16;
+
+/// How much a widget being edited grows on each side as it lifts, in device-independent
+/// pixels.
+pub const LIFT_DIP: u32 = 4;
+
+/// The width of the accent border of a widget being edited.
+pub const EDIT_BORDER_DIP: u32 = 2;
+
+/// The corner radius of that border: the radius of a Windows 11 window.
+pub const EDIT_RADIUS_DIP: u32 = 8;
+
+/// The diameter of a resize handle of a widget being edited.
+pub const HANDLE_DIP: u32 = 12;
+
+/// How far from a handle's middle a press still grabs it.
+pub const HANDLE_HIT_DIP: u32 = 10;
 
 /// The host's density at a scale of 100%.
 const HOST_BASE_DPI: u32 = 96;
@@ -131,6 +165,13 @@ pub fn placement_of(x: i32, y: i32, width: i32, height: i32, dpi: u32) -> Placem
 /// The smallest a widget's window may be made on a monitor of `dpi`, in pixels.
 pub fn min_window_size(provider: &widgets::WidgetProvider, dpi: u32) -> (i32, i32) {
     let (width, height) = widgets::clamp_size(provider, 0, 0);
+    (px_of_dp(width, dpi), px_of_dp(height, dpi))
+}
+
+/// The largest a widget's window may be made on a monitor of `dpi`, in pixels: the widget's
+/// maximum, and its default along a side it cannot be resized along.
+pub fn max_window_size(provider: &widgets::WidgetProvider, dpi: u32) -> (i32, i32) {
+    let (width, height) = widgets::clamp_size(provider, widgets::MAX_SIDE, widgets::MAX_SIDE);
     (px_of_dp(width, dpi), px_of_dp(height, dpi))
 }
 
@@ -301,6 +342,8 @@ pub enum Hit {
     TopRight,
     BottomLeft,
     BottomRight,
+    /// Around a widget being edited, outside it: a press there ends the edit.
+    Outside,
 }
 
 /// What `x`, `y` (from the window's top left corner) hits in a window of `width` by `height`
@@ -326,6 +369,223 @@ pub fn hit_test(x: i32, y: i32, width: i32, height: i32, dpi: u32, resize_mode: 
         _ if on_more_button(x, y, width, height, dpi) => Hit::More,
         _ => Hit::Client,
     }
+}
+
+/// Where the parts of a widget being edited are in its window, which has
+/// [`EDIT_MARGIN_DIP`] of room on every side of the widget. Each is left, top, width and
+/// height in the window's pixels.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EditLayout {
+    /// The widget's own place, where it sits when it is not edited.
+    pub widget: (i32, i32, i32, i32),
+    /// The widget lifted: [`LIFT_DIP`] larger on each side, which its image is drawn into.
+    pub lifted: (i32, i32, i32, i32),
+    /// A handle in the middle of each edge the widget may be resized along, with that edge.
+    pub handles: Vec<(Hit, Circle)>,
+}
+
+/// The room around a widget being edited on a monitor of `dpi`, in pixels.
+pub fn edit_margin(dpi: u32) -> i32 {
+    px_of_dip(EDIT_MARGIN_DIP, dpi)
+}
+
+/// The parts of a widget being edited in a window of `width` by `height` pixels (the widget
+/// and its margin) on a monitor of `dpi`, with handles on the edges `resize_mode` allows.
+pub fn edit_layout(width: i32, height: i32, dpi: u32, resize_mode: u32) -> EditLayout {
+    let margin = edit_margin(dpi);
+    let (w, h) = ((width - 2 * margin).max(1), (height - 2 * margin).max(1));
+    let lift = px_of_dip(LIFT_DIP, dpi).min(margin);
+    let lifted = (margin - lift, margin - lift, w + 2 * lift, h + 2 * lift);
+    let (lx, ly, lw, lh) = lifted;
+    let radius = px_of_dip(HANDLE_DIP, dpi) as f32 / 2.0;
+    let (cx, cy) = (lx as f32 + lw as f32 / 2.0, ly as f32 + lh as f32 / 2.0);
+    let at = |cx: f32, cy: f32| Circle { cx, cy, radius };
+    let mut handles = Vec::with_capacity(4);
+    if resize_mode & widgets::RESIZE_HORIZONTAL != 0 {
+        handles.push((Hit::Left, at(lx as f32, cy)));
+        handles.push((Hit::Right, at((lx + lw) as f32, cy)));
+    }
+    if resize_mode & widgets::RESIZE_VERTICAL != 0 {
+        handles.push((Hit::Top, at(cx, ly as f32)));
+        handles.push((Hit::Bottom, at(cx, (ly + lh) as f32)));
+    }
+    EditLayout {
+        widget: (margin, margin, w, h),
+        lifted,
+        handles,
+    }
+}
+
+/// What `x`, `y` (from the window's top left corner) hits in the window of a widget being
+/// edited, `width` by `height` pixels on a monitor of `dpi`: a handle or an edge of the lifted
+/// widget resizes it along the edges `resize_mode` allows, inside it is the widget (a drag
+/// moves it), and around it is [`Hit::Outside`].
+pub fn edit_hit_test(x: i32, y: i32, width: i32, height: i32, dpi: u32, resize_mode: u32) -> Hit {
+    let layout = edit_layout(width, height, dpi, resize_mode);
+    let reach = px_of_dip(HANDLE_HIT_DIP, dpi) as f32;
+    let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+    for (hit, handle) in &layout.handles {
+        let (dx, dy) = (px - handle.cx, py - handle.cy);
+        if dx * dx + dy * dy <= reach * reach {
+            return *hit;
+        }
+    }
+    let (lx, ly, lw, lh) = layout.lifted;
+    let band = px_of_dip(BORDER_DIP as u32, dpi).max(1);
+    let horizontal = resize_mode & widgets::RESIZE_HORIZONTAL != 0;
+    let vertical = resize_mode & widgets::RESIZE_VERTICAL != 0;
+    let within_x = x >= lx - band && x < lx + lw + band;
+    let within_y = y >= ly - band && y < ly + lh + band;
+    if within_x && within_y {
+        let left = horizontal && x < lx + band;
+        let right = horizontal && x >= lx + lw - band;
+        let top = vertical && y < ly + band;
+        let bottom = vertical && y >= ly + lh - band;
+        match (left, right, top, bottom) {
+            (true, _, true, _) => return Hit::TopLeft,
+            (_, true, true, _) => return Hit::TopRight,
+            (true, _, _, true) => return Hit::BottomLeft,
+            (_, true, _, true) => return Hit::BottomRight,
+            (true, ..) => return Hit::Left,
+            (_, true, ..) => return Hit::Right,
+            (_, _, true, _) => return Hit::Top,
+            (.., true) => return Hit::Bottom,
+            _ => {}
+        }
+    }
+    if x >= lx && x < lx + lw && y >= ly && y < ly + lh {
+        Hit::Client
+    } else {
+        Hit::Outside
+    }
+}
+
+/// The colors a widget being edited is drawn with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditLook {
+    /// The border and the handles' rims: the accent color, as WinUI draws a selection.
+    pub accent: super::fluent::Argb,
+    /// The inside of the handles.
+    pub handle: super::fluent::Argb,
+    /// The shadow under the lifted widget, at its darkest.
+    pub shadow: super::fluent::Argb,
+}
+
+/// The colors of a widget being edited in `theme`: WinUI's accent fill (AccentDark1 on a light
+/// theme, AccentLight2 on a dark one), the theme's surface for the handles, and the high
+/// contrast colors while those are on.
+pub fn edit_look(theme: &super::fluent::Theme) -> EditLook {
+    if let Some(contrast) = theme.high_contrast {
+        return EditLook {
+            accent: contrast.highlight,
+            handle: contrast.window,
+            shadow: 0,
+        };
+    }
+    EditLook {
+        accent: if theme.dark {
+            theme.accent.light2
+        } else {
+            theme.accent.dark1
+        },
+        handle: if theme.dark { 0xFF2D_2D2D } else { 0xFFFF_FFFF },
+        shadow: if theme.dark { 0x5C00_0000 } else { 0x3800_0000 },
+    }
+}
+
+/// The picture of a widget being edited, `width` by `height` premultiplied BGRA pixels on a
+/// monitor of `dpi`: a soft shadow under the lifted widget, `lifted` (its image at the lifted
+/// size, premultiplied BGRA) over it, a border in the accent color and the handles. Every
+/// pixel of the widget stays just visible enough to be clicked; the room around it is clear
+/// but for the shadow.
+pub fn draw_edit(
+    lifted: &[u8],
+    width: usize,
+    height: usize,
+    dpi: u32,
+    resize_mode: u32,
+    look: &EditLook,
+) -> Vec<u8> {
+    let layout = edit_layout(width as i32, height as i32, dpi, resize_mode);
+    let mut pixels = vec![0u8; width * height * 4];
+    let mut canvas = super::fluent::Canvas {
+        width,
+        height,
+        pixels: &mut pixels,
+    };
+    let (lx, ly, lw, lh) = layout.lifted;
+    let radius = px_of_dip(EDIT_RADIUS_DIP, dpi) as f32;
+    // The shadow: layers that spread from the widget into the room around it, each adding a
+    // little, so it is darkest under the widget and fades out, a little below it as a raised
+    // surface's is.
+    if look.shadow >> 24 != 0 {
+        const LAYERS: i32 = 6;
+        let room = (edit_margin(dpi) - px_of_dip(LIFT_DIP, dpi)).max(1) as f32;
+        let drop = px_of_dip(2, dpi) as f32;
+        let alpha = ((look.shadow >> 24) as f32 / LAYERS as f32)
+            .round()
+            .max(1.0) as u32;
+        let layer = (alpha.min(255) << 24) | (look.shadow & 0x00FF_FFFF);
+        for step in 1..=LAYERS {
+            let spread = room * step as f32 / LAYERS as f32;
+            canvas.fill_rounded(
+                lx as f32 - spread,
+                ly as f32 - spread + drop,
+                lw as f32 + 2.0 * spread,
+                lh as f32 + 2.0 * spread,
+                radius + spread,
+                layer,
+            );
+        }
+    }
+    // The widget's image over it.
+    let (lw_px, lh_px) = (lw.max(0) as usize, lh.max(0) as usize);
+    for row in 0..lh_px {
+        let y = ly + row as i32;
+        if y < 0 || y as usize >= height {
+            continue;
+        }
+        for column in 0..lw_px {
+            let x = lx + column as i32;
+            if x < 0 || x as usize >= width {
+                continue;
+            }
+            let from = (row * lw_px + column) * 4;
+            let Some(source) = lifted.get(from..from + 4) else {
+                continue;
+            };
+            let to = (y as usize * width + x as usize) * 4;
+            let keep = 255 - u32::from(source[3]);
+            for channel in 0..4 {
+                let under = u32::from(canvas.pixels[to + channel]) * keep / 255;
+                canvas.pixels[to + channel] = (u32::from(source[channel]) + under).min(255) as u8;
+            }
+            if canvas.pixels[to + 3] == 0 {
+                canvas.pixels[to + 3] = 1;
+            }
+        }
+    }
+    let border = px_of_dip(EDIT_BORDER_DIP, dpi).max(1) as f32;
+    let (x, y, w, h) = (lx as f32, ly as f32, lw as f32, lh as f32);
+    canvas.stroke_rounded(x, y, w, h, radius, border, look.accent);
+    let rim = (px_of_dip(3, dpi) as f32 / 2.0).max(1.0);
+    for (_, handle) in &layout.handles {
+        let (r, d) = (handle.radius, handle.radius * 2.0);
+        let (left, top) = (handle.cx - r, handle.cy - r);
+        canvas.fill_rounded(left, top, d, d, r, look.handle);
+        canvas.stroke_rounded(left, top, d, d, r, rim, look.accent);
+    }
+    pixels
+}
+
+/// How far a press may move and still be a long press, at `drag` (the system's drag
+/// threshold): that, or [`TOUCH_SLOP_DIP`] for a finger or a pen when that is more.
+pub fn press_threshold(drag: (i32, i32), touch: bool, dpi: u32) -> (i32, i32) {
+    if !touch {
+        return drag;
+    }
+    let slop = px_of_dip(TOUCH_SLOP_DIP, dpi);
+    (drag.0.max(slop), drag.1.max(slop))
 }
 
 /// A circle in a window's pixels.
@@ -436,12 +696,20 @@ impl Fade {
 }
 
 /// Whether the More button shows: while the pointer is over the widget, while the window has
-/// the keyboard, while its menu is open, and while it is pressed or moving the window.
-pub fn more_button_shown(hover: bool, focused: bool, menu_open: bool, gesture: &Gesture) -> bool {
-    hover
-        || focused
-        || menu_open
-        || matches!(gesture, Gesture::Button { .. } | Gesture::Moving { .. })
+/// the keyboard, while its menu is open, and while it is pressed or moving the window, but
+/// never while the widget is being edited, whose border and handles take its place.
+pub fn more_button_shown(
+    hover: bool,
+    focused: bool,
+    menu_open: bool,
+    editing: bool,
+    gesture: &Gesture,
+) -> bool {
+    !editing
+        && (hover
+            || focused
+            || menu_open
+            || matches!(gesture, Gesture::Button { .. } | Gesture::Moving { .. }))
 }
 
 /// What a press on a widget window is doing.
@@ -459,6 +727,19 @@ pub enum Gesture {
     Button {
         down: (i32, i32),
     },
+    /// A long press: held still for [`HOLD_TO_MOVE`], so the widget is lifted for editing and
+    /// Android's press was cancelled. The pointer is at `at` on the screen, `grab` pixels
+    /// from the window's top left corner; dragging past the threshold moves the widget, and
+    /// letting go opens its menu.
+    Lifted {
+        at: (i32, i32),
+        grab: (i32, i32),
+    },
+    /// Pressed on a widget being edited, at `down` on the screen: Android never has it. A
+    /// drag moves the widget and a click opens its menu.
+    Editing {
+        down: (i32, i32),
+    },
     /// Moving the window, the pointer `grab` pixels from its top left corner.
     Moving {
         grab: (i32, i32),
@@ -473,17 +754,21 @@ pub enum Step {
     Android(PointerAction),
     /// The More button is pressed, or no longer pressed.
     Button,
-    /// The More button was clicked: its menu opens.
+    /// The More button was clicked: its menu opens under it.
     OpenMenu,
-    /// The window starts moving, to this top left corner; Android's press is cancelled
-    /// first when `cancel`.
+    /// The press was held long enough: Android's press is cancelled, so it never becomes a
+    /// click, and the widget is lifted for editing.
+    Lift,
+    /// A long press, or a click on a widget being edited, ended where it began: the menu of
+    /// the widget opens under it.
+    EditMenu,
+    /// The window starts moving, to this top left corner.
     StartMove {
-        cancel: bool,
         to: (i32, i32),
     },
     /// The window moves to this top left corner.
     MoveTo((i32, i32)),
-    /// The move ended: the service is told where the window is.
+    /// The move ended: the service is told where the window is, and an edit ends.
     EndMove,
 }
 
@@ -493,11 +778,15 @@ fn beyond(down: (i32, i32), at: (i32, i32), threshold: (i32, i32)) -> bool {
 }
 
 impl Gesture {
-    /// The button went down at `at` on the screen, on the More button or not.
-    pub fn down(&mut self, on_button: bool, at: (i32, i32), now: Instant) -> Step {
-        if on_button {
+    /// The button went down at `at` on the screen, on the More button or not, on a widget
+    /// being edited (`editing`) or not.
+    pub fn down(&mut self, on_button: bool, editing: bool, at: (i32, i32), now: Instant) -> Step {
+        if on_button && !editing {
             *self = Gesture::Button { down: at };
             Step::Button
+        } else if editing {
+            *self = Gesture::Editing { down: at };
+            Step::Nothing
         } else {
             *self = Gesture::Widget {
                 down: at,
@@ -522,21 +811,28 @@ impl Gesture {
                 }
                 Step::Android(PointerAction::Move)
             }
-            Gesture::Button { down } if beyond(down, at, threshold) => {
+            Gesture::Button { down } | Gesture::Editing { down } if beyond(down, at, threshold) => {
                 let grab = (down.0 - origin.0, down.1 - origin.1);
                 *self = Gesture::Moving { grab };
                 Step::StartMove {
-                    cancel: false,
                     to: (at.0 - grab.0, at.1 - grab.1),
                 }
             }
-            Gesture::Button { .. } => Step::Nothing,
+            Gesture::Button { .. } | Gesture::Editing { .. } => Step::Nothing,
+            Gesture::Lifted { at: held, grab } if beyond(held, at, threshold) => {
+                *self = Gesture::Moving { grab };
+                Step::StartMove {
+                    to: (at.0 - grab.0, at.1 - grab.1),
+                }
+            }
+            Gesture::Lifted { .. } => Step::Nothing,
             Gesture::Moving { grab } => Step::MoveTo((at.0 - grab.0, at.1 - grab.1)),
         }
     }
 
-    /// The press has been held until `now`, the pointer at `at`: one held still for
-    /// [`HOLD_TO_MOVE`] starts moving the window, and Android's press is cancelled.
+    /// The press has been held until `now`, the pointer at `at` on the screen and the
+    /// window's top left corner at `origin`: one held still for [`HOLD_TO_MOVE`] is a long
+    /// press, which lifts the widget for editing.
     pub fn held(&mut self, at: (i32, i32), origin: (i32, i32), now: Instant) -> Step {
         let Gesture::Widget { since, slid, .. } = *self else {
             return Step::Nothing;
@@ -545,10 +841,15 @@ impl Gesture {
             return Step::Nothing;
         }
         let grab = (at.0 - origin.0, at.1 - origin.1);
-        *self = Gesture::Moving { grab };
-        Step::StartMove {
-            cancel: true,
-            to: origin,
+        *self = Gesture::Lifted { at, grab };
+        Step::Lift
+    }
+
+    /// The window grew or shrank by `by` pixels on its left and top as an edit began or
+    /// ended under the press, so the pointer is that much further from its corner.
+    pub fn regrab(&mut self, by: (i32, i32)) {
+        if let Gesture::Lifted { grab, .. } | Gesture::Moving { grab } = self {
+            *grab = (grab.0 + by.0, grab.1 + by.1);
         }
     }
 
@@ -559,6 +860,7 @@ impl Gesture {
             Gesture::Widget { .. } => Step::Android(PointerAction::Up),
             Gesture::Button { .. } if on_button => Step::OpenMenu,
             Gesture::Button { .. } => Step::Button,
+            Gesture::Lifted { .. } | Gesture::Editing { .. } => Step::EditMenu,
             Gesture::Moving { .. } => Step::EndMove,
         }
     }
@@ -566,7 +868,7 @@ impl Gesture {
     /// The window lost the mouse before the button went up.
     pub fn cancel(&mut self) -> Step {
         match std::mem::replace(self, Gesture::Idle) {
-            Gesture::Idle => Step::Nothing,
+            Gesture::Idle | Gesture::Lifted { .. } | Gesture::Editing { .. } => Step::Nothing,
             Gesture::Widget { .. } => Step::Android(PointerAction::Cancel),
             Gesture::Button { .. } => Step::Button,
             Gesture::Moving { .. } => Step::EndMove,
@@ -724,6 +1026,8 @@ pub enum WindowReport {
     },
     /// The user chose Remove in the window's menu.
     Remove { widget_id: i32 },
+    /// The user chose Widget settings in the window's menu: the widget's setup opens again.
+    Reconfigure { widget_id: i32 },
 }
 
 /// The widget windows, as the watch drives them: the window manager's are Win32 windows on
@@ -771,12 +1075,32 @@ pub fn coalesce(reports: Vec<WindowReport>) -> Vec<WindowReport> {
     out
 }
 
+/// Asks the service, through a connection of its own, to open the setup of widget
+/// `widget_id` again, and logs how it ended. It waits for the user, who may take minutes, so
+/// it runs on a thread of its own and nothing else waits for it.
+pub fn reconfigure(mut client: HostApiClient, widget_id: i32, logger: Option<&CompositorLogger>) {
+    note(
+        logger,
+        &format!("opening the settings of widget {widget_id} from its menu"),
+    );
+    let wait = dsa_host_core::host_api::WIDGET_ADD_WAIT + Duration::from_secs(10);
+    match client.reconfigure_widget(widget_id, wait) {
+        Ok(_) => note(logger, &format!("widget {widget_id} was set up again")),
+        Err(error) => note(
+            logger,
+            &format!("widget {widget_id} was not set up again: {error}"),
+        ),
+    }
+}
+
 /// Passes what the windows reported to the service through `client`. A report the service
-/// refuses is logged; the rest go on.
+/// refuses is logged; the rest go on. A widget's settings go to `settings`, which opens them
+/// without holding up the reports after it.
 fn send_reports(
     client: &mut HostApiClient,
     reports: Vec<WindowReport>,
     logger: Option<&CompositorLogger>,
+    settings: &mut dyn FnMut(i32),
 ) -> Result<(), String> {
     for report in coalesce(reports) {
         let result = match report {
@@ -799,6 +1123,10 @@ fn send_reports(
                     &format!("removing widget {widget_id} from its menu"),
                 );
                 client.remove_widget(widget_id)
+            }
+            WindowReport::Reconfigure { widget_id } => {
+                settings(widget_id);
+                Ok(())
             }
         };
         match result {
@@ -877,7 +1205,34 @@ pub fn sync(
             windows.command(WindowCommand::Place(widget));
         }
         while !stop.load(Ordering::Relaxed) {
-            if let Err(error) = send_reports(&mut requests, windows.reports(), logger.as_deref()) {
+            let mut settings = |widget_id: i32| {
+                match HostApiClient::connect(&mut *connector, BUILD, ANSWER) {
+                    Ok(client) => {
+                        let thread_logger = logger.clone();
+                        let spawned = thread::Builder::new()
+                            .name("dsa-wm-widget-settings".into())
+                            .spawn(move || {
+                                reconfigure(client, widget_id, thread_logger.as_deref())
+                            });
+                        if let Err(why) = spawned {
+                            note(
+                                logger.as_deref(),
+                                &format!("the settings of widget {widget_id} did not open: {why}"),
+                            );
+                        }
+                    }
+                    Err(error) => note(
+                        logger.as_deref(),
+                        &format!(
+                            "the settings of widget {widget_id} did not open: the service cannot be reached: {error}"
+                        ),
+                    ),
+                }
+            };
+            let reports = windows.reports();
+            if let Err(error) =
+                send_reports(&mut requests, reports, logger.as_deref(), &mut settings)
+            {
                 note(
                     logger.as_deref(),
                     &format!("a widget's window did not reach the service: {error}"),
@@ -1004,8 +1359,8 @@ mod win {
         DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
     };
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        ReleaseCapture, SetCapture, SetFocus, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
-        VK_RETURN, VK_SPACE,
+        GetAsyncKeyState, ReleaseCapture, SetCapture, SetFocus, TrackMouseEvent, TME_LEAVE,
+        TRACKMOUSEEVENT, VK_ESCAPE, VK_LBUTTON, VK_RBUTTON, VK_RETURN, VK_SPACE,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowExW,
@@ -1022,15 +1377,19 @@ mod win {
         WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCDESTROY, WM_NCHITTEST, WM_SETFOCUS, WM_SETTINGCHANGE,
         WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetMessageExtraInfo, IsWindow,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible, GW_HWNDNEXT};
 
     use std::time::Instant;
 
     use super::{
-        android_density, draw_more_button, frame_overdue, hit_test, min_window_size, more_button,
-        more_button_shown, more_glyph_size, on_more_button, placement_of, px_of_dip,
-        reachable_origin, right_above_desktop, to_frame, window_size, window_styles, z_place,
-        Below, ButtonLook, Fade, Gesture, Hit, Step, WindowCommand, WindowReport, ZPlace,
+        android_density, draw_edit, draw_more_button, edit_hit_test, edit_layout, edit_look,
+        edit_margin, frame_overdue, hit_test, max_window_size, min_window_size, more_button,
+        more_button_shown, more_glyph_size, on_more_button, placement_of, press_threshold,
+        px_of_dip, reachable_origin, right_above_desktop, to_frame, window_size, window_styles,
+        z_place, Below, ButtonLook, Fade, Gesture, Hit, Step, WindowCommand, WindowReport, ZPlace,
         HOLD_TO_MOVE, MORE_GLYPH_DIP, NO_FRAME, NO_FRAME_CHECK, RESTACK_CHECK,
     };
     use crate::compositor::fluent::text::{self, Align, ICON_FACES};
@@ -1074,6 +1433,16 @@ mod win {
         /// What UI Automation reads of the window, and the provider it was answered with.
         view: Arc<Mutex<WidgetView>>,
         provider: Option<IRawElementProviderSimple>,
+        /// Some while the widget is being edited after a long press.
+        editing: Option<Edit>,
+    }
+
+    /// A widget being edited: its window has `margin` pixels of room on each side for the
+    /// shadow and the handles, and has the keyboard, which `previous` had before.
+    #[derive(Debug, Clone, Copy)]
+    struct Edit {
+        margin: i32,
+        previous: isize,
     }
 
     /// The window's timer that turns a held press into a move.
@@ -1192,6 +1561,121 @@ mod win {
             0 => 96,
             dpi => dpi,
         }
+    }
+
+    /// The window's edit, while its widget is being edited.
+    fn edit_of(hwnd: HWND) -> Option<Edit> {
+        with_state(|s| s.windows.get(&(hwnd as isize)).and_then(|w| w.editing)).flatten()
+    }
+
+    /// The widget's own rectangle on the screen: its window's, less the room around it while
+    /// it is being edited.
+    fn widget_rect(hwnd: HWND) -> RECT {
+        let rect = rect_of(hwnd);
+        let margin = edit_of(hwnd).map_or(0, |edit| edit.margin);
+        RECT {
+            left: rect.left + margin,
+            top: rect.top + margin,
+            right: (rect.right - margin).max(rect.left + margin + 1),
+            bottom: (rect.bottom - margin).max(rect.top + margin + 1),
+        }
+    }
+
+    /// Lifts the widget for editing, after a long press: its window grows by the room for
+    /// the shadow and the handles on each side, keeping the widget where it was, and takes
+    /// the keyboard, so Esc ends the edit and a click on any other window does too (the
+    /// window hears it lose the keyboard). The grown window moves the pointer that much
+    /// further from the window's corner, which the press in progress is told.
+    fn enter_edit(hwnd: HWND) {
+        let key = hwnd as isize;
+        let margin = edit_margin(dpi_of(hwnd));
+        // SAFETY: a plain query.
+        let previous = unsafe { GetForegroundWindow() } as isize;
+        let entered = with_state(|s| {
+            let w = s.windows.get_mut(&key)?;
+            if w.editing.is_some() {
+                return Some(false);
+            }
+            w.editing = Some(Edit { margin, previous });
+            w.gesture.regrab((margin, margin));
+            w.base = None;
+            Some(true)
+        })
+        .flatten()
+        .unwrap_or(false);
+        if !entered {
+            return;
+        }
+        // One widget is edited at a time.
+        end_other_edits(hwnd);
+        let rect = rect_of(hwnd);
+        // SAFETY: a window of this thread; it keeps its place in the z-order. It takes the
+        // foreground while the user's long press is in progress, which Windows allows.
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                null_mut(),
+                rect.left - margin,
+                rect.top - margin,
+                rect.right - rect.left + 2 * margin,
+                rect.bottom - rect.top + 2 * margin,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
+            SetForegroundWindow(hwnd);
+            SetFocus(hwnd);
+        }
+        with_state(|s| {
+            let id = s.windows.get(&key).map(|w| w.widget.widget_id);
+            note(
+                s.logger.as_deref(),
+                &format!(
+                    "widget {}: editing it after a long press",
+                    id.unwrap_or_default()
+                ),
+            );
+        });
+        update_button(hwnd);
+    }
+
+    /// Ends the widget's edit, if it is being edited: its window shrinks back around the
+    /// widget, which stays where the edit left it. With `give_back`, the window that had the
+    /// keyboard before the edit gets it back, as after Esc or a finished move; a click on
+    /// another window has given it away already.
+    fn leave_edit(hwnd: HWND, give_back: bool) {
+        let key = hwnd as isize;
+        let Some(edit) = with_state(|s| {
+            let w = s.windows.get_mut(&key)?;
+            let edit = w.editing.take()?;
+            w.base = None;
+            Some(edit)
+        })
+        .flatten() else {
+            return;
+        };
+        let rect = rect_of(hwnd);
+        let m = edit.margin;
+        // SAFETY: a window of this thread; it keeps its place in the z-order.
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                null_mut(),
+                rect.left + m,
+                rect.top + m,
+                (rect.right - rect.left - 2 * m).max(1),
+                (rect.bottom - rect.top - 2 * m).max(1),
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
+            let previous = edit.previous as HWND;
+            if give_back
+                && GetForegroundWindow() == hwnd
+                && !previous.is_null()
+                && previous != hwnd
+                && IsWindow(previous) != 0
+            {
+                SetForegroundWindow(previous);
+            }
+        }
+        update_button(hwnd);
     }
 
     fn work_area(hwnd: HWND) -> Option<super::ScreenRect> {
@@ -1540,6 +2024,9 @@ mod win {
         let existing = with_state(|s| s.by_id.get(&widget.widget_id).copied()).flatten();
         let hwnd = match existing {
             Some(hwnd) => {
+                // Placed anew (described again, as when Android restarts): an edit ends, and
+                // the window goes where the placement says.
+                leave_edit(hwnd as HWND, false);
                 with_state(|s| {
                     if let Some(window) = s.windows.get_mut(&hwnd) {
                         window.widget = widget.clone();
@@ -1607,6 +2094,7 @@ mod win {
                             noted: false,
                             view: Arc::new(Mutex::new(WidgetView::default())),
                             provider: None,
+                            editing: None,
                         },
                     );
                 });
@@ -1638,7 +2126,7 @@ mod win {
     }
 
     fn report_placement(hwnd: HWND) {
-        let rect = rect_of(hwnd);
+        let rect = widget_rect(hwnd);
         let dpi = dpi_of(hwnd);
         let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
         with_state(|s| {
@@ -1745,19 +2233,34 @@ mod win {
                 ..
             } = s;
             let window = windows.get_mut(&(hwnd as isize))?;
+            // While it is edited the widget's image is drawn lifted, a little larger, in the
+            // middle of the window's room for its shadow and handles.
+            let resize_mode = window.widget.provider.resize_mode;
+            let layout = window
+                .editing
+                .map(|_| edit_layout(width, height, dpi, resize_mode));
+            let (image_w, image_h) = match &layout {
+                Some(layout) => (layout.lifted.2.max(1), layout.lifted.3.max(1)),
+                None => (width, height),
+            };
             let cached = match &window.base {
-                Some((w, h, pixels)) if (*w, *h) == (width, height) => Some(pixels.clone()),
+                Some((w, h, pixels)) if (*w, *h) == (image_w, image_h) => Some(pixels.clone()),
                 _ => None,
             };
             let mut pixels = match cached {
                 Some(pixels) => pixels,
                 None => {
                     let (decoder, logger) = (decoder.as_ref(), logger.as_deref());
-                    let pixels = base_pixels(window, decoder, logger, width, height, dpi);
-                    window.base = Some((width, height, pixels.clone()));
+                    let pixels = base_pixels(window, decoder, logger, image_w, image_h, dpi);
+                    window.base = Some((image_w, image_h, pixels.clone()));
                     pixels
                 }
             };
+            if layout.is_some() {
+                let look = edit_look(theme);
+                let (w, h) = (width as usize, height as usize);
+                return Some(draw_edit(&pixels, w, h, dpi, resize_mode, &look));
+            }
             let level = window.fade.level(now);
             let glyph = if level > 0.0 {
                 more_glyph_of(more_glyph, width, height, dpi)
@@ -1856,7 +2359,7 @@ mod win {
 
     /// The More button's square on the screen: left, top, right and bottom.
     fn button_on_screen(hwnd: HWND) -> (i32, i32, i32, i32) {
-        let rect = rect_of(hwnd);
+        let rect = widget_rect(hwnd);
         let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
         let (left, top, right, bottom) = more_button(width, height, dpi_of(hwnd)).bounds();
         (
@@ -1891,7 +2394,8 @@ mod win {
         let now = Instant::now();
         let fading = with_state(|s| {
             let w = s.windows.get_mut(&key)?;
-            let shown = more_button_shown(w.hover, w.focused, w.menu_open, &w.gesture);
+            let editing = w.editing.is_some();
+            let shown = more_button_shown(w.hover, w.focused, w.menu_open, editing, &w.gesture);
             let before = w.fade;
             w.fade = w.fade.toward(shown, now);
             Some(w.fade != before)
@@ -1912,6 +2416,15 @@ mod win {
         // SAFETY: as above.
         let y = unsafe { GetSystemMetricsForDpi(SM_CYDRAG, dpi) };
         (x.max(1), y.max(1))
+    }
+
+    /// How far the press being handled may move and still be a long press, at `dpi`: the
+    /// drag threshold, widened for a finger or a pen.
+    fn threshold_now(dpi: u32) -> (i32, i32) {
+        // SAFETY: reads the extra information of the message being handled.
+        let extra = unsafe { GetMessageExtraInfo() };
+        let touch = crate::app_window::pointer::made_from_touch_or_pen(extra);
+        press_threshold(drag_threshold(dpi), touch, dpi)
     }
 
     /// Runs a step of the window's gesture.
@@ -1961,13 +2474,17 @@ mod win {
             Step::Button => update_button(hwnd),
             Step::OpenMenu => {
                 update_button(hwnd);
-                open_menu(hwnd, None, false);
+                open_menu(hwnd, MenuAt::Button);
             }
-            Step::StartMove { cancel, to } => {
-                if cancel {
-                    pointer(hwnd, PointerAction::Cancel, 0);
-                    set_pressed(hwnd, false);
-                }
+            Step::Lift => {
+                // The long press is not the widget's: Android's press is cancelled, so it
+                // never becomes a click, before the widget lifts.
+                pointer(hwnd, PointerAction::Cancel, 0);
+                set_pressed(hwnd, false);
+                enter_edit(hwnd);
+            }
+            Step::EditMenu => open_menu(hwnd, MenuAt::Widget),
+            Step::StartMove { to } => {
                 // SAFETY: a system cursor, shown while the window moves.
                 unsafe { SetCursor(LoadCursorW(null_mut(), IDC_SIZEALL)) };
                 move_to(hwnd, to);
@@ -1976,9 +2493,24 @@ mod win {
             Step::MoveTo(to) => move_to(hwnd, to),
             Step::EndMove => {
                 report_placement(hwnd);
+                // A finished move ends the edit, as on a phone's home screen.
+                leave_edit(hwnd, true);
                 update_button(hwnd);
             }
         }
+    }
+
+    /// Where a widget's menu opens.
+    #[derive(Debug, Clone, Copy)]
+    enum MenuAt {
+        /// Under the More button, which was clicked.
+        Button,
+        /// Under the widget, after a long press or a click on it while it is edited.
+        Widget,
+        /// At this point on the screen, where it was right-clicked.
+        Point(i32, i32),
+        /// Under the More button, from the keyboard or UI Automation.
+        Keyboard,
     }
 
     #[cfg(test)]
@@ -2021,20 +2553,21 @@ mod win {
             WM_NCHITTEST => {
                 let rect = rect_of(hwnd);
                 let (x, y) = (lo(lparam) - rect.left, hi(lparam) - rect.top);
-                let resize_mode =
-                    with_state(|s| s.windows.get(&key).map(|w| w.widget.provider.resize_mode))
-                        .flatten()
-                        .unwrap_or(0);
-                let hit = hit_test(
-                    x,
-                    y,
-                    rect.right - rect.left,
-                    rect.bottom - rect.top,
-                    dpi_of(hwnd),
-                    resize_mode,
-                );
+                let (resize_mode, editing) = with_state(|s| {
+                    s.windows
+                        .get(&key)
+                        .map(|w| (w.widget.provider.resize_mode, w.editing.is_some()))
+                })
+                .flatten()
+                .unwrap_or((0, false));
+                let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
+                let hit = if editing {
+                    edit_hit_test(x, y, width, height, dpi_of(hwnd), resize_mode)
+                } else {
+                    hit_test(x, y, width, height, dpi_of(hwnd), resize_mode)
+                };
                 (match hit {
-                    Hit::Client | Hit::More => HTCLIENT,
+                    Hit::Client | Hit::More | Hit::Outside => HTCLIENT,
                     Hit::Left => HTLEFT,
                     Hit::Right => HTRIGHT,
                     Hit::Top => HTTOP,
@@ -2062,20 +2595,26 @@ mod win {
                 0
             }
             WM_GETMINMAXINFO => {
-                let min = with_state(|s| {
-                    s.windows
-                        .get(&key)
-                        .map(|w| min_window_size(&w.widget.provider, dpi_of(hwnd)))
+                // The widget's own limits, and the room around it while it is edited.
+                let dpi = dpi_of(hwnd);
+                let limits = with_state(|s| {
+                    s.windows.get(&key).map(|w| {
+                        let room = w.editing.map_or(0, |edit| 2 * edit.margin);
+                        let (min_w, min_h) = min_window_size(&w.widget.provider, dpi);
+                        let (max_w, max_h) = max_window_size(&w.widget.provider, dpi);
+                        (min_w + room, min_h + room, max_w + room, max_h + room)
+                    })
                 })
                 .flatten();
-                if let Some((width, height)) = min {
+                if let Some((min_w, min_h, max_w, max_h)) = limits {
                     let info = lparam as *mut MINMAXINFO;
                     // SAFETY: the system passes a MINMAXINFO it reads back.
                     unsafe {
                         if !info.is_null() {
-                            (*info).ptMinTrackSize = POINT {
-                                x: width,
-                                y: height,
+                            (*info).ptMinTrackSize = POINT { x: min_w, y: min_h };
+                            (*info).ptMaxTrackSize = POINT {
+                                x: max_w.max(min_w),
+                                y: max_h.max(min_h),
                             };
                         }
                     }
@@ -2089,10 +2628,22 @@ mod win {
             WM_ENTERSIZEMOVE => 0,
             WM_EXITSIZEMOVE => {
                 report_placement(hwnd);
+                // A finished resize ends the edit, as on a phone's home screen.
+                leave_edit(hwnd, true);
                 0
             }
             WM_DPICHANGED => {
                 let suggested = lparam as *const RECT;
+                // An edit ends on a monitor of another scale: its room is in the old scale's
+                // pixels, so the widget keeps the suggested place less the room at the new one.
+                let new_dpi = ((wparam >> 16) & 0xffff) as u32;
+                let room = with_state(|s| {
+                    let w = s.windows.get_mut(&key)?;
+                    w.base = None;
+                    w.editing.take().map(|_| edit_margin(new_dpi.max(1)))
+                })
+                .flatten()
+                .unwrap_or(0);
                 // SAFETY: the system passes the rectangle it suggests for the new scale.
                 unsafe {
                     if !suggested.is_null() {
@@ -2100,25 +2651,25 @@ mod win {
                         SetWindowPos(
                             hwnd,
                             null_mut(),
-                            r.left,
-                            r.top,
-                            r.right - r.left,
-                            r.bottom - r.top,
+                            r.left + room,
+                            r.top + room,
+                            (r.right - r.left - 2 * room).max(1),
+                            (r.bottom - r.top - 2 * room).max(1),
                             SWP_NOACTIVATE | SWP_NOZORDER,
                         );
                     }
                 }
                 report_placement(hwnd);
+                update_button(hwnd);
                 0
             }
             WM_MOUSEMOVE => {
                 let rect = rect_of(hwnd);
                 let (x, y) = (lo(lparam), hi(lparam));
-                let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
                 let dpi = dpi_of(hwnd);
-                let over = on_more_button(x, y, width, height, dpi);
+                let over = over_button(hwnd, x, y);
                 let (at, origin) = ((rect.left + x, rect.top + y), (rect.left, rect.top));
-                let threshold = drag_threshold(dpi);
+                let threshold = threshold_now(dpi);
                 let seen = with_state(|s| {
                     let w = s.windows.get_mut(&key)?;
                     let first = !std::mem::replace(&mut w.hover, true);
@@ -2154,15 +2705,32 @@ mod win {
                 0
             }
             WM_LBUTTONDOWN => {
-                // SAFETY: the window takes the mouse until the button is released.
-                unsafe { SetCapture(hwnd) };
                 let rect = rect_of(hwnd);
                 let (x, y) = (lo(lparam), hi(lparam));
                 let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
-                let over = on_more_button(x, y, width, height, dpi_of(hwnd));
+                // A press on any widget ends the edit of every other one, as a click outside
+                // a widget being edited does; a press beside this one ends its own.
+                end_other_edits(hwnd);
+                let edit = with_state(|s| {
+                    s.windows
+                        .get(&key)
+                        .map(|w| (w.editing.is_some(), w.widget.provider.resize_mode))
+                })
+                .flatten();
+                let editing = matches!(edit, Some((true, _)));
+                if let Some((true, resize_mode)) = edit {
+                    let dpi = dpi_of(hwnd);
+                    if edit_hit_test(x, y, width, height, dpi, resize_mode) == Hit::Outside {
+                        leave_edit(hwnd, true);
+                        return 0;
+                    }
+                }
+                // SAFETY: the window takes the mouse until the button is released.
+                unsafe { SetCapture(hwnd) };
+                let over = over_button(hwnd, x, y);
                 let at = (rect.left + x, rect.top + y);
                 let now = Instant::now();
-                let step = gesture(hwnd, |g| g.down(over, at, now));
+                let step = gesture(hwnd, |g| g.down(over, editing, at, now));
                 if matches!(step, Step::Android(_)) {
                     let hold = HOLD_TO_MOVE.as_millis() as u32;
                     // SAFETY: a timer of this window, killed when the press ends.
@@ -2174,9 +2742,7 @@ mod win {
             WM_LBUTTONUP => {
                 // SAFETY: the hold timer of this window.
                 unsafe { KillTimer(hwnd, HOLD_TIMER) };
-                let rect = rect_of(hwnd);
-                let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
-                let over = on_more_button(lo(lparam), hi(lparam), width, height, dpi_of(hwnd));
+                let over = over_button(hwnd, lo(lparam), hi(lparam));
                 let step = gesture(hwnd, |g| g.up(over));
                 // SAFETY: gives the mouse back; the gesture has ended, so losing it ends
                 // nothing.
@@ -2217,24 +2783,33 @@ mod win {
             }
             WM_SETFOCUS | WM_KILLFOCUS => {
                 let focused = msg == WM_SETFOCUS;
-                let view = with_state(|s| {
+                let seen = with_state(|s| {
                     let w = s.windows.get_mut(&key)?;
                     w.focused = focused;
-                    Some(Arc::clone(&w.view))
+                    Some((Arc::clone(&w.view), w.menu_open))
                 })
                 .flatten();
+                // The keyboard went to another window, as a click on it gives it: an edit
+                // ends. Its own menu taking the keyboard ends nothing.
+                if !focused && matches!(seen, Some((_, false))) {
+                    leave_edit(hwnd, false);
+                }
                 update_button(hwnd);
-                if let (true, Some(view)) = (focused, view) {
+                if let (true, Some((view, _))) = (focused, seen) {
                     widget_automation::raise_focus(&view);
                 }
                 0
             }
+            WM_KEYDOWN if wparam as u16 == VK_ESCAPE => {
+                leave_edit(hwnd, true);
+                0
+            }
             WM_KEYDOWN if matches!(wparam as u16, VK_RETURN | VK_SPACE) => {
-                open_menu(hwnd, None, true);
+                open_menu(hwnd, MenuAt::Keyboard);
                 0
             }
             WM_WIDGET_MORE => {
-                open_menu(hwnd, None, true);
+                open_menu(hwnd, MenuAt::Keyboard);
                 0
             }
             WM_WIDGET_FOCUS => {
@@ -2268,8 +2843,11 @@ mod win {
             }
             WM_CONTEXTMENU => {
                 // From the keyboard (the menu key or Shift+F10) the position is -1, -1.
-                let at = (lparam as u32 != u32::MAX).then(|| (lo(lparam), hi(lparam)));
-                open_menu(hwnd, at, at.is_none());
+                let at = match lparam as u32 {
+                    u32::MAX => MenuAt::Keyboard,
+                    _ => MenuAt::Point(lo(lparam), hi(lparam)),
+                };
+                open_menu(hwnd, at);
                 0
             }
             WM_CLOSE => 0,
@@ -2336,10 +2914,60 @@ mod win {
         update_button(hwnd);
     }
 
-    /// Shows the window's menu (Resize, Remove) at `at` on the screen, where the user
-    /// right-clicked, or under the More button (None), and does what the user chose.
-    /// `keyboard` says the keyboard opened it.
-    fn open_menu(hwnd: HWND, at: Option<(i32, i32)>, keyboard: bool) {
+    /// Whether `x`, `y` (from the window's top left corner) is on the More button, which a
+    /// widget being edited does not show.
+    fn over_button(hwnd: HWND, x: i32, y: i32) -> bool {
+        if edit_of(hwnd).is_some() {
+            return false;
+        }
+        let rect = rect_of(hwnd);
+        let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
+        on_more_button(x, y, width, height, dpi_of(hwnd))
+    }
+
+    /// Ends the edit of every widget but `hwnd`'s.
+    fn end_other_edits(hwnd: HWND) {
+        let key = hwnd as isize;
+        let others: Vec<isize> = with_state(|s| {
+            s.windows
+                .iter()
+                .filter(|(other, w)| **other != key && w.editing.is_some())
+                .map(|(other, _)| *other)
+                .collect()
+        })
+        .unwrap_or_default();
+        for other in others {
+            leave_edit(other as HWND, false);
+        }
+    }
+
+    /// The lifted widget's rectangle on the screen while it is edited, else the widget's.
+    fn shown_on_screen(hwnd: HWND) -> (i32, i32, i32, i32) {
+        let rect = rect_of(hwnd);
+        if edit_of(hwnd).is_none() {
+            return (rect.left, rect.top, rect.right, rect.bottom);
+        }
+        let resize_mode = with_state(|s| {
+            s.windows
+                .get(&(hwnd as isize))
+                .map(|w| w.widget.provider.resize_mode)
+        })
+        .flatten()
+        .unwrap_or(0);
+        let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
+        let (x, y, w, h) = edit_layout(width, height, dpi_of(hwnd), resize_mode).lifted;
+        (
+            rect.left + x,
+            rect.top + y,
+            rect.left + x + w,
+            rect.top + y + h,
+        )
+    }
+
+    /// Shows the window's menu (Widget settings when the widget can be set up again, Resize,
+    /// Remove) where `at` says, and does what the user chose. Choosing anything ends an edit;
+    /// closing the menu by pressing outside the widget, or on another window, ends it too.
+    fn open_menu(hwnd: HWND, at: MenuAt) {
         let key = hwnd as isize;
         let Some((provider, placement, widget_id)) = with_state(|s| {
             s.windows.get(&key).map(|w| {
@@ -2353,10 +2981,15 @@ mod win {
         .flatten() else {
             return;
         };
-        let rect = rect_of(hwnd);
-        let anchor = match at {
-            Some((x, y)) => Anchor::Point { x, y },
-            None => Anchor::Below(button_on_screen(hwnd)),
+        let rect = widget_rect(hwnd);
+        let editing = edit_of(hwnd).is_some();
+        let (anchor, keyboard) = match at {
+            MenuAt::Point(x, y) => (Anchor::Point { x, y }, false),
+            // The menu of a widget being edited opens under it, as on a phone's home screen.
+            MenuAt::Widget => (Anchor::Below(shown_on_screen(hwnd)), false),
+            MenuAt::Button => (Anchor::Below(button_on_screen(hwnd)), false),
+            MenuAt::Keyboard if editing => (Anchor::Below(shown_on_screen(hwnd)), true),
+            MenuAt::Keyboard => (Anchor::Below(button_on_screen(hwnd)), true),
         };
         let dpi = dpi_of(hwnd);
         // The size shown as current is the window's own, which a drag may have changed.
@@ -2380,6 +3013,8 @@ mod win {
                 width_dp,
                 height_dp,
             }) => {
+                // The edit ends first, so the window is the widget's own size again.
+                leave_edit(hwnd, true);
                 let (width, height) = window_size(
                     &Placement {
                         width_dp,
@@ -2403,9 +3038,36 @@ mod win {
                 report_placement(hwnd);
             }
             Some(MenuChoice::Remove) => {
+                leave_edit(hwnd, true);
                 with_state(|s| {
                     let _ = s.reports.send(WindowReport::Remove { widget_id });
                 });
+            }
+            Some(MenuChoice::Settings) => {
+                // The setup opens as the app's window, which takes the keyboard.
+                leave_edit(hwnd, false);
+                with_state(|s| {
+                    let _ = s.reports.send(WindowReport::Reconfigure { widget_id });
+                });
+            }
+            None if editing => {
+                // Closed by a press: on another window, or beside the widget, the edit ends;
+                // closed with Esc or by a press on the widget, it goes on.
+                let mut cursor = POINT { x: 0, y: 0 };
+                // SAFETY: plain reads of the cursor, the buttons and the foreground window.
+                let (pressed, foreground) = unsafe {
+                    GetCursorPos(&mut cursor);
+                    let down = |vk: u16| GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000 != 0;
+                    (down(VK_LBUTTON) || down(VK_RBUTTON), GetForegroundWindow())
+                };
+                let lifted = shown_on_screen(hwnd);
+                let beside = cursor.x < lifted.0
+                    || cursor.y < lifted.1
+                    || cursor.x >= lifted.2
+                    || cursor.y >= lifted.3;
+                if foreground != hwnd || (pressed && beside) {
+                    leave_edit(hwnd, foreground == hwnd);
+                }
             }
             None => {}
         }
@@ -2610,6 +3272,7 @@ mod tests {
             resize_mode: 3,
             needs_configuration: false,
             app_label: "Clock App".into(),
+            reconfigurable: false,
         }
     }
 
@@ -2779,13 +3442,15 @@ mod tests {
     fn fr12_the_more_button_fades_in_on_hover_and_keyboard_focus_and_out_after() {
         let start = Instant::now();
         let idle = Gesture::Idle;
-        assert!(!more_button_shown(false, false, false, &idle));
+        assert!(!more_button_shown(false, false, false, false, &idle));
         // The pointer is over the widget, the keyboard is on it, its menu is open.
-        assert!(more_button_shown(true, false, false, &idle));
-        assert!(more_button_shown(false, true, false, &idle));
-        assert!(more_button_shown(false, false, true, &idle));
+        assert!(more_button_shown(true, false, false, false, &idle));
+        assert!(more_button_shown(false, true, false, false, &idle));
+        assert!(more_button_shown(false, false, true, false, &idle));
         let moving = Gesture::Moving { grab: (4, 4) };
-        assert!(more_button_shown(false, false, false, &moving));
+        assert!(more_button_shown(false, false, false, false, &moving));
+        // A widget being edited shows its border and handles instead.
+        assert!(!more_button_shown(true, true, true, true, &moving));
         // Fading in takes WinUI's fast animation, and turning back starts from where it is.
         let hidden = Fade::hidden(start);
         assert_eq!(hidden.level(start + FADE), 0.0);
@@ -2857,7 +3522,7 @@ mod tests {
 
     fn pressed_on_button(down: (i32, i32)) -> Gesture {
         let mut gesture = Gesture::Idle;
-        gesture.down(true, down, Instant::now());
+        gesture.down(true, false, down, Instant::now());
         gesture
     }
 
@@ -2867,46 +3532,350 @@ mod tests {
         let (origin, threshold) = ((100, 100), (4, 4));
         let mut gesture = Gesture::Idle;
         assert_eq!(
-            gesture.down(false, (150, 150), start),
+            gesture.down(false, false, (150, 150), start),
             Step::Android(PointerAction::Down)
         );
         // A tap: the press and the release go to Android.
         assert_eq!(gesture.up(false), Step::Android(PointerAction::Up));
         assert_eq!(gesture, Gesture::Idle);
         // A drag that starts at once (a list scrolling) is the widget's, however long it lasts.
-        gesture.down(false, (150, 150), start);
+        gesture.down(false, false, (150, 150), start);
         let moved = gesture.moved((150, 170), origin, threshold);
         assert_eq!(moved, Step::Android(PointerAction::Move));
         let later = start + HOLD_TO_MOVE * 2;
         assert_eq!(gesture.held((150, 170), origin, later), Step::Nothing);
         assert_eq!(gesture.up(false), Step::Android(PointerAction::Up));
         // The window losing the mouse cancels Android's press.
-        gesture.down(false, (150, 150), start);
+        gesture.down(false, false, (150, 150), start);
         assert_eq!(gesture.cancel(), Step::Android(PointerAction::Cancel));
     }
 
+    /// A long press edits the widget as Android's home screen does: the hold's timing and
+    /// the drag threshold decide it, it never also clicks, letting go opens the menu and
+    /// dragging moves the widget; the menu offers Widget settings only for a widget that can
+    /// be set up again; and choosing it reaches Android for that widget through the service.
     #[test]
-    fn fr12_holding_a_press_still_then_dragging_moves_the_widget() {
+    fn fr12_long_pressing_a_widget_edits_it_like_a_home_screen() {
         let start = Instant::now();
         let (origin, threshold) = ((100, 100), (4, 4));
+        let margin = edit_margin(96);
+
+        // Held still for half a second, within the drag threshold: a long press. Android had
+        // the press until then; the long press cancels it (Lift), so no click follows.
         let mut gesture = Gesture::Idle;
-        gesture.down(false, (150, 150), start);
-        // A small wobble within the threshold is still a press.
-        gesture.moved((152, 151), origin, threshold);
-        let early = start + HOLD_TO_MOVE / 2;
-        assert_eq!(gesture.held((152, 151), origin, early), Step::Nothing);
-        // Held still long enough: Android's press is cancelled and the window starts moving.
-        let held = gesture.held((152, 151), origin, start + HOLD_TO_MOVE);
-        let start_move = Step::StartMove {
-            cancel: true,
-            to: origin,
-        };
-        assert_eq!(held, start_move);
-        // The window follows the pointer, keeping where it was grabbed.
-        let moved = gesture.moved((252, 201), origin, threshold);
-        assert_eq!(moved, Step::MoveTo((200, 150)));
-        assert_eq!(gesture.up(false), Step::EndMove);
+        assert_eq!(
+            gesture.down(false, false, (150, 150), start),
+            Step::Android(PointerAction::Down)
+        );
+        assert_eq!(
+            gesture.moved((154, 153), origin, threshold),
+            Step::Android(PointerAction::Move),
+            "a wobble within the threshold is still a press"
+        );
+        let early = start + HOLD_TO_MOVE - Duration::from_millis(1);
+        assert_eq!(gesture.held((154, 153), origin, early), Step::Nothing);
+        assert_eq!(
+            gesture.held((154, 153), origin, start + HOLD_TO_MOVE),
+            Step::Lift
+        );
+        // The window grows by its margin as the widget lifts.
+        gesture.regrab((margin, margin));
+        let lifted_origin = (origin.0 - margin, origin.1 - margin);
+        assert_eq!(
+            gesture.moved((156, 154), lifted_origin, threshold),
+            Step::Nothing
+        );
+        // Let go where it was: the menu opens, and Android hears nothing more.
+        assert_eq!(gesture.up(false), Step::EditMenu);
         assert_eq!(gesture, Gesture::Idle);
+
+        // A press that slides past the threshold before the half second is the widget's own,
+        // and never lifts.
+        let mut gesture = Gesture::Idle;
+        gesture.down(false, false, (150, 150), start);
+        gesture.moved((150, 155), origin, threshold);
+        let later = start + HOLD_TO_MOVE * 2;
+        assert_eq!(gesture.held((150, 155), origin, later), Step::Nothing);
+        assert_eq!(gesture.up(false), Step::Android(PointerAction::Up));
+
+        // Lifted, then dragged past the threshold: the widget moves with the pointer, and
+        // letting go ends the move (and the edit).
+        let mut gesture = Gesture::Idle;
+        gesture.down(false, false, (150, 150), start);
+        assert_eq!(gesture.held((150, 150), origin, later), Step::Lift);
+        gesture.regrab((margin, margin));
+        assert_eq!(
+            gesture.moved((160, 150), lifted_origin, threshold),
+            Step::StartMove {
+                to: (lifted_origin.0 + 10, lifted_origin.1)
+            }
+        );
+        assert_eq!(
+            gesture.moved((170, 175), lifted_origin, threshold),
+            Step::MoveTo((lifted_origin.0 + 20, lifted_origin.1 + 25))
+        );
+        assert_eq!(gesture.up(false), Step::EndMove);
+        // The window losing the mouse while lifted sends Android nothing.
+        gesture.down(false, false, (150, 150), start);
+        gesture.held((150, 150), origin, later);
+        assert_eq!(gesture.cancel(), Step::Nothing);
+
+        // While it is edited, Android never has a press: a click opens the menu again, a
+        // drag moves the widget at once, and the More button is not there.
+        let mut gesture = Gesture::Idle;
+        assert_eq!(gesture.down(false, true, (150, 150), start), Step::Nothing);
+        assert_eq!(gesture.up(false), Step::EditMenu);
+        gesture.down(true, true, (150, 150), start);
+        assert_eq!(gesture, Gesture::Editing { down: (150, 150) });
+        assert_eq!(
+            gesture.moved((150, 140), origin, threshold),
+            Step::StartMove { to: (100, 90) }
+        );
+        assert_eq!(gesture.up(false), Step::EndMove);
+
+        // A finger or a pen may wander a little more than a mouse.
+        assert_eq!(press_threshold((4, 4), false, 96), (4, 4));
+        assert_eq!(press_threshold((4, 4), true, 96), (8, 8));
+        assert_eq!(press_threshold((4, 4), true, 192), (16, 16));
+        assert_eq!(press_threshold((20, 20), true, 96), (20, 20));
+
+        // The menu: Widget settings only for a widget whose app lets it be set up again.
+        use crate::compositor::widget_menu::{self, MenuChoice, SETTINGS};
+        let settable = WidgetProvider {
+            provider: "com.example.weather/.WeatherWidget".into(),
+            reconfigurable: true,
+            needs_configuration: true,
+            ..clock()
+        };
+        let text = widget_menu::menu_text(false);
+        let placement = Placement {
+            x: 0,
+            y: 0,
+            width_dp: 180,
+            height_dp: 110,
+        };
+        let ids = |provider: &WidgetProvider| -> Vec<u32> {
+            let sizes = widget_menu::size_choices(provider);
+            widget_menu::entries(&text, &sizes, &placement, provider.reconfigurable)
+                .iter()
+                .filter_map(|entry| entry.item().map(|item| item.id))
+                .collect()
+        };
+        assert_eq!(
+            ids(&settable),
+            vec![SETTINGS, widget_menu::RESIZE, widget_menu::REMOVE]
+        );
+        assert_eq!(
+            ids(&clock()),
+            vec![widget_menu::RESIZE, widget_menu::REMOVE]
+        );
+        let sizes = widget_menu::size_choices(&settable);
+        assert_eq!(
+            widget_menu::choice_of(SETTINGS, &sizes),
+            Some(MenuChoice::Settings)
+        );
+
+        // Choosing it: the window's report goes through the window manager's watch to the
+        // service, which opens the widget's setup in Android for the same widget.
+        use dsa_host_core::host_api_conformance::{FakeAndroids, RunningService};
+        let wait = Duration::from_secs(10);
+        let (listener, connector) = dsa_transport::local::pair();
+        let androids = Arc::new(FakeAndroids::default());
+        let _service = RunningService::start(Box::new(listener), androids.clone());
+        let mut client =
+            HostApiClient::connect(&mut connector.clone(), "test", wait).expect("connecting");
+        client.start().expect("starting Android");
+        let android = androids
+            .androids
+            .lock()
+            .unwrap()
+            .values()
+            .next()
+            .cloned()
+            .expect("the caller's Android");
+        android.widget_offer.lock().unwrap().push(settable.clone());
+        let weather = client
+            .add_widget(&settable.provider, wait)
+            .expect("placing the widget");
+        let windows = Scripted::default();
+        windows
+            .pending
+            .lock()
+            .unwrap()
+            .push(WindowReport::Reconfigure {
+                widget_id: weather.widget_id,
+            });
+        let stop = Arc::new(AtomicBool::new(false));
+        let syncing = {
+            let mut windows = windows.clone();
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || sync(Box::new(connector), &mut windows, stop, None))
+        };
+        let deadline = Instant::now() + wait;
+        while android.widget_reconfigures.lock().unwrap().is_empty() {
+            assert!(
+                Instant::now() < deadline,
+                "the widget's settings never reached Android"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        stop.store(true, Ordering::Relaxed);
+        syncing.join().unwrap();
+        assert_eq!(
+            *android.widget_reconfigures.lock().unwrap(),
+            vec![weather.widget_id]
+        );
+        assert!(
+            windows
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| matches!(c, WindowCommand::Place(w) if w.widget_id == weather.widget_id)),
+            "the widget's window was opened"
+        );
+    }
+
+    /// Widget windows that record what the watch asks of them and hand it the reports a
+    /// test gives them.
+    #[derive(Clone, Default)]
+    struct Scripted {
+        commands: Arc<std::sync::Mutex<Vec<WindowCommand>>>,
+        pending: Arc<std::sync::Mutex<Vec<WindowReport>>>,
+    }
+
+    impl WidgetWindows for Scripted {
+        fn command(&mut self, command: WindowCommand) {
+            self.commands.lock().unwrap().push(command);
+        }
+
+        fn reports(&mut self) -> Vec<WindowReport> {
+            std::mem::take(&mut *self.pending.lock().unwrap())
+        }
+    }
+
+    #[test]
+    fn fr12_a_widget_being_edited_lifts_with_a_border_and_a_handle_on_each_edge_it_resizes() {
+        // A widget of 108 by 66 pixels at 100%, with 16 pixels of room on each side.
+        let (width, height) = (140, 98);
+        let layout = edit_layout(width, height, 96, 3);
+        assert_eq!(layout.widget, (16, 16, 108, 66));
+        assert_eq!(layout.lifted, (12, 12, 116, 74), "4 px larger on each side");
+        let handles: Vec<(Hit, f32, f32, f32)> = layout
+            .handles
+            .iter()
+            .map(|(hit, c)| (*hit, c.cx, c.cy, c.radius))
+            .collect();
+        assert_eq!(
+            handles,
+            vec![
+                (Hit::Left, 12.0, 49.0, 6.0),
+                (Hit::Right, 128.0, 49.0, 6.0),
+                (Hit::Top, 70.0, 12.0, 6.0),
+                (Hit::Bottom, 70.0, 86.0, 6.0),
+            ]
+        );
+        // Only the edges the widget may be resized along have handles.
+        let sideways = edit_layout(width, height, 96, widgets::RESIZE_HORIZONTAL);
+        assert_eq!(
+            sideways.handles.iter().map(|h| h.0).collect::<Vec<_>>(),
+            vec![Hit::Left, Hit::Right]
+        );
+        assert!(edit_layout(width, height, 96, 0).handles.is_empty());
+        // At 200% everything is twice as large.
+        let large = edit_layout(2 * width, 2 * height, 192, 3);
+        assert_eq!(large.widget, (32, 32, 216, 132));
+        assert_eq!(large.lifted, (24, 24, 232, 148));
+
+        // What a press hits: the handles and edges resize, inside moves, beside it is outside.
+        let hit = |x, y, mode| edit_hit_test(x, y, width, height, 96, mode);
+        assert_eq!(hit(70, 49, 3), Hit::Client);
+        assert_eq!(hit(12, 49, 3), Hit::Left);
+        assert_eq!(hit(4, 49, 3), Hit::Left, "a handle is grabbed near it");
+        assert_eq!(hit(128, 49, 3), Hit::Right);
+        assert_eq!(hit(70, 12, 3), Hit::Top);
+        assert_eq!(hit(70, 86, 3), Hit::Bottom);
+        assert_eq!(hit(13, 13, 3), Hit::TopLeft);
+        assert_eq!(hit(126, 84, 3), Hit::BottomRight);
+        assert_eq!(hit(1, 1, 3), Hit::Outside);
+        assert_eq!(hit(30, 95, 3), Hit::Outside);
+        // A widget that cannot be resized is only moved.
+        assert_eq!(hit(12, 49, 0), Hit::Client);
+        assert_eq!(hit(70, 12, 1), Hit::Client);
+        assert_eq!(hit(4, 49, 0), Hit::Outside);
+    }
+
+    #[test]
+    fn fr12_a_widget_being_edited_is_drawn_lifted_over_a_shadow_with_its_border_and_handles() {
+        use crate::compositor::fluent::{premultiplied, Theme};
+        let (width, height) = (140usize, 98usize);
+        let (lw, lh) = (116usize, 74usize);
+        let gray = [0x20u8, 0x20, 0x20, 0xff];
+        let lifted = gray.repeat(lw * lh);
+        for dark in [false, true] {
+            let theme = Theme {
+                dark,
+                ..Theme::light()
+            };
+            let look = edit_look(&theme);
+            let pixels = draw_edit(&lifted, width, height, 96, 3, &look);
+            assert_eq!(pixels.len(), width * height * 4);
+            let at = |x: usize, y: usize| {
+                let i = (y * width + x) * 4;
+                [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+            };
+            // The widget's image, in the middle.
+            assert_eq!(at(70, 49), gray);
+            // Its border, in the accent color, along its edge.
+            assert_eq!(at(40, 12), premultiplied(look.accent, 1.0));
+            // A handle, in the theme's surface color, on the middle of each edge.
+            assert_eq!(at(70, 12), premultiplied(look.handle, 1.0));
+            assert_eq!(at(12, 49), premultiplied(look.handle, 1.0));
+            // A soft shadow below it, darker nearer the widget, and clear corners.
+            let near = at(40, 89);
+            let far = at(40, 96);
+            assert!(near[3] > far[3], "{near:?} {far:?}");
+            assert!(near[3] > 0 && near[..3] == [0, 0, 0]);
+            assert_eq!(at(0, 0), [0, 0, 0, 0]);
+            // Premultiplied: no color exceeds its alpha.
+            assert!(pixels
+                .chunks_exact(4)
+                .all(|p| p[..3].iter().all(|&c| c <= p[3])));
+        }
+        assert_eq!(edit_look(&Theme::light()).handle, 0xFFFF_FFFF);
+        assert_ne!(
+            edit_look(&Theme::light()).accent,
+            edit_look(&Theme {
+                dark: true,
+                ..Theme::light()
+            })
+            .accent
+        );
+        // A see-through widget stays clickable all over while it is edited.
+        let clear = vec![0u8; lw * lh * 4];
+        let look = edit_look(&Theme::light());
+        let pixels = draw_edit(&clear, width, height, 96, 0, &look);
+        let alpha = |x: usize, y: usize| pixels[(y * width + x) * 4 + 3];
+        assert!(alpha(70, 49) >= 1);
+        assert!(alpha(20, 20) >= 1);
+    }
+
+    #[test]
+    fn fr12_a_widget_window_is_resized_within_what_the_widget_allows() {
+        assert_eq!(min_window_size(&clock(), 96), (66, 40));
+        assert_eq!(max_window_size(&clock(), 96), (2458, 2458));
+        let capped = WidgetProvider {
+            max_width_dp: 200,
+            max_height_dp: 120,
+            ..clock()
+        };
+        assert_eq!(max_window_size(&capped, 96), (120, 72));
+        let fixed = WidgetProvider {
+            resize_mode: 0,
+            ..clock()
+        };
+        assert_eq!(min_window_size(&fixed, 96), (108, 66));
+        assert_eq!(max_window_size(&fixed, 96), (108, 66));
     }
 
     #[test]
@@ -2922,11 +3891,7 @@ mod tests {
         // Dragging the button moves the window at once, by as far as the pointer went.
         let mut gesture = pressed_on_button((278, 122));
         let start = gesture.moved((288, 122), origin, threshold);
-        let start_move = Step::StartMove {
-            cancel: false,
-            to: (110, 100),
-        };
-        assert_eq!(start, start_move);
+        assert_eq!(start, Step::StartMove { to: (110, 100) });
         assert_eq!(
             gesture.moved((300, 140), origin, threshold),
             Step::MoveTo((122, 118))
@@ -2971,11 +3936,14 @@ mod tests {
             let palette = menu_palette(&theme);
             for dpi in [96, 144] {
                 let words = widget_menu::menu_text(false);
-                let entries = widget_menu::entries(&words, &sizes, &placement);
-                let submenu = match entries[0].item() {
-                    Some(item) => item.submenu.clone(),
-                    None => Vec::new(),
-                };
+                // The menu of a widget that can be set up again: every item it may have.
+                let entries = widget_menu::entries(&words, &sizes, &placement, true);
+                let submenu = entries
+                    .iter()
+                    .filter_map(MenuEntry::item)
+                    .find(|item| item.id == widget_menu::RESIZE)
+                    .map(|item| item.submenu.clone())
+                    .unwrap_or_default();
                 let draw = |entries: &[MenuEntry], focus: Option<usize>| {
                     let em = px_of_dip(metrics::TEXT_SIZE, dpi);
                     let widths: Vec<i32> = entries
@@ -3014,7 +3982,7 @@ mod tests {
                 assert!(
                     inked > 20,
                     "the label {:?} has {inked} inked pixels",
-                    words.resize
+                    words.settings
                 );
                 let mut picture = Picture::new(
                     (root.width + sub.width) as usize + 48,
@@ -3056,6 +4024,21 @@ mod tests {
                     picture.place(16 + index * (w + 16), 16, w, h, &pixels);
                 }
                 picture.save(folder.as_deref(), &format!("button-{name}-{percent}.bmp"));
+
+                // The widget being edited after a long press: lifted over its shadow, with
+                // its border and handles, and its menu under it.
+                let margin = edit_margin(dpi);
+                let (ew, eh) = (width + 2 * margin, height + 2 * margin);
+                let lifted = edit_layout(ew, eh, dpi, clock().resize_mode).lifted;
+                let image = placeholder(lifted.2 as usize, lifted.3 as usize, dpi);
+                let (ew, eh) = (ew as usize, eh as usize);
+                let edited = draw_edit(&image, ew, eh, dpi, 3, &edit_look(&theme));
+                let mut picture = Picture::new(ew.max(root_w) + 32, eh + root_h + 40, desktop);
+                picture.place(16, 16, ew, eh, &edited);
+                let menu_x = (16 + lifted.0 as usize + lifted.2 as usize).saturating_sub(root_w);
+                let menu_y = 16 + (lifted.1 + lifted.3) as usize + px_of_dip(4, dpi) as usize;
+                picture.place(menu_x, menu_y, root_w, root_h, &root_pixels);
+                picture.save(folder.as_deref(), &format!("edit-{name}-{percent}.bmp"));
             }
         }
     }
