@@ -766,6 +766,48 @@ pub struct ControlMedia {
     #[prost(enumeration = "MediaCommand", tag = "2")]
     pub command: i32,
 }
+/// One output of the caller's Android's sound, and the app it plays. Android sends every
+/// output at full scale; the host plays it at `volume`, under the app's name and icon.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppAudioStream {
+    /// The output, as the audio port names it ("app 0", "primary").
+    #[prost(string, tag = "1")]
+    pub stream: ::prost::alloc::string::String,
+    /// Empty for the shared output, which every sound of an app without its own plays on.
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub app_label: ::prost::alloc::string::String,
+    /// From 0 (silent) to 1 (full).
+    #[prost(float, tag = "4")]
+    pub volume: f32,
+    #[prost(bool, tag = "5")]
+    pub muted: bool,
+}
+/// The outputs of the caller's Android's sound, the whole list.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppAudio {
+    #[prost(message, repeated, tag = "1")]
+    pub streams: ::prost::alloc::vec::Vec<AppAudioStream>,
+}
+/// Watches which app each output of the caller's Android's sound plays, and its volume. The
+/// answer is AppAudio, and the connection then carries an AppAudio each time it changes; an
+/// Android that stops gives an empty one. The client sends nothing more on it. The watch lasts
+/// across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchAppAudio {}
+/// The user set an app's volume or mute in the host's volume mixer: it becomes the volume
+/// Android gives the app. Empty `package_name` is the shared output. Answered with Done.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetAppVolume {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    /// From 0 to 1.
+    #[prost(float, tag = "2")]
+    pub volume: f32,
+    #[prost(bool, tag = "3")]
+    pub muted: bool,
+}
 /// Asks for the widgets the apps in the caller's Android offer. The answer is WidgetProviders.
 /// Needs the caller's Android to be running.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2739,7 +2781,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 332, 400, 401, 402, 340, 341, 350, 620, 470, 471, 472, 473, 640, 641, 642, 643, 644, 645, 646, 647, 648, 660, 661"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2913,6 +2955,10 @@ pub mod request {
         SetBackup(super::SetBackup),
         #[prost(message, tag = "648")]
         GetKeyProtection(super::GetKeyProtection),
+        #[prost(message, tag = "660")]
+        WatchAppAudio(super::WatchAppAudio),
+        #[prost(message, tag = "661")]
+        SetAppVolume(super::SetAppVolume),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2921,7 +2967,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 332, 400, 401, 340, 341, 620, 621, 622"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 332, 400, 401, 340, 341, 620, 621, 622, 660"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2991,6 +3037,8 @@ pub mod response {
         BackupRecoveryKey(super::BackupRecoveryKey),
         #[prost(message, tag = "622")]
         KeyProtection(super::KeyProtection),
+        #[prost(message, tag = "660")]
+        AppAudio(super::AppAudio),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2998,7 +3046,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620, 470, 471, 640, 641"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 334, 335, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301, 620, 470, 471, 640, 641, 660"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -3084,6 +3132,8 @@ pub mod envelope {
         PasskeyCeremony(super::PasskeyCeremony),
         #[prost(message, tag = "641")]
         PasskeyCeremonyWithdrawn(super::PasskeyCeremonyWithdrawn),
+        #[prost(message, tag = "660")]
+        AppAudio(super::AppAudio),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

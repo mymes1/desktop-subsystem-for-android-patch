@@ -284,6 +284,8 @@ impl<P: Platform> Manager<P> {
                     None => {}
                 }
             }
+            // Only a Windows taskbar preview has media buttons; these windows send none.
+            FromHost::MediaButton { .. } => {}
         }
     }
 

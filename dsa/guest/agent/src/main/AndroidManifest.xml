@@ -160,6 +160,12 @@
       manager binds only in a package that holds this.
     -->
     <uses-permission android:name="android.permission.INSTALL_LOCATION_PROVIDER" />
+    <!--
+      Routing each app with a window to an output of its own (an audio policy), and setting
+      Android's media volume to the one the user set for the app on the host.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_ROUTING" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <application
         android:name=".platform.AgentApplication"
@@ -380,6 +386,9 @@
             <meta-data
                 android:name="android.view.textservice.scs"
                 android:resource="@xml/host_spell_checker" />
+        </service>
+
+        <!--
           The guest's network location provider: the image names the agent as the provider,
           and the location manager binds it for the network provider, which reports the host's
           location (platform/HostNetworkLocationService.kt). WRITE_SECURE_SETTINGS keeps every

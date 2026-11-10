@@ -112,6 +112,9 @@ windows = { version = "0.62", features = [
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
     "Win32_UI_Shell_PropertiesSystem",
+    # The media buttons in a task window's taskbar preview: ITaskbarList3's buttons carry
+    # icons (HICON).
+    "Win32_UI_WindowsAndMessaging",
     # Text input in each task window: the text services framework's thread manager, document
     # manager and text store, which every input method composes through.
     "Win32_UI_TextServices",

@@ -40,6 +40,18 @@ pub mod glyph {
     pub const UNPIN: char = '\u{E77A}';
     /// "Setting": a gear, for an item's own settings.
     pub const SETTINGS: char = '\u{E713}';
+    /// "Play": a triangle pointing right.
+    pub const PLAY: char = '\u{E768}';
+    /// "Pause": two bars.
+    pub const PAUSE: char = '\u{E769}';
+    /// "Previous": a bar and a triangle pointing left, to the track before.
+    pub const PREVIOUS: char = '\u{E892}';
+    /// "Next": a triangle pointing right and a bar, to the track after.
+    pub const NEXT: char = '\u{E893}';
+    /// "OpenInNewWindow": a window with an arrow out of it, for opening an app.
+    pub const OPEN_WINDOW: char = '\u{E8A7}';
+    /// "Stop": a square.
+    pub const STOP: char = '\u{E71A}';
 }
 
 /// The system colors of a high contrast theme that a menu and a button are drawn in.
@@ -443,9 +455,17 @@ pub fn read_theme() -> Theme {
     }
 }
 
+/// Whether the taskbar, its previews and its flyouts use the light theme
+/// (`SystemUsesLightTheme`), which is set apart from the apps' theme.
+#[cfg(windows)]
+pub fn taskbar_is_light() -> bool {
+    const PERSONALIZE: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+    registry::user_dword(PERSONALIZE, "SystemUsesLightTheme") == Some(1)
+}
+
 /// The high contrast theme's colors, while one is on.
 #[cfg(windows)]
-fn high_contrast() -> Option<HighContrast> {
+pub fn high_contrast() -> Option<HighContrast> {
     use windows_sys::Win32::Graphics::Gdi::{
         GetSysColor, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, COLOR_WINDOW,
         COLOR_WINDOWTEXT, SYS_COLOR_INDEX,
@@ -548,6 +568,13 @@ pub mod text {
     /// before it. Both put the same glyphs at the same code points.
     pub const ICON_FACES: [&str; 2] = ["Segoe Fluent Icons", "Segoe MDL2 Assets"];
 
+    /// The faces of a title: Segoe UI Variable at its display size, then Segoe UI.
+    pub const TITLE_FACES: [&str; 2] = ["Segoe UI Variable Display", "Segoe UI"];
+
+    /// The weights text is drawn at: WinUI's body text, and its titles' semibold.
+    pub const REGULAR: i32 = 400;
+    pub const SEMIBOLD: i32 = 600;
+
     /// Where text sits in its box: at the left, cut with an ellipsis where it runs past the
     /// box, or in the middle, as a glyph is.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -558,12 +585,12 @@ pub mod text {
 
     /// The first face of `faces` that is installed at `em` pixels, selected into nothing;
     /// the last one when none is. Null when GDI could make none.
-    unsafe fn font(dc: HDC, faces: &[&str], em: i32) -> HFONT {
+    unsafe fn font(dc: HDC, faces: &[&str], em: i32, weight: i32) -> HFONT {
         for (index, face) in faces.iter().enumerate() {
             let mut font: LOGFONTW = std::mem::zeroed();
             // A negative height is the em size, as WinUI gives font sizes.
             font.lfHeight = -em.max(1);
-            font.lfWeight = 400;
+            font.lfWeight = weight;
             font.lfCharSet = DEFAULT_CHARSET as _;
             // Gray antialiasing: the text is drawn as coverage.
             font.lfQuality = ANTIALIASED_QUALITY as _;
@@ -594,6 +621,11 @@ pub mod text {
 
     /// How wide `text` is in the first installed face of `faces` at `em` pixels.
     pub fn measure(text: &str, faces: &[&str], em: i32) -> i32 {
+        measure_weighted(text, faces, em, REGULAR)
+    }
+
+    /// How wide `text` is in the first installed face of `faces` at `em` pixels and `weight`.
+    pub fn measure_weighted(text: &str, faces: &[&str], em: i32, weight: i32) -> i32 {
         if text.is_empty() {
             return 0;
         }
@@ -604,7 +636,7 @@ pub mod text {
             if dc.is_null() {
                 return 0;
             }
-            let font = font(dc, faces, em);
+            let font = font(dc, faces, em, weight);
             let old = (!font.is_null()).then(|| SelectObject(dc, font));
             let units: Vec<u16> = text.encode_utf16().collect();
             let mut size = SIZE { cx: 0, cy: 0 };
@@ -625,6 +657,18 @@ pub mod text {
         text: &str,
         faces: &[&str],
         em: i32,
+        size: (usize, usize),
+        align: Align,
+    ) -> Option<Vec<u8>> {
+        mask_weighted(text, faces, em, REGULAR, size, align)
+    }
+
+    /// As [`mask`], at `weight` ([`REGULAR`] or [`SEMIBOLD`]).
+    pub fn mask_weighted(
+        text: &str,
+        faces: &[&str],
+        em: i32,
+        weight: i32,
         size: (usize, usize),
         align: Align,
     ) -> Option<Vec<u8>> {
@@ -667,7 +711,7 @@ pub mod text {
                 return None;
             }
             let old_bitmap = SelectObject(dc, bitmap);
-            let font = font(dc, faces, em);
+            let font = font(dc, faces, em, weight);
             let old_font = (!font.is_null()).then(|| SelectObject(dc, font));
             SetBkMode(dc, TRANSPARENT as _);
             SetTextColor(dc, 0x00FF_FFFF);

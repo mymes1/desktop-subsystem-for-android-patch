@@ -125,6 +125,7 @@ use crate::accessibility::{
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::adb_discovery::{AdbAdvertise, AdbServerLink, AutoConnectState, AutoConnectWatcher};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
+use crate::app_audio::{self, AppAudioHub, AppAudioWatch, AppStream, VolumeChange};
 use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
 use crate::background::{
@@ -680,6 +681,8 @@ struct Shared {
     open_shares: Mutex<HashSet<u32>>,
     /// The apps that run in the background, their media sessions, and who watches them.
     background: Mutex<BackgroundHub>,
+    /// Which app each output of the guest's sound plays and its volume, and who watches it.
+    app_audio: Mutex<AppAudioHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
     installs: Mutex<HashMap<u32, Sender<InstallEvent>>>,
     /// The transfer ID of the last install.
@@ -1357,6 +1360,7 @@ impl Session {
             share_watchers: Mutex::new(Vec::new()),
             open_shares: Mutex::new(HashSet::new()),
             background: Mutex::new(BackgroundHub::default()),
+            app_audio: Mutex::new(AppAudioHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
             install_turn: Mutex::new(()),
@@ -2746,6 +2750,35 @@ impl Session {
             .send(Command::Background(request, reply_tx))
             .map_err(|_| SessionError::Gone)?;
         reply_rx.recv().map_err(|_| SessionError::Gone)?
+    }
+
+    /// Which app each output of the guest's sound plays and its volume now, and every list
+    /// after it. The watch lasts across restarts of the guest; a guest that stops has none.
+    pub fn watch_app_audio(&self) -> AppAudioWatch {
+        self.shared
+            .app_audio
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// Which app each output of the guest's sound plays and its volume now.
+    pub fn app_audio(&self) -> Vec<AppStream> {
+        self.shared
+            .app_audio
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .streams()
+    }
+
+    /// Gives the guest the volume the user set for an app on the host. A change for a guest
+    /// that is not running is dropped: its apps are gone with it.
+    pub fn set_app_volume(&self, change: &VolumeChange) {
+        send_quietly(
+            &self.shared,
+            &self.commands,
+            Body::SetAppVolume(change.to_control()),
+        );
     }
 
     /// Freezes the guest now, as when the user chooses it. It stays frozen until a task
@@ -6225,6 +6258,12 @@ impl Worker {
                     package_name: gone.package_name,
                 })
             }
+            Some(Body::AppAudio(list)) => self
+                .shared
+                .app_audio
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .apply(app_audio::checked_streams(list)),
             Some(Body::InstallProgress(progress)) => self.shared.install_event(
                 progress.transfer_id,
                 InstallEvent::Progress(progress.received),
@@ -6498,7 +6537,8 @@ impl Worker {
             | Some(Body::BackupRestore(_))
             | Some(Body::PasskeyResponse(_))
             | Some(Body::KeymintRootKey(_))
-            | Some(Body::BackupSetting(_)) => {
+            | Some(Body::BackupSetting(_))
+            | Some(Body::SetAppVolume(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))
@@ -6571,6 +6611,12 @@ impl Worker {
         // And its background apps and media sessions.
         self.shared
             .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+        // And its outputs of sound.
+        self.shared
+            .app_audio
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clear();

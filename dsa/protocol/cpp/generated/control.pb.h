@@ -78,6 +78,12 @@ extern AndroidFilesDefaultTypeInternal _AndroidFiles_default_instance_;
 class ApkChunk;
 struct ApkChunkDefaultTypeInternal;
 extern ApkChunkDefaultTypeInternal _ApkChunk_default_instance_;
+class AppAudio;
+struct AppAudioDefaultTypeInternal;
+extern AppAudioDefaultTypeInternal _AppAudio_default_instance_;
+class AppAudioStream;
+struct AppAudioStreamDefaultTypeInternal;
+extern AppAudioStreamDefaultTypeInternal _AppAudioStream_default_instance_;
 class AppInfo;
 struct AppInfoDefaultTypeInternal;
 extern AppInfoDefaultTypeInternal _AppInfo_default_instance_;
@@ -540,6 +546,9 @@ extern SensorReadingDefaultTypeInternal _SensorReading_default_instance_;
 class SensorReadings;
 struct SensorReadingsDefaultTypeInternal;
 extern SensorReadingsDefaultTypeInternal _SensorReadings_default_instance_;
+class SetAppVolume;
+struct SetAppVolumeDefaultTypeInternal;
+extern SetAppVolumeDefaultTypeInternal _SetAppVolume_default_instance_;
 class SetTaskCaption;
 struct SetTaskCaptionDefaultTypeInternal;
 extern SetTaskCaptionDefaultTypeInternal _SetTaskCaption_default_instance_;
@@ -675,6 +684,8 @@ template<> ::dsa::control::v1::AddonImageRead* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::AgentConnected* Arena::CreateMaybeMessage<::dsa::control::v1::AgentConnected>(Arena*);
 template<> ::dsa::control::v1::AndroidFiles* Arena::CreateMaybeMessage<::dsa::control::v1::AndroidFiles>(Arena*);
 template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ApkChunk>(Arena*);
+template<> ::dsa::control::v1::AppAudio* Arena::CreateMaybeMessage<::dsa::control::v1::AppAudio>(Arena*);
+template<> ::dsa::control::v1::AppAudioStream* Arena::CreateMaybeMessage<::dsa::control::v1::AppAudioStream>(Arena*);
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationQuery* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationQuery>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationRemove* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationRemove>(Arena*);
@@ -829,6 +840,7 @@ template<> ::dsa::control::v1::SensorDescription* Arena::CreateMaybeMessage<::ds
 template<> ::dsa::control::v1::SensorList* Arena::CreateMaybeMessage<::dsa::control::v1::SensorList>(Arena*);
 template<> ::dsa::control::v1::SensorReading* Arena::CreateMaybeMessage<::dsa::control::v1::SensorReading>(Arena*);
 template<> ::dsa::control::v1::SensorReadings* Arena::CreateMaybeMessage<::dsa::control::v1::SensorReadings>(Arena*);
+template<> ::dsa::control::v1::SetAppVolume* Arena::CreateMaybeMessage<::dsa::control::v1::SetAppVolume>(Arena*);
 template<> ::dsa::control::v1::SetTaskCaption* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskCaption>(Arena*);
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
 template<> ::dsa::control::v1::ShareResult* Arena::CreateMaybeMessage<::dsa::control::v1::ShareResult>(Arena*);
@@ -25776,6 +25788,491 @@ class AudioOutputControl final :
 };
 // -------------------------------------------------------------------
 
+class AppAudioStream final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AppAudioStream) */ {
+ public:
+  inline AppAudioStream() : AppAudioStream(nullptr) {}
+  ~AppAudioStream() override;
+  explicit PROTOBUF_CONSTEXPR AppAudioStream(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AppAudioStream(const AppAudioStream& from);
+  AppAudioStream(AppAudioStream&& from) noexcept
+    : AppAudioStream() {
+    *this = ::std::move(from);
+  }
+
+  inline AppAudioStream& operator=(const AppAudioStream& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AppAudioStream& operator=(AppAudioStream&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AppAudioStream& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AppAudioStream* internal_default_instance() {
+    return reinterpret_cast<const AppAudioStream*>(
+               &_AppAudioStream_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    144;
+
+  friend void swap(AppAudioStream& a, AppAudioStream& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AppAudioStream* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AppAudioStream* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AppAudioStream* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AppAudioStream>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AppAudioStream& from);
+  void MergeFrom(const AppAudioStream& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AppAudioStream* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AppAudioStream";
+  }
+  protected:
+  explicit AppAudioStream(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kStreamFieldNumber = 1,
+    kPackageNameFieldNumber = 2,
+    kAppLabelFieldNumber = 3,
+    kVolumeFieldNumber = 4,
+    kMutedFieldNumber = 5,
+  };
+  // string stream = 1;
+  void clear_stream();
+  const std::string& stream() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_stream(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_stream();
+  PROTOBUF_NODISCARD std::string* release_stream();
+  void set_allocated_stream(std::string* stream);
+  private:
+  const std::string& _internal_stream() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_stream(const std::string& value);
+  std::string* _internal_mutable_stream();
+  public:
+
+  // string package_name = 2;
+  void clear_package_name();
+  const std::string& package_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_package_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_package_name();
+  PROTOBUF_NODISCARD std::string* release_package_name();
+  void set_allocated_package_name(std::string* package_name);
+  private:
+  const std::string& _internal_package_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
+  std::string* _internal_mutable_package_name();
+  public:
+
+  // string app_label = 3;
+  void clear_app_label();
+  const std::string& app_label() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_app_label(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_app_label();
+  PROTOBUF_NODISCARD std::string* release_app_label();
+  void set_allocated_app_label(std::string* app_label);
+  private:
+  const std::string& _internal_app_label() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_app_label(const std::string& value);
+  std::string* _internal_mutable_app_label();
+  public:
+
+  // float volume = 4;
+  void clear_volume();
+  float volume() const;
+  void set_volume(float value);
+  private:
+  float _internal_volume() const;
+  void _internal_set_volume(float value);
+  public:
+
+  // bool muted = 5;
+  void clear_muted();
+  bool muted() const;
+  void set_muted(bool value);
+  private:
+  bool _internal_muted() const;
+  void _internal_set_muted(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AppAudioStream)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr stream_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr app_label_;
+    float volume_;
+    bool muted_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class AppAudio final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AppAudio) */ {
+ public:
+  inline AppAudio() : AppAudio(nullptr) {}
+  ~AppAudio() override;
+  explicit PROTOBUF_CONSTEXPR AppAudio(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AppAudio(const AppAudio& from);
+  AppAudio(AppAudio&& from) noexcept
+    : AppAudio() {
+    *this = ::std::move(from);
+  }
+
+  inline AppAudio& operator=(const AppAudio& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AppAudio& operator=(AppAudio&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AppAudio& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AppAudio* internal_default_instance() {
+    return reinterpret_cast<const AppAudio*>(
+               &_AppAudio_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    145;
+
+  friend void swap(AppAudio& a, AppAudio& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AppAudio* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AppAudio* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AppAudio* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AppAudio>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AppAudio& from);
+  void MergeFrom(const AppAudio& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AppAudio* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AppAudio";
+  }
+  protected:
+  explicit AppAudio(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kStreamsFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.AppAudioStream streams = 1;
+  int streams_size() const;
+  private:
+  int _internal_streams_size() const;
+  public:
+  void clear_streams();
+  ::dsa::control::v1::AppAudioStream* mutable_streams(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::AppAudioStream >*
+      mutable_streams();
+  private:
+  const ::dsa::control::v1::AppAudioStream& _internal_streams(int index) const;
+  ::dsa::control::v1::AppAudioStream* _internal_add_streams();
+  public:
+  const ::dsa::control::v1::AppAudioStream& streams(int index) const;
+  ::dsa::control::v1::AppAudioStream* add_streams();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::AppAudioStream >&
+      streams() const;
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AppAudio)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::AppAudioStream > streams_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SetAppVolume final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SetAppVolume) */ {
+ public:
+  inline SetAppVolume() : SetAppVolume(nullptr) {}
+  ~SetAppVolume() override;
+  explicit PROTOBUF_CONSTEXPR SetAppVolume(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SetAppVolume(const SetAppVolume& from);
+  SetAppVolume(SetAppVolume&& from) noexcept
+    : SetAppVolume() {
+    *this = ::std::move(from);
+  }
+
+  inline SetAppVolume& operator=(const SetAppVolume& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetAppVolume& operator=(SetAppVolume&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SetAppVolume& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SetAppVolume* internal_default_instance() {
+    return reinterpret_cast<const SetAppVolume*>(
+               &_SetAppVolume_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    146;
+
+  friend void swap(SetAppVolume& a, SetAppVolume& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SetAppVolume* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetAppVolume* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SetAppVolume* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SetAppVolume>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SetAppVolume& from);
+  void MergeFrom(const SetAppVolume& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SetAppVolume* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SetAppVolume";
+  }
+  protected:
+  explicit SetAppVolume(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPackageNameFieldNumber = 1,
+    kVolumeFieldNumber = 2,
+    kMutedFieldNumber = 3,
+  };
+  // string package_name = 1;
+  void clear_package_name();
+  const std::string& package_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_package_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_package_name();
+  PROTOBUF_NODISCARD std::string* release_package_name();
+  void set_allocated_package_name(std::string* package_name);
+  private:
+  const std::string& _internal_package_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
+  std::string* _internal_mutable_package_name();
+  public:
+
+  // float volume = 2;
+  void clear_volume();
+  float volume() const;
+  void set_volume(float value);
+  private:
+  float _internal_volume() const;
+  void _internal_set_volume(float value);
+  public:
+
+  // bool muted = 3;
+  void clear_muted();
+  bool muted() const;
+  void set_muted(bool value);
+  private:
+  bool _internal_muted() const;
+  void _internal_set_muted(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SetAppVolume)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    float volume_;
+    bool muted_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class LogStream final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.LogStream) */ {
  public:
@@ -25815,7 +26312,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    147;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -25978,7 +26475,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    148;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -26130,7 +26627,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    149;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -26358,7 +26855,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    150;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -26535,7 +27032,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    148;
+    151;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -26665,7 +27162,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    149;
+    152;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -26838,7 +27335,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    150;
+    153;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -26984,7 +27481,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    151;
+    154;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -27250,7 +27747,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    152;
+    155;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -27407,7 +27904,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    153;
+    156;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -27537,7 +28034,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    154;
+    157;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -27694,7 +28191,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    155;
+    158;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -27857,7 +28354,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    156;
+    159;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -28050,7 +28547,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    157;
+    160;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -28189,7 +28686,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    158;
+    161;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -28357,7 +28854,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    159;
+    162;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -28536,7 +29033,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    160;
+    163;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -28726,7 +29223,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    161;
+    164;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -28843,7 +29340,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    162;
+    165;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -29006,7 +29503,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    163;
+    166;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -29168,7 +29665,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    164;
+    167;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -29303,7 +29800,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    165;
+    168;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -29535,7 +30032,7 @@ class DeviceName final :
                &_DeviceName_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    166;
+    169;
 
   friend void swap(DeviceName& a, DeviceName& b) {
     a.Swap(&b);
@@ -29670,7 +30167,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    167;
+    170;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -29849,7 +30346,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    168;
+    171;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -29979,7 +30476,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    169;
+    172;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -30186,7 +30683,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    170;
+    173;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -30349,7 +30846,7 @@ class BackupUpload final :
                &_BackupUpload_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    171;
+    174;
 
   friend void swap(BackupUpload& a, BackupUpload& b) {
     a.Swap(&b);
@@ -30506,7 +31003,7 @@ class BackupCommit final :
                &_BackupCommit_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    172;
+    175;
 
   friend void swap(BackupCommit& a, BackupCommit& b) {
     a.Swap(&b);
@@ -30738,7 +31235,7 @@ class BackupDiscard final :
                &_BackupDiscard_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    173;
+    176;
 
   friend void swap(BackupDiscard& a, BackupDiscard& b) {
     a.Swap(&b);
@@ -30868,7 +31365,7 @@ class BackupClear final :
                &_BackupClear_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    174;
+    177;
 
   friend void swap(BackupClear& a, BackupClear& b) {
     a.Swap(&b);
@@ -31014,7 +31511,7 @@ class BackupAnswer final :
                &_BackupAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    175;
+    178;
 
   friend void swap(BackupAnswer& a, BackupAnswer& b) {
     a.Swap(&b);
@@ -31182,7 +31679,7 @@ class BackupQuery final :
                &_BackupQuery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    176;
+    179;
 
   friend void swap(BackupQuery& a, BackupQuery& b) {
     a.Swap(&b);
@@ -31312,7 +31809,7 @@ class BackupPackage final :
                &_BackupPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    177;
+    180;
 
   friend void swap(BackupPackage& a, BackupPackage& b) {
     a.Swap(&b);
@@ -31528,7 +32025,7 @@ class BackupContents final :
                &_BackupContents_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    178;
+    181;
 
   friend void swap(BackupContents& a, BackupContents& b) {
     a.Swap(&b);
@@ -31732,7 +32229,7 @@ class BackupFetch final :
                &_BackupFetch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    179;
+    182;
 
   friend void swap(BackupFetch& a, BackupFetch& b) {
     a.Swap(&b);
@@ -31927,7 +32424,7 @@ class BackupFetchData final :
                &_BackupFetchData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    180;
+    183;
 
   friend void swap(BackupFetchData& a, BackupFetchData& b) {
     a.Swap(&b);
@@ -32133,7 +32630,7 @@ class BackupRun final :
                &_BackupRun_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    181;
+    184;
 
   friend void swap(BackupRun& a, BackupRun& b) {
     a.Swap(&b);
@@ -32263,7 +32760,7 @@ class BackupRestore final :
                &_BackupRestore_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    182;
+    185;
 
   friend void swap(BackupRestore& a, BackupRestore& b) {
     a.Swap(&b);
@@ -32430,7 +32927,7 @@ class BackupRunResult final :
                &_BackupRunResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    183;
+    186;
 
   friend void swap(BackupRunResult& a, BackupRunResult& b) {
     a.Swap(&b);
@@ -32609,7 +33106,7 @@ class BackupSetting final :
                &_BackupSetting_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    184;
+    187;
 
   friend void swap(BackupSetting& a, BackupSetting& b) {
     a.Swap(&b);
@@ -32739,7 +33236,7 @@ class PasskeyRequest final :
                &_PasskeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    185;
+    188;
 
   friend void swap(PasskeyRequest& a, PasskeyRequest& b) {
     a.Swap(&b);
@@ -32986,7 +33483,7 @@ class PasskeyResponse final :
                &_PasskeyResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    186;
+    189;
 
   friend void swap(PasskeyResponse& a, PasskeyResponse& b) {
     a.Swap(&b);
@@ -33159,7 +33656,7 @@ class KeyMintRootKeyRequest final :
                &_KeyMintRootKeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    187;
+    190;
 
   friend void swap(KeyMintRootKeyRequest& a, KeyMintRootKeyRequest& b) {
     a.Swap(&b);
@@ -33276,7 +33773,7 @@ class KeyMintRootKey final :
                &_KeyMintRootKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    188;
+    191;
 
   friend void swap(KeyMintRootKey& a, KeyMintRootKey& b) {
     a.Swap(&b);
@@ -33427,7 +33924,7 @@ class ListSpeechVoices final :
                &_ListSpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    189;
+    192;
 
   friend void swap(ListSpeechVoices& a, ListSpeechVoices& b) {
     a.Swap(&b);
@@ -33544,7 +34041,7 @@ class SpeechVoice final :
                &_SpeechVoice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    190;
+    193;
 
   friend void swap(SpeechVoice& a, SpeechVoice& b) {
     a.Swap(&b);
@@ -33733,7 +34230,7 @@ class SpeechVoices final :
                &_SpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    191;
+    194;
 
   friend void swap(SpeechVoices& a, SpeechVoices& b) {
     a.Swap(&b);
@@ -33899,7 +34396,7 @@ class SpeakText final :
                &_SpeakText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    192;
+    195;
 
   friend void swap(SpeakText& a, SpeakText& b) {
     a.Swap(&b);
@@ -34099,7 +34596,7 @@ class SpeechAudio final :
                &_SpeechAudio_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    193;
+    196;
 
   friend void swap(SpeechAudio& a, SpeechAudio& b) {
     a.Swap(&b);
@@ -34267,7 +34764,7 @@ class SpeechDone final :
                &_SpeechDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    194;
+    197;
 
   friend void swap(SpeechDone& a, SpeechDone& b) {
     a.Swap(&b);
@@ -34424,7 +34921,7 @@ class StopSpeaking final :
                &_StopSpeaking_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    195;
+    198;
 
   friend void swap(StopSpeaking& a, StopSpeaking& b) {
     a.Swap(&b);
@@ -34554,7 +35051,7 @@ class StartRecognition final :
                &_StartRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    196;
+    199;
 
   friend void swap(StartRecognition& a, StartRecognition& b) {
     a.Swap(&b);
@@ -34733,7 +35230,7 @@ class StopRecognition final :
                &_StopRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    197;
+    200;
 
   friend void swap(StopRecognition& a, StopRecognition& b) {
     a.Swap(&b);
@@ -34863,7 +35360,7 @@ class CancelRecognition final :
                &_CancelRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    198;
+    201;
 
   friend void swap(CancelRecognition& a, CancelRecognition& b) {
     a.Swap(&b);
@@ -34993,7 +35490,7 @@ class RecognitionEvent final :
                &_RecognitionEvent_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    199;
+    202;
 
   friend void swap(RecognitionEvent& a, RecognitionEvent& b) {
     a.Swap(&b);
@@ -35211,7 +35708,7 @@ class CheckSpelling final :
                &_CheckSpelling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    200;
+    203;
 
   friend void swap(CheckSpelling& a, CheckSpelling& b) {
     a.Swap(&b);
@@ -35394,7 +35891,7 @@ class SpellingMistake final :
                &_SpellingMistake_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    201;
+    204;
 
   friend void swap(SpellingMistake& a, SpellingMistake& b) {
     a.Swap(&b);
@@ -35572,7 +36069,7 @@ class SpellingText final :
                &_SpellingText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    202;
+    205;
 
   friend void swap(SpellingText& a, SpellingText& b) {
     a.Swap(&b);
@@ -35711,7 +36208,7 @@ class SpellingResult final :
                &_SpellingResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    203;
+    206;
 
   friend void swap(SpellingResult& a, SpellingResult& b) {
     a.Swap(&b);
@@ -35968,6 +36465,8 @@ class Envelope final :
     kAudioOutputControl = 103,
     kAudioInputOpen = 104,
     kAudioInputOpened = 105,
+    kAppAudio = 106,
+    kSetAppVolume = 107,
     kVideoCapabilities = 120,
     kVideoDecoderOpen = 121,
     kVideoDecoderOpened = 122,
@@ -36060,7 +36559,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    204;
+    207;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -36224,6 +36723,8 @@ class Envelope final :
     kAudioOutputControlFieldNumber = 103,
     kAudioInputOpenFieldNumber = 104,
     kAudioInputOpenedFieldNumber = 105,
+    kAppAudioFieldNumber = 106,
+    kSetAppVolumeFieldNumber = 107,
     kVideoCapabilitiesFieldNumber = 120,
     kVideoDecoderOpenFieldNumber = 121,
     kVideoDecoderOpenedFieldNumber = 122,
@@ -38109,6 +38610,42 @@ class Envelope final :
       ::dsa::control::v1::AudioInputOpened* audio_input_opened);
   ::dsa::control::v1::AudioInputOpened* unsafe_arena_release_audio_input_opened();
 
+  // .dsa.control.v1.AppAudio app_audio = 106;
+  bool has_app_audio() const;
+  private:
+  bool _internal_has_app_audio() const;
+  public:
+  void clear_app_audio();
+  const ::dsa::control::v1::AppAudio& app_audio() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AppAudio* release_app_audio();
+  ::dsa::control::v1::AppAudio* mutable_app_audio();
+  void set_allocated_app_audio(::dsa::control::v1::AppAudio* app_audio);
+  private:
+  const ::dsa::control::v1::AppAudio& _internal_app_audio() const;
+  ::dsa::control::v1::AppAudio* _internal_mutable_app_audio();
+  public:
+  void unsafe_arena_set_allocated_app_audio(
+      ::dsa::control::v1::AppAudio* app_audio);
+  ::dsa::control::v1::AppAudio* unsafe_arena_release_app_audio();
+
+  // .dsa.control.v1.SetAppVolume set_app_volume = 107;
+  bool has_set_app_volume() const;
+  private:
+  bool _internal_has_set_app_volume() const;
+  public:
+  void clear_set_app_volume();
+  const ::dsa::control::v1::SetAppVolume& set_app_volume() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SetAppVolume* release_set_app_volume();
+  ::dsa::control::v1::SetAppVolume* mutable_set_app_volume();
+  void set_allocated_set_app_volume(::dsa::control::v1::SetAppVolume* set_app_volume);
+  private:
+  const ::dsa::control::v1::SetAppVolume& _internal_set_app_volume() const;
+  ::dsa::control::v1::SetAppVolume* _internal_mutable_set_app_volume();
+  public:
+  void unsafe_arena_set_allocated_set_app_volume(
+      ::dsa::control::v1::SetAppVolume* set_app_volume);
+  ::dsa::control::v1::SetAppVolume* unsafe_arena_release_set_app_volume();
+
   // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
   bool has_video_capabilities() const;
   private:
@@ -39726,6 +40263,8 @@ class Envelope final :
   void set_has_audio_output_control();
   void set_has_audio_input_open();
   void set_has_audio_input_opened();
+  void set_has_app_audio();
+  void set_has_set_app_volume();
   void set_has_video_capabilities();
   void set_has_video_decoder_open();
   void set_has_video_decoder_opened();
@@ -39921,6 +40460,8 @@ class Envelope final :
       ::dsa::control::v1::AudioOutputControl* audio_output_control_;
       ::dsa::control::v1::AudioInputOpen* audio_input_open_;
       ::dsa::control::v1::AudioInputOpened* audio_input_opened_;
+      ::dsa::control::v1::AppAudio* app_audio_;
+      ::dsa::control::v1::SetAppVolume* set_app_volume_;
       ::dsa::control::v1::VideoCapabilities* video_capabilities_;
       ::dsa::control::v1::VideoDecoderOpen* video_decoder_open_;
       ::dsa::control::v1::VideoDecoderOpened* video_decoder_opened_;
@@ -56491,6 +57032,338 @@ inline void AudioOutputControl::set_command(::dsa::control::v1::AudioOutputComma
 
 // -------------------------------------------------------------------
 
+// AppAudioStream
+
+// string stream = 1;
+inline void AppAudioStream::clear_stream() {
+  _impl_.stream_.ClearToEmpty();
+}
+inline const std::string& AppAudioStream::stream() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudioStream.stream)
+  return _internal_stream();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AppAudioStream::set_stream(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.stream_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppAudioStream.stream)
+}
+inline std::string* AppAudioStream::mutable_stream() {
+  std::string* _s = _internal_mutable_stream();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AppAudioStream.stream)
+  return _s;
+}
+inline const std::string& AppAudioStream::_internal_stream() const {
+  return _impl_.stream_.Get();
+}
+inline void AppAudioStream::_internal_set_stream(const std::string& value) {
+  
+  _impl_.stream_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::_internal_mutable_stream() {
+  
+  return _impl_.stream_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::release_stream() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AppAudioStream.stream)
+  return _impl_.stream_.Release();
+}
+inline void AppAudioStream::set_allocated_stream(std::string* stream) {
+  if (stream != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.stream_.SetAllocated(stream, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.stream_.IsDefault()) {
+    _impl_.stream_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AppAudioStream.stream)
+}
+
+// string package_name = 2;
+inline void AppAudioStream::clear_package_name() {
+  _impl_.package_name_.ClearToEmpty();
+}
+inline const std::string& AppAudioStream::package_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudioStream.package_name)
+  return _internal_package_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AppAudioStream::set_package_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppAudioStream.package_name)
+}
+inline std::string* AppAudioStream::mutable_package_name() {
+  std::string* _s = _internal_mutable_package_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AppAudioStream.package_name)
+  return _s;
+}
+inline const std::string& AppAudioStream::_internal_package_name() const {
+  return _impl_.package_name_.Get();
+}
+inline void AppAudioStream::_internal_set_package_name(const std::string& value) {
+  
+  _impl_.package_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::_internal_mutable_package_name() {
+  
+  return _impl_.package_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::release_package_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AppAudioStream.package_name)
+  return _impl_.package_name_.Release();
+}
+inline void AppAudioStream::set_allocated_package_name(std::string* package_name) {
+  if (package_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.package_name_.IsDefault()) {
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AppAudioStream.package_name)
+}
+
+// string app_label = 3;
+inline void AppAudioStream::clear_app_label() {
+  _impl_.app_label_.ClearToEmpty();
+}
+inline const std::string& AppAudioStream::app_label() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudioStream.app_label)
+  return _internal_app_label();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AppAudioStream::set_app_label(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.app_label_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppAudioStream.app_label)
+}
+inline std::string* AppAudioStream::mutable_app_label() {
+  std::string* _s = _internal_mutable_app_label();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AppAudioStream.app_label)
+  return _s;
+}
+inline const std::string& AppAudioStream::_internal_app_label() const {
+  return _impl_.app_label_.Get();
+}
+inline void AppAudioStream::_internal_set_app_label(const std::string& value) {
+  
+  _impl_.app_label_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::_internal_mutable_app_label() {
+  
+  return _impl_.app_label_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AppAudioStream::release_app_label() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AppAudioStream.app_label)
+  return _impl_.app_label_.Release();
+}
+inline void AppAudioStream::set_allocated_app_label(std::string* app_label) {
+  if (app_label != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.app_label_.SetAllocated(app_label, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.app_label_.IsDefault()) {
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AppAudioStream.app_label)
+}
+
+// float volume = 4;
+inline void AppAudioStream::clear_volume() {
+  _impl_.volume_ = 0;
+}
+inline float AppAudioStream::_internal_volume() const {
+  return _impl_.volume_;
+}
+inline float AppAudioStream::volume() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudioStream.volume)
+  return _internal_volume();
+}
+inline void AppAudioStream::_internal_set_volume(float value) {
+  
+  _impl_.volume_ = value;
+}
+inline void AppAudioStream::set_volume(float value) {
+  _internal_set_volume(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppAudioStream.volume)
+}
+
+// bool muted = 5;
+inline void AppAudioStream::clear_muted() {
+  _impl_.muted_ = false;
+}
+inline bool AppAudioStream::_internal_muted() const {
+  return _impl_.muted_;
+}
+inline bool AppAudioStream::muted() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudioStream.muted)
+  return _internal_muted();
+}
+inline void AppAudioStream::_internal_set_muted(bool value) {
+  
+  _impl_.muted_ = value;
+}
+inline void AppAudioStream::set_muted(bool value) {
+  _internal_set_muted(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppAudioStream.muted)
+}
+
+// -------------------------------------------------------------------
+
+// AppAudio
+
+// repeated .dsa.control.v1.AppAudioStream streams = 1;
+inline int AppAudio::_internal_streams_size() const {
+  return _impl_.streams_.size();
+}
+inline int AppAudio::streams_size() const {
+  return _internal_streams_size();
+}
+inline void AppAudio::clear_streams() {
+  _impl_.streams_.Clear();
+}
+inline ::dsa::control::v1::AppAudioStream* AppAudio::mutable_streams(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AppAudio.streams)
+  return _impl_.streams_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::AppAudioStream >*
+AppAudio::mutable_streams() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.AppAudio.streams)
+  return &_impl_.streams_;
+}
+inline const ::dsa::control::v1::AppAudioStream& AppAudio::_internal_streams(int index) const {
+  return _impl_.streams_.Get(index);
+}
+inline const ::dsa::control::v1::AppAudioStream& AppAudio::streams(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppAudio.streams)
+  return _internal_streams(index);
+}
+inline ::dsa::control::v1::AppAudioStream* AppAudio::_internal_add_streams() {
+  return _impl_.streams_.Add();
+}
+inline ::dsa::control::v1::AppAudioStream* AppAudio::add_streams() {
+  ::dsa::control::v1::AppAudioStream* _add = _internal_add_streams();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.AppAudio.streams)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::AppAudioStream >&
+AppAudio::streams() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.AppAudio.streams)
+  return _impl_.streams_;
+}
+
+// -------------------------------------------------------------------
+
+// SetAppVolume
+
+// string package_name = 1;
+inline void SetAppVolume::clear_package_name() {
+  _impl_.package_name_.ClearToEmpty();
+}
+inline const std::string& SetAppVolume::package_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SetAppVolume.package_name)
+  return _internal_package_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SetAppVolume::set_package_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SetAppVolume.package_name)
+}
+inline std::string* SetAppVolume::mutable_package_name() {
+  std::string* _s = _internal_mutable_package_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SetAppVolume.package_name)
+  return _s;
+}
+inline const std::string& SetAppVolume::_internal_package_name() const {
+  return _impl_.package_name_.Get();
+}
+inline void SetAppVolume::_internal_set_package_name(const std::string& value) {
+  
+  _impl_.package_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SetAppVolume::_internal_mutable_package_name() {
+  
+  return _impl_.package_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SetAppVolume::release_package_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SetAppVolume.package_name)
+  return _impl_.package_name_.Release();
+}
+inline void SetAppVolume::set_allocated_package_name(std::string* package_name) {
+  if (package_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.package_name_.IsDefault()) {
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SetAppVolume.package_name)
+}
+
+// float volume = 2;
+inline void SetAppVolume::clear_volume() {
+  _impl_.volume_ = 0;
+}
+inline float SetAppVolume::_internal_volume() const {
+  return _impl_.volume_;
+}
+inline float SetAppVolume::volume() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SetAppVolume.volume)
+  return _internal_volume();
+}
+inline void SetAppVolume::_internal_set_volume(float value) {
+  
+  _impl_.volume_ = value;
+}
+inline void SetAppVolume::set_volume(float value) {
+  _internal_set_volume(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SetAppVolume.volume)
+}
+
+// bool muted = 3;
+inline void SetAppVolume::clear_muted() {
+  _impl_.muted_ = false;
+}
+inline bool SetAppVolume::_internal_muted() const {
+  return _impl_.muted_;
+}
+inline bool SetAppVolume::muted() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SetAppVolume.muted)
+  return _internal_muted();
+}
+inline void SetAppVolume::_internal_set_muted(bool value) {
+  
+  _impl_.muted_ = value;
+}
+inline void SetAppVolume::set_muted(bool value) {
+  _internal_set_muted(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SetAppVolume.muted)
+}
+
+// -------------------------------------------------------------------
+
 // LogStream
 
 // bool on = 1;
@@ -70890,6 +71763,154 @@ inline ::dsa::control::v1::AudioInputOpened* Envelope::mutable_audio_input_opene
   return _msg;
 }
 
+// .dsa.control.v1.AppAudio app_audio = 106;
+inline bool Envelope::_internal_has_app_audio() const {
+  return body_case() == kAppAudio;
+}
+inline bool Envelope::has_app_audio() const {
+  return _internal_has_app_audio();
+}
+inline void Envelope::set_has_app_audio() {
+  _impl_._oneof_case_[0] = kAppAudio;
+}
+inline void Envelope::clear_app_audio() {
+  if (_internal_has_app_audio()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.app_audio_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AppAudio* Envelope::release_app_audio() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.app_audio)
+  if (_internal_has_app_audio()) {
+    clear_has_body();
+    ::dsa::control::v1::AppAudio* temp = _impl_.body_.app_audio_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.app_audio_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AppAudio& Envelope::_internal_app_audio() const {
+  return _internal_has_app_audio()
+      ? *_impl_.body_.app_audio_
+      : reinterpret_cast< ::dsa::control::v1::AppAudio&>(::dsa::control::v1::_AppAudio_default_instance_);
+}
+inline const ::dsa::control::v1::AppAudio& Envelope::app_audio() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.app_audio)
+  return _internal_app_audio();
+}
+inline ::dsa::control::v1::AppAudio* Envelope::unsafe_arena_release_app_audio() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.app_audio)
+  if (_internal_has_app_audio()) {
+    clear_has_body();
+    ::dsa::control::v1::AppAudio* temp = _impl_.body_.app_audio_;
+    _impl_.body_.app_audio_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_app_audio(::dsa::control::v1::AppAudio* app_audio) {
+  clear_body();
+  if (app_audio) {
+    set_has_app_audio();
+    _impl_.body_.app_audio_ = app_audio;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.app_audio)
+}
+inline ::dsa::control::v1::AppAudio* Envelope::_internal_mutable_app_audio() {
+  if (!_internal_has_app_audio()) {
+    clear_body();
+    set_has_app_audio();
+    _impl_.body_.app_audio_ = CreateMaybeMessage< ::dsa::control::v1::AppAudio >(GetArenaForAllocation());
+  }
+  return _impl_.body_.app_audio_;
+}
+inline ::dsa::control::v1::AppAudio* Envelope::mutable_app_audio() {
+  ::dsa::control::v1::AppAudio* _msg = _internal_mutable_app_audio();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.app_audio)
+  return _msg;
+}
+
+// .dsa.control.v1.SetAppVolume set_app_volume = 107;
+inline bool Envelope::_internal_has_set_app_volume() const {
+  return body_case() == kSetAppVolume;
+}
+inline bool Envelope::has_set_app_volume() const {
+  return _internal_has_set_app_volume();
+}
+inline void Envelope::set_has_set_app_volume() {
+  _impl_._oneof_case_[0] = kSetAppVolume;
+}
+inline void Envelope::clear_set_app_volume() {
+  if (_internal_has_set_app_volume()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.set_app_volume_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SetAppVolume* Envelope::release_set_app_volume() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.set_app_volume)
+  if (_internal_has_set_app_volume()) {
+    clear_has_body();
+    ::dsa::control::v1::SetAppVolume* temp = _impl_.body_.set_app_volume_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.set_app_volume_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SetAppVolume& Envelope::_internal_set_app_volume() const {
+  return _internal_has_set_app_volume()
+      ? *_impl_.body_.set_app_volume_
+      : reinterpret_cast< ::dsa::control::v1::SetAppVolume&>(::dsa::control::v1::_SetAppVolume_default_instance_);
+}
+inline const ::dsa::control::v1::SetAppVolume& Envelope::set_app_volume() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.set_app_volume)
+  return _internal_set_app_volume();
+}
+inline ::dsa::control::v1::SetAppVolume* Envelope::unsafe_arena_release_set_app_volume() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.set_app_volume)
+  if (_internal_has_set_app_volume()) {
+    clear_has_body();
+    ::dsa::control::v1::SetAppVolume* temp = _impl_.body_.set_app_volume_;
+    _impl_.body_.set_app_volume_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_set_app_volume(::dsa::control::v1::SetAppVolume* set_app_volume) {
+  clear_body();
+  if (set_app_volume) {
+    set_has_set_app_volume();
+    _impl_.body_.set_app_volume_ = set_app_volume;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.set_app_volume)
+}
+inline ::dsa::control::v1::SetAppVolume* Envelope::_internal_mutable_set_app_volume() {
+  if (!_internal_has_set_app_volume()) {
+    clear_body();
+    set_has_set_app_volume();
+    _impl_.body_.set_app_volume_ = CreateMaybeMessage< ::dsa::control::v1::SetAppVolume >(GetArenaForAllocation());
+  }
+  return _impl_.body_.set_app_volume_;
+}
+inline ::dsa::control::v1::SetAppVolume* Envelope::mutable_set_app_volume() {
+  ::dsa::control::v1::SetAppVolume* _msg = _internal_mutable_set_app_volume();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.set_app_volume)
+  return _msg;
+}
+
 // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
 inline bool Envelope::_internal_has_video_capabilities() const {
   return body_case() == kVideoCapabilities;
@@ -77118,6 +78139,12 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

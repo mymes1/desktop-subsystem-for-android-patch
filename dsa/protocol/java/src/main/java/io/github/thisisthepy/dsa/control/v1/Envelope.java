@@ -120,6 +120,8 @@ public  final class Envelope extends
     AUDIO_OUTPUT_CONTROL(103),
     AUDIO_INPUT_OPEN(104),
     AUDIO_INPUT_OPENED(105),
+    APP_AUDIO(106),
+    SET_APP_VOLUME(107),
     VIDEO_CAPABILITIES(120),
     VIDEO_DECODER_OPEN(121),
     VIDEO_DECODER_OPENED(122),
@@ -319,6 +321,8 @@ public  final class Envelope extends
         case 103: return AUDIO_OUTPUT_CONTROL;
         case 104: return AUDIO_INPUT_OPEN;
         case 105: return AUDIO_INPUT_OPENED;
+        case 106: return APP_AUDIO;
+        case 107: return SET_APP_VOLUME;
         case 120: return VIDEO_CAPABILITIES;
         case 121: return VIDEO_DECODER_OPEN;
         case 122: return VIDEO_DECODER_OPENED;
@@ -5419,6 +5423,106 @@ public  final class Envelope extends
    */
   private void clearAudioInputOpened() {
     if (bodyCase_ == 105) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int APP_AUDIO_FIELD_NUMBER = 106;
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  @java.lang.Override
+  public boolean hasAppAudio() {
+    return bodyCase_ == 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AppAudio getAppAudio() {
+    if (bodyCase_ == 106) {
+       return (io.github.thisisthepy.dsa.control.v1.AppAudio) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AppAudio.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void setAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void mergeAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+    value.getClass();
+  if (bodyCase_ == 106 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AppAudio.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AppAudio.newBuilder((io.github.thisisthepy.dsa.control.v1.AppAudio) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 106;
+  }
+  /**
+   * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+   */
+  private void clearAppAudio() {
+    if (bodyCase_ == 106) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SET_APP_VOLUME_FIELD_NUMBER = 107;
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  @java.lang.Override
+  public boolean hasSetAppVolume() {
+    return bodyCase_ == 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SetAppVolume getSetAppVolume() {
+    if (bodyCase_ == 107) {
+       return (io.github.thisisthepy.dsa.control.v1.SetAppVolume) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SetAppVolume.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void setSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void mergeSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+    value.getClass();
+  if (bodyCase_ == 107 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SetAppVolume.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SetAppVolume.newBuilder((io.github.thisisthepy.dsa.control.v1.SetAppVolume) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 107;
+  }
+  /**
+   * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+   */
+  private void clearSetAppVolume() {
+    if (bodyCase_ == 107) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -14536,6 +14640,102 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    @java.lang.Override
+    public boolean hasAppAudio() {
+      return instance.hasAppAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AppAudio getAppAudio() {
+      return instance.getAppAudio();
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder setAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+      copyOnWrite();
+      instance.setAppAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder setAppAudio(
+        io.github.thisisthepy.dsa.control.v1.AppAudio.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAppAudio(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder mergeAppAudio(io.github.thisisthepy.dsa.control.v1.AppAudio value) {
+      copyOnWrite();
+      instance.mergeAppAudio(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AppAudio app_audio = 106;</code>
+     */
+    public Builder clearAppAudio() {
+      copyOnWrite();
+      instance.clearAppAudio();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    @java.lang.Override
+    public boolean hasSetAppVolume() {
+      return instance.hasSetAppVolume();
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SetAppVolume getSetAppVolume() {
+      return instance.getSetAppVolume();
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder setSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+      copyOnWrite();
+      instance.setSetAppVolume(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder setSetAppVolume(
+        io.github.thisisthepy.dsa.control.v1.SetAppVolume.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSetAppVolume(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder mergeSetAppVolume(io.github.thisisthepy.dsa.control.v1.SetAppVolume value) {
+      copyOnWrite();
+      instance.mergeSetAppVolume(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetAppVolume set_app_volume = 107;</code>
+     */
+    public Builder clearSetAppVolume() {
+      copyOnWrite();
+      instance.clearSetAppVolume();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
     @java.lang.Override
@@ -18665,6 +18865,8 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.AudioOutputControl.class,
             io.github.thisisthepy.dsa.control.v1.AudioInputOpen.class,
             io.github.thisisthepy.dsa.control.v1.AudioInputOpened.class,
+            io.github.thisisthepy.dsa.control.v1.AppAudio.class,
+            io.github.thisisthepy.dsa.control.v1.SetAppVolume.class,
             io.github.thisisthepy.dsa.control.v1.PowerHint.class,
             io.github.thisisthepy.dsa.control.v1.VideoCapabilities.class,
             io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.class,
@@ -18771,7 +18973,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.BackupSetting.class,
           };
           java.lang.String info =
-              "\u0000\u00b8\u0001\u0000\u0001\u0290\u00b8\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u00ba\u0001\u0000\u0001\u0290\u00ba\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -18781,22 +18983,22 @@ public  final class Envelope extends
               "<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N" +
               "<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000" +
               "^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000" +
-              "h<\u0000i<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000" +
-              "<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<" +
-              "\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000" +
-              "\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd<\u0000\u00de" +
-              "<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000\u0105<\u0000" +
-              "\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000\u0122" +
-              "<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000\u0157<\u0000\u0158<\u0000" +
-              "\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179<\u0000\u017c" +
-              "<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
-              "\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000\u019b" +
-              "<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000\u01d7<\u0000" +
-              "\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f<\u0000\u0270" +
-              "<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000\u0276<\u0000" +
-              "\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284<\u0000\u0285" +
-              "<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000\u028b<\u0000" +
-              "\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000";
+              "h<\u0000i<\u0000j<\u0000k<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
+              "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0098<\u0000\u0099<\u0000" +
+              "\u009a<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd" +
+              "<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000" +
+              "\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b" +
+              "<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000\u0157<\u0000" +
+              "\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162<\u0000\u0179" +
+              "<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0192<\u0000\u0193<\u0000" +
+              "\u0194<\u0000\u0195<\u0000\u0196<\u0000\u0197<\u0000\u0198<\u0000\u0199<\u0000\u019a" +
+              "<\u0000\u019b<\u0000\u019c<\u0000\u019d<\u0000\u019e<\u0000\u019f<\u0000\u01d6<\u0000" +
+              "\u01d7<\u0000\u01d8<\u0000\u01d9<\u0000\u026c<\u0000\u026d<\u0000\u026e<\u0000\u026f" +
+              "<\u0000\u0270<\u0000\u0271<\u0000\u0272<\u0000\u0273<\u0000\u0274<\u0000\u0275<\u0000" +
+              "\u0276<\u0000\u0277<\u0000\u0280<\u0000\u0281<\u0000\u0282<\u0000\u0283<\u0000\u0284" +
+              "<\u0000\u0285<\u0000\u0286<\u0000\u0287<\u0000\u0288<\u0000\u0289<\u0000\u028a<\u0000" +
+              "\u028b<\u0000\u028c<\u0000\u028d<\u0000\u028e<\u0000\u028f<\u0000\u0290<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

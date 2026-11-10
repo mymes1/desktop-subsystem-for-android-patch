@@ -36,6 +36,7 @@ pub mod committed;
 pub mod device_recovery;
 pub mod display_gpu;
 pub mod fluent;
+pub mod fluent_dialog;
 pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
@@ -69,6 +70,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::app_audio::{self, AppStream, AppVolumes};
 use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::compositor::{
     GraphicsRenderer, GraphicsStreamKind, StreamTracker, GRAPHICS_COMMAND_PORT,
@@ -178,6 +180,37 @@ pub struct Compositor {
     /// Turns Windows' touch gestures off while a task window is in front, when the user's
     /// setting says so. None leaves them alone.
     touch_gestures: Option<touch_gestures::TouchGestureSetup>,
+    /// What joins the media sessions the tray follows to the media buttons in the taskbar
+    /// previews of the task windows.
+    media_windows: MediaWindows,
+}
+
+/// The way between the media sessions the tray follows and the media buttons in the task
+/// windows' taskbar previews: each session goes to the manager, which tells the app's window
+/// host, and each press of a button comes back to the tray's connection to the service, which
+/// sends it to the app's session as it sends a media key's.
+struct MediaWindows {
+    /// The manager's events, once the task windows have started.
+    events: Arc<Mutex<Option<mpsc::Sender<ManagerEvent>>>>,
+    /// Where the manager sends a press.
+    pressed_tx: mpsc::Sender<MediaPress>,
+    /// Where the tray's thread reads the presses; taken when it starts.
+    pressed_rx: Mutex<Option<mpsc::Receiver<MediaPress>>>,
+}
+
+/// A media button pressed in a task window's taskbar preview: the app's package and what the
+/// button asks of its media session.
+type MediaPress = (String, dsa_host_core::background::MediaCommand);
+
+impl MediaWindows {
+    fn new() -> MediaWindows {
+        let (pressed_tx, pressed_rx) = mpsc::channel();
+        MediaWindows {
+            events: Arc::new(Mutex::new(None)),
+            pressed_tx,
+            pressed_rx: Mutex::new(Some(pressed_rx)),
+        }
+    }
 }
 
 /// The installed apps an event from the watch of the tasks carries, if it carries them.
@@ -290,6 +323,7 @@ impl Compositor {
             host_services: true,
             show_background: true,
             touch_gestures: touch_gestures::TouchGestureSetup::for_this_user(),
+            media_windows: MediaWindows::new(),
         }
     }
 
@@ -330,6 +364,7 @@ impl Compositor {
             host_services: false,
             show_background: false,
             touch_gestures: None,
+            media_windows: MediaWindows::new(),
         }
     }
 
@@ -742,10 +777,13 @@ impl Compositor {
     /// Starts playing the sound of the user's Android on their default output device, on a
     /// thread of its own that ends with `stop`: it listens on the audio port of the user's
     /// VM, and plays each stream the guest opens there. A device that cannot play is logged
-    /// and the stream goes on unheard, so the guest is never held up.
+    /// and the stream goes on unheard, so the guest is never held up. Each app's output plays
+    /// as that app in Windows' volume mixer, at the volume Android gives it, and a volume the
+    /// user sets there goes back to Android; a second thread follows that over the local API.
     fn start_audio(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
         let bind = self.bind_audio.take()?;
         let mut listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let mut connector = (self.local_api_connector)();
         let stop = Arc::clone(stop);
         let logger = self.logger.clone();
         let failed = self.logger.clone();
@@ -754,10 +792,41 @@ impl Compositor {
             .spawn(move || {
                 let log: Arc<dyn Fn(&str) + Send + Sync> =
                     Arc::new(move |line: &str| note(logger.as_deref(), line));
-                let device: Arc<dyn AudioDevice> =
-                    Arc::new(audio::DefaultOutput::new(Arc::clone(&log)));
                 let build = format!("dsa-wm {}", crate::VERSION);
+                let volumes = AppVolumes::new();
+                let follower = {
+                    let (volumes, stop, log, build) = (
+                        Arc::clone(&volumes),
+                        Arc::clone(&stop),
+                        Arc::clone(&log),
+                        build.clone(),
+                    );
+                    thread::Builder::new()
+                        .name("dsa-wm-app-audio".into())
+                        .spawn(move || {
+                            app_audio::follow(
+                                &mut *connector,
+                                &build,
+                                &volumes,
+                                &stop,
+                                &*log,
+                                &|_: &[AppStream]| {},
+                            )
+                        })
+                };
+                if let Err(e) = &follower {
+                    log(&format!(
+                        "could not start the app volumes' thread; every app plays as one: {e}"
+                    ));
+                }
+                let device: Arc<dyn AudioDevice> = Arc::new(audio::DefaultOutput::new(
+                    Arc::clone(&log),
+                    Arc::clone(&volumes),
+                ));
                 serve_audio_port(&mut listener, device, &build, &stop, log);
+                if let Ok(follower) = follower {
+                    let _ = follower.join();
+                }
             })
             .map_err(|e| {
                 note(
@@ -997,6 +1066,13 @@ impl Compositor {
         let stop = Arc::clone(stop);
         let logger = self.logger.clone();
         let failed = self.logger.clone();
+        let events = Arc::clone(&self.media_windows.events);
+        let pressed = self
+            .media_windows
+            .pressed_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         thread::Builder::new()
             .name("dsa-wm-background".into())
             .spawn(move || {
@@ -1010,7 +1086,26 @@ impl Compositor {
                         return;
                     }
                 };
-                background::sync(connector, &mut tray, stop, logger);
+                let Some(pressed) = pressed else {
+                    background::sync(connector, &mut tray, stop, logger);
+                    return;
+                };
+                // Each media session also reaches its app's windows, for the media buttons in
+                // their taskbar previews, and those buttons' presses come back here.
+                let mut linked = background::WithWindowMedia {
+                    tray: &mut tray,
+                    windows: Box::new(move |package: &str, media| {
+                        let events = events.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(events) = events.as_ref() {
+                            let _ = events.send(ManagerEvent::Media {
+                                package: package.to_string(),
+                                media,
+                            });
+                        }
+                    }),
+                    pressed,
+                };
+                background::sync(connector, &mut linked, stop, logger);
             })
             .map_err(|e| {
                 note(
@@ -1288,7 +1383,14 @@ impl Compositor {
             renderer_generation: self.presenter.clone().map(|presenter| {
                 Box::new(move || presenter.device_generation()) as Box<dyn Fn() -> u64 + Send>
             }),
+            media_pressed: Some(self.media_windows.pressed_tx.clone()),
         };
+        // The media sessions the tray follows reach the windows through the manager.
+        *self
+            .media_windows
+            .events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(events_tx.clone());
         let manager = thread::Builder::new()
             .name("dsa-wm-manager".into())
             .spawn(move || hosts::manage(setup))

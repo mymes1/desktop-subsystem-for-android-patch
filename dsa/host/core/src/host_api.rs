@@ -72,6 +72,7 @@ use crate::accessibility::{
 use crate::adb_discovery::AutoConnectState;
 use crate::addon_disk::{Addon, AddonDisk};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
+use crate::app_audio::{self as app_audio, AppAudioStream, AppAudioWatch, VolumeChange};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package, Source, Translator};
@@ -448,6 +449,18 @@ pub trait UserAndroid: Send + Sync {
         let _ = request;
         Err(TaskRequestError::Failed(
             "this Android does not report the apps that run in the background".into(),
+        ))
+    }
+    /// Which app each output of this Android's sound plays and its volume, now and every list
+    /// after it. `None` when it says nothing of its outputs.
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        None
+    }
+    /// Gives this Android the volume the user set for one of its apps on the host.
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        let _ = change;
+        Err(TaskRequestError::Failed(
+            "this Android takes no app volumes from the host".into(),
         ))
     }
     /// The widgets this Android hosts now and every change to them. `None` when it hosts none.
@@ -984,6 +997,13 @@ impl UserAndroid for Session {
     }
     fn watch_background(&self) -> Option<BackgroundWatch> {
         Some(Session::watch_background(self))
+    }
+    fn watch_app_audio(&self) -> Option<AppAudioWatch> {
+        Some(Session::watch_app_audio(self))
+    }
+    fn set_app_volume(&self, change: &VolumeChange) -> Result<(), TaskRequestError> {
+        Session::set_app_volume(self, change);
+        Ok(())
     }
     fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
         Session::background_apps(self)
@@ -2525,6 +2545,9 @@ impl HostApiService {
             }
             if let Some(request::Body::WatchBackgroundApps(_)) = request.body {
                 return self.watch_background(connection, &peer, request.id);
+            }
+            if let Some(request::Body::WatchAppAudio(_)) = request.body {
+                return self.watch_app_audio(connection, &peer, request.id);
             }
             if let Some(request::Body::InstallApk(install)) = &request.body {
                 return self.install_apk(connection, &peer, request.id, install.clone());
@@ -4534,6 +4557,82 @@ impl HostApiService {
         }
     }
 
+    /// Answers a WatchAppAudio request with the outputs of the caller's Android's sound now,
+    /// then passes every new list until the client goes away. The client sends nothing more:
+    /// anything it sends closes the connection, except a frame that cannot be read, which is
+    /// dropped.
+    fn watch_app_audio(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => android.watch_app_audio().ok_or_else(|| {
+                error(
+                    ErrorCode::Unavailable,
+                    "this Android says nothing of its apps' sound".into(),
+                )
+            }),
+        };
+        let watch = match watched {
+            Ok(watch) => watch,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::AppAudio(app_audio::streams_to_host_api(
+                &watch.streams,
+            ))),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.events.try_recv() {
+                    Ok(streams) => {
+                        let list = Body::AppAudio(app_audio::streams_to_host_api(&streams));
+                        if send(&mut *connection, list).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            if !self.one_way_watch_continues(&mut *connection, peer, "watches its apps' sound") {
+                return;
+            }
+        }
+    }
+
+    /// Gives the caller's Android the volume the user set for one of its apps on the host.
+    fn set_app_volume(&self, peer: &Peer, set: types::SetAppVolume) -> response::Body {
+        let change = match VolumeChange::from_host_api(set) {
+            Ok(change) => change,
+            Err(why) => return error(ErrorCode::UnknownRequest, why),
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.set_app_volume(&change) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            // The app went with its Android; there is nothing to set.
+            Err(TaskRequestError::NotRunning(_)) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     /// Passes what the user did with an app that runs in the background to the caller's
     /// Android.
     fn act_on_background(&self, peer: &Peer, act: types::ActOnBackgroundApp) -> response::Body {
@@ -4897,6 +4996,7 @@ impl HostApiService {
             Some(request::Body::ReportPrintJob(report)) => self.report_print_job(peer, report),
             Some(request::Body::ReportGeocode(report)) => self.report_geocode(peer, report),
             Some(request::Body::ReportShare(report)) => self.report_share(peer, report),
+            Some(request::Body::SetAppVolume(set)) => self.set_app_volume(peer, set),
             Some(request::Body::ListBackgroundApps(_)) => self.list_background(peer),
             Some(request::Body::ActOnBackgroundApp(act)) => self.act_on_background(peer, act),
             Some(request::Body::ControlMedia(control)) => self.control_media(peer, control),
@@ -5016,7 +5116,9 @@ impl HostApiService {
                         | request::Body::WatchGeocoding(_)
                         | request::Body::ReportGeocode(_)
                         | request::Body::WatchShares(_)
-                        | request::Body::ReportShare(_) => unreachable!("answered above"),
+                        | request::Body::ReportShare(_)
+                        | request::Body::WatchAppAudio(_)
+                        | request::Body::SetAppVolume(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -7644,6 +7746,28 @@ impl HostApiClient {
         outcome: &ShareOutcome,
     ) -> Result<(), ClientError> {
         self.done(request::Body::ReportShare(outcome.to_host_api(share_id)))
+    }
+
+    /// Watches which app each output of the caller's Android's sound plays and its volume. The
+    /// connection carries nothing else from here on, so the client is used up.
+    pub fn watch_app_audio(mut self) -> Result<AppAudioStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchAppAudio(types::WatchAppAudio {}),
+            self.timeout,
+        )? {
+            response::Body::AppAudio(list) => Ok(AppAudioStream {
+                streams: app_audio::streams_from_host_api(list),
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the outputs of Android's sound".into(),
+            )),
+        }
+    }
+
+    /// Gives the caller's Android the volume the user set for one of its apps on the host.
+    pub fn set_app_volume(&mut self, change: &VolumeChange) -> Result<(), ClientError> {
+        self.done(request::Body::SetAppVolume(change.to_host_api()))
     }
 
     /// Watches the apps that run in the background in the caller's Android. The connection

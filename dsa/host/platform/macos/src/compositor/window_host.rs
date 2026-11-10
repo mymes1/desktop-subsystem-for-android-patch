@@ -467,6 +467,8 @@ fn handle(message: ToHost) {
         }),
         ToHost::AppMenu { new_window } => menu_bar::set_new_window(new_window),
         ToHost::AppIcon { icon_png, .. } => set_dock_icon(&icon_png),
+        // The media buttons are a Windows taskbar preview's; macOS has no such preview.
+        ToHost::AppMedia { .. } => {}
     }
 }
 
