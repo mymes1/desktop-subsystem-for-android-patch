@@ -192,6 +192,26 @@
         </activity>
 
         <!--
+          An app's request to pin a shortcut (requestPinShortcut), which Android hands to the
+          default launcher: it shows nothing, hands the request to the agent, which asks the
+          host, and finishes at once. Having it makes ShortcutManager.isRequestPinShortcutSupported
+          true for the apps. It runs in a task of its own, in the agent's package, which the
+          host never shows a window for, so the app that asked keeps its window. Only the
+          system starts it, so it is not exported.
+        -->
+        <activity
+            android:name=".platform.PinShortcutActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity="io.github.thisisthepy.dsa.agent.pinshortcut"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+            </intent-filter>
+        </activity>
+
+        <!--
           The guest's browser while web links go to the host: it shows nothing, hands each
           http and https link to the agent, which sends it to the host, and finishes at once.
           A link an installed app has verified as its own (an App Link) never comes here:

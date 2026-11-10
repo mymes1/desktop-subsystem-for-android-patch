@@ -30,6 +30,13 @@ interface TaskActions {
     fun launchNewWindow(packageName: String): Boolean = false
 
     /**
+     * Starts the shortcut [shortcutId] of [packageName] as a task in its own freeform window,
+     * as a launcher does (LauncherApps.startShortcut). False when the app has no such shortcut,
+     * it is turned off, or the framework refused.
+     */
+    fun launchShortcut(packageName: String, shortcutId: String): Boolean = false
+
+    /**
      * Opens Android Settings' [page] of [packageName], or the list of every installed app when
      * it is null, as a new task in its own freeform window. A Settings without that page opens
      * the app's info instead. False when the framework refused.
@@ -119,6 +126,12 @@ sealed interface RequestResult {
     /** The app started, or came to the front; [newWindow] when it started another task. */
     data class Launched(val packageName: String, val newWindow: Boolean = false) : RequestResult
     data class LaunchFailed(val packageName: String, val reason: String) : RequestResult
+
+    /**
+     * The shortcut [shortcutId] of [packageName] started; or, with [appInstead], the shortcut
+     * could not start and the app started in its place.
+     */
+    data class ShortcutLaunched(val packageName: String, val shortcutId: String, val appInstead: Boolean = false) : RequestResult
     /** Android's [page] of [packageName] opened; null for the list of every app. */
     data class SettingsOpened(val packageName: String?, val page: SettingsPage = SettingsPage.DETAILS) : RequestResult
     data class SettingsFailed(val packageName: String?, val reason: String) : RequestResult
@@ -155,7 +168,8 @@ sealed interface RequestResult {
  * Turns the frames the channel delivers into actions on the guest's tasks.
  *
  * LaunchApp starts an app, or with new_window another task of an app that supports several
- * windows; OpenAppSettings opens one of Android's settings pages of an app; CloseTask ends a task, but only one the host was told about, so
+ * windows; LaunchShortcut starts one of an app's shortcuts, or the app when the shortcut cannot
+ * start; OpenAppSettings opens one of Android's settings pages of an app; CloseTask ends a task, but only one the host was told about, so
  * the host cannot end the agent's own task or anything else that has no window. ResizeTask
  * and SetTaskDensity are checked the same way and handed back for the agent to apply with
  * the rest of the task layout, and so is SetTaskCaption, the height of the host's title bar
@@ -176,6 +190,8 @@ class HostRequests(
         }
         return when (envelope.bodyCase) {
             Envelope.BodyCase.LAUNCH_APP -> launch(envelope.launchApp.packageName, envelope.launchApp.newWindow)
+            Envelope.BodyCase.LAUNCH_SHORTCUT ->
+                launchShortcut(envelope.launchShortcut.packageName, envelope.launchShortcut.shortcutId)
             Envelope.BodyCase.OPEN_APP_SETTINGS ->
                 settings(envelope.openAppSettings.packageName, pageOf(envelope.openAppSettings.page))
             Envelope.BodyCase.CLOSE_TASK -> close(envelope.closeTask.taskId)
@@ -208,6 +224,18 @@ class HostRequests(
             }
         actions.launchApp(packageName) -> RequestResult.Launched(packageName)
         else -> RequestResult.LaunchFailed(packageName, "the package has no launcher activity, or the framework refused to start it")
+    }
+
+    // A shortcut that is gone or turned off still opens its app, as a launcher's stale
+    // shortcut does, so the user's click is never lost.
+    private fun launchShortcut(packageName: String, shortcutId: String): RequestResult = when {
+        !PACKAGE_NAME.matches(packageName) ->
+            RequestResult.Malformed("LaunchShortcut names ${packageName.take(80).ifEmpty { "no package" }}, which is not a package name")
+        shortcutId.isEmpty() -> RequestResult.Malformed("LaunchShortcut names no shortcut of $packageName")
+        packageName == ownPackage -> RequestResult.LaunchFailed(packageName, "the agent has no shortcuts to start")
+        actions.launchShortcut(packageName, shortcutId) -> RequestResult.ShortcutLaunched(packageName, shortcutId)
+        actions.launchApp(packageName) -> RequestResult.ShortcutLaunched(packageName, shortcutId, appInstead = true)
+        else -> RequestResult.LaunchFailed(packageName, "neither the shortcut $shortcutId nor the app could be started")
     }
 
     // A page this build does not know opens the app's info, the page every Settings has.
