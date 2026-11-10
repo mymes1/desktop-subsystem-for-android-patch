@@ -22,7 +22,7 @@ one. They are marked "(admin)" below.
 |---|---|---|
 | **General** | Android's state, **Start**, **Stop**, **Freeze Android now**, the last problem, **Open my log folder** | `dsa status`, `dsa start`, `dsa stop`, `dsa freeze` |
 | **Memory** | **Memory limit**, the size of Android's VM, what each part uses | `memory-limit`, `dsa memory` |
-| **Apps** | Installed apps: **Open**, **App info**, **Uninstall**, **Resizable**, the size windows open at | `dsa apps`, `dsa app-window` |
+| **Apps** | Installed apps: **Open**, **App info**, **Uninstall**, **Create desktop shortcut**, **Resizable**, the size windows open at | `dsa apps`, `dsa app-window` |
 | **Running in the background** | Apps running with no window: **Open**, **Stop**; whether to ask before stopping | `dsa background`, `stop-without-asking` |
 | **Widgets** | Widgets on your desktop, and **Add to desktop** | `dsa widgets` |
 | **Display & GPU** | **Render GPU**, **Restart the window manager**, **Turn off Windows touch gestures in DSA app windows** (Windows 11 only, on by default) | `render-gpu`, `dsa gpus`, `touch-gestures-off` |
