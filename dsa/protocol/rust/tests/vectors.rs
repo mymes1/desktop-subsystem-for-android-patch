@@ -22,10 +22,6 @@ use dsa_protocol::control::{
     ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames, TaskRemoved, TaskUpdated,
 };
 use dsa_protocol::control::{
-    RecognitionEvent, RecognitionEventKind, SpeakText, SpeechAudio, SpellingMistake,
-    SpellingResult, SpellingText,
-};
-use dsa_protocol::control::{
     AddWidget, ListWidgetProviders, RemoveWidget, ResizeWidget, WidgetAdded, WidgetFrame,
     WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
 };
@@ -40,6 +36,10 @@ use dsa_protocol::control::{
 };
 use dsa_protocol::control::{
     PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome,
+};
+use dsa_protocol::control::{
+    RecognitionEvent, RecognitionEventKind, SpeakText, SpeechAudio, SpellingMistake,
+    SpellingResult, SpellingText,
 };
 use dsa_protocol::control::{
     SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
