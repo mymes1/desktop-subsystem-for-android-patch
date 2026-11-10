@@ -1447,6 +1447,12 @@
   <data name="AppsInfoButton.Content" xml:space="preserve">
     <value>App info</value>
   </data>
+  <data name="AppsDesktopShortcutButton.Content" xml:space="preserve">
+    <value>Create desktop shortcut</value>
+  </data>
+  <data name="Apps_DesktopShortcutMade" xml:space="preserve">
+    <value>A shortcut to {0} is on the desktop.</value>
+  </data>
   <data name="AppsUninstallButton.Content" xml:space="preserve">
     <value>Uninstall</value>
   </data>

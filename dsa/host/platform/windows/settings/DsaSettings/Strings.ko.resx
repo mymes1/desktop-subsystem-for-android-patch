@@ -1447,6 +1447,12 @@
   <data name="AppsInfoButton.Content" xml:space="preserve">
     <value>앱 정보</value>
   </data>
+  <data name="AppsDesktopShortcutButton.Content" xml:space="preserve">
+    <value>바탕 화면 바로 가기 만들기</value>
+  </data>
+  <data name="Apps_DesktopShortcutMade" xml:space="preserve">
+    <value>{0} 바로 가기를 바탕 화면에 만들었습니다.</value>
+  </data>
   <data name="AppsUninstallButton.Content" xml:space="preserve">
     <value>제거</value>
   </data>

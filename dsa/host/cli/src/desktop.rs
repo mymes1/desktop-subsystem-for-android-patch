@@ -7,6 +7,13 @@ use std::path::PathBuf;
 
 use dsa_host_core::tasks::AppInfo;
 
+/// Puts a shortcut to `app` on the desktop; returns where it is. On Windows it is a `.lnk`
+/// that runs the app's window program, as its Start menu shortcut does.
+#[cfg(windows)]
+pub fn place_on_desktop(app: &AppInfo) -> Result<PathBuf, String> {
+    dsa_host_windows::desktop_shortcuts::place_app_on_desktop(app)
+}
+
 /// Puts a shortcut to `app` on the desktop; returns where it is. On Linux it is a copy of the
 /// app's launcher entry in the desktop folder `xdg-user-dirs` names.
 #[cfg(target_os = "linux")]

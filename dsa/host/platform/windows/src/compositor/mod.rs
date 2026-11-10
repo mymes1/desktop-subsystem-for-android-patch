@@ -48,6 +48,7 @@ pub mod log;
 pub mod microphone;
 pub mod notifications;
 pub mod passkeys;
+pub mod pin_shortcuts;
 pub mod present;
 pub mod print;
 pub mod share;
@@ -220,6 +221,18 @@ pub fn installed_in(event: &ManagerEvent) -> Option<Vec<AppInfo>> {
         }),
         ManagerEvent::Task(event) => match &**event {
             TaskEvent::Installed(apps) => Some(apps.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The request to pin a shortcut an event from the watch of the tasks carries, if it carries
+/// one. Only a live event does: a request is never part of the tasks a watch starts from.
+pub fn pin_request_in(event: &ManagerEvent) -> Option<dsa_host_core::tasks::PinShortcutRequest> {
+    match event {
+        ManagerEvent::Task(event) => match &**event {
+            TaskEvent::PinShortcut(request) => Some(request.clone()),
             _ => None,
         },
         _ => None,
@@ -1376,6 +1389,22 @@ impl Compositor {
         // apps' programs and shortcuts takes a while and the windows must not wait on it.
         let mut start_menu = None;
         let mut installed_tx = None;
+        // An app's request to pin a shortcut on the desktop is asked about on a thread of its
+        // own, which waits on the user; it ends when the watch of tasks does.
+        let mut pin_tx = None;
+        if self.start_menu.is_some() {
+            let (tx, rx) = mpsc::channel();
+            let pin_connector = (self.local_api_connector)();
+            let pin_logger = self.logger.clone();
+            if thread::Builder::new()
+                .name("dsa-wm-pin-shortcuts".into())
+                .spawn(move || pin_shortcuts::serve(rx, pin_connector, pin_logger))
+                .map_err(|e| log(&format!("could not start the pin requests' thread: {e}")))
+                .is_ok()
+            {
+                pin_tx = Some(tx);
+            }
+        }
         if let Some(setup) = self.start_menu.take() {
             let (tx, rx) = mpsc::channel();
             let menu_logger = self.logger.clone();
@@ -1417,6 +1446,9 @@ impl Compositor {
                     |event| {
                         if let (Some(tx), Some(apps)) = (&installed_tx, installed_in(&event)) {
                             let _ = tx.send(apps);
+                        }
+                        if let (Some(tx), Some(request)) = (&pin_tx, pin_request_in(&event)) {
+                            let _ = tx.send((request, Instant::now()));
                         }
                         note_tasks(&idle, &event);
                         watch_events.send(event).is_ok()
