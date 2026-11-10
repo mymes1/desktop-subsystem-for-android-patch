@@ -2555,8 +2555,10 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False, 
 # unmetered Wi-Fi network that NetworkMonitor validates, and ConnectivityManager reports it
 # and each change of it. The address, the route and the DNS servers come by DHCP from the
 # host (Android's IpClient asks), so nothing here is static: a host network change reaches
-# the guest through its next lease, and the NAT gateway's DNS proxy follows the host's own
-# DNS and VPN. Cuttlefish's rename_eth0 would hand eth0 to the radio as rmnet0, and DSA has no
+# the guest through its next lease. While the host answers DNS, the daemon's stub takes every
+# query sent to those servers and the host's own resolver answers it (dns_problems), so the
+# host's hosts file, VPN and DNS filters apply; the DHCP servers are the fallback while it does
+# not. Cuttlefish's rename_eth0 would hand eth0 to the radio as rmnet0, and DSA has no
 # modem, so it is turned off. setup_wifi derives wlan0's MAC address from the boot property
 # wifi_mac_prefix, a number it fails without (see kernel_cmdline).
 NETWORK_PROPS_FILE = "VENDOR/build.prop"
@@ -3606,6 +3608,13 @@ FILES_PROPERTY_CONTEXT = f"{FILES_PROPERTY} u:object_r:dsa_files_prop:s0 exact s
 # to 0 when it is off; dsa-channeld.rc starts and stops the elevation helper to match (su.cil).
 ROOT_ELEVATION_PROPERTY = "vendor.dsa.root_elevation"
 ROOT_ELEVATION_PROPERTY_CONTEXT = f"{ROOT_ELEVATION_PROPERTY} u:object_r:dsa_root_elevation_prop:s0 exact bool"
+# dsa-channeld sets this to "on" while the host answers the guest's DNS queries and to "off"
+# when it stays unreachable; dsa-channeld.rc has dsa-channeld --dns-redirect send every DNS
+# query to the daemon's stub, or stop doing so, to match (channeld.cil).
+DNS_PROPERTY = "vendor.dsa.dns"
+DNS_PROPERTY_CONTEXT = f"{DNS_PROPERTY} u:object_r:dsa_dns_prop:s0 exact enum on off"
+DNS_REDIRECT_SERVICE = "service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect"
+DNS_REDIRECT_TRIGGER = f"on property:{DNS_PROPERTY}=* && property:init.svc.netd=running"
 # Root elevation's su client. It is a system file, where an app's PATH and the kernel's su
 # guard look for su, labelled with a type of its own so the policy lets apps run that file
 # alone (su.cil). The label goes in only with the daemon, whose policy declares the type.
@@ -4140,6 +4149,8 @@ def update_vendor_property_contexts(text):
         lines.append(FILES_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ROOT_ELEVATION_PROPERTY] for line in lines):
         lines.append(ROOT_ELEVATION_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [DNS_PROPERTY] for line in lines):
+        lines.append(DNS_PROPERTY_CONTEXT)
     for name, context in GAPPS_COMPILE_PROPERTY_CONTEXTS.items():
         if not any(line.split()[:1] == [name] for line in lines):
             lines.append(context)
@@ -4375,6 +4386,28 @@ def root_elevation_problems(names, read):
         if context not in contexts:
             problems.append(f"vendor_file_contexts lacks \"{context}\", so init makes the socket with a label "
                             "its clients may not write")
+    return problems
+
+
+def dns_problems(names, read):
+    """Returns what an image with the daemon lacks for the guest's DNS to be answered by the
+    host's resolver: the redirect service that sends DNS queries to the daemon's stub, as root
+    in its own domain and started once netd has set up the packet filter, and the type of the
+    property that switches it."""
+    problems = []
+    rc = read(CHANNELD_RC).decode().splitlines() if CHANNELD_RC in names else []
+    for line, why in [
+        (DNS_REDIRECT_SERVICE, "the guest's DNS queries never reach the host's resolver"),
+        ("    user root", "the packet filter cannot be changed"),
+        ("    seclabel u:r:dsa_dns_redirect:s0", "the redirect runs outside its own domain"),
+        (DNS_REDIRECT_TRIGGER, "nothing starts the redirect when the daemon switches it"),
+    ]:
+        if line not in rc:
+            problems.append(f"{CHANNELD_RC} lacks \"{line.strip()}\", so {why}")
+    if VENDOR_PROPERTY_CONTEXTS in names and DNS_PROPERTY_CONTEXT not in read(
+            VENDOR_PROPERTY_CONTEXTS).decode().splitlines():
+        problems.append(f"vendor_property_contexts does not give {DNS_PROPERTY} its type, so the daemon "
+                        "cannot switch the guest's DNS to the host's resolver")
     return problems
 
 

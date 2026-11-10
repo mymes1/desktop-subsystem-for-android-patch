@@ -99,6 +99,8 @@ class ImageLayoutTests(unittest.TestCase):
         "su_process.rs": ("dsa_su", "su.cil"),
         # KeyMint's root key from the host (dsa-channeld --keymint-key).
         "keymint_key.rs": ("dsa_keymint_key", "channeld.cil"),
+        # The packet filter rules that send DNS queries to the stub (dsa-channeld --dns-redirect).
+        "dns_redirect.rs": ("dsa_dns_redirect", "channeld.cil"),
     }
     # The policy files the image installs together with the daemon, so a rule for one of its
     # domains may live in any of them (the daemon's root elevation rules are in su.cil).
@@ -7089,6 +7091,72 @@ class KeyMintKeyImageTests(unittest.TestCase):
             "vendor_file_contexts lacks",
             "lets untrusted_app read KeyMint's root key",
         ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+
+class HostDnsTests(unittest.TestCase):
+    """The guest's DNS, answered by the host's resolver: the daemon's stub, the root helper that
+    sends every DNS query to it, and the property that switches the helper."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", "/system/bin/sh u:object_r:shell_exec:s0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = root / "dsa-channeld"
+        daemon.write_bytes(b"daemon")
+        client = root / "su"
+        client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _block(self, text, first_line):
+        start = text.index(first_line)
+        end = text.find("\n\n", start)
+        return [line.strip() for line in text[start:end if end >= 0 else len(text)].splitlines()]
+
+    def test_fr28_the_dns_redirect_runs_as_root_in_its_own_domain_once_netd_runs(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.DNS_REDIRECT_SERVICE)
+        for option in ["user root", "seclabel u:r:dsa_dns_redirect:s0", "oneshot", "disabled",
+                       "capabilities NET_ADMIN NET_RAW"]:
+            self.assertIn(option, service)
+        trigger = self._block(rc, make_image.DNS_REDIRECT_TRIGGER)
+        self.assertEqual(trigger[1:], ["start dsa_dns_redirect"])
+
+    def test_fr28_only_the_daemon_switches_the_dns_redirect(self):
+        setters = re.findall(r"\(allow\s+(\S+)\s+dsa_dns_prop\s+\(\s*property_service\s+\(([^)]*)\)",
+                             self.POLICY)
+        self.assertEqual({who for who, perms in setters if "set" in perms.split()}, {"dsa_channeld"})
+        # The helper may change the packet filter, and nothing on the disk but what it runs.
+        self.assertRegex(self.POLICY, r"\(allow\s+dsa_dns_redirect\s+self\s+\(\s*capability\s+\([^)]*\bnet_admin\b")
+        self.assertNotRegex(self.POLICY, r"\(allow\s+dsa_dns_redirect\s+\S*data\S*")
+        # The daemon listens for the guest's queries on the loopback address.
+        for cls in ("udp_socket", "tcp_socket"):
+            self.assertRegex(self.POLICY, rf"\(allow\s+dsa_channeld\s+port\s+\(\s*{cls}\s+\(\s*name_bind")
+        self.assertIn(make_image.DNS_PROPERTY_CONTEXT,
+                      make_image.update_vendor_property_contexts("").splitlines())
+
+    def test_fr28_check_image_names_what_the_hosts_dns_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        self.assertEqual(make_image.dns_problems(list(files), files.__getitem__), [])
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_dns_redirect:s0").encode()
+        files[make_image.VENDOR_PROPERTY_CONTEXTS] = b""
+        problems = make_image.dns_problems(list(files), files.__getitem__)
+        expected = ['lacks "seclabel u:r:dsa_dns_redirect:s0"', f"does not give {make_image.DNS_PROPERTY}"]
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
         self.assertEqual(len(problems), len(expected), problems)
