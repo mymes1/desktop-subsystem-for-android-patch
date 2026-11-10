@@ -186,6 +186,8 @@ class Agent(
     fileStore: TransferStore? = null,
     fileOpener: FileOpener = FileOpener.NONE,
     mediaScan: MediaScan = MediaScan.NONE,
+    trustStoreNotice: io.github.thisisthepy.dsa.agent.network.TrustStoreNotice =
+        io.github.thisisthepy.dsa.agent.network.TrustStoreNotice.NONE,
     sharedStorage: java.io.File = java.io.File("/storage/emulated/0"),
     clipboard: GuestClipboard = GuestClipboard.NONE,
     notifications: NotificationSource = NotificationSource.NONE,
@@ -414,6 +416,7 @@ class Agent(
     private val links = Links(browserRole, guestBrowser, { frame -> channel.send(frame) }, log)
     private val files = FileReceiver(fileStore, fileOpener, { frame -> channel.send(frame) }, log)
     private val sharedFolders = SharedFolders(sharedStorage, mediaScan, scheduler, log)
+    private val hostCertificates = io.github.thisisthepy.dsa.agent.network.HostCertificates(trustStoreNotice, log)
     private val dragThread by lazy {
         java.util.concurrent.Executors.newSingleThreadExecutor { work -> Thread(work, "dsa-drag-out") }
     }
@@ -782,6 +785,7 @@ class Agent(
             return true
         }
         if (sharedFolders.handle(envelope)) return true
+        if (hostCertificates.handle(envelope)) return true
         if (clipboardSync.handle(envelope)) return true
         if (notificationForwarder.handle(envelope)) return true
         if (backgroundApps.handle(envelope)) return true
