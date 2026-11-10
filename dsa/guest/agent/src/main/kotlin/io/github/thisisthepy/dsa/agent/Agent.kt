@@ -3,6 +3,9 @@ package io.github.thisisthepy.dsa.agent
 import com.google.protobuf.InvalidProtocolBufferException
 import io.github.thisisthepy.dsa.agent.accessibility.AccessibilityExport
 import io.github.thisisthepy.dsa.agent.accessibility.AccessibilitySource
+import io.github.thisisthepy.dsa.agent.audio.AppAudio
+import io.github.thisisthepy.dsa.agent.audio.AppAudioPort
+import io.github.thisisthepy.dsa.agent.audio.AppVolumeStore
 import io.github.thisisthepy.dsa.agent.channel.ChannelClient
 import io.github.thisisthepy.dsa.agent.channel.ChannelLocator
 import io.github.thisisthepy.dsa.agent.clipboard.ClipboardSync
@@ -147,7 +150,9 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * across Play services' updates ([DesktopPlayServices]).
  * The host's location is also the guest's network location ([NetworkLocation]), the guest's
  * geocoder asks the host ([HostGeocoder]), and what apps share through "Share on PC" goes to
- * the host's share UI, its files read like a drag's ([DragOut.share]).
+ * the host's share UI, its files read like a drag's ([DragOut.share]). Each app with a window
+ * plays on an output of its own, which the host plays as that app at the app's volume, and the
+ * host's volume mixer is the only place the guest's sound is turned down ([AppAudio]).
  */
 class Agent(
     private val ownPackage: String,
@@ -209,6 +214,8 @@ class Agent(
     backupManager: BackupManagerPort = BackupManagerPort.NONE,
     /** Tells the user that a share did not reach the PC (the host's reason, or empty). */
     shareNotice: (String) -> Unit = {},
+    appAudio: AppAudioPort = AppAudioPort.NONE,
+    appVolumes: AppVolumeStore = AppVolumeStore.memory(),
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -416,6 +423,13 @@ class Agent(
         run = dragRunner ?: { work -> dragThread.execute(work) },
         notify = shareNotice,
     )
+    private val appSound = AppAudio(
+        appAudio,
+        appVolumes,
+        { frame -> channel.send(frame) },
+        log,
+        isConnected = { channel.connected },
+    )
     private val networkLocation = NetworkLocation({ frame -> channel.send(frame) }, log, isConnected = { channel.connected })
     private val geocoder = HostGeocoder({ frame -> channel.send(frame) }, log, isConnected = { channel.connected }, scheduler)
     private val accessibilityExport = AccessibilityExport(
@@ -464,6 +478,7 @@ class Agent(
                 log.warn("could not turn click sounds off; each click spends time on a sound nobody hears", e)
             }
             accessibilityExport.start()
+            appSound.start { work -> scheduler.post(work) }
             listen()
             lifecycle.start { work -> scheduler.post(work) }
             clipboardSync.start { work -> scheduler.post(work) }
@@ -603,6 +618,7 @@ class Agent(
         links.connected()
         files.connected()
         accessibilityExport.connected()
+        appSound.connected()
         requestRefresh()
         requestAppsRefresh()
     }
@@ -700,6 +716,7 @@ class Agent(
         if (appReinstaller.handle(envelope)) return true
         if (hostCalls.handle(envelope)) return true
         if (backupRuns.handle(envelope)) return true
+        if (appSound.handle(envelope)) return true
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
@@ -912,7 +929,9 @@ class Agent(
         }
         keys.retainTasks(reporter.reported)
         text.retainTasks(reporter.reported)
-        closedApps.tasks(reported.mapNotNull(reporter::reportedPackage).toSet())
+        val packages = reported.mapNotNull(reporter::reportedPackage).toSet()
+        closedApps.tasks(packages)
+        appSound.tasks(packages, reporter.focusedTask()?.let(reporter::reportedPackage))
     }
 
     /**

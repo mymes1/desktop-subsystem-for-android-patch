@@ -179,6 +179,22 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   without the permission to record gets the recognizer's permission error before the host
   is asked; the host's own microphone privacy settings apply there. A host that cannot
   answer fails the request at once, so no app waits.
+- **Sound volume.** The host's volume mixer is the only place the guest's sound is turned
+  down: the audio module sends every output at full scale (see `dsa/guest/audio`). The agent
+  registers an audio policy (`MODIFY_AUDIO_ROUTING`) and gives each app with a window an app
+  output of its own, by attaching a mix whose rule matches the app's uid and which plays on
+  that output's bus device (`dsa_app_0` to `dsa_app_7`). It tells the host which app each
+  output plays and the app's volume (`AppAudio`, the whole list, on each connection and each
+  change), and the host plays the output as that app in its mixer. An app's volume is what
+  Android's media volume says while the app is the one it stands for: the app whose window
+  has the focus, or the last one that had it. An app that sets its volume and the volume keys
+  change it; when the focus moves, the media volume becomes the focused app's, so each app
+  reads its own. A volume or mute the user sets in the host's mixer (`SetAppVolume`) becomes
+  the app's, and the media volume while the app has the focus. Each app's volume is kept in
+  the agent's preferences, and a new app starts at full volume. An app keeps its output after
+  its windows close, so music it plays on keeps its name in the mixer; when all are taken, the
+  app that had a window longest ago and plays nothing gives its output up. An app without one
+  plays on the shared output, DSA's line in the mixer, which has a volume of its own.
 - **The channel.** It reaches the host through the control daemon's binder service,
   `io.github.thisisthepy.dsa.channel.IChannel/default` (`dsa/guest/aidl/`). It looks for
   the service every second until the daemon is up, subscribes, and sends every app task
