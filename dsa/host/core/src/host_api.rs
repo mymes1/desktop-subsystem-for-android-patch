@@ -284,6 +284,16 @@ pub trait UserAndroid: Send + Sync {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         let _ = (on, folders);
     }
+    /// Lets this Android trust the root certificates a user or an administrator added to the
+    /// computer (`on`), or takes them away, as the user's setting says.
+    fn trust_host_certificates(&self, on: bool) {
+        let _ = on;
+    }
+    /// The root certificates added to the computer that this Android is given while the user's
+    /// setting is on. Empty when this Android reads no trust store.
+    fn host_certificates(&self) -> Vec<crate::host_certificates::ImportedCertificate> {
+        Vec::new()
+    }
     /// Sets the user's root elevation settings: the computer's switch and the apps with a
     /// level other than off. The running Android is told at once (see
     /// [`Session::set_root_elevation_config`]).
@@ -943,6 +953,12 @@ impl UserAndroid for Session {
     }
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         Session::share_folders(self, on, folders)
+    }
+    fn trust_host_certificates(&self, on: bool) {
+        Session::trust_host_certificates(self, on)
+    }
+    fn host_certificates(&self) -> Vec<crate::host_certificates::ImportedCertificate> {
+        Session::host_certificates(self)
     }
     fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
         Session::set_root_elevation_config(self, on, apps)
@@ -1942,6 +1958,9 @@ pub struct SettingsReport {
     /// mode is on, "unavailable" while root elevation is off, and empty while developer mode is
     /// off (adb is closed) or from a service that does not report it.
     pub adb_shell_root: String,
+    /// The root certificates added to the computer that the caller's Android is given while
+    /// `settings.host_certificates` is on. Empty from a service that does not report them.
+    pub imported_certificates: Vec<crate::host_certificates::ImportedCertificate>,
 }
 
 /// How a user's Android reaches the network.
@@ -6201,10 +6220,30 @@ impl HostApiService {
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
                 wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
                 self.touch_gestures_now(&peer.user, &mut wire);
+                wire.imported_certificates = self.host_certificates_now(&peer.user);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::Unavailable, why),
         }
+    }
+
+    /// The root certificates added to the computer that the caller's Android is given, as its
+    /// session last read them; none when it has no Android.
+    fn host_certificates_now(&self, user: &str) -> Vec<types::ImportedCertificate> {
+        self.androids
+            .android(user)
+            .map(|android| android.host_certificates())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|certificate| types::ImportedCertificate {
+                subject: certificate.subject,
+                issuer: certificate.issuer,
+                source: certificate.source,
+                location: certificate.location,
+                sha256: certificate.sha256,
+                not_after: certificate.not_after,
+            })
+            .collect()
     }
 
     /// What the caller's window manager last said about the host's touch gestures, into
@@ -6303,6 +6342,7 @@ impl HostApiService {
             advanced_networking: wanted.advanced_networking,
             touch_gestures_off: wanted.touch_gestures_off,
             image_auto_restart: wanted.image_auto_restart,
+            host_certificates: wanted.host_certificates,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -6363,6 +6403,7 @@ impl HostApiService {
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
                     android.adb_auto_connect(settings.adb_auto_connect);
                     android.image_auto_restart(settings.image_auto_restart);
+                    android.trust_host_certificates(settings.host_certificates);
                     crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
@@ -6383,7 +6424,7 @@ impl HostApiService {
                      {}, links in Android {}, program updates {} ({} channel), image updates \
                      {}, input trace {}, resize trace {}, developer mode {} (adb port {}, \
                      auto-connect {}), file sharing {} ({}), advanced networking {}, touch \
-                     gestures off in task windows {}, image auto-restart {}",
+                     gestures off in task windows {}, image auto-restart {}, host certificates {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -6403,7 +6444,8 @@ impl HostApiService {
                     settings.shared_folders.join(", "),
                     on_off(settings.advanced_networking),
                     on_off(settings.touch_gestures_off),
-                    on_off(settings.image_auto_restart)
+                    on_off(settings.image_auto_restart),
+                    on_off(settings.host_certificates)
                 );
                 if settings.root_elevation != machine.root_elevation {
                     // The switch is the computer's, so every user's Android follows it. The
@@ -6435,6 +6477,7 @@ impl HostApiService {
                 wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
                 wire.adb_shell_root = self.adb_shell_root_now(&peer.user, &settings);
                 self.touch_gestures_now(&peer.user, &mut wire);
+                wire.imported_certificates = self.host_certificates_now(&peer.user);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::InvalidSetting, why),
@@ -6485,6 +6528,8 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         advanced_networking: settings.advanced_networking,
         touch_gestures_off: settings.touch_gestures_off,
         image_auto_restart: settings.image_auto_restart,
+        host_certificates: settings.host_certificates,
+        imported_certificates: Vec::new(),
         touch_gestures_state: String::new(),
         touch_gestures_problem: String::new(),
         adb_shell_root: String::new(),
@@ -6524,6 +6569,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             advanced_networking: settings.advanced_networking,
             touch_gestures_off: settings.touch_gestures_off,
             image_auto_restart: settings.image_auto_restart,
+            host_certificates: settings.host_certificates,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -6540,6 +6586,20 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             &settings.touch_gestures_problem,
         ),
         adb_shell_root: settings.adb_shell_root,
+        imported_certificates: settings
+            .imported_certificates
+            .into_iter()
+            .map(
+                |certificate| crate::host_certificates::ImportedCertificate {
+                    subject: certificate.subject,
+                    issuer: certificate.issuer,
+                    source: certificate.source,
+                    location: certificate.location,
+                    sha256: certificate.sha256,
+                    not_after: certificate.not_after,
+                },
+            )
+            .collect(),
     }
 }
 
