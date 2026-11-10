@@ -26,6 +26,32 @@ SPEC.loader.exec_module(make_image)
 
 
 class ImageLayoutTests(unittest.TestCase):
+    def test_nfr2_the_cached_process_limit_applies_where_android_17_reads_it(self):
+        # Android 17 takes the limit from the device configuration, which the agent sets, and
+        # else from config_customizedMaxCachedProcesses (1024), never from the global setting.
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS["config_customizedMaxCachedProcesses"], 8)
+        self.assertIn("integer/config_customizedMaxCachedProcesses", make_image.framework_overlaid())
+        with tempfile.TemporaryDirectory() as tmp:
+            make_image.framework_overlay_sources(Path(tmp))
+            values = (Path(tmp) / "res/values/dsa.xml").read_text()
+        self.assertIn('<integer name="config_customizedMaxCachedProcesses">8</integer>', values)
+        agent = Path(__file__).parent.parent / "agent"
+        source = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/platform/AndroidAppProcesses.kt").read_text()
+        self.assertIn('NAMESPACE = "activity_manager"', source)
+        self.assertIn("DeviceConfig.setProperty(NAMESPACE, MAX_CACHED", source)
+        closed = (agent / "src/main/kotlin/io/github/thisisthepy/dsa/agent/memory/ClosedApps.kt").read_text()
+        self.assertIn("const val MAX_CACHED_PROCESSES = 8", closed)
+
+    def test_nfr2_channeld_may_page_a_woken_app_out_to_zram(self):
+        # process_madvise on another user's process asks CAP_SYS_NICE and CAP_SYS_PTRACE: init
+        # gives the daemon both, and the policy lets it use them, or every pageout is refused.
+        here = Path(__file__).parent
+        cil = (here / "sepolicy" / "channeld.cil").read_text()
+        self.assertRegex(cil, r"\(allow dsa_channeld self \(capability \([^)]*\bsys_nice\b[^)]*\bsys_ptrace\b")
+        rc = (here / "dsa-channeld.rc").read_text()
+        service = rc[rc.index("service dsa_channeld"):rc.index("on property:sys.boot_completed=1")]
+        self.assertIn("capabilities SYS_NICE SYS_PTRACE", service)
+
     def test_fr21_channeld_may_clear_the_pstore_records_the_host_collected(self):
         # init leaves /sys/fs/pstore read only to system; the daemon makes it writable to
         # itself and unlinks each collected record, which erases it from the pstore disk.
@@ -43,9 +69,14 @@ class ImageLayoutTests(unittest.TestCase):
         "/proc/meminfo": [("proc_meminfo", "file")],
         "/proc/pressure/memory": [("proc_pressure_mem", "file")],
         "/proc/vmstat": [("proc_vmstat", "file")],
-        # The process listing and each app process's /proc/<pid>/cmdline.
-        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
+        # The process listing, the owner of each process's entry (an app's or not), and each
+        # app process's /proc/<pid>/cmdline.
+        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "dir", "getattr"), ("appdomain", "file")],
         "/proc/{}/cmdline": [("appdomain", "file")],
+        # The pageout after an app wakes: its importance, its memory and its address space.
+        "/proc/{pid}/status": [("appdomain", "file")],
+        "/proc/{}/oom_score_adj": [("appdomain", "file")],
+        "/proc/{}/maps": [("appdomain", "file")],
         # The kernel's su guard on securityfs, which only the elevation helper writes.
         "/sys/kernel/security/dsa_su/control": [
             ("securityfs", "dir"),
@@ -976,6 +1007,23 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("ro.hardware.gralloc=minigbm\n", props)
         self.assertIn("ro.cpuvulkan.version=0\n", props)
 
+    def test_fr32_pr3_android_reports_opengles_3_2_to_app_stores(self):
+        # v0.2.1 on a real PC: ro.opengles.version was empty and `pm list features` reported
+        # reqGlEsVersion=0x0, so Google Play called YouTube incompatible and left YouTube and
+        # Chrome out of its search. Cuttlefish's launcher passes the version at boot, and DSA
+        # does not run it, so the vendor build.prop claims it and the boot passes the same one.
+        self.assertEqual(make_image.OPENGLES_VERSION, 196610)
+        for vendor in [False, True]:
+            props = make_image.edit_props("ro.debuggable=1\nro.opengles.version=196608\n", vendor=vendor)
+            self.assertIn("ro.opengles.version=196610\n", props)
+            self.assertNotIn("ro.opengles.version=196608", props)
+        self.assertIn("ro.opengles.version=196610\n",
+                      make_image.edit_props("ro.debuggable=1\n", vendor=True, network=True))
+        for arch in sorted(make_image.ARCHES):
+            for hwcomposer in [False, True]:
+                cmdline = make_image.kernel_cmdline("", hwcomposer=hwcomposer, arch=arch)
+                self.assertIn("androidboot.opengles.version=196610", cmdline.split())
+
     def test_fr4_android_starts_at_the_main_monitors_density(self):
         # Image test run 42562909966: without ro.sf.lcd_density SurfaceFlinger fell back to
         # 213 dpi, the host then asked each task for 160, and that density change relaunched
@@ -985,7 +1033,7 @@ class ImageLayoutTests(unittest.TestCase):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
         self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
-        self.assertIn("androidboot.lcd_density=160", make_image.kernel_cmdline("", hwcomposer=False))
+        self.assertIn("androidboot.lcd_density=96", make_image.kernel_cmdline("", hwcomposer=False))
         # No build.prop sets it, the input's included: init reads them before any script, and
         # the first value would hold every boot at the image's density.
         for vendor in (False, True):
@@ -2023,7 +2071,7 @@ class ImageLayoutTests(unittest.TestCase):
         # The one freeform display every task window lives on.
         self.assertIn("androidboot.dsa.display_width=1920", cmdline)
         self.assertIn("androidboot.dsa.display_height=1080", cmdline)
-        self.assertIn("androidboot.dsa.display_dpi=160", cmdline)
+        self.assertIn("androidboot.dsa.display_dpi=96", cmdline)
         self.assertIn(
             "androidboot.vendor.apex.com.android.hardware.gatekeeper=com.android.hardware.gatekeeper.nonsecure",
             cmdline,
@@ -2282,7 +2330,7 @@ class GuestMemoryTests(unittest.TestCase):
 
     def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
         rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
-        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-160}\n", rc)
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-96}\n", rc)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
             self.assertIn(
@@ -2486,6 +2534,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
             + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
+            + "".join(context + "\n" for context in make_image.GAPPS_COMPILE_PROPERTY_CONTEXTS.values())
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
 
@@ -3128,7 +3177,10 @@ class TouchLatencyTests(unittest.TestCase):
     def test_fr5_a_press_on_a_list_row_is_not_held_back_by_the_tap_timeout(self):
         # Settings' rows sit in a RecyclerView, so View.onTouchEvent posts setPressed after
         # config_tapTimeoutMillis (100 ms) instead of calling it on the press.
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_INTEGERS, {"config_tapTimeoutMillis": 0})
+        self.assertEqual(
+            make_image.FRAMEWORK_OVERLAY_INTEGERS,
+            {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8},
+        )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_image.framework_overlay_sources(root / "src")
@@ -3170,6 +3222,70 @@ class TouchLatencyTests(unittest.TestCase):
             values = (root / "src/res/values/dsa.xml").read_text()
         self.assertIn('<bool name="config_checkWallpaperAtBoot">false</bool>', values)
         self.assertIn("bool/config_checkWallpaperAtBoot", make_image.framework_overlaid())
+
+    def test_nfr2_google_play_services_is_the_device_configurator(self):
+        # WRITE_DEVICE_CONFIG is a "configurator" permission. With no configurator named, Play
+        # services' platform configurator could never write the flags it syncs, and retried
+        # about once a second after boot (its RETRY_UPDATE alarm).
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_STRINGS["config_deviceConfiguratorPackageName"],
+                         "com.google.android.gms")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = ET.fromstring((root / "src/res/values/dsa.xml").read_text())
+        strings = {item.get("name"): item.text for item in values.findall("string")}
+        self.assertEqual(strings["config_deviceConfiguratorPackageName"], "com.google.android.gms")
+        # The overlay is checked against the image's framework-res, so a renamed resource fails
+        # the image check instead of leaving Play services without the permission again.
+        self.assertIn("string/config_deviceConfiguratorPackageName", make_image.framework_overlaid())
+
+    def test_fr36_the_agent_is_the_network_location_provider_and_without_play_the_geocode_provider(self):
+        # With the overlay flags on, the location manager picks the provider of the highest
+        # service version, which is Google Play's once it is installed.
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableNetworkLocationOverlay"], False)
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_enableGeocoderOverlay"], False)
+        agent = "io.github.thisisthepy.dsa.agent"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = (root / "src/res/values/dsa.xml").read_text()
+        self.assertIn(
+            f'<string name="config_networkLocationProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn(
+            f'<string name="config_geocoderProviderPackageName" translatable="false">{agent}</string>', values)
+        self.assertIn('<bool name="config_enableGeocoderOverlay">false</bool>', values)
+        self.assertIn("string/config_geocoderProviderPackageName", make_image.framework_overlaid())
+
+    def test_fr36_network_location_and_geocoder_come_from_the_host_and_google_plays_geocoder_wins_with_play(self):
+        # The Google apps overlay applies only on a boot with the Google apps image: the property
+        # is the one the host's bootconfig sets and the image's own Google apps import reads.
+        overlay = make_image.system_overlay(make_image.GAPPS_FRAMEWORK_OVERLAY_APK)
+        self.assertEqual(overlay["target"], "android")
+        self.assertEqual(overlay["required_property"], ("ro.boot.dsa.gapps", "on"))
+        self.assertIn("${ro.boot.dsa.gapps:-off}", make_image.GAPPS_IMPORT)
+        self.assertIn(make_image.GAPPS_FRAMEWORK_OVERLAY_APK, make_image.DESIGN_OVERLAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.design_overlay_sources(root / "src", make_image.GAPPS_FRAMEWORK_OVERLAY_APK)
+            manifest = ET.fromstring((root / "src/AndroidManifest.xml").read_text())
+            values = (root / "src/res/values/dsa.xml").read_text()
+        element = manifest.find("overlay")
+        self.assertEqual(element.get(NS + "requiredSystemPropertyName"), "ro.boot.dsa.gapps")
+        self.assertEqual(element.get(NS + "requiredSystemPropertyValue"), "on")
+        self.assertEqual(element.get(NS + "isStatic"), "true")
+        # Above the framework overlay, whose geocoder values it replaces.
+        base = ET.fromstring(make_image.overlay_manifest(make_image.FRAMEWORK_OVERLAY_PACKAGE, "android"))
+        self.assertGreater(int(element.get(NS + "priority")), int(base.find("overlay").get(NS + "priority")))
+        self.assertIsNone(base.find("overlay").get(NS + "requiredSystemPropertyName"))
+        # With Google Play the location manager binds Google's geocoder and no other, so DSA is
+        # not the geocode provider.
+        self.assertIn('<bool name="config_enableGeocoderOverlay">false</bool>', values)
+        self.assertIn('<string name="config_geocoderProviderPackageName" translatable="false">'
+                      'com.google.android.gms</string>', values)
+        # The network location provider is not touched: the host's stays, with or without Play.
+        self.assertNotIn("NetworkLocation", values)
+        self.assertEqual(set(make_image.overlaid_resources(make_image.GAPPS_FRAMEWORK_OVERLAY_APK)),
+                         {"bool/config_enableGeocoderOverlay", "string/config_geocoderProviderPackageName"})
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"
@@ -5373,7 +5489,7 @@ class ArmTranslationImageTests(unittest.TestCase):
         return dropped
 
     def test_fr25_fr32_init_hands_every_mount_option_to_the_kernel(self):
-        for name in ["dsa-arm-translation.rc", "dsa-gapps.rc"]:
+        for name in ["dsa-arm-translation.rc", "dsa-gapps.rc", "dsa-addons.rc"]:
             rc = (Path(make_image.__file__).with_name(name)).read_text()
             self.assertEqual(self._dropped_mount_options(rc), [], name)
         # develop 406c30d7 named fscontext= and context= as two arguments. Init dropped
@@ -5393,7 +5509,7 @@ class ArmTranslationImageTests(unittest.TestCase):
         # with proc, and any domain creating, writing or relabelling a file or folder of a
         # contextmount_type. A rule that broke one would stop the policy compiling at boot.
         fs_types = {"labeledfs", "tmpfs", "rootfs", "proc", "binfmt_miscfs"}
-        for name in ("arm-translation.cil", "gapps.cil"):
+        for name in ("arm-translation.cil", "gapps.cil", "addons.cil"):
             text = (Path(make_image.__file__).parent / "sepolicy" / name).read_text()
             attributes = self._attributes(text)
             declared = attributes.get("fs_type", set())
@@ -5494,6 +5610,7 @@ class ArmTranslationImageTests(unittest.TestCase):
                     self.assertFalse([n for n in names if n.startswith(folder + "/") and n != folder + "/"],
                                      f"{folder} stays empty, so the package hides nothing")
                 self.assertEqual(archive.read("SYSTEM/etc/ld.config.arm64.txt"), b"")
+                self.assertEqual(archive.read("SYSTEM/lib64/libberberis_exec_region.so"), b"")
                 for name, target in make_image.ARM_TRANSLATION_LINKS.items():
                     self.assertTrue(stat.S_ISLNK(archive.getinfo(name).external_attr >> 16), name)
                     self.assertEqual(archive.read(name).decode(), target)
@@ -5527,13 +5644,54 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr25_a_build_with_files_where_the_package_goes_is_refused(self):
         for name in ["SYSTEM_EXT/lib64/libfoo.so", "SYSTEM/lib64/arm64/libc.so", "SYSTEM/bin/arm64/linker64",
-                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt"]:
+                     "SYSTEM/etc/ld.config.arm64.txt", "SYSTEM/etc/berberis/cpuinfo.arm64.txt",
+                     "SYSTEM/lib64/libberberis_exec_region.so"]:
             with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError, msg=name) as caught:
                 self._modify_for(Path(tmp), "x86_64", extra=[name]).close()
             self.assertIn(name.split("/")[0], str(caught.exception))
         # An arm64 build is not bound into, so its own files there stay.
         with tempfile.TemporaryDirectory() as tmp:
             self._modify_for(Path(tmp), "arm64", extra=["SYSTEM/lib64/arm64/libc.so"]).close()
+
+    def test_fr25_the_exec_region_library_is_bound_where_berberis_opens_it(self):
+        # Berberis opens its exec region library by this absolute path (runtime_primitives/
+        # exec_region_elf_backed.cc, kExecRegionLibraryPath), not by name. While the package's
+        # system/lib64 was bound onto /system_ext/lib64 alone, the path held nothing and every
+        # ARM app aborted as it started: "exec_region_elf_backed.cc:48: CHECK failed: 0 != 0".
+        opened = "/system/lib64/libberberis_exec_region.so"
+        self.assertEqual("/" + make_image.ARM_TRANSLATION_EXEC_REGION.lower(), opened)
+        self.assertIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.ARM_TRANSLATION_BOUND_FILES)
+        self.assertIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.arm_translation_reach_names())
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        sections = dict(self._sections(rc))
+        bind = f"mount none /mnt/dsa-arm-translation{opened} {opened} bind"
+        for value in ["on", "default"]:
+            section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
+            self.assertIn(bind, section, value)
+            # Bound before the binfmt_misc rules let any ARM64 program start.
+            self.assertLess(section.index(bind), section.index(
+                "mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid"), value)
+        # A bind, not a link: the linker checks the path it really opened against the system
+        # namespace, and a link's would be under /mnt.
+        self.assertNotIn(make_image.ARM_TRANSLATION_EXEC_REGION, make_image.ARM_TRANSLATION_LINKS)
+        with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
+            info = archive.getinfo(make_image.ARM_TRANSLATION_EXEC_REGION)
+            self.assertFalse(stat.S_ISLNK(info.external_attr >> 16))
+            self.assertEqual(archive.read(make_image.ARM_TRANSLATION_EXEC_REGION), b"")
+            self.assertIn("system/lib64/libberberis_exec_region.so 0 0 644 capabilities=0x0",
+                          archive.read("META/filesystem_config.txt").decode())
+            files = {name: archive.read(name) for name in archive.namelist()}
+            infos = {name: archive.getinfo(name) for name in archive.namelist()}
+
+        def check(files):
+            return make_image.check_arm_translation_reach({"arch": "x86_64"}, list(files), files.__getitem__,
+                                                         infos.get)
+
+        self.assertEqual(check(files), [])
+        gone = {n: d for n, d in files.items() if n != make_image.ARM_TRANSLATION_EXEC_REGION}
+        self.assertTrue(any("every ARM app aborts" in problem for problem in check(gone)), check(gone))
+        filled = dict(files, **{make_image.ARM_TRANSLATION_EXEC_REGION: b"\x7fELF"})
+        self.assertTrue(any("not empty" in problem for problem in check(filled)), check(filled))
 
     def test_fr25_check_image_finds_a_place_of_the_package_missing_or_filled(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify_for(Path(tmp), "x86_64") as archive:
@@ -5621,27 +5779,47 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
         rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
-        sections = dict(self._sections(rc))
+        sections = self._sections(rc)
+        triggers = [trigger for trigger, _ in sections]
+        on = "on post-fs-data && property:ro.boot.dsa.arm_translation=on"
+        # Where the image is: a user's package on the add-on disk, or, for one boot after an
+        # update, where an older DSA kept it in /data; the image's own default package.
         images = {
-            "on": "/data/vendor/dsa/arm-translation/system.img",
-            "default": "/system/etc/dsa/arm-translation/default.img",
+            f"{on} && property:ro.boot.dsa.arm_translation_image=disk": "/mnt/dsa-addons/arm-translation.img",
+            f"{on} && property:ro.boot.dsa.arm_translation_image=data":
+                "/data/vendor/dsa/arm-translation/system.img",
+            "on post-fs-data && property:ro.boot.dsa.arm_translation=default":
+                "/system/etc/dsa/arm-translation/default.img",
         }
-        for value, image in images.items():
-            section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
-            self.assertIn(f"mount erofs loop@{image} /mnt/dsa-arm-translation ro nodev nosuid "
-                          "fscontext=u:object_r:dsa_arm_translation_fs:s0,"
-                          "context=u:object_r:system_lib_file:s0", section)
-            erofs = section.index(next(c for c in section if c.startswith("mount erofs ")))
+        for trigger, image in images.items():
+            commands = dict(sections)[trigger]
+            mount = (f"mount erofs {image} /mnt/dsa-arm-translation ro nodev nosuid "
+                     "directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,"
+                     "context=u:object_r:system_lib_file:s0")
+            self.assertIn(mount, commands, trigger)
+            self.assertEqual([c for c in commands if c.startswith("mount erofs ")], [mount], trigger)
+        # A user's package is mounted, from wherever it is, before its parts are bound: init
+        # runs the actions of one trigger in the order of the file.
+        for trigger in images:
+            if trigger.startswith(on + " "):
+                self.assertLess(triggers.index(trigger), triggers.index(on), trigger)
+        binders = {
+            on: dict(sections)[on],
+            "default": dict(sections)["on post-fs-data && property:ro.boot.dsa.arm_translation=default"],
+        }
+        for value, section in binders.items():
             # Each part of the package is bound onto the empty place the image carries for it,
             # once the image is mounted, and nothing else is mounted from it.
             binds = []
             for folder, inside in make_image.ARM_TRANSLATION_FOLDERS.items():
                 binds.append(f"mount none /mnt/dsa-arm-translation/{inside} /{folder.lower()} bind")
-            config = make_image.ARM_TRANSLATION_LINKER_CONFIG
-            binds.append(f"mount none /mnt/dsa-arm-translation/{config.lower()} /{config.lower()} bind")
+            for name in make_image.ARM_TRANSLATION_BOUND_FILES:
+                binds.append(f"mount none /mnt/dsa-arm-translation/{name.lower()} /{name.lower()} bind")
+            erofs = [i for i, c in enumerate(section) if c.startswith("mount erofs ")]
             for bind in binds:
-                self.assertIn(bind, section)
-                self.assertGreater(section.index(bind), erofs, bind)
+                self.assertIn(bind, section, value)
+                if erofs:
+                    self.assertGreater(section.index(bind), erofs[0], bind)
             self.assertEqual(sorted(c for c in section if c.startswith("mount none ")), sorted(binds))
             # Nothing else in Android mounts binfmt_misc, so the handlers are registered only
             # once it is mounted here.
@@ -5650,11 +5828,12 @@ class ArmTranslationImageTests(unittest.TestCase):
                 register = section.index(f"copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/{rule} "
                                          "/proc/sys/fs/binfmt_misc/register")
                 self.assertGreater(register, mount)
-        # Every mount waits for the host's word.
-        for trigger, commands in self._sections(rc):
-            if trigger not in {f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"
-                               for value in images}:
+        # Every mount waits for the host's word, and nothing makes a folder in /data for a
+        # package any more: the host keeps it on the add-on disk.
+        for trigger, commands in sections:
+            if trigger not in set(images) | {on}:
                 self.assertFalse([c for c in commands if c.startswith("mount ")], trigger)
+            self.assertFalse([c for c in commands if c.startswith("mkdir /data")], trigger)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
@@ -5664,6 +5843,7 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
             self.assertIn("(allow init system_file (dir (mounton)))", policy)
             self.assertIn("(allow init system_linker_config_file (file (mounton)))", policy)
+            self.assertIn("(allow init system_lib_file (file (mounton)))", policy)
             self.assertIn("(typeattributeset fs_type (dsa_arm_translation_fs))", policy)
             self.assertIn("(typeattributeset contextmount_type (dsa_arm_translation_fs))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
@@ -5807,11 +5987,24 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr32_the_google_apps_are_laid_over_only_when_the_host_says_they_are_installed(self):
         rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
-        trigger = "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
-        before, after = rc.split(trigger, 1)
-        section, rest = after.split("\n\n", 1)
-        self.assertIn("mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
-                      "fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0", section)
+        sections = self._sections(rc)
+        triggers = [trigger for trigger, _ in sections]
+        on = "on post-fs-data && property:ro.boot.dsa.gapps=on"
+        # Where the image is: on the add-on disk, or, for one boot after an update, where an
+        # older DSA kept it in /data.
+        images = {
+            f"{on} && property:ro.boot.dsa.gapps_image=disk": "/mnt/dsa-addons/gapps.img",
+            f"{on} && property:ro.boot.dsa.gapps_image=data": "/data/vendor/dsa/gapps/system.img",
+        }
+        for trigger, image in images.items():
+            commands = dict(sections)[trigger]
+            mount = (f"mount erofs {image} /mnt/dsa-gapps ro nodev nosuid "
+                     "directio,fscontext=u:object_r:dsa_gapps_fs:s0,context=u:object_r:system_file:s0")
+            self.assertEqual([c for c in commands if c.startswith("mount ")], [mount], trigger)
+            # Mounted before it is laid over: init runs one trigger's actions in file order.
+            self.assertLess(triggers.index(trigger), triggers.index(on), trigger)
+        # Every action of that trigger, in order: the overlays, and anything else done then.
+        section = [command for trigger, commands in sections if trigger == on for command in commands]
         for folder in make_image.gapps_folders():
             point = "/" + folder.lower()
             self.assertIn(
@@ -5819,11 +6012,16 @@ class ArmTranslationImageTests(unittest.TestCase):
                 f"lowerdir=/mnt/dsa-gapps{point}:{point}",
                 section,
             )
+        self.assertEqual(len([c for c in section if c.startswith("mount ")]), len(make_image.gapps_folders()))
         for partition in ["product", "system_ext"]:
-            self.assertNotIn(f"mount overlay overlay /{partition} ", section)
-        # Every mount waits for the host's word.
-        self.assertNotIn("mount ", before)
-        self.assertNotIn("mount ", rest)
+            self.assertNotIn(f"mount overlay overlay /{partition} ro nodev lowerdir=/mnt/dsa-gapps/{partition}:/{partition}",
+                             section)
+        # Every mount waits for the host's word, and nothing makes a folder in /data for the
+        # image any more: the host keeps it on the add-on disk.
+        for trigger, commands in sections:
+            if trigger not in set(images) | {on}:
+                self.assertFalse([c for c in commands if c.startswith("mount ")], trigger)
+            self.assertFalse([c for c in commands if c.startswith("mkdir /data")], trigger)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-gapps.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
@@ -5833,6 +6031,45 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertIn("(allow system_file dsa_gapps_fs (filesystem (associate)))", policy)
             # No domain is given filesystem getattr on a file type: the superblock is not one.
             self.assertNotIn("(allow init system_file (filesystem (getattr)))", policy)
+
+    def test_fr32_the_addon_disk_is_mounted_read_only_before_the_images_on_it(self):
+        rc = (Path(make_image.__file__).with_name("dsa-addons.rc")).read_text()
+        sections = self._sections(rc)
+        self.assertEqual([trigger for trigger, _ in sections], [make_image.ADDONS_TRIGGER])
+        commands = sections[0][1]
+        self.assertEqual([c for c in commands if c.startswith("mount ")], [make_image.ADDONS_MOUNT])
+        self.assertIn("mkdir /mnt/dsa-addons 0755 root root", commands)
+        self.assertLess(commands.index("mkdir /mnt/dsa-addons 0755 root root"),
+                        commands.index(make_image.ADDONS_MOUNT))
+        # Read only, nothing on it runs or is a device, and labelled as system files, which init
+        # reads as it mounts each image from its file.
+        words = make_image.ADDONS_MOUNT.split()
+        for flag in ["ro", "nodev", "nosuid", "noexec"]:
+            self.assertIn(flag, words)
+        self.assertEqual(self._dropped_mount_options(rc), [])
+        self.assertEqual(self._erofs_mounts(rc), [("/mnt/dsa-addons", "dsa_addons_fs", "system_file")])
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read(make_image.ADDONS_RC).decode(), rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            config = archive.read("META/filesystem_config.txt").decode()
+            files = {name: archive.read(name) for name in archive.namelist()}
+        self.assertEqual(self._context_mount_problems("dsa-addons.rc", policy), [])
+        for rule in make_image.ADDONS_FS_CONFIG:
+            self.assertIn(rule, config)
+        self.assertEqual(make_image.addon_disk_problems(list(files), files.__getitem__), [])
+        # An image without the script, one that mounts the disk without waiting for the host, or
+        # whose Google apps still come only from /data, is refused.
+        gone = {n: d for n, d in files.items() if n != make_image.ADDONS_RC}
+        self.assertIn("is missing", make_image.addon_disk_problems(list(gone), gone.__getitem__)[0])
+        early = dict(files, **{make_image.ADDONS_RC: ("on early-init\n    " + make_image.ADDONS_MOUNT + "\n").encode()})
+        self.assertEqual(len(make_image.addon_disk_problems(list(early), early.__getitem__)), 1)
+        writable = dict(files, **{make_image.ADDONS_RC: rc.replace(" ro nodev", " rw nodev").encode()})
+        self.assertEqual(len(make_image.addon_disk_problems(list(writable), writable.__getitem__)), 1)
+        old_gapps = files[make_image.GAPPS_RC].decode().replace("/mnt/dsa-addons/gapps.img", "/data/x.img")
+        old = dict(files, **{make_image.GAPPS_RC: old_gapps.encode()})
+        problems = make_image.addon_disk_problems(list(old), old.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("dsa-gapps.rc never mounts /mnt/dsa-addons/gapps.img", problems[0])
 
     def test_fr32_x86_64_stays_the_first_abi_when_arm_translation_is_on(self):
         on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_text().splitlines()
@@ -5887,6 +6124,171 @@ class ArmTranslationImageTests(unittest.TestCase):
         self.assertNotIn("stops Android at every boot", good)
         self.assertIn("x86_64 is not the ABI apps are installed for first", arm_first)
         self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
+
+
+# What `cmd package art dump` prints for an updated Google Play services (Android 17), with the
+# filter and reason of its base APK left to fill in.
+ART_DUMP = """[{package}]
+  path: /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/base.apk
+    x86_64: [status={status}] [reason={reason}] [primary-abi]
+      [location is /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/oat/x86_64/base.odex]
+    used by other apps: [com.google.android.youtube (isa=x86_64)]
+  path: /data/app/~~tRmniAnGjxf1d7FhqhzuvQ==/{package}-JblIlLyjElnBue39spDegw==/split_AdsDynamite_installtime.apk
+    x86_64: [status=verify] [reason=vdex-dm] [primary-abi]
+      [location is primary.vdex mapped directly in memory]
+"""
+
+
+class GoogleAppsCompileTests(unittest.TestCase):
+    """Google Play services and the Play Store compiled again without an app image, which each
+    of their processes loaded into memory of its own: 25-30 MiB each for
+    com.google.android.gms and com.google.android.gms.unstable on a PC."""
+
+    RC = Path(__file__).with_name("dsa-gapps.rc")
+    SCRIPT = Path(__file__).with_name("gapps-compile.sh")
+
+    @staticmethod
+    def _sections(rc):
+        """Each action and service of an init script: its first line and its command lines."""
+        sections = []
+        for line in rc.splitlines():
+            if line.startswith(("on ", "service ")):
+                sections.append((line, []))
+            elif line.strip() and not line.lstrip().startswith("#") and sections:
+                sections[-1][1].append(line.strip())
+        return sections
+
+    def test_nfr2_init_runs_the_compile_as_the_shell_with_the_app_image_format_cleared(self):
+        sections = dict(self._sections(self.RC.read_text()))
+        service = sections["service dsa_gapps_compile /system/bin/sh /system/etc/dsa/gapps-compile.sh"]
+        self.assertIn("user shell", service)
+        self.assertIn("seclabel u:r:shell:s0", service)
+        self.assertIn("oneshot", service)
+        self.assertIn("disabled", service)
+        clear_and_start = ['setprop dalvik.vm.appimageformat ""', "start dsa_gapps_compile"]
+        # At each boot with the Google apps, and whenever the agent asks.
+        self.assertEqual(sections["on property:sys.boot_completed=1 && property:ro.boot.dsa.gapps=on"],
+                         clear_and_start)
+        self.assertEqual(sections[f"on property:{make_image.GAPPS_COMPILE_PROPERTY}=* && property:ro.boot.dsa.gapps=on"],
+                         clear_and_start)
+        # The build's format is kept before the first compile and put back after every one, with
+        # the image's own format should the keeping have failed.
+        self.assertIn(f"setprop {make_image.GAPPS_IMAGE_FORMAT_PROPERTY} ${{dalvik.vm.appimageformat}}",
+                      [command for line, commands in self._sections(self.RC.read_text())
+                       if line == "on post-fs-data && property:ro.boot.dsa.gapps=on" for command in commands])
+        self.assertEqual(sections["on property:init.svc.dsa_gapps_compile=stopped"],
+                         [f"setprop dalvik.vm.appimageformat ${{{make_image.GAPPS_IMAGE_FORMAT_PROPERTY}:-lz4}}"])
+
+    def test_nfr2_the_image_carries_the_script_its_properties_and_its_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read(make_image.GAPPS_COMPILE_SCRIPT), self.SCRIPT.read_bytes())
+                config = archive.read("META/filesystem_config.txt").decode()
+                contexts = archive.read(make_image.VENDOR_PROPERTY_CONTEXTS).decode().splitlines()
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+        self.assertIn("system/etc/dsa/gapps-compile.sh 0 0 644 capabilities=0x0", config)
+        self.assertIn("vendor.dsa.gapps.compile u:object_r:dsa_gapps_compile_prop:s0 exact string", contexts)
+        self.assertIn("vendor.dsa.gapps.appimageformat u:object_r:dsa_gapps_compile_prop:s0 exact string", contexts)
+        # The agent asks; nothing else but init sets the property, and the script reads it.
+        setters = set(re.findall(r"\(allow (\S+) dsa_gapps_compile_prop \(property_service \(set\)\)\)", policy))
+        self.assertEqual(setters, {"platform_app"})
+        self.assertIn("(allow shell dsa_gapps_compile_prop (file (read open getattr map)))", policy)
+
+    def _run_script(self, packages, request_changes=0):
+        """Runs gapps-compile.sh with a fake `cmd`, `getprop` and `log`. `packages` maps each
+        package to its base APK's (filter, reason), or None when it is not installed. Returns
+        the compile commands it ran and what it logged."""
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        state = root / "state"
+        state.mkdir()
+        for package, status in packages.items():
+            if status is not None:
+                (state / package).write_text(ART_DUMP.format(package=package, status=status[0], reason=status[1]))
+        (state / "request").write_text("1")
+        (state / "changes").write_text(str(request_changes))
+        dump = ART_DUMP.replace("{status}", "speed-profile").replace("{reason}", "cmdline")
+        (state / "compiled-dump").write_text(dump)
+        scripts = {
+            # The package manager: ART's dump of a package, and a compile, which ART records with
+            # the reason "cmdline".
+            "cmd": f"""#!/bin/sh
+s={state}
+if [ "$1 $2 $3" = "package art dump" ]; then cat "$s/$4" 2>/dev/null; exit 0; fi
+if [ "$1 $2" = "package compile" ]; then
+    echo "$*" >> "$s/compiles"
+    for last; do :; done
+    sed "s/{{package}}/$last/g" "$s/compiled-dump" > "$s/$last"
+    exit 0
+fi
+exit 1
+""",
+            # The request property, which changes `changes` times while the script runs.
+            "getprop": f"""#!/bin/sh
+s={state}
+n=$(cat "$s/request")
+c=$(cat "$s/changes")
+if [ "$c" -gt 0 ] && [ -f "$s/compiles" ]; then echo $((n + 1)) > "$s/request"; echo $((c - 1)) > "$s/changes"; fi
+cat "$s/request"
+""",
+            "log": f"""#!/bin/sh
+echo "$*" >> {state}/log
+""",
+        }
+        for name, text in scripts.items():
+            (bin_dir / name).write_text(text)
+            (bin_dir / name).chmod(0o755)
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
+        subprocess.run(["sh", str(self.SCRIPT)], env=env, check=True, timeout=30)
+        compiles = (state / "compiles").read_text().splitlines() if (state / "compiles").exists() else []
+        log = (state / "log").read_text() if (state / "log").exists() else ""
+        return compiles, log
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_package_compiled_with_an_app_image_is_compiled_again_and_only_once(self):
+        compiles, log = self._run_script({
+            "com.google.android.gms": ("speed-profile", "install-dm"),
+            "com.android.vending": ("speed-profile", "bg-dexopt"),
+        })
+        self.assertEqual(compiles, [
+            "package compile -m speed-profile -p PRIORITY_BACKGROUND -f com.google.android.gms",
+            "package compile -m speed-profile -p PRIORITY_BACKGROUND -f com.android.vending",
+        ])
+        self.assertIn("compiled com.google.android.gms without an app image: speed-profile cmdline", log)
+        self.assertIn("checked com.google.android.gms com.android.vending", log)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_package_without_an_app_image_is_left_alone(self):
+        # Its own earlier compile, a compile without a profile, and Google Play not installed.
+        for packages in [
+            {"com.google.android.gms": ("speed-profile", "cmdline")},
+            {"com.google.android.gms": ("verify", "boot-after-ota"), "com.android.vending": ("verify", "install")},
+            {"com.google.android.gms": None, "com.android.vending": None},
+        ]:
+            compiles, log = self._run_script(packages)
+            self.assertEqual(compiles, [], packages)
+            self.assertIn("checked", log)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runs the script with a POSIX sh")
+    def test_nfr2_a_request_that_comes_while_the_script_runs_is_not_lost(self):
+        # The agent asks again while the first compile runs: the script looks once more, and
+        # finds both packages already compiled by it.
+        compiles, log = self._run_script({"com.google.android.gms": ("speed-profile", "install")},
+                                         request_changes=1)
+        self.assertEqual(len(compiles), 1)
+        self.assertEqual(log.count("checked"), 1)
 
 
 class DefaultArmTranslationTests(unittest.TestCase):

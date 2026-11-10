@@ -454,7 +454,8 @@ MEMORY_PROPS = {
 
 # The density of the freeform display every task window lives on, by default: a 100% monitor's.
 # The host replaces it on the kernel command line at each boot with the density of the user's
-# main monitor (240 at 150%), the density a task window there asks its task to draw at. The
+# main monitor (144 at 150%: a dp is 1/160 inch and a host pixel at 100% 1/96 inch), the
+# density a task window there asks its task to draw at. The
 # hwcomposer reports it (ro.boot.dsa.display_dpi) and SurfaceFlinger takes it from
 # ro.sf.lcd_density alone, which dsa-display.rc sets from androidboot.lcd_density. Without
 # ro.sf.lcd_density SurfaceFlinger falls back to 213 dpi ("ro.sf.lcd_density must be defined as
@@ -463,13 +464,23 @@ MEMORY_PROPS = {
 # was destroyed before its first window that way and crashed in its own clean-up. No build.prop
 # may set it: init reads them before any script, and the first value of a read-only property
 # stays, so a build.prop value would hold every boot at this default.
-DISPLAY_DPI = 160
+DISPLAY_DPI = 96
+
+# The OpenGL ES version Android reports to apps and to app stores: 3.2 (0x30002), which ANGLE
+# provides on the host GPU's Vulkan for every app. PackageManager reports it as reqGlEsVersion,
+# and Google Play hides every app whose manifest asks for a version above it (<uses-feature
+# android:glEsVersion>). Cuttlefish leaves it to its launcher, which passes
+# androidboot.opengles.version for init_graphics.vendor.rc to copy; DSA does not run that
+# launcher, so without this the property stayed empty, reqGlEsVersion was 0, and Play called
+# YouTube incompatible and left YouTube and Chrome out of its search.
+OPENGLES_VERSION = 0x30002
 
 GRAPHICS_PROPS = {
     "ro.hardware.egl": "angle",
     "ro.hardware.vulkan": "ranchu",
     "ro.hardware.gralloc": "minigbm",
     "ro.cpuvulkan.version": "0",
+    "ro.opengles.version": str(OPENGLES_VERSION),
 }
 
 # Properties no build.prop may set, whatever the input build's files say: the boot sets them.
@@ -910,10 +921,16 @@ ANDROID_XMLNS = 'xmlns:android="http://schemas.android.com/apk/res/android"'
 APP_XMLNS = 'xmlns:app="http://schemas.android.com/apk/res-auto"'
 
 
-def overlay_manifest(package, target, resource_map=False):
+def overlay_manifest(package, target, resource_map=False, priority=100, required_property=None):
     """The manifest of a static overlay of `target` with no code; with `resource_map`, its
-    resource map (SYSTEM_OVERLAY_MAP) names what it replaces, and only that."""
+    resource map (SYSTEM_OVERLAY_MAP) names what it replaces, and only that. With
+    `required_property` (a name and a value), the package manager applies the overlay only
+    while that read-only property has that value when it scans the packages at boot."""
     mapping = f'\n        android:resourcesMap="@xml/{SYSTEM_OVERLAY_MAP}"' if resource_map else ""
+    if required_property:
+        name, value = required_property
+        mapping += (f'\n        android:requiredSystemPropertyName="{name}"'
+                    f'\n        android:requiredSystemPropertyValue="{value}"')
     return (
         XML_HEADER
         + f'<manifest {ANDROID_XMLNS}\n'
@@ -921,7 +938,7 @@ def overlay_manifest(package, target, resource_map=False):
         # Android 14 and later refuse a package that targets an old SDK, and the default is 1.
         '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
         '    <application android:hasCode="false" />\n'
-        f'    <overlay android:targetPackage="{target}" android:isStatic="true" android:priority="100"{mapping} />\n'
+        f'    <overlay android:targetPackage="{target}" android:isStatic="true" android:priority="{priority}"{mapping} />\n'
         '</manifest>\n'
     )
 
@@ -1085,8 +1102,10 @@ def framework_overlay_sources(dest, record=None):
                        for name, value in FRAMEWORK_OVERLAY_INTEGERS.items())
     booleans = "".join(f'    <bool name="{name}">{str(value).lower()}</bool>\n'
                        for name, value in FRAMEWORK_OVERLAY_BOOLEANS.items())
+    strings = "".join(f'    <string name="{name}" translatable="false">{value}</string>\n'
+                      for name, value in FRAMEWORK_OVERLAY_STRINGS.items())
     (dest / "res/values/dsa.xml").write_text(
-        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}</resources>\n')
+        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}{strings}</resources>\n')
     write_overlay_files(dest, {
         "res/values/dsa_design.xml": resources_xml(
             [f'<color name="{name}">{value}</color>' for name, value in DESIGN_COLORS.items()]
@@ -1104,6 +1123,7 @@ def framework_overlaid():
     map, so the framework matches its resources to its own by name."""
     return ([f"integer/{name}" for name in FRAMEWORK_OVERLAY_INTEGERS]
             + [f"bool/{name}" for name in FRAMEWORK_OVERLAY_BOOLEANS]
+            + [f"string/{name}" for name in FRAMEWORK_OVERLAY_STRINGS]
             + FRAMEWORK_DESIGN_OVERLAID)
 
 
@@ -1451,6 +1471,14 @@ def design_overlay_resources(apk):
         return ({"res/values/dsa.xml": resources_xml(
             [f'<dimen name="{key.split("/", 1)[1]}">{value}</dimen>' for key, value in INTENT_RESOLVER_DESIGN.items()])},
             {key: key for key in INTENT_RESOLVER_DESIGN})
+    if apk == GAPPS_FRAMEWORK_OVERLAY_APK:
+        lines = []
+        for key, value in GAPPS_FRAMEWORK_OVERLAY.items():
+            kind, name = key.split("/", 1)
+            text = str(value).lower() if kind == "bool" else value
+            extra = ' translatable="false"' if kind == "string" else ""
+            lines.append(f'<{kind} name="{name}"{extra}>{text}</{kind}>')
+        return {"res/values/dsa.xml": resources_xml(lines)}, {key: key for key in GAPPS_FRAMEWORK_OVERLAY}
     raise ValueError(f"{apk} is not one of the design's overlays")
 
 
@@ -1465,7 +1493,9 @@ def design_overlay_sources(dest, apk, record=None):
     overlay = system_overlay(apk)
     files, mapping = design_overlay_resources(apk)
     write_overlay_files(dest, {
-        "AndroidManifest.xml": overlay_manifest(overlay["package"], overlay["target"], resource_map=True),
+        "AndroidManifest.xml": overlay_manifest(overlay["package"], overlay["target"], resource_map=True,
+                                                priority=overlay.get("priority", 100),
+                                                required_property=overlay.get("required_property")),
         **files,
         f"res/xml/{SYSTEM_OVERLAY_MAP}.xml": overlay_map(mapping),
     })
@@ -2849,6 +2879,21 @@ ARM_TRANSLATION_FOLDERS = {
     "SYSTEM/bin/dsa-arm-translation": "system/bin",
 }
 ARM_TRANSLATION_LINKER_CONFIG = "SYSTEM/etc/ld.config.arm64.txt"
+# The library Berberis (Digitalis) runs its translated code in. It opens it by this absolute
+# path, never by name, so that it can load it at an address it reserved first; with the
+# package's system/lib64 bound onto /system_ext/lib64 alone, the path held nothing and every
+# ARM app aborted as it started ("exec_region_elf_backed.cc:48: CHECK failed: 0 != 0"). The
+# image carries an empty file there, and the init script binds the package's onto it. A link
+# into the mount would not do: the linker checks the path it really opened, which would be
+# under /mnt, against the system namespace, which may not load from there.
+ARM_TRANSLATION_EXEC_REGION = "SYSTEM/lib64/libberberis_exec_region.so"
+# The empty files the init script binds a package's files onto, each with what is lost
+# without it.
+ARM_TRANSLATION_BOUND_FILES = {
+    ARM_TRANSLATION_LINKER_CONFIG: "the translator's ARM64 linker has no namespaces",
+    ARM_TRANSLATION_EXEC_REGION: "the translator cannot load the library its code runs in, and "
+                                 "every ARM app aborts as it starts",
+}
 # The runners Berberis (Digitalis) and Google's translator name in their binfmt_misc rules,
 # led to where the package's system/bin is bound. Packages made now name the bound place
 # themselves (make-package.py, and the host for Google's); these keep a package made before,
@@ -2866,6 +2911,7 @@ ARM_TRANSLATION_REACH_FS_CONFIG = {
         "system/bin/arm64 0 0 755 capabilities=0x0",
         "system/bin/dsa-arm-translation 0 0 755 capabilities=0x0",
         "system/etc/ld.config.arm64.txt 0 0 644 capabilities=0x0",
+        "system/lib64/libberberis_exec_region.so 0 0 644 capabilities=0x0",
         "system/etc/cpuinfo.arm64.txt 0 0 644 capabilities=0x0",
         "system/etc/berberis 0 0 644 capabilities=0x0",
         *[f"system/bin/{runner} 0 0 755 capabilities=0x0" for runner in ARM_TRANSLATION_RUNNERS],
@@ -2878,7 +2924,7 @@ ARM_TRANSLATION_REACH_FS_CONFIG = {
 
 def arm_translation_reach_names():
     """Every target_files name the x86_64 image adds to reach a translation package."""
-    return ([folder + "/" for folder in ARM_TRANSLATION_FOLDERS] + [ARM_TRANSLATION_LINKER_CONFIG]
+    return ([folder + "/" for folder in ARM_TRANSLATION_FOLDERS] + list(ARM_TRANSLATION_BOUND_FILES)
             + list(ARM_TRANSLATION_LINKS))
 
 
@@ -2891,7 +2937,7 @@ def arm_translation_reach_conflicts(names):
         if inside or folder in names:
             conflicts.append(f"{folder} already has {inside[:3] or [folder]}, which binding the ARM "
                              "translation package there would hide")
-    for name in [ARM_TRANSLATION_LINKER_CONFIG, *ARM_TRANSLATION_LINKS]:
+    for name in [*ARM_TRANSLATION_BOUND_FILES, *ARM_TRANSLATION_LINKS]:
         if name in names or any(other.startswith(name + "/") for other in names):
             conflicts.append(f"{name} is already in the build, where the ARM translation package "
                              "goes")
@@ -2917,12 +2963,12 @@ def check_arm_translation_reach(manifest, names, read, info=None):
         elif inside:
             problems.append(f"{folder} holds {sorted(inside)[:3]}, which the ARM translation package "
                             "hides")
-    if ARM_TRANSLATION_LINKER_CONFIG not in names:
-        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is missing, so the translator's ARM64 "
-                        "linker has no namespaces")
-    elif read(ARM_TRANSLATION_LINKER_CONFIG):
-        problems.append(f"{ARM_TRANSLATION_LINKER_CONFIG} is not empty: it is the build's, not the "
-                        "place the package's goes")
+    for name, lost in ARM_TRANSLATION_BOUND_FILES.items():
+        if name not in names:
+            problems.append(f"{name} is missing, so {lost}")
+        elif read(name):
+            problems.append(f"{name} is not empty: it is the build's, not the place the package's "
+                            "goes")
     for name, target in ARM_TRANSLATION_LINKS.items():
         if name not in names:
             problems.append(f"{name} is missing, so a translator never finds its own {target}")
@@ -3237,6 +3283,51 @@ def check_framework(manifest, names, read):
     return problems
 
 
+# The user's add-on disk: a read-only disk the host builds and attaches, whose one partition
+# (dsa_addons) is an erofs file system holding the add-on images the user installed as plain
+# files. The host puts androidboot.dsa.addon_disk=on in the boot's bootconfig only while it
+# attaches the disk; the script then mounts it at /mnt/dsa-addons before post-fs-data, where
+# the Google Play and ARM translation scripts mount each image from it.
+ADDONS_RC = "SYSTEM/etc/init/dsa-addons.rc"
+ADDONS_FS_CONFIG = ["system/etc/init/dsa-addons.rc 0 0 644 capabilities=0x0"]
+ADDONS_TRIGGER = "on post-fs && property:ro.boot.dsa.addon_disk=on"
+ADDONS_MOUNT = ("mount erofs /dev/block/by-name/dsa_addons /mnt/dsa-addons ro nodev nosuid noexec "
+                "fscontext=u:object_r:dsa_addons_fs:s0,context=u:object_r:system_file:s0")
+# Where each add-on's image is on the mounted disk, and the script that mounts it.
+ADDON_IMAGES = {
+    "dsa-gapps.rc": "/mnt/dsa-addons/gapps.img",
+    "dsa-arm-translation.rc": "/mnt/dsa-addons/arm-translation.img",
+}
+
+
+def addon_disk_problems(names, read):
+    """The problems with how an image mounts the user's add-on disk, given the names in its
+    target files and a function that reads one: the script is there, mounts the disk read only
+    and only when the host says it attached one, before post-fs-data, and the Google Play and ARM
+    translation scripts mount each image from it."""
+    if ADDONS_RC not in names:
+        return [f"{ADDONS_RC} is missing, so the add-ons a user installs are never mounted"]
+    problems = []
+    rc = read(ADDONS_RC).decode(errors="replace")
+    trigger = None
+    mounts = []
+    for line in rc.splitlines():
+        if line.startswith("on "):
+            trigger = line.strip()
+        elif line.strip().startswith("mount "):
+            mounts.append((trigger, line.strip()))
+    if mounts != [(ADDONS_TRIGGER, ADDONS_MOUNT)]:
+        problems.append("dsa-addons.rc does not mount the add-on disk alone, read only and labelled as "
+                        f"system files, at post-fs once the host says it attached one ({ADDONS_MOUNT}), "
+                        "so the add-on images are not there when post-fs-data mounts them")
+    for rc_name, image in ADDON_IMAGES.items():
+        path = f"SYSTEM/etc/init/{rc_name}"
+        if path in names and f"mount erofs {image} " not in read(path).decode(errors="replace"):
+            problems.append(f"{rc_name} never mounts {image}, so that add-on is not taken from the "
+                            "add-on disk")
+    return problems
+
+
 # Google Play, for a user who installs it (`dsa gapps install`). The host puts
 # androidboot.dsa.gapps=on in the boot's bootconfig only while the user has a Google apps image
 # installed. The init script then lays the image over /product and /system_ext before the
@@ -3257,10 +3348,23 @@ GAPPS_IMPORT = "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop"
 # partition's properties are read after every other partition's, so this wins over an
 # "enforce" set anywhere else.
 GAPPS_PRIVAPP_LOG = "ro.control_privapp_permissions=log"
+# Google Play services and the Play Store compiled again without an app image, which each of
+# their processes would otherwise load into memory of its own (dsa-gapps.rc). The script runs
+# as the shell; the agent asks for it through the first property, and init keeps the build's
+# app image format in the second while it clears it for the compile (sepolicy/gapps.cil).
+GAPPS_COMPILE_SCRIPT = "SYSTEM/etc/dsa/gapps-compile.sh"
+GAPPS_COMPILE_PACKAGES = ["com.google.android.gms", "com.android.vending"]
+GAPPS_COMPILE_PROPERTY = "vendor.dsa.gapps.compile"
+GAPPS_IMAGE_FORMAT_PROPERTY = "vendor.dsa.gapps.appimageformat"
+GAPPS_COMPILE_PROPERTY_CONTEXTS = {
+    GAPPS_COMPILE_PROPERTY: f"{GAPPS_COMPILE_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+    GAPPS_IMAGE_FORMAT_PROPERTY: f"{GAPPS_IMAGE_FORMAT_PROPERTY} u:object_r:dsa_gapps_compile_prop:s0 exact string",
+}
 GAPPS_FS_CONFIG = [
     "system/etc/init/dsa-gapps.rc 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/gapps-off.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/gapps-compile.sh 0 0 644 capabilities=0x0",
 ]
 
 
@@ -3394,7 +3498,13 @@ AGENT_APKCERTS = (
 # that becomes a scroll shows the row pressed until it moves past the touch slop.
 FRAMEWORK_OVERLAY_APK = "VENDOR/overlay/DsaFrameworkOverlay.apk"
 FRAMEWORK_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.framework"
-FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
+# The activity manager's cached process limit when the device configuration sets none: 8, not
+# Android 17's 1024, so a phone's dozens of cached processes do not hold memory the host would
+# get back. Android 17 reads the limit from the device configuration
+# (activity_manager/max_cached_processes, which the agent sets to the same value) and else from
+# this resource; the global setting activity_manager_constants no longer carries it. The
+# resource holds from the first boot, before the agent runs.
+FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0, "config_customizedMaxCachedProcesses": 8}
 # The user's aspect ratio override of an app, which Settings offers on the app's aspect ratio
 # page and a task window's system menu opens. The window manager applies the override only
 # while this flag is on, and Android leaves it off unless a device turns it on, as large
@@ -3405,9 +3515,45 @@ FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
 # SystemUI's ImageWallpaper, and SystemUI is removed, so the window manager gave up only at
 # its 30 s boot timeout ("BOOT TIMEOUT: forcing display enabled"). Every boot was 30 s
 # longer, and the user's storage was unlocked, and widgets became available, 30 s later.
+#
+# The agent is the guest's network location provider, answered by the host's location, with or
+# without Google Play: with the overlay flag off, the location manager binds the package the
+# string names and no other, where Google Play's provider would otherwise win on its higher
+# service version. The agent is the geocode provider only without Google Play: these values
+# name it, and the Google apps overlay (GAPPS_FRAMEWORK_OVERLAY) names Google's geocoder instead
+# on a boot with the Google apps image.
 FRAMEWORK_OVERLAY_BOOLEANS = {
     "config_appCompatUserAppAspectRatioSettingsIsEnabled": True,
     "config_checkWallpaperAtBoot": False,
+    "config_enableNetworkLocationOverlay": False,
+    "config_enableGeocoderOverlay": False,
+}
+# The device configurator: the package the framework lets write DeviceConfig, Android's server
+# flags (WRITE_DEVICE_CONFIG and WRITE_ALLOWLISTED_DEVICE_CONFIG are "configurator"
+# permissions). On a phone with Google Play it is Google Play services, whose platform
+# configurator copies the flags Google serves into DeviceConfig. The image is built from AOSP,
+# which names no configurator ("Configurator: none" in `dumpsys package`), so Play services was
+# never granted those permissions and retried: one boot on a PC fired its RETRY_UPDATE alarm 720
+# times in about ten minutes, each a run of the Play services process. Without Google Play
+# no package has this name, and the framework takes the configurator to be absent, as before.
+GAPPS_CONFIGURATOR = "com.google.android.gms"
+FRAMEWORK_OVERLAY_STRINGS = {
+    "config_deviceConfiguratorPackageName": GAPPS_CONFIGURATOR,
+    "config_networkLocationProviderPackageName": "io.github.thisisthepy.dsa.agent",
+    "config_geocoderProviderPackageName": "io.github.thisisthepy.dsa.agent",
+}
+# Google apps: on a boot with the Google apps image (the host puts androidboot.dsa.gapps=on
+# in the bootconfig, so ro.boot.dsa.gapps is on before the package manager scans the overlays),
+# this static overlay, above the framework overlay, names Google's geocoder, and the agent is
+# not the geocode provider: Google's answers with street addresses and turns addresses into
+# positions, which the host's boundary data does not. Without the Google apps image the package
+# manager leaves the overlay out, and the agent's geocoder (the framework overlay's values)
+# stands. The network location provider stays the agent's either way.
+GAPPS_FRAMEWORK_OVERLAY_APK = "DsaFrameworkGappsOverlay.apk"
+GAPPS_GEOCODER_PACKAGE = "com.google.android.gms"
+GAPPS_FRAMEWORK_OVERLAY = {
+    "bool/config_enableGeocoderOverlay": False,
+    "string/config_geocoderProviderPackageName": GAPPS_GEOCODER_PACKAGE,
 }
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
@@ -3519,10 +3665,17 @@ SYSTEM_OVERLAYS = [
     {"apk": "DsaIntentResolverOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.intentresolver",
      "target": "com.android.intentresolver", "target_apk": "/priv-app/IntentResolver/IntentResolver.apk",
      "without": "the share sheet's headline keeps its small size"},
+    {"apk": "DsaFrameworkGappsOverlay.apk", "package": "io.github.thisisthepy.dsa.overlay.framework.gapps",
+     "target": "android", "target_apk": FRAMEWORK_RES,
+     # Above the framework overlay, whose geocoder values it replaces.
+     "priority": 101, "required_property": ("ro.boot.dsa.gapps", "on"),
+     "without": "with Google Play installed, apps' address lookups still go to DSA's geocoder instead of "
+                "Google's"},
 ]
 SYSTEM_OVERLAY_FILES = [overlay["apk"] for overlay in SYSTEM_OVERLAYS]
-# The overlays this section adds; the framework and Settings overlays are built by their own
-# functions, which other changes made first.
+# The overlays built from a resource map (design_overlay_resources): the design's, and the
+# Google apps overlay. The framework and Settings overlays are built by their own functions,
+# which other changes made first.
 DESIGN_OVERLAYS = SYSTEM_OVERLAY_FILES[2:]
 
 # The blue accent: one tonal ramp (tone 0 is white, 1000 black) for the framework's first
@@ -3800,6 +3953,9 @@ def update_vendor_property_contexts(text):
         lines.append(FILES_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ROOT_ELEVATION_PROPERTY] for line in lines):
         lines.append(ROOT_ELEVATION_PROPERTY_CONTEXT)
+    for name, context in GAPPS_COMPILE_PROPERTY_CONTEXTS.items():
+        if not any(line.split()[:1] == [name] for line in lines):
+            lines.append(context)
     return "\n".join(lines) + "\n"
 
 
@@ -3915,6 +4071,7 @@ ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
+ADDONS_POLICY = HERE / "sepolicy/addons.cil"
 GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 SU_POLICY = HERE / "sepolicy/su.cil"
 
@@ -4378,6 +4535,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             # init laying a user's Google apps over /product and /system_ext.
             plat_patched += "\n" + GAPPS_POLICY.read_text()
+            # init mounting the user's add-on disk, which those images are on.
+            plat_patched += "\n" + ADDONS_POLICY.read_text()
             if framework is not None:
                 # SurfaceFlinger telling the apps about a GPU reset.
                 plat_patched += "\n" + GPU_RESET_POLICY.read_text()
@@ -4562,7 +4721,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
-                                                 + GAPPS_FS_CONFIG
+                                                 + GAPPS_FS_CONFIG + ADDONS_FS_CONFIG
                                                  + (["system/etc/init/dsa-su-guard.rc 0 0 644 capabilities=0x0",
                                                      "system/xbin 0 2000 755 capabilities=0x0"]
                                                     if channeld_payload is not None else [])
@@ -4629,12 +4788,15 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if reach:
             for folder in ARM_TRANSLATION_FOLDERS:
                 zout.writestr(directory_entry(folder + "/"), b"")
-            zout.writestr(ARM_TRANSLATION_LINKER_CONFIG, b"")
+            for name in ARM_TRANSLATION_BOUND_FILES:
+                zout.writestr(name, b"")
             for name, target in ARM_TRANSLATION_LINKS.items():
                 zout.writestr(link_entry(name), target.encode())
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
+        zout.writestr(ADDONS_RC, (HERE / "dsa-addons.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
+        zout.writestr(GAPPS_COMPILE_SCRIPT, (HERE / "gapps-compile.sh").read_bytes())
         for folder in added_gapps_folders:
             zout.writestr(directory_entry(folder + "/"), b"")
         if VENDOR_PROPERTY_CONTEXTS not in names:
@@ -5643,6 +5805,9 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
         # replaces it with its main monitor's at each boot, as it does display_dpi.
         f"androidboot.lcd_density={DISPLAY_DPI}",
         "androidboot.cpuvulkan.version=0",
+        # init_graphics.vendor.rc copies it to ro.opengles.version, which the build.prop files
+        # have already claimed with the same value (OPENGLES_VERSION).
+        f"androidboot.opengles.version={OPENGLES_VERSION}",
         # The Cuttlefish lights HAL listens on this vsock port for a host client; without
         # one it binds port 0, which only privileged processes may, and aborts. No host
         # client connects; DSA's own ports are 5000-5001, 5555 (adb) and 5566-5567.

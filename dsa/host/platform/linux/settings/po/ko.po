@@ -66,8 +66,17 @@ msgstr "프로세스 {0}, 전용 {1}"
 msgid "Apps and system"
 msgstr "앱과 시스템"
 
-msgid "The apps and the system server, counted by their share (PSS)."
-msgstr "앱과 시스템 서버가 차지한 몫(PSS)입니다."
+msgid "{0} in memory, {1} compressed"
+msgstr "메모리 {0}, 압축 메모리 {1}"
+
+msgid "Google Play services"
+msgstr "Google Play 서비스"
+
+msgid "The Google apps you installed, {0} processes: {1}"
+msgstr "설치한 Google 앱, 프로세스 {0}개: {1}"
+
+msgid "unknown"
+msgstr "알 수 없음"
 
 msgid "Cache"
 msgstr "캐시"
@@ -125,6 +134,9 @@ msgstr "받은 {0} 중 커널 코드, 페이지 구조체, 버퍼. 연속 영역
 
 msgid "Process {0}"
 msgstr "프로세스 {0}"
+
+msgid "Process {0}, Google Play services"
+msgstr "프로세스 {0}, Google Play 서비스"
 
 msgid "Automatic"
 msgstr "자동"
@@ -768,8 +780,26 @@ msgstr "지원하는 가장 새 버전(지금은 Android {0})"
 msgid "Android {0} and its security updates"
 msgstr "Android {0} 버전과 그 보안 업데이트"
 
-msgid "No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."
-msgstr "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다."
+msgid "No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open."
+msgstr "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 열린 앱 창이 없을 때 Android를 다시 시작해 업데이트를 적용합니다."
+
+msgid "Android {0} is downloaded. Restart Android to use it now."
+msgstr "Android {0}을(를) 내려받았습니다. 지금 적용하려면 Android를 다시 시작하세요."
+
+msgid "Restart now"
+msgstr "지금 다시 시작"
+
+msgid "Restart Android now?"
+msgstr "지금 Android를 다시 시작할까요?"
+
+msgid "Android restarts into Android {0}. Its app windows close; open the apps again once it has started."
+msgstr "Android {0}(으)로 다시 시작합니다. 앱 창이 닫히며, 시작이 끝나면 앱을 다시 열면 됩니다."
+
+msgid "Restart Android into updates by itself"
+msgstr "업데이트 시 Android 자동으로 다시 시작"
+
+msgid "On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android."
+msgstr "기본값은 켬입니다. 열린 앱 창이 없으면 내려받은 업데이트로 Android를 바로 다시 시작합니다. 창이 열려 있으면 먼저 묻거나, 창을 모두 닫을 때까지 기다립니다. 끄면 다음에 Android를 시작할 때 업데이트를 적용합니다."
 
 msgid "Version it follows"
 msgstr "따르는 버전"
@@ -801,8 +831,8 @@ msgstr "이 설치는 릴리스 채널을 따르지 않습니다."
 msgid "Update the Android image automatically"
 msgstr "Android 이미지 자동 업데이트"
 
-msgid "Download signed security updates and new versions of Android. They apply at the next start of Android."
-msgstr "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 다음에 Android를 시작할 때 적용됩니다."
+msgid "Download signed security updates and new versions of Android. They apply when Android restarts, as the Android update settings above say."
+msgstr "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 위의 Android 업데이트 설정에 따라 Android가 다시 시작할 때 적용됩니다."
 
 msgid "This installation does not offer image updates."
 msgstr "이 설치에서는 이미지 업데이트를 제공하지 않습니다."
@@ -966,8 +996,8 @@ msgstr "Android가 이 변경 전에 시작되었습니다. Android를 멈췄다
 msgid "Remove the ARM translation package"
 msgstr "ARM 번역 묶음 제거"
 
-msgid "Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."
-msgstr "Android 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
+msgid "Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts."
+msgstr "추가 구성 요소 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
 
 msgid "Developer"
 msgstr "개발자"
@@ -1161,8 +1191,8 @@ msgstr "설치"
 msgid "Remove Google Play"
 msgstr "Google Play 제거"
 
-msgid "Deletes Google's apps from your Android disk. They are gone from the next start of Android."
-msgstr "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 Google 앱이 사라집니다."
+msgid "Deletes Google's apps from your add-on disk. They are gone from the next start of Android."
+msgstr "추가 구성 요소 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 Google 앱이 사라집니다."
 
 msgid "Google's terms"
 msgstr "Google 약관"
@@ -1379,3 +1409,36 @@ msgstr "시스템(강제)은 배율 변화를 처리한다고 밝히지 않은 �
 
 msgid "App: the app redraws at the new scale, and text stays sharp; for an app that does not say it handles this, Android recreates its screen and restores its state, so it may redraw briefly when it moves. System: the app keeps its scale and DSA scales its window to the same physical size; text can look a little blurry. Automatic picks App for apps that say they handle it, and System for the others. Automatic and System never restart the app."
 msgstr "앱: 앱이 새 배율로 다시 그려서 글자가 선명합니다. 이를 처리한다고 밝히지 않은 앱은 Android가 화면을 다시 만들고 상태를 되살리므로, 모니터를 옮길 때 잠깐 다시 그려질 수 있습니다. 시스템: 앱은 배율을 그대로 두고 DSA가 창을 같은 실제 크기로 늘이거나 줄입니다. 글자가 조금 흐려질 수 있습니다. 자동은 직접 처리한다고 밝힌 앱에 앱을, 나머지에 시스템을 씁니다. 자동과 시스템은 앱을 재시작하지 않습니다."
+
+msgid "Getting the update ready"
+msgstr "업데이트를 준비하고 있습니다"
+
+msgid "Downloading DSA {0}"
+msgstr "DSA {0} 버전을 내려받고 있습니다"
+
+msgid "Stopping Android to install DSA {0}"
+msgstr "DSA {0} 버전을 설치하기 위해 Android를 종료하고 있습니다"
+
+msgid "Installing DSA {0}"
+msgstr "DSA {0} 버전을 설치하고 있습니다"
+
+msgid "DSA is restarting to finish the update"
+msgstr "업데이트를 마치기 위해 DSA가 다시 시작하고 있습니다"
+
+msgid "Do not close DSA or start Android apps until the update is done."
+msgstr "업데이트가 끝날 때까지 DSA를 닫거나 Android 앱을 시작하지 마십시오."
+
+msgid "Updated to {0}"
+msgstr "{0} 버전으로 업데이트했습니다"
+
+msgid "DSA has not come back after the update to {0}. If it does not start soon, restart the computer."
+msgstr "{0} 버전으로 업데이트한 뒤 DSA가 다시 시작하지 않았습니다. 곧 시작하지 않으면 컴퓨터를 다시 시작하십시오."
+
+msgid "Updating to {0} failed. The version before it is still installed."
+msgstr "{0} 버전으로 업데이트하지 못했습니다. 이전 버전이 그대로 설치되어 있습니다."
+
+msgid "Updating DSA"
+msgstr "DSA 업데이트 중"
+
+msgid "Update of DSA"
+msgstr "DSA 업데이트"

@@ -459,9 +459,46 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
         .visible(false)
         .build();
     update_row.add_suffix(&progress);
+    // Shown while a downloaded image waits for this user's Android to restart.
+    let restart = button(&tr("Restart now"));
+    restart.add_css_class("suggested-action");
+    restart.set_visible(false);
+    update_row.add_suffix(&restart);
+    let restart_button = restart.clone();
     let check = button(&tr("Check now"));
     update_row.add_suffix(&check);
     running.add(&update_row);
+    // The user's own switch: restarting into a downloaded image by itself.
+    let auto_restart = {
+        let (ctx, page) = (ctx.clone(), page.clone());
+        Switch::new(
+            &tr("Restart Android into updates by itself"),
+            &tr("On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android."),
+            move |on| {
+                let page = page.clone();
+                request(
+                    &ctx,
+                    move |c| c.switch("image-auto-restart", on),
+                    move |r| {
+                        page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                    },
+                );
+            },
+        )
+    };
+    running.add(&auto_restart.row);
+    {
+        let auto_restart = auto_restart.clone();
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                if let Ok(settings) = r {
+                    auto_restart.set(settings.image_auto_restart);
+                }
+            },
+        );
+    }
     page.add(&running);
     page.add(image);
 
@@ -504,6 +541,7 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
             );
             follows_label.set_label(&view::android_channel_text(&version));
             update_row.set_subtitle(&view::android_update_text(&version));
+            restart.set_visible(version.restart_pending.is_some());
             match view::android_download_percent(version.notice.as_deref()) {
                 Some(percent) => {
                     progress.set_fraction(f64::from(percent) / 100.0);
@@ -542,6 +580,35 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
                 &ctx,
                 move |c| c.use_android(&channel, false),
                 move |r| show(r),
+            );
+        });
+    }
+    {
+        // The restart is the user's own Android's, so no administrator is asked; the user
+        // agrees first that its app windows close.
+        let (ctx, show, info) = (ctx.clone(), show.clone(), info.clone());
+        restart_button.connect_clicked(move |_| {
+            let Some(version) = info
+                .borrow()
+                .as_ref()
+                .and_then(|version| version.restart_pending.clone())
+            else {
+                return;
+            };
+            let (asked, show) = (ctx.clone(), show.clone());
+            confirm(
+                &ctx,
+                &tr("Restart Android now?"),
+                &trf(
+                    "Android restarts into Android {0}. Its app windows close; open the apps again once it has started.",
+                    &[version.as_str()],
+                ),
+                &tr("Restart now"),
+                false,
+                move || {
+                    let show = show.clone();
+                    request(&asked, |c| c.restart_android(), move |r| show(r));
+                },
             );
         });
     }
@@ -692,7 +759,7 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
         let (ctx, page, cell) = (ctx.clone(), page.clone(), image_switch.clone());
         Switch::new(
             &tr("Update the Android image automatically"),
-            &tr("Download signed security updates and new versions of Android. They apply at the next start of Android."),
+            &tr("Download signed security updates and new versions of Android. They apply when Android restarts, as the Android update settings above say."),
             move |on| {
                 let page = page.clone();
                 let cell = cell.clone();
@@ -715,6 +782,7 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
     // Android first (what runs, its update, the version choice), then DSA itself.
     android_groups(ctx, &page, &image);
     page.add(&program);
+    program_progress(ctx, &program);
 
     {
         let page = page.clone();
@@ -745,6 +813,94 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
         );
     }
     page.root.clone().upcast()
+}
+
+/// An update of DSA while it runs, in `program`: the phase, the version and a line asking not
+/// to close DSA or start Android apps, with a moving progress bar, across the service's
+/// restart; then how it ended. The running service is asked every 1.5 seconds while the page
+/// is shown, never starting the service, so a service being replaced is not started again.
+fn program_progress(ctx: &Shared, program: &adw::PreferencesGroup) {
+    let progress_row = action_row("", "");
+    progress_row.set_subtitle_lines(0);
+    let bar = gtk::ProgressBar::builder()
+        .valign(gtk::Align::Center)
+        .width_request(120)
+        .tooltip_text(tr("Updating DSA"))
+        .build();
+    progress_row.add_suffix(&bar);
+    progress_row.set_visible(false);
+    let (ended_row, ended_label) = value_row(&tr("Update of DSA"), "");
+    ended_row.set_visible(false);
+    program.add(&progress_row);
+    program.add(&ended_row);
+
+    // The bar moves on its own while it is shown: the phase says what is happening, not how
+    // far it is.
+    {
+        let bar = bar.downgrade();
+        gtk::glib::timeout_add_local(std::time::Duration::from_millis(150), move || {
+            let Some(bar) = bar.upgrade() else {
+                return gtk::glib::ControlFlow::Break;
+            };
+            if bar.is_mapped() {
+                bar.pulse();
+            }
+            gtk::glib::ControlFlow::Continue
+        });
+    }
+    let follower: Rc<RefCell<view::ProgramUpdateFollower>> = Rc::default();
+    let show = {
+        let (follower, progress_row) = (follower.clone(), progress_row.clone());
+        let ended_row = ended_row.clone();
+        Rc::new(move || {
+            let follower = follower.borrow();
+            progress_row.set_visible(follower.in_progress());
+            progress_row.set_title(&follower.phase_text());
+            let mut lines: Vec<String> = follower.version_text().into_iter().collect();
+            lines.push(view::ProgramUpdateFollower::keep_open_text());
+            progress_row.set_subtitle(&lines.join("\n"));
+            match follower.ended_text() {
+                Some((succeeded, text)) => {
+                    ended_label.set_label(&text);
+                    if succeeded {
+                        ended_row.remove_css_class("error");
+                        ended_row.add_css_class("success");
+                    } else {
+                        ended_row.remove_css_class("success");
+                        ended_row.add_css_class("error");
+                    }
+                    ended_row.set_visible(true);
+                }
+                None => ended_row.set_visible(false),
+            }
+        })
+    };
+    let ctx = ctx.clone();
+    let watched = program.downgrade();
+    let asking = Rc::new(std::cell::Cell::new(false));
+    let poll = move || {
+        let Some(group) = watched.upgrade() else {
+            return gtk::glib::ControlFlow::Break;
+        };
+        if !group.is_mapped() || asking.get() {
+            return gtk::glib::ControlFlow::Continue;
+        }
+        asking.set(true);
+        let (follower, show, asking) = (follower.clone(), show.clone(), asking.clone());
+        request(
+            &ctx,
+            |c| c.running_status(),
+            move |r| {
+                asking.set(false);
+                follower
+                    .borrow_mut()
+                    .polled(r.as_ref(), std::time::Instant::now());
+                show();
+            },
+        );
+        gtk::glib::ControlFlow::Continue
+    };
+    gtk::glib::timeout_add_local(std::time::Duration::from_millis(1500), poll);
 }
 
 /// The versions, the licences, the source code and the notices.

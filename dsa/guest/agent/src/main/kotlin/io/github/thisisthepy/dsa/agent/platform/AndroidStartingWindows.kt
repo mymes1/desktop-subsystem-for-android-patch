@@ -238,7 +238,7 @@ class AndroidStartingWindows(
      * at [densityDpi].
      *
      * The density is the task's, which is its host monitor's, and not the guest display's
-     * 160 dpi: the task's frames are shown one pixel to one screen pixel, so a splash laid out
+     * density: the task's frames are shown one pixel to one screen pixel, so a splash laid out
      * at the display's density on a 200% monitor would show its icon at half the size and
      * from bitmaps a quarter as fine.
      */

@@ -1,21 +1,25 @@
 ; Desktop Subsystem for Android (DSA)
 ; ARM app translation (dsa-arm-translation.rc). When the host says translation is on, init
-; mounts a package's erofs image through a loop device at /mnt/dsa-arm-translation, its files
-; labelled as system libraries: the user's package from /data/vendor/dsa/arm-translation, or
-; the image's default one from /system/etc/dsa (system_file, which init already reads). It
+; mounts a package's erofs image straight from its file at /mnt/dsa-arm-translation, its files
+; labelled as system libraries: the user's package from the user's add-on disk (system_file,
+; addons.cil), or, for one boot after an update from a DSA that kept it on the user's disk,
+; from /data/vendor/dsa/arm-translation (vendor_data_file); or the image's default one from
+; /system/etc/dsa (system_file, which init already reads). It
 ; then binds the image's folders onto the empty folders the x86_64 image carries for them
 ; (/system_ext/lib64 and /system/lib64/arm64, system libraries; /system/bin/arm64 and
 ; /system/bin/dsa-arm-translation, system files) and its linker configuration onto the empty
-; /system/etc/ld.config.arm64.txt. Nothing is laid over a folder the system's own programs
+; /system/etc/ld.config.arm64.txt, and the translator's exec region library onto the empty
+; /system/lib64/libberberis_exec_region.so (a system library). Nothing is laid over a folder the system's own programs
 ; are in. It mounts binfmt_misc on /proc/sys/fs/binfmt_misc, which nothing else in Android
 ; mounts, and registers the package's handlers there.
+; erofs opens the image file with init's credentials as init mounts it, and reads it with them
+; afterwards, so reading the file is all init needs; there is no loop device to open.
 (allow init vendor_data_file (file (read open getattr)))
-(allow init loop_control_device (chr_file (read write open ioctl getattr)))
-(allow init loop_device (blk_file (read open ioctl getattr)))
 (allow init tmpfs (dir (mounton)))
 (allow init system_file (dir (mounton)))
 (allow init system_lib_file (dir (mounton)))
 (allow init system_linker_config_file (file (mounton)))
+(allow init system_lib_file (file (mounton)))
 
 ; The image's superblock. statfs on each folder the image is bound onto reports the image's
 ; superblock, and the kernel checks the caller's filesystem getattr against its label. So

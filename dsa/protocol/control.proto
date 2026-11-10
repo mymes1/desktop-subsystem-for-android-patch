@@ -245,7 +245,7 @@ message ResizeTask {
 }
 
 // Host to guest: the task's window is on a monitor of another scale; the task's app draws
-// at `density_dpi` (160 at a scale of 100%). The host sends the matching ResizeTask right
+// at `density_dpi` (96 at a scale of 100%). The host sends the matching ResizeTask right
 // after it, and the agent applies both together, so the app relays out once.
 message SetTaskDensity {
   int32 task_id = 1;
@@ -814,6 +814,115 @@ message LocationFix {
   uint64 unix_time_ms = 11;
 }
 
+// Guest to host, from the agent, which is the guest's geocode provider: look up addresses
+// for an app's Geocoder. A forward lookup names a place (`query`); a reverse lookup gives a
+// position. The host answers each request with GeocodeResult, from the host's own geocoding
+// service, so the guest holds no geocoding engine or data of its own.
+message GeocodeRequest {
+  // The agent's number for the request, unique while its connection lasts.
+  uint32 request_id = 1;
+  // True for a reverse lookup (a position to addresses), false for a forward one.
+  bool reverse = 2;
+  // Forward: the name or address of the place, as the app gave it.
+  string query = 3;
+  // Reverse: the position.
+  double latitude_degrees = 4;
+  double longitude_degrees = 5;
+  // Forward: the box the app prefers results in, when `has_bounds`.
+  bool has_bounds = 6;
+  double lower_left_latitude = 7;
+  double lower_left_longitude = 8;
+  double upper_right_latitude = 9;
+  double upper_right_longitude = 10;
+  // The most addresses the app takes, from 1.
+  uint32 max_results = 11;
+  // The language the app wants the addresses in, as a BCP 47 tag ("ko-KR"); empty for the
+  // host's own.
+  string language = 12;
+}
+
+// How a geocoding request ended.
+enum GeocodeStatus {
+  GEOCODE_STATUS_UNSPECIFIED = 0;
+  // The lookup ran. No addresses means the place is not known.
+  GEOCODE_STATUS_OK = 1;
+  // The host's geocoding service cannot answer now: no network, or the service failed.
+  GEOCODE_STATUS_UNAVAILABLE = 2;
+  // The user turned the host's geocoding off, or there is no desktop session to ask.
+  GEOCODE_STATUS_REFUSED = 3;
+  // Too many lookups in a short time; the service asks the guest to wait.
+  GEOCODE_STATUS_BUSY = 4;
+  // The request itself cannot be answered: an empty name, or a position not on Earth.
+  GEOCODE_STATUS_INVALID = 5;
+}
+
+// One address a geocoding lookup found. Empty strings are parts the service did not give.
+message GeocodeAddress {
+  // The address as lines a person reads, in order.
+  repeated string address_lines = 1;
+  // The place's own name, such as a building or a landmark.
+  string feature_name = 2;
+  string premises = 3;
+  // The house number and the street.
+  string sub_thoroughfare = 4;
+  string thoroughfare = 5;
+  string sub_locality = 6;
+  string locality = 7;
+  string sub_admin_area = 8;
+  string admin_area = 9;
+  string postal_code = 10;
+  // ISO 3166-1 alpha-2, upper case.
+  string country_code = 11;
+  string country_name = 12;
+  bool has_position = 13;
+  double latitude_degrees = 14;
+  double longitude_degrees = 15;
+}
+
+// Host to guest, to the agent: the answer to a GeocodeRequest. `message` says why, in words
+// for the guest's log, when the status is not OK.
+message GeocodeResult {
+  uint32 request_id = 1;
+  GeocodeStatus status = 2;
+  repeated GeocodeAddress addresses = 3;
+  string message = 4;
+}
+
+// Guest to host, from the agent's "Share on PC" target: an app shared text, links or files
+// with the host. The host shows its own share UI with the same content. Each file is read
+// with DragRead, as a drag's files are, with `share_id` as the drag's ID, and the share ends
+// with DragEnd, which gives back the guest's access to the files. The host answers with
+// ShareResult.
+message ShareToHost {
+  // Unique among the shares and drags of one connection.
+  uint32 share_id = 1;
+  // The subject or title the app gave; empty when none.
+  string title = 2;
+  // The app that shared, and its name as the guest shows it; empty when unknown.
+  string package_name = 3;
+  string app_label = 4;
+  // The text and links (`is_text`) and the files, in the order the app gave them.
+  repeated DragItem items = 5;
+}
+
+// What became of a share.
+enum ShareOutcome {
+  SHARE_OUTCOME_UNSPECIFIED = 0;
+  // The host's share UI took the content.
+  SHARE_OUTCOME_SHARED = 1;
+  // The user closed the host's share UI without sharing.
+  SHARE_OUTCOME_CANCELED = 2;
+  // It could not be shared; the message says why.
+  SHARE_OUTCOME_FAILED = 3;
+}
+
+// Host to guest, to the agent: what became of a ShareToHost.
+message ShareResult {
+  uint32 share_id = 1;
+  ShareOutcome outcome = 2;
+  string message = 3;
+}
+
 // Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 // controller's deep idle state). The host takes the device not to be in Doze when the agent
 // connects; the agent sends this on each change after that.
@@ -846,30 +955,11 @@ message DeveloperMode {
   bool on = 1;
 }
 
-// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
-// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
-// writes it to the user's disk beside any package already there, checks its length and
-// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
-// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
-// when the host says one is installed. One transfer at a time; a new one drops an unfinished
-// one.
-message ArmTranslationInstall {
-  uint32 transfer_id = 1;
-  uint64 size = 2;
-  // The SHA-256 digest of the whole image.
-  bytes sha256 = 3;
-}
-
-// Host to guest: part of the image an ArmTranslationInstall announced.
-message ArmTranslationChunk {
-  uint32 transfer_id = 1;
-  // Where `data` starts in the image.
-  uint64 offset = 2;
-  bytes data = 3;
-}
-
-// Host to guest, to the control daemon: remove the installed ARM translation package. The
-// guest goes on using a package it has mounted until it restarts. Answered with
+// Host to guest, to the control daemon: remove the ARM translation package's image that a DSA
+// from before the add-on disk left on the user's disk (/data/vendor/dsa/arm-translation). The
+// host keeps an installed package on the add-on disk, which only the host writes; this removes
+// the old copy once the host has moved it there, or once the user removed the package. The
+// guest goes on using an image it has mounted until it restarts. Answered with
 // ArmTranslationState.
 message ArmTranslationRemove {}
 
@@ -877,18 +967,14 @@ message ArmTranslationRemove {}
 message ArmTranslationQuery {}
 
 // Guest to host, from the control daemon: where ARM translation stands in the guest. It
-// answers each of the messages above.
+// answers ArmTranslationRemove and ArmTranslationQuery.
 message ArmTranslationState {
-  // The transfer this answers, or 0.
-  uint32 transfer_id = 1;
-  // How many bytes of that transfer the daemon has written.
-  uint64 received = 2;
-  // The transfer is complete and its image checked and in place.
+  // The removal this answers is done.
   bool done = 3;
-  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-  // failed transfer leaves the package that was there before.
+  // Non-empty when the removal failed: why, in words a person can act on.
   string error = 4;
-  // A package image is on the user's disk.
+  // A package image a DSA from before the add-on disk sent is still on the user's disk
+  // (/data), for the host to move onto the add-on disk and then remove.
   bool installed = 5;
   // This boot runs with a package laid over the system: the bridge library is in place.
   bool active = 6;
@@ -896,48 +982,25 @@ message ArmTranslationState {
   string abilist = 7;
 }
 
-// Host to guest, to the control daemon: the system image (erofs) of the Google apps the user
-// chose to install follows in GappsChunk messages of the same `transfer_id`, in order. The
-// daemon keeps it on the user's disk as it keeps an ARM translation package's image: beside
-// any image already there, checked for its length and SHA-256 once all `size` bytes have
-// arrived, and only then in the old one's place. It answers each chunk with GappsState. The
-// guest lays the image over its product and system_ext partitions from its next boot, when
-// the host says one is installed. One transfer at a time; a new one drops an unfinished one.
-message GappsInstall {
-  uint32 transfer_id = 1;
-  uint64 size = 2;
-  // The SHA-256 digest of the whole image.
-  bytes sha256 = 3;
-}
-
-// Host to guest: part of the image a GappsInstall announced.
-message GappsChunk {
-  uint32 transfer_id = 1;
-  // Where `data` starts in the image.
-  uint64 offset = 2;
-  bytes data = 3;
-}
-
-// Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
-// an image it has mounted until it restarts. Answered with GappsState.
+// Host to guest, to the control daemon: remove the Google apps image that a DSA from before
+// the add-on disk left on the user's disk (/data/vendor/dsa/gapps). The host keeps installed
+// Google apps on the add-on disk, which only the host writes; this removes the old copy once
+// the host has moved it there, or once the user removed Google Play. The guest goes on using an
+// image it has mounted until it restarts. Answered with GappsState.
 message GappsRemove {}
 
 // Host to guest, to the control daemon: asks for GappsState.
 message GappsQuery {}
 
 // Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
-// each of the messages above.
+// GappsRemove and GappsQuery.
 message GappsState {
-  // The transfer this answers, or 0.
-  uint32 transfer_id = 1;
-  // How many bytes of that transfer the daemon has written.
-  uint64 received = 2;
-  // The transfer is complete and its image checked and in place.
+  // The removal this answers is done.
   bool done = 3;
-  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-  // failed transfer leaves the image that was there before.
+  // Non-empty when the removal failed: why, in words a person can act on.
   string error = 4;
-  // A Google apps image is on the user's disk.
+  // A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+  // (/data), for the host to move onto the add-on disk and then remove.
   bool installed = 5;
   // This boot runs with the image laid over the system.
   bool active = 6;
@@ -948,6 +1011,40 @@ message GappsState {
   // The ABIs the package manager installs apps for, in the order it prefers them
   // (ro.product.cpu.abilist).
   string abilist = 9;
+}
+
+// The add-on images a DSA from before the add-on disk kept on the user's disk (/data).
+enum AddonImage {
+  ADDON_IMAGE_UNSPECIFIED = 0;
+  // The Google apps' system image, /data/vendor/dsa/gapps/system.img.
+  ADDON_IMAGE_GAPPS = 1;
+  // The ARM translation package's system image, /data/vendor/dsa/arm-translation/system.img.
+  ADDON_IMAGE_ARM_TRANSLATION = 2;
+}
+
+// Host to guest, to the control daemon: asks for part of an add-on image that a DSA from before
+// the add-on disk left on the user's disk, so the host can move it onto the add-on disk, which
+// the guest mounts it from at its next boot. The host reads the image from its start to its
+// end, then removes it (GappsRemove, ArmTranslationRemove). Answered with AddonImagePart.
+message AddonImageRead {
+  AddonImage image = 1;
+  // Where the part starts in the image.
+  uint64 offset = 2;
+  // How many bytes the host asks for. The daemon sends at most this many and at most 1 MiB,
+  // fewer at the end of the image.
+  uint32 length = 3;
+}
+
+// Guest to host, from the control daemon: part of an add-on image, answering AddonImageRead.
+message AddonImagePart {
+  AddonImage image = 1;
+  // Where `data` starts in the image.
+  uint64 offset = 2;
+  bytes data = 3;
+  // The size of the whole image; 0 when there is none.
+  uint64 size = 4;
+  // Non-empty when the image cannot be read: why, in words a person can act on.
+  string error = 5;
 }
 
 // Host to guest, to the agent: asks for GoogleDeviceId.
@@ -1170,8 +1267,14 @@ message ProcessMemory {
   // Its proportional set size in KiB: its private pages plus its share of the pages it
   // shares with other processes.
   uint64 pss_kb = 3;
-  // How much of it is swapped out to compressed memory, proportionally, in KiB.
+  // How much of it is swapped out to compressed memory, proportionally, in KiB. This is the
+  // size the pages had before zram compressed them, not the memory they take in zram, and it
+  // is counted in pss_kb.
   uint64 swap_pss_kb = 4;
+  // The process belongs to Google Play services: one of the Google apps the user installed
+  // (Google Play services, the Play Store, the services framework and the other system apps
+  // the Google apps image brings).
+  bool google_play = 5;
 }
 
 // Guest to host, from the agent: how the guest uses its memory. Sent every few minutes, and
@@ -1215,6 +1318,15 @@ message GuestMemory {
   // MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
   // pstore). 0 when the guest cannot read it.
   uint64 mem_online_kb = 22;
+  // How much of total_pss_kb is swapped out to zram, at the size the pages had before they
+  // were compressed, for every process total_pss_kb counts.
+  uint64 swap_pss_kb = 23;
+  // The processes of Google Play services (ProcessMemory.google_play), all of them and not
+  // only those among top_processes: how many run, their proportional set size, and how much
+  // of it is swapped out to zram, at the size before compression.
+  uint32 google_play_processes = 24;
+  uint64 google_play_pss_kb = 25;
+  uint64 google_play_swap_pss_kb = 26;
 }
 
 // From the agent to the guest's control daemon, on each connection to it: the agent has
@@ -1753,7 +1865,7 @@ message RemoveWidget {
 }
 
 // Host to guest: the size of the widget's host window. The agent draws the widget at `width`
-// by `height` pixels at `density_dpi` (160 at a scale of 100%), and tells the widget's app
+// by `height` pixels at `density_dpi` (96 at a scale of 100%), and tells the widget's app
 // its size in dp, so a widget with layouts for several sizes picks the one that fits.
 message ResizeWidget {
   int32 widget_id = 1;
@@ -2275,6 +2387,12 @@ message SystemSettings {
   // The host's accent color as 0xAARRGGBB, which becomes the seed of the guest's dynamic
   // colors. 0 when the host has none.
   fixed32 accent_color = 7;
+  // The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+  // of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+  // a host pixel, and scales text separately from everything else, so this is 160/96 times
+  // the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+  // the guest's as it is.
+  float font_scale = 8;
 }
 
 // Host to guest: the computer's name, which the agent makes the guest's device name: the name
@@ -2394,13 +2512,9 @@ message Envelope {
     DisplayRefresh display_refresh = 407;
     PowerHint power_hint = 110;
     DeveloperMode developer_mode = 140;
-    ArmTranslationInstall arm_translation_install = 150;
-    ArmTranslationChunk arm_translation_chunk = 151;
     ArmTranslationRemove arm_translation_remove = 152;
     ArmTranslationQuery arm_translation_query = 153;
     ArmTranslationState arm_translation_state = 154;
-    GappsInstall gapps_install = 400;
-    GappsChunk gapps_chunk = 401;
     GappsRemove gapps_remove = 402;
     GappsQuery gapps_query = 403;
     GappsState gapps_state = 404;
@@ -2409,6 +2523,8 @@ message Envelope {
     RootElevationConfig root_elevation_config = 411;
     SuRequest su_request = 412;
     SuDecision su_decision = 413;
+    AddonImageRead addon_image_read = 414;
+    AddonImagePart addon_image_part = 415;
     DeviceIdle device_idle = 42;
     HostMemory host_memory = 43;
     HostSleep host_sleep = 44;
@@ -2510,5 +2626,9 @@ message Envelope {
     ReinstallApp reinstall_app = 380;
     ReinstallResult reinstall_result = 381;
     NativeLibraryCrash native_library_crash = 382;
+    GeocodeRequest geocode_request = 470;
+    GeocodeResult geocode_result = 471;
+    ShareToHost share_to_host = 472;
+    ShareResult share_result = 473;
   }
 }

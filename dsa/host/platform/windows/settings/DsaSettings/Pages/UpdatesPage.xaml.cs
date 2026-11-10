@@ -13,9 +13,15 @@ public partial class UpdatesPage : Page
     /// <summary>Follows an image download while the page is shown.</summary>
     private readonly DispatcherTimer _androidTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
+    /// <summary>Follows an update of DSA while the page is shown, across the service's
+    /// restart.</summary>
+    private readonly DispatcherTimer _programTimer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+
     private static SettingsViewModel ViewModel => App.Settings;
 
     private static AndroidVersionViewModel Android => App.AndroidVersion;
+
+    private static ProgramUpdateViewModel ProgramUpdate => App.ProgramUpdate;
 
     public UpdatesPage()
     {
@@ -23,16 +29,42 @@ public partial class UpdatesPage : Page
         DataContext = ViewModel;
         AndroidStatus.DataContext = Android;
         AndroidChoice.DataContext = Android;
+        ProgramProgress.DataContext = ProgramUpdate;
+        // The gate follows the update; the button inside it follows the settings.
+        UpdateNowGate.DataContext = ProgramUpdate;
+        UpdateNowButton.DataContext = ViewModel;
         _androidTimer.Tick += async (_, _) => await Android.RefreshAsync();
+        _programTimer.Tick += async (_, _) => await ProgramUpdate.PollAsync();
         Loaded += async (_, _) =>
         {
+            ProgramUpdate.CameBack += OnServiceBack;
             _androidTimer.Start();
+            _programTimer.Start();
+            await ProgramUpdate.PollAsync();
             await Task.WhenAll(ViewModel.LoadAsync(), Android.LoadAsync());
-            await App.General.PollAsync();
-            NoticeBar.Message = App.General.UpdateNotice;
-            NoticeBar.IsOpen = App.General.HasUpdateNotice;
+            await ShowNoticeAsync();
         };
-        Unloaded += (_, _) => _androidTimer.Stop();
+        Unloaded += (_, _) =>
+        {
+            ProgramUpdate.CameBack -= OnServiceBack;
+            _androidTimer.Stop();
+            _programTimer.Stop();
+        };
+    }
+
+    private async Task ShowNoticeAsync()
+    {
+        await App.General.PollAsync();
+        NoticeBar.Message = App.General.UpdateNotice;
+        NoticeBar.IsOpen = App.General.HasUpdateNotice;
+    }
+
+    /// <summary>The new service answers after an update: the page reads what it says now, its
+    /// version among it.</summary>
+    private async void OnServiceBack(object? sender, EventArgs e)
+    {
+        await Task.WhenAll(ViewModel.LoadAsync(), Android.LoadAsync());
+        await ShowNoticeAsync();
     }
 
     // Only a click sends a change; the switch shows what the service keeps once it answers.
@@ -41,6 +73,27 @@ public partial class UpdatesPage : Page
 
     private async void OnImageToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetImageUpdatesAsync(ImageSwitch.IsChecked == true);
+
+    private async void OnAutoRestartToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetImageAutoRestartAsync(AutoRestartSwitch.IsChecked == true);
+
+    /// <summary>Restarts Android now into the downloaded image, after the user agrees that its
+    /// app windows close.</summary>
+    private async void OnRestartNow(object sender, RoutedEventArgs e)
+    {
+        if (Android.RestartPending is not { } version)
+        {
+            return;
+        }
+        var confirmed = await Shell.Confirm(App.Text.Get("AndroidRestartConfirm.Title"),
+            string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                App.Text.Get("AndroidRestartConfirm.Body"), version),
+            App.Text.Get("AndroidRestartButton.Content"));
+        if (confirmed)
+        {
+            await Android.RestartNowAsync();
+        }
+    }
 
     private async void OnPrereleaseToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetPrereleaseUpdatesAsync(PrereleaseSwitch.IsChecked == true);
@@ -130,21 +183,18 @@ public partial class UpdatesPage : Page
         {
             return;
         }
-        UpdateNowButton.IsEnabled = false;
-        UpdateRing.Visibility = Visibility.Visible;
-        try
+        // The page shows the update from here on: its phase, the version, and that DSA should
+        // be left alone, until the new service answers. No dialog waits on it meanwhile.
+        _programTimer.Start();
+        var answer = await ProgramUpdate.UpdateNowAsync();
+        if (ProgramUpdate.HasError)
         {
-            var said = await App.Service.UpdateNowAsync();
-            await Shell.Tell(App.Text.Get("UpdateNowTitle"), said);
+            await Shell.Tell(App.Text.Get("UpdateNowFailed"), ProgramUpdate.Error);
         }
-        catch (Exception error)
+        else if (answer is { Installing: null })
         {
-            await Shell.Tell(App.Text.Get("UpdateNowFailed"), Format.Problem(App.Text, error));
-        }
-        finally
-        {
-            UpdateRing.Visibility = Visibility.Collapsed;
-            UpdateNowButton.IsEnabled = ViewModel.CanUpdateNow;
+            // Nothing newer: the service says why.
+            await Shell.Tell(App.Text.Get("UpdateNowTitle"), answer.Detail);
         }
     }
 }

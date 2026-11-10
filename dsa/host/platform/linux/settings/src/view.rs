@@ -7,8 +7,8 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, DpiScaling, Gapps,
-    GappsState, GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status,
-    ALL_FOLDERS,
+    GappsState, GuestMemory, HostRole, Memory, MemoryShare, Network, NetworkMode, Outcome,
+    ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -145,12 +145,14 @@ pub fn host_rows(memory: &Memory) -> Vec<MemoryRow> {
 /// Android's breakdown: the apps and the system, the caches, the kernel's reclaimable caches,
 /// shared memory, compressed memory and what is free.
 pub fn guest_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
-    vec![
-        row(
-            tr("Apps and system"),
-            tr("The apps and the system server, counted by their share (PSS)."),
-            guest.total_pss_kb,
-        ),
+    // What the processes cost: in memory, plus their compressed share of zram. A service that
+    // does not say counts their PSS as in memory.
+    let apps = guest.apps.unwrap_or(MemoryShare {
+        resident_kb: guest.total_pss_kb,
+        compressed_kb: Some(0),
+    });
+    let mut rows = vec![
+        row(tr("Apps and system"), share_detail(&apps), apps.total_kb()),
         row(
             tr("Cache"),
             tr("File contents kept in memory. Android drops them when it needs the memory."),
@@ -171,7 +173,32 @@ pub fn guest_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
             guest.zram_used_kb,
         ),
         row(tr("Free"), String::new(), guest.free_kb),
-    ]
+    ];
+    // Google Play services, which the user chose to install, on a row of its own, so what it
+    // costs is not taken for what Android and DSA cost.
+    if let Some(play) = &guest.google_play {
+        rows.insert(
+            1,
+            row(
+                tr("Google Play services"),
+                trf(
+                    "The Google apps you installed, {0} processes: {1}",
+                    &[&play.processes.to_string(), &share_detail(&play.cost)],
+                ),
+                play.cost.total_kb(),
+            ),
+        );
+    }
+    rows
+}
+
+/// "N in memory, M compressed", the compressed part unknown when zram could not measure it.
+fn share_detail(share: &MemoryShare) -> String {
+    let compressed = share.compressed_kb.map_or_else(|| tr("unknown"), size_kb);
+    trf(
+        "{0} in memory, {1} compressed",
+        &[&size_kb(share.resident_kb), &compressed],
+    )
 }
 
 pub fn kernel_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
@@ -216,10 +243,15 @@ pub fn process_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
         .top_processes
         .iter()
         .map(|p| {
+            let detail = if p.google_play {
+                trf("Process {0}, Google Play services", &[&p.pid.to_string()])
+            } else {
+                trf("Process {0}", &[&p.pid.to_string()])
+            };
             row(
                 p.name.clone(),
-                trf("Process {0}", &[&p.pid.to_string()]),
-                p.pss_kb,
+                detail,
+                p.cost.map_or(p.pss_kb, |cost| cost.total_kb()),
             )
         })
         .collect()
@@ -357,17 +389,26 @@ pub fn android_download_percent(notice: Option<&str>) -> Option<u8> {
     digits.parse::<u32>().ok().map(|p| p.min(100) as u8)
 }
 
-/// Where the Android image update stands, in one line: the service's news (a download with
-/// its progress, or what was applied), a version waiting for the next start, or that none is
-/// waiting.
+/// Where the Android image update stands, in one line: a download with its progress, a
+/// downloaded image waiting for Android to restart, the service's news (what was applied), a
+/// version waiting for the next start, or that none is waiting.
 pub fn android_update_text(info: &AndroidVersion) -> String {
+    if android_download_percent(info.notice.as_deref()).is_some() {
+        return info.notice.clone().unwrap_or_default();
+    }
+    if let Some(version) = &info.restart_pending {
+        return trf(
+            "Android {0} is downloaded. Restart Android to use it now.",
+            &[version.as_str()],
+        );
+    }
     match &info.notice {
         Some(notice) if !notice.is_empty() => notice.clone(),
         _ if info.target_major != info.major => trf(
             "Android {0} is chosen. It is downloaded now and used the next time Android starts.",
             &[&info.target_major.to_string()],
         ),
-        _ => tr("No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."),
+        _ => tr("No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open."),
     }
 }
 
@@ -1079,4 +1120,203 @@ pub fn software_updates_commands() -> Vec<Vec<&'static str>> {
         vec!["gnome-software", "--mode=updates"],
         vec!["plasma-discover", "--mode", "update"],
     ]
+}
+
+/// How long the service may stay away during an update of DSA before the page stops waiting
+/// for it and says so.
+pub const PROGRAM_RESTART_LIMIT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// An update of DSA itself while it runs: what it is doing, the version, and that the user
+/// should leave DSA alone until it is done. The service reports the phase in its status; while
+/// the service is being replaced there is no service to ask, and that gap reads as DSA
+/// restarting, not as an error. Once the new service answers, the page says which version runs.
+/// The same rules as the Windows and macOS apps' view models.
+#[derive(Debug, Clone, Default)]
+pub struct ProgramUpdateFollower {
+    phase: Option<ProgramUpdatePhase>,
+    version: String,
+    /// Set while the request to install now waits for its answer.
+    asking: bool,
+    /// When the service went away during the update.
+    away_since: Option<std::time::Instant>,
+    /// The service stayed away longer than [`PROGRAM_RESTART_LIMIT`].
+    not_back: bool,
+    error: Option<String>,
+}
+
+impl ProgramUpdateFollower {
+    pub fn phase(&self) -> ProgramUpdatePhase {
+        self.phase.unwrap_or(ProgramUpdatePhase::None)
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Whether an update is under way, so the page shows its progress.
+    pub fn in_progress(&self) -> bool {
+        self.phase().in_progress()
+    }
+
+    /// Why the request to install now was refused, in the user's language.
+    pub fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    fn set(&mut self, phase: ProgramUpdatePhase, version: &str) {
+        if !version.is_empty() {
+            self.version = version.to_string();
+        }
+        self.phase = Some(phase);
+    }
+
+    /// What the update is doing now, in the user's language.
+    pub fn phase_text(&self) -> String {
+        let version = self.version.as_str();
+        match self.phase() {
+            ProgramUpdatePhase::Starting => tr("Getting the update ready"),
+            ProgramUpdatePhase::Downloading => trf("Downloading DSA {0}", &[version]),
+            ProgramUpdatePhase::StoppingAndroid => {
+                trf("Stopping Android to install DSA {0}", &[version])
+            }
+            ProgramUpdatePhase::Installing => trf("Installing DSA {0}", &[version]),
+            ProgramUpdatePhase::Restarting => tr("DSA is restarting to finish the update"),
+            _ => String::new(),
+        }
+    }
+
+    /// The version under the phase, while it is known.
+    pub fn version_text(&self) -> Option<String> {
+        (self.in_progress() && !self.version.is_empty())
+            .then(|| trf("Version {0}", &[self.version.as_str()]))
+    }
+
+    /// The line that asks the user to leave DSA alone while the update runs.
+    pub fn keep_open_text() -> String {
+        tr("Do not close DSA or start Android apps until the update is done.")
+    }
+
+    /// How the update ended, once it has: whether it succeeded, and the text.
+    pub fn ended_text(&self) -> Option<(bool, String)> {
+        let version = self.version.as_str();
+        match self.phase() {
+            ProgramUpdatePhase::Applied => Some((true, trf("Updated to {0}", &[version]))),
+            ProgramUpdatePhase::Failed if self.not_back => Some((
+                false,
+                trf(
+                    "DSA has not come back after the update to {0}. If it does not start soon, restart the computer.",
+                    &[version],
+                ),
+            )),
+            ProgramUpdatePhase::Failed => Some((
+                false,
+                trf(
+                    "Updating to {0} failed. The version before it is still installed.",
+                    &[version],
+                ),
+            )),
+            _ => None,
+        }
+    }
+
+    /// The request to install now was sent: the page shows the update from this moment.
+    pub fn asked(&mut self) {
+        self.error = None;
+        self.not_back = false;
+        self.away_since = None;
+        self.version.clear();
+        self.asking = true;
+        self.phase = Some(ProgramUpdatePhase::Starting);
+    }
+
+    /// The service answered the request to install now, at `now`.
+    pub fn answered(
+        &mut self,
+        answer: Result<ProgramUpdateAnswer, Failure>,
+        now: std::time::Instant,
+    ) {
+        self.asking = false;
+        match answer {
+            Ok(ProgramUpdateAnswer {
+                installing: None, ..
+            }) => self.set(ProgramUpdatePhase::None, ""),
+            Ok(ProgramUpdateAnswer {
+                installing: Some(version),
+                ..
+            }) => {
+                // A poll may already have seen a later phase, or the service go away.
+                let phase = match self.phase() {
+                    ProgramUpdatePhase::Starting
+                    | ProgramUpdatePhase::Downloading
+                    | ProgramUpdatePhase::StoppingAndroid => ProgramUpdatePhase::Installing,
+                    later => later,
+                };
+                self.set(phase, &version);
+            }
+            // Once the new version is being installed, a lost answer is the restart.
+            Err(_)
+                if matches!(
+                    self.phase(),
+                    ProgramUpdatePhase::Installing | ProgramUpdatePhase::Restarting
+                ) =>
+            {
+                self.gone_away(now)
+            }
+            Err(failure) => {
+                self.error = Some(problem_text(&failure));
+                self.set(ProgramUpdatePhase::None, "");
+            }
+        }
+    }
+
+    /// What a poll of the running service found, at `now`. Returns true when the service
+    /// answers again after it went away during the update, so the page reads the new
+    /// version's settings.
+    pub fn polled(&mut self, status: Result<&Status, &Failure>, now: std::time::Instant) -> bool {
+        let reported = match status {
+            Ok(status) => status.program_update.clone(),
+            Err(_) => {
+                // A service that is away matters only while an update runs.
+                if self.in_progress() {
+                    self.gone_away(now);
+                }
+                return false;
+            }
+        };
+        if self.away_since.take().is_some() {
+            self.not_back = false;
+            match reported {
+                Some(update) => self.set(update.phase, &update.version),
+                // A new service with nothing to report runs the version that was installed.
+                None => self.set(ProgramUpdatePhase::Applied, ""),
+            }
+            return true;
+        }
+        if self.asking {
+            // Until the request is answered, only a phase of this update counts.
+            if let Some(update) = reported
+                .filter(|u| u.phase.in_progress() && u.phase != ProgramUpdatePhase::Starting)
+            {
+                self.set(update.phase, &update.version);
+            }
+            return false;
+        }
+        match reported {
+            Some(update) => self.set(update.phase, &update.version),
+            // Nothing is under way. An update the page followed keeps saying how it ended.
+            None if self.in_progress() => self.set(ProgramUpdatePhase::None, ""),
+            None => {}
+        }
+        false
+    }
+
+    fn gone_away(&mut self, now: std::time::Instant) {
+        let since = *self.away_since.get_or_insert(now);
+        if now.duration_since(since) > PROGRAM_RESTART_LIMIT {
+            self.not_back = true;
+            self.set(ProgramUpdatePhase::Failed, "");
+        } else {
+            self.set(ProgramUpdatePhase::Restarting, "");
+        }
+    }
 }

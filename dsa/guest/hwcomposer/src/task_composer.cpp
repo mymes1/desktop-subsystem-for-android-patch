@@ -267,6 +267,7 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
                 LayerFill fill;
                 fill.frame = layer.frame;
                 fill.drawn = layer.client || device;
+                fill.alpha = layer.alpha;
                 if (device && !layer.client) {
                     fill.bufferWidth = layer.buffer.width;
                     fill.bufferHeight = layer.buffer.height;
@@ -274,6 +275,11 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
                     fill.cropHeight = layer.crop.bottom - layer.crop.top;
                 }
                 fills.push_back(fill);
+            }
+            // A task whose app shows nothing any more is ending: its window keeps its last
+            // frame and closes with it, rather than emptying first.
+            if (leavesLastFrameUndrawn(fills, output.posted)) {
+                continue;
             }
             const ResizeGate::Decision decision = mResizeGate.decide(
                 task.task, output.onHost ? output.width : 0, output.onHost ? output.height : 0,
@@ -311,6 +317,17 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
             const BufferSize buffers = taskBufferSize(output.buffers, frame.display, width, height);
             if (buffers != output.buffers) {
                 // The first frame, a task past its buffers, or one far smaller than them.
+                // Said in the log: each size the host's buffers take is a step a GPU problem
+                // during a resize can be matched against.
+                HWC_LOGI("task %d's buffers are now %lldx%lld (were %lldx%lld) for a %lldx%lld "
+                         "task on a %dx%d display",
+                         task.task, static_cast<long long>(buffers.width),
+                         static_cast<long long>(buffers.height),
+                         static_cast<long long>(output.buffers.width),
+                         static_cast<long long>(output.buffers.height),
+                         static_cast<long long>(width), static_cast<long long>(height),
+                         static_cast<int>(frame.display.width()),
+                         static_cast<int>(frame.display.height()));
                 for (uint32_t& target : output.targets) {
                     mHost.closeColorBuffer(target);
                     target = 0;

@@ -139,12 +139,50 @@ class AndroidKernelConfigTests(unittest.TestCase):
             self.assertIn(option, config)
 
     def test_fr25_an_arm_translation_package_can_be_mounted_and_run(self):
-        # init mounts the package's erofs image through a loop device, lays it over /system
-        # with overlayfs, and registers its translator for ARM64 executables in binfmt_misc.
+        # init mounts the package's erofs image from its file, binds it into /system, and
+        # registers its translator for ARM64 executables in binfmt_misc. The Google apps
+        # image is laid over with overlayfs.
         config = CONFIG.read_text()
-        for option in ["CONFIG_EROFS_FS=y", "CONFIG_BLK_DEV_LOOP=y", "CONFIG_OVERLAY_FS=y",
+        for option in ["CONFIG_EROFS_FS=y", "CONFIG_EROFS_FS_BACKED_BY_FILE=y", "CONFIG_OVERLAY_FS=y",
                        "CONFIG_BINFMT_MISC=y"]:
             self.assertIn(option, config)
+
+    def test_nfr2_fr25_fr32_the_images_are_mounted_from_their_files_without_a_loop_device(self):
+        # A loop device kept every page read from the Google apps or the translation image
+        # twice: once in erofs's page cache and once in the image file's own. erofs mounts an
+        # image file itself from Linux 6.12, and its directio option, which the scripts give,
+        # is in the same release.
+        lines = fragment_lines(CONFIG)
+        self.assertIn("CONFIG_EROFS_FS=y", lines)
+        self.assertIn("CONFIG_EROFS_FS_BACKED_BY_FILE=y", lines)
+        tag = Path(__file__).with_name("wsl-kernel.tag").read_text().strip()
+        version = re.search(r"(\d+)\.(\d+)", tag)
+        self.assertIsNotNone(version, tag)
+        self.assertGreaterEqual((int(version.group(1)), int(version.group(2))), (6, 12), tag)
+        image = Path(__file__).parent.parent / "guest" / "image"
+        # Each image is a file on the user's add-on disk (and, for one boot after an update, the
+        # copy an older DSA kept in /data), or the default translator in /system.
+        images = {
+            "dsa-gapps.rc": ["/mnt/dsa-addons/gapps.img", "/data/vendor/dsa/gapps/system.img"],
+            "dsa-arm-translation.rc": ["/mnt/dsa-addons/arm-translation.img",
+                                       "/data/vendor/dsa/arm-translation/system.img",
+                                       "/system/etc/dsa/arm-translation/default.img"],
+        }
+        for name, files in images.items():
+            mounts = [line.split() for line in (image / name).read_text().splitlines()
+                      if line.strip().startswith("mount erofs ")]
+            self.assertEqual(sorted(words[2] for words in mounts), sorted(files), name)
+            for words in mounts:
+                self.assertNotIn("loop@", " ".join(words), name)
+                # The kernel gets only the last argument that is not one of init's flags, so
+                # directio shares it with the SELinux contexts.
+                self.assertIn("directio", words[-1].split(","), name)
+        # The add-on disk itself is an erofs partition the kernel mounts from its block device.
+        disk = [line.split() for line in (image / "dsa-addons.rc").read_text().splitlines()
+                if line.strip().startswith("mount erofs ")]
+        self.assertEqual([words[2] for words in disk], ["/dev/block/by-name/dsa_addons"])
+        # The loop driver stays for apexd.
+        self.assertIn("CONFIG_BLK_DEV_LOOP=y", lines)
 
     def test_fr1_binder_device_nodes_are_created_for_android_init(self):
         config = CONFIG.read_text()

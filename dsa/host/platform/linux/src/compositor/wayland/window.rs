@@ -4,7 +4,8 @@
 use std::time::Instant;
 
 use dsa_host_core::compositor::caption::{
-    scaled, CaptionButton, CaptionLayout, CaptionState, CaptionTone, TITLE_TEXT_AT_100,
+    scaled, shown_tone, BandSample, CaptionButton, CaptionLayout, CaptionState, CaptionTone,
+    TITLE_TEXT_AT_100,
 };
 use dsa_host_core::compositor::task_windows::WindowChange;
 use dsa_host_core::compositor::window_hosts::FromHost;
@@ -27,7 +28,8 @@ use super::State;
 use crate::compositor::frames::Frame;
 use crate::compositor::text::Text;
 use crate::compositor::title_bar::{
-    caption_icon_png, frame_band_fill, place_text, BandArt, CaptionIcon, TitleBar,
+    caption_icon_is_logo, caption_icon_png, frame_band_sample, place_text, BandArt, CaptionIcon,
+    TitleBar,
 };
 use crate::compositor::toplevel::{Reported, States, Toplevel};
 use crate::input::text_input::TextInputV3;
@@ -72,8 +74,11 @@ pub struct Window {
     pub(crate) caption_layer: Option<super::gpu::CaptionLayer>,
     /// The GPU frame shown last, drawn again when the title bar changes.
     pub(crate) last_gpu: Option<(u32, crate::compositor::frames::GpuFrame)>,
-    /// The band's fill over GPU frames, as sampled last, and when it was sampled.
-    pub(crate) gpu_fill: Option<u32>,
+    /// The tone the caption glyphs are drawn in now: `tone`, unless the pixels under the band
+    /// call for the other ([`shown_tone`]).
+    shown_tone: CaptionTone,
+    /// The band's fill and lightness over GPU frames, as sampled last, and when it was sampled.
+    pub(crate) gpu_band: BandSample,
     pub(crate) band_probed: Option<Instant>,
     /// Move or Size, chosen in the window menu: the next press in the window starts it.
     pub(crate) armed: Option<crate::compositor::window_menu::MoveSize>,
@@ -110,6 +115,8 @@ struct BandKey {
 pub struct AppLook {
     /// The PNG the title bar draws.
     pub caption_icon_png: Vec<u8>,
+    /// Whether it is an adaptive icon's foreground alone, with no plate behind it.
+    pub caption_icon_logo: bool,
     pub multiple_windows: bool,
 }
 
@@ -117,7 +124,17 @@ impl AppLook {
     pub fn of(app: &AppInfo) -> AppLook {
         AppLook {
             caption_icon_png: caption_icon_png(app).to_vec(),
+            caption_icon_logo: caption_icon_is_logo(app),
             multiple_windows: app.multiple_windows,
+        }
+    }
+
+    /// The title bar icon this look draws.
+    fn caption_icon(&self) -> CaptionIcon {
+        if self.caption_icon_logo {
+            CaptionIcon::logo(&self.caption_icon_png)
+        } else {
+            CaptionIcon::new(&self.caption_icon_png)
         }
     }
 }
@@ -173,12 +190,13 @@ impl State {
                 viewport: None,
                 caption_layer: None,
                 last_gpu: None,
-                gpu_fill: None,
+                shown_tone: CaptionTone::default(),
+                gpu_band: BandSample::default(),
                 band_probed: None,
                 armed: None,
                 pip: None,
                 title_bar: TitleBar::default(),
-                icon: CaptionIcon::new(&look.caption_icon_png),
+                icon: look.caption_icon(),
                 multiple_windows: look.multiple_windows,
                 title_text: None,
                 band: None,
@@ -192,6 +210,7 @@ impl State {
         let look = AppLook::of(app);
         if self.app_looks.get(&app.package_name).is_some_and(|known| {
             known.caption_icon_png == look.caption_icon_png
+                && known.caption_icon_logo == look.caption_icon_logo
                 && known.multiple_windows == look.multiple_windows
         }) {
             return;
@@ -201,7 +220,7 @@ impl State {
             .iter_mut()
             .filter(|(_, window)| window.model.package == app.package_name)
             .map(|(task_id, window)| {
-                window.icon = CaptionIcon::new(&look.caption_icon_png);
+                window.icon = look.caption_icon();
                 window.multiple_windows = look.multiple_windows;
                 window.band = None;
                 *task_id
@@ -537,19 +556,22 @@ impl Window {
     }
 
     /// The title bar's band as it is now, over a frame of the window's size: premultiplied
-    /// BGRA rows of the layout's width and height, with the layout. `fill` fills a band the
-    /// app left empty. The band is drawn again only when something it shows changed.
+    /// BGRA rows of the layout's width and height, with the layout. `sample` is what the
+    /// frame shows under the band: its fill fills a band the app left empty, and its lightness
+    /// sets the glyphs' tone. The band is drawn again only when something it shows changed.
     pub(crate) fn band_pixels(
         &mut self,
         text: Option<&Text>,
-        fill: Option<u32>,
+        sample: BandSample,
     ) -> (CaptionLayout, &[u8]) {
         let layout = self.model.caption_layout();
         let dpi = self.model.dpi();
+        self.shown_tone = shown_tone(self.tone, sample, self.title_bar.app_drawn, self.shown_tone);
+        let fill = sample.fill;
         let key = BandKey {
             layout,
             dpi,
-            tone: self.tone,
+            tone: self.shown_tone,
             state: CaptionState {
                 maximized: self.model.states.maximized,
                 active: self.model.states.activated,
@@ -569,7 +591,7 @@ impl Window {
             let pixels = self.title_bar.paint(
                 &layout,
                 dpi,
-                self.tone,
+                self.shown_tone,
                 &key.state,
                 BandArt { icon, title, fill },
             );
@@ -670,8 +692,8 @@ impl Window {
         if self.model.has_caption() {
             // The band takes the app's top color when the app leaves it empty.
             let band = self.model.caption_height();
-            let fill = frame_band_fill(&shown.pixels, shown.width, shown.height, band);
-            let (layout, pixels) = self.band_pixels(text, fill);
+            let sample = frame_band_sample(&shown.pixels, shown.width, shown.height, band);
+            let (layout, pixels) = self.band_pixels(text, sample);
             shown.blend(pixels, (layout.width, layout.height), (0, 0));
         }
         let buffer = &mut self.buffers[at];

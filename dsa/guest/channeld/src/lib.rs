@@ -11,10 +11,12 @@
 //! users reach the daemon, so they run and are tested on any Linux, over the in-memory
 //! transport and over vsock. The binder service (`binder`, Android only) is the thin layer
 //! that lets those users in; [`aidl`] holds the values it shares with their generated code.
-//! [`arm_translation`] keeps the ARM translation package the host installs, and [`gapps`]
-//! the Google apps; [`image_store`] keeps the image of either on the user's disk.
+//! [`arm_translation`] says where the ARM translation package stands, and [`gapps`]
+//! the Google apps; [`image_store`] reads and removes the image of either that an older host
+//! left on the user's disk, which the host moves onto its add-on disk.
 //! [`gamepad`] makes the host's game controllers gamepad devices of the guest.
-//! [`reclaim`] decides when the guest drops its caches so the host gets the memory back.
+//! [`reclaim`] decides when the guest drops its caches so the host gets the memory back, and
+//! [`pageout`] pages an idle app out to zram again soon after something woke it.
 //! [`pressure`] tells the host how much memory the guest has, so the VM grows and shrinks.
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
 //! the guest's diagnostics; [`logd`] reads logd for it.
@@ -33,6 +35,7 @@ pub mod gapps;
 pub mod image_store;
 pub mod logbridge;
 pub mod logd;
+pub mod pageout;
 pub mod pressure;
 pub mod reclaim;
 pub mod router;

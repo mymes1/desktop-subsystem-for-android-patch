@@ -2,7 +2,7 @@
 //! splash background of the user's theme. The guest's own splash screen, in the app's colours,
 //! replaces it with the first frame. The drawing itself is `dsa_host_core::compositor::splash`.
 
-use dsa_host_core::compositor::splash;
+use dsa_host_core::compositor::{caption, splash};
 use windows_sys::Win32::Graphics::Gdi::{
     DeleteObject, GetDC, GetDIBits, ReleaseDC, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
 };
@@ -44,7 +44,12 @@ pub fn image(icon_id: usize, dpi: u32) -> SplashImage {
 /// The app's icon PNG this program carries for its splash, decoded at its own size, as rows of
 /// premultiplied BGRA pixels. `None` when it carries none or it cannot be read.
 fn full_icon() -> Option<(Vec<u8>, (u32, u32))> {
-    let png = splash_png()?;
+    // The icon the window manager sent since the program started, else the program's own.
+    let live = super::live_icon::current();
+    let png = match &live {
+        Some(icon) => icon.icon_png.as_slice(),
+        None => splash_png()?,
+    };
     let (width, height) = crate::compositor::widgets::png::size(png)?;
     if width > MAX_SPLASH_SOURCE || height > MAX_SPLASH_SOURCE {
         return None;
@@ -58,19 +63,25 @@ fn full_icon() -> Option<(Vec<u8>, (u32, u32))> {
 
 /// The icon the window's title bar shows, `side` pixels square, as rows of premultiplied BGRA
 /// pixels: the foreground layer of the app's adaptive icon, which this program carries beside
-/// its own icon, scaled from the size the guest drew it at. `None` when the program carries
-/// none (the app's icon is not adaptive) or it cannot be read; the title bar then shows the
-/// program's icon.
+/// its own icon. Without the plate behind it the logo would look smaller than a whole icon,
+/// so it is cropped to what it draws and fitted to the icon's box ([`caption::caption_icon`]).
+/// `None` when the program carries none (the app's icon is not adaptive) or it cannot be
+/// read; the title bar then shows the program's icon, which has its background and is drawn
+/// as it is.
 pub(super) fn caption_icon_pixels(side: u32) -> Option<Vec<u8>> {
     let png = rcdata(CAPTION_ICON_ID)?;
     let (width, height) = crate::compositor::widgets::png::size(png)?;
-    if side == 0 || width > MAX_SPLASH_SOURCE || height > MAX_SPLASH_SOURCE {
+    if side == 0 || width == 0 || height == 0 {
         return None;
     }
-    crate::compositor::widgets::png::with_com(|| {
+    if width > MAX_SPLASH_SOURCE || height > MAX_SPLASH_SOURCE {
+        return None;
+    }
+    let pixels = crate::compositor::widgets::png::with_com(|| {
         let decoder = crate::compositor::widgets::png::Decoder::new().ok()?;
-        decoder.decode(png, side, side).ok()
-    })
+        decoder.decode(png, width, height).ok()
+    })?;
+    Some(caption::caption_icon(&pixels, width, height, side, true))
 }
 
 /// The bytes of this program's splash icon resource.

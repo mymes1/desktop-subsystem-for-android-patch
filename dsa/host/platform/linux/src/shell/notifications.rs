@@ -9,12 +9,14 @@
 //! applied, or failed. Those show under DSA's settings app (its launcher entry,
 //! [`SETTINGS_ENTRY`]), one per kind of update, so the news that an update was applied
 //! replaces the news that it was ready. A click on one opens the settings app's Updates
-//! page; nothing about it goes to the guest.
+//! page; nothing about it goes to the guest. The question whether Android restarts into a
+//! downloaded image carries the actions [Restart now], which asks the service to restart, and
+//! [Later], which only closes it.
 
 use std::collections::BTreeMap;
 
 use dsa_host_core::notifications::{Notification, NotificationAction};
-use dsa_host_core::update::alerts::{is_update_key, thread_of};
+use dsa_host_core::update::alerts::{buttons_of, is_update_key, thread_of, RESTART_NOW};
 
 use super::desktop_entry::app_id;
 
@@ -89,6 +91,18 @@ impl Shown {
         Shown::default()
     }
 
+    /// The `Notify` call that shows `notification`, replacing the one with its key. DSA's
+    /// question whether Android restarts into a downloaded image gets [Restart now] and
+    /// [Later], labelled in Korean when `korean`.
+    pub fn notify_in(&self, notification: &Notification, korean: bool) -> Notify {
+        let mut notify = self.notify(notification);
+        for button in buttons_of(&notification.key, korean) {
+            notify.actions.push(button.action.to_string());
+            notify.actions.push(button.label);
+        }
+        notify
+    }
+
     /// The `Notify` call that shows `notification`, replacing the one with its key.
     pub fn notify(&self, notification: &Notification) -> Notify {
         let app_name = if notification.app_label.is_empty() {
@@ -138,6 +152,12 @@ impl Shown {
     pub fn action_invoked(&self, id: u32, action: &str) -> Option<NotificationAction> {
         let key = self.by_id.get(&id)?;
         (action == DEFAULT_ACTION).then(|| NotificationAction::Open { key: key.clone() })
+    }
+
+    /// Whether `ActionInvoked` is [Restart now] on DSA's question whether Android restarts
+    /// into a downloaded image: the host then asks the service to restart.
+    pub fn restart_asked(&self, id: u32, action: &str) -> bool {
+        action == RESTART_NOW && self.by_id.get(&id).is_some_and(|key| is_update_key(key))
     }
 
     /// `NotificationClosed`: what the guest is told. Only the user's dismissal reaches the
@@ -249,6 +269,36 @@ mod tests {
         shown.shown("0|com.example.chat|1|null|10100", 13);
         assert_eq!(shown.clear(), vec![13]);
         assert_eq!(shown.notify(&applied).replaces_id, 12);
+    }
+
+    #[test]
+    fn fr14_the_question_to_restart_has_restart_now_and_later_actions() {
+        use dsa_host_core::update::alerts::{AlertKind, Subject, UpdateAlert, LATER};
+        let mut shown = Shown::new();
+        let asked = UpdateAlert::new(Subject::Android, AlertKind::Restart, "16.0.3").notification();
+        let notify = shown.notify_in(&asked, false);
+        assert_eq!(
+            notify.actions,
+            [
+                DEFAULT_ACTION,
+                "Open",
+                RESTART_NOW,
+                "Restart now",
+                LATER,
+                "Later"
+            ]
+        );
+        assert_eq!(shown.notify_in(&asked, true).actions[3], "지금 다시 시작");
+        shown.shown(&asked.key, 21);
+        assert!(shown.restart_asked(21, RESTART_NOW));
+        assert!(!shown.restart_asked(21, LATER));
+        assert!(!shown.restart_asked(21, DEFAULT_ACTION));
+        assert_eq!(shown.action_invoked(21, RESTART_NOW), None);
+        // An Android notification never restarts anything.
+        shown.shown("0|com.example.chat|1|null|10100", 22);
+        assert!(!shown.restart_asked(22, RESTART_NOW));
+        let ready = UpdateAlert::new(Subject::Android, AlertKind::Ready, "16.0.3").notification();
+        assert_eq!(shown.notify_in(&ready, false).actions.len(), 2);
     }
 
     #[test]

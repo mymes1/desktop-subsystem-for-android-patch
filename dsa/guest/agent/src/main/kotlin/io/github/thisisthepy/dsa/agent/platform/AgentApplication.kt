@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.HandlerThread
 import android.os.Process
 import io.github.thisisthepy.dsa.agent.Agent
+import io.github.thisisthepy.dsa.agent.R
 import io.github.thisisthepy.dsa.agent.trace.FrameStatsTrace
 import io.github.thisisthepy.dsa.agent.trace.InputTrace
 import io.github.thisisthepy.dsa.agent.trace.SurfaceFlingerTrace
@@ -93,6 +94,7 @@ class AgentApplication : Application() {
             arm64Supported = { "arm64-v8a" in android.os.Build.SUPPORTED_64_BIT_ABIS },
             packages = AndroidPackageInfo(this),
             googleDeviceId = AndroidGoogleDeviceId(this),
+            componentStates = AndroidComponentStates(this),
             widgets = AndroidWidgets(this, log),
             appProcesses = AndroidAppProcesses(this),
             widgetStore = AndroidWidgetStore(this),
@@ -100,12 +102,28 @@ class AgentApplication : Application() {
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
             dragCatcher = dragCatcher,
+            shareNotice = { reason ->
+                val main = android.os.Handler(mainLooper)
+                main.post {
+                    val text = if (reason.isBlank()) {
+                        getString(R.string.share_unavailable)
+                    } else {
+                        getString(R.string.share_failed, reason)
+                    }
+                    android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show()
+                }
+            },
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }
         HostInputMethod.onEditor = { state -> agent.editorChanged(state) }
         agent.start()
         dragCatcher.start()
+        io.github.thisisthepy.dsa.agent.gapps.GoogleAppsCompile(
+            AndroidGoogleAppsCompile(this),
+            android.os.SystemClock::elapsedRealtime,
+            log,
+        ).start()
         // Starting windows draw on a thread of their own, so a slow app theme never holds up
         // the agent's work or the home activity on the main thread.
         val splash = HandlerThread("dsa-splash").apply { start() }

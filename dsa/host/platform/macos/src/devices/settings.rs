@@ -1,5 +1,10 @@
 //! The Mac's system settings that each user's Android follows: time zone, display languages,
-//! regional format, 24-hour time, first day of the week, dark mode and accent color.
+//! regional format, 24-hour time, first day of the week, dark mode, accent color and text
+//! size.
+//!
+//! The text size is the size of the body text style (`NSFont.preferredFontForTextStyle:`)
+//! over its default of 13 points, which the accessibility text size changes; 100% when it
+//! cannot be read.
 
 use dsa_host_core::system_settings::SystemSettings;
 
@@ -20,6 +25,19 @@ pub struct MacSettings {
     pub dark: bool,
     /// `AppleAccentColor`: `None` when the user keeps the default (multicolor).
     pub accent: Option<i64>,
+    /// The point size of the body text style; 0 when it cannot be read.
+    pub body_points: u32,
+}
+
+/// The body text style's size at macOS's default text size, in points.
+pub const DEFAULT_BODY_POINTS: u32 = 13;
+
+/// The text size in percent for a body text style of `points`; 0 (unknown) when it is 0.
+pub fn text_scale_percent(points: u32) -> u32 {
+    if points == 0 {
+        return 0;
+    }
+    (points * 100 + DEFAULT_BODY_POINTS / 2) / DEFAULT_BODY_POINTS
 }
 
 /// A macOS locale identifier as a BCP 47 tag: `en_US` becomes `en-US`, and a region
@@ -106,6 +124,7 @@ pub fn system_settings(mac: &MacSettings) -> SystemSettings {
         first_day_of_week: first_day_of_week(mac.first_weekday),
         dark_mode: mac.dark,
         accent_color: accent_color(mac.accent),
+        text_scale_percent: text_scale_percent(mac.body_points),
     }
     .checked()
 }
@@ -177,6 +196,21 @@ mod source {
         if !accent.is_null() {
             let value: isize = msg_send![defaults, integerForKey: &*accent_key];
             mac.accent = Some(value as i64);
+        }
+        // NSFontTextStyleBody; the font is AppKit's, so without AppKit the size stays unknown.
+        if let (Ok(font_class), Ok(dictionary_class)) = (class(c"NSFont"), class(c"NSDictionary")) {
+            let options: *mut AnyObject = msg_send![dictionary_class, dictionary];
+            let font: *mut AnyObject = msg_send![
+                font_class,
+                preferredFontForTextStyle: &*ns_string("UICTFontTextStyleBody"),
+                options: options
+            ];
+            if !font.is_null() {
+                let points: f64 = msg_send![font, pointSize];
+                if points.is_finite() && points > 0.0 {
+                    mac.body_points = points.round() as u32;
+                }
+            }
         }
         mac
     }
@@ -256,6 +290,18 @@ mod tests {
     }
 
     #[test]
+    fn fr4_the_text_size_follows_the_macs_body_text() {
+        assert_eq!(text_scale_percent(13), 100);
+        assert_eq!(text_scale_percent(20), 154);
+        assert_eq!(text_scale_percent(0), 0, "unknown, which counts as 100");
+        let settings = system_settings(&MacSettings {
+            body_points: 26,
+            ..MacSettings::default()
+        });
+        assert_eq!(settings.text_scale_percent, 200);
+    }
+
+    #[test]
     fn fr30_mac_settings_reach_the_guest_in_its_terms() {
         let settings = system_settings(&MacSettings {
             time_zone: "Asia/Seoul".into(),
@@ -265,6 +311,7 @@ mod tests {
             first_weekday: 1,
             dark: true,
             accent: Some(5),
+            body_points: 13,
         });
         assert_eq!(settings.time_zone, "Asia/Seoul");
         assert_eq!(settings.locales, vec!["ko-KR", "en-US"]);

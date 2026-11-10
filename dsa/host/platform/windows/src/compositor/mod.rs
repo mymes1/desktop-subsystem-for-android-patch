@@ -20,7 +20,9 @@
 //! ([`links`]). It shows the notifications of the user's Android as toasts, and passes the
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
-//! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
+//! printers, through the Windows print dialog ([`print`]). It answers the address lookups of
+//! the apps in Android ([`geocode`]), and shows what they share with the PC in Windows' share
+//! window ([`share`]). It plays the sound of the user's
 //! Android on their default output device ([`audio`]), and records their default capture
 //! device for its microphone ([`microphone`]).
 
@@ -29,11 +31,13 @@ pub mod audio;
 pub mod background;
 pub mod clipboard;
 pub mod committed;
+pub mod device_recovery;
 pub mod display_gpu;
 pub mod fluent;
 pub mod fluent_menu;
 pub mod frames;
 pub mod gamepads;
+pub mod geocode;
 pub mod hosts;
 pub mod links;
 pub mod location;
@@ -42,6 +46,7 @@ pub mod microphone;
 pub mod notifications;
 pub mod present;
 pub mod print;
+pub mod share;
 pub mod shutdown;
 pub mod single_instance;
 pub mod system_settings;
@@ -156,6 +161,9 @@ pub struct Compositor {
     print_jobs: bool,
     /// Whether the user's Android gets the computer's location from Windows.
     give_location: bool,
+    /// Whether the address lookups of the user's Android are answered here, and what its apps
+    /// share with the PC is shown in Windows' share window.
+    host_services: bool,
     /// Whether the apps that run in the background in the user's Android are shown in the
     /// notification area, with their media sessions in Windows' media controls.
     show_background: bool,
@@ -269,6 +277,7 @@ impl Compositor {
             show_widgets: true,
             print_jobs: true,
             give_location: true,
+            host_services: true,
             show_background: true,
             touch_gestures: touch_gestures::TouchGestureSetup::for_this_user(),
         }
@@ -306,6 +315,7 @@ impl Compositor {
             show_widgets: false,
             print_jobs: false,
             give_location: false,
+            host_services: false,
             show_background: false,
             touch_gestures: None,
         }
@@ -433,6 +443,8 @@ impl Compositor {
         let background_thread = self.start_background(&stop);
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
+        let geocode_thread = self.start_geocoding(&stop);
+        let share_thread = self.start_shares(&stop);
         let audio_thread = self.start_audio(&stop);
         let sensors_thread = self.start_sensors(&stop);
         let camera_thread = self.start_camera(&stop);
@@ -646,6 +658,12 @@ impl Compositor {
             let _ = thread.join();
         }
         if let Some(thread) = print_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = geocode_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = share_thread {
             let _ = thread.join();
         }
         if let Some(thread) = audio_thread {
@@ -960,6 +978,50 @@ impl Compositor {
             .ok()
     }
 
+    /// Starts answering the address lookups of the user's Android, on a thread of its own that
+    /// ends with `stop`.
+    fn start_geocoding(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.host_services {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-geocode".into())
+            .spawn(move || geocode::serve(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the address lookups' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts showing what the apps in the user's Android share with the PC, on a thread of
+    /// its own that ends with `stop`. Each share window runs on a thread of its own besides.
+    fn start_shares(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.host_services {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-share".into())
+            .spawn(move || share::serve(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the shares' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
     /// Starts printing the documents the user's Android prints, on a thread of its own that
     /// ends with `stop`. Each job's dialog runs on a thread of its own besides.
     fn start_print(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
@@ -1075,7 +1137,7 @@ impl Compositor {
                 luid = presenter.adapter_luid();
                 match Gpu::new(luid, false) {
                     Ok(gpu) => {
-                        if luid.is_some() && !gpu.on_renderer_gpu {
+                        if luid.is_some() && !gpu.on_renderer_gpu() {
                             log("the renderer's GPU was not found; task windows may stay empty");
                         }
                         match presenter
@@ -1101,11 +1163,11 @@ impl Compositor {
                 crate::app_exe::default_template(),
                 crate::app_exe::default_apps_dir(),
             ) {
-                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher {
+                (Some(template), Some(apps_dir)) => Box::new(crate::app_exe::ProgramLauncher::new(
                     template,
                     apps_dir,
-                    logger: self.logger.clone(),
-                }),
+                    self.logger.clone(),
+                )),
                 _ => {
                     log("cannot tell where the app window programs go; task windows cannot open");
                     return TaskWindowThreads::default();
@@ -1154,6 +1216,9 @@ impl Compositor {
             stop: Arc::clone(&manager_stop),
             idle: Arc::clone(&idle),
             fronts,
+            renderer_generation: self.presenter.clone().map(|presenter| {
+                Box::new(move || presenter.device_generation()) as Box<dyn Fn() -> u64 + Send>
+            }),
         };
         let manager = thread::Builder::new()
             .name("dsa-wm-manager".into())

@@ -75,6 +75,17 @@ class ComponentRule(unittest.TestCase):
         self.assertIn("unmodified", gl.component_problems(component(license="MS-RL"), POLICY)[0])
         self.assertEqual(gl.component_problems(component(license="MS-RL", modified=False), POLICY), [])
 
+    def test_fr36_map_data_licences_are_only_for_data_with_its_attribution(self):
+        policy = dict(POLICY, data=["CC-BY-4.0"])
+        data = component(license="CC-BY-4.0", part="data", distribution="data", notice="Data by someone")
+        self.assertEqual(gl.component_problems(data, policy), [])
+        # Without the attribution the licence asks for.
+        problems = gl.component_problems(dict(data, notice=""), policy)
+        self.assertIn("attribution", problems[0])
+        # Linked into a program.
+        problems = gl.component_problems(dict(data, distribution="linked"), policy)
+        self.assertIn("only for data", problems[0])
+
     def test_nfr7_component_without_a_source_is_rejected(self):
         problems = gl.component_problems(component(source=""), POLICY)
         self.assertIn("has no source", problems[0])

@@ -267,6 +267,7 @@ fn fr14_dsa_shows_news_about_an_update_on_its_own_line() {
         last_reason: None,
         update_notice: Some("Android was updated to 16.0.3".into()),
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -284,6 +285,7 @@ fn fr2_dsa_shows_the_guest_console_of_a_failed_start_below_the_status_line() {
         ),
         update_notice: None,
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -302,6 +304,7 @@ fn fr17_dsa_status_says_an_error_code_in_a_sentence_and_keeps_the_raw_line() {
         last_reason: Some(raw.into()),
         update_notice: None,
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -327,6 +330,7 @@ fn fr17_dsa_status_gives_each_mapped_code_its_sentence() {
             last_reason: Some(format!("HcsStartComputeSystem failed (HRESULT {code})")),
             update_notice: None,
             problem: None,
+            program_update: None,
         });
         let first = line.lines().next().unwrap();
         assert!(first.contains(sentence), "{code}: {line}");
@@ -342,6 +346,7 @@ fn fr2_dsa_says_what_keeps_a_stalled_android_from_being_ready() {
         last_reason: None,
         update_notice: None,
         problem: Some("Android has not finished booting after 300 s\nthe log is there".into()),
+        program_update: None,
     };
     assert_eq!(
         dsa_cli::describe(&status),
@@ -394,6 +399,32 @@ fn fr15_dsa_update_asks_the_service_to_install_now_and_prints_its_answer() {
         "installing DSA 0.1.1; the service restarts when setup is done"
     );
     assert_eq!(*program.requests.lock().unwrap(), 1);
+}
+
+#[test]
+fn fr15_dsa_update_json_says_which_version_setup_installs() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: Some("0.1.1".into()),
+        detail: "installing DSA 0.1.1".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert_eq!(answer["installing"], "0.1.1");
+    assert_eq!(answer["detail"], "installing DSA 0.1.1");
+    assert!(answer["status"].is_null());
+
+    let ((listener, _, _), endpoint) = local_pair();
+    let program = Arc::new(FakeProgramUpdates::answering(Ok(ProgramUpdate {
+        installing: None,
+        detail: "DSA 0.1.1 is up to date".into(),
+    })));
+    let _service =
+        RunningService::start_updating(listener, Arc::new(FakeAndroids::default()), program);
+    let answer = json_of(&dsa(&endpoint, "update --json"));
+    assert!(answer["installing"].is_null(), "nothing newer: {answer}");
+    assert_eq!(answer["detail"], "DSA 0.1.1 is up to date");
 }
 
 #[test]
@@ -516,6 +547,7 @@ fn fr15_dsa_shows_news_about_the_image_and_the_program_on_their_own_lines() {
                 .into(),
         ),
         problem: None,
+        program_update: None,
     });
     assert_eq!(
         line,
@@ -883,8 +915,34 @@ fn settings_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> R
                 image_updates_available: true,
                 android_version: Some("17.0.0-16373615-7".into()),
             },
-        );
+        )
+        .with_addon_disks(addon_disks());
     RunningService::start_service(listener, service)
+}
+
+/// Each user's add-on disk, a raw disk in a folder of its own for every service a test starts,
+/// as the installed service keeps one in each user's data folder. The service puts the Google
+/// apps and ARM translation packages there, not on Android's own disk.
+fn addon_disks() -> dsa_host_core::host_api::AddonDiskSource {
+    use dsa_host_core::addon_disk::{AddonDisk, Format};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "dsa-cli-addons-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    Arc::new(move |user: &str| {
+        let stem: String = user
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        Ok(AddonDisk::new(
+            dir.join(format!("{stem}-addons.img")),
+            Format::Raw,
+        ))
+    })
 }
 
 fn json_of(output: &Output) -> serde_json::Value {
@@ -1203,7 +1261,8 @@ fn fr25_dsa_uses_the_images_default_translator_until_a_package_replaces_it() {
     let ((listener, _, _), endpoint) = local_pair();
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
-        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())));
+        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())))
+        .with_addon_disks(addon_disks());
     let _service = RunningService::start_service(listener, service);
 
     // From the first start, with nothing installed.
@@ -1365,6 +1424,79 @@ fn fr17_dsa_status_json_reports_the_state_and_the_last_reason() {
     assert!(status["update_notice"].is_null());
     let started = json_of(&dsa(&endpoint, "start --wait --timeout 10 --json"));
     assert_eq!(started["state"], "Active");
+    assert!(
+        status["program_update"].is_null(),
+        "no update of DSA is reported by a service that does not update DSA"
+    );
+}
+
+#[test]
+fn fr15_dsa_status_says_how_far_an_update_of_dsa_has_got() {
+    use dsa_host_core::host_api::{ProgramPhase, ProgramProgress, Status};
+    let status = |phase| Status {
+        state: SessionState::Stopped,
+        last_reason: None,
+        update_notice: None,
+        problem: None,
+        program_update: Some(ProgramProgress::new(phase, "0.1.11")),
+    };
+    for (phase, name, said) in [
+        (
+            ProgramPhase::Downloading,
+            "downloading",
+            "downloading DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::StoppingAndroid,
+            "stopping_android",
+            "stopping Android to install DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::Installing,
+            "installing",
+            "installing DSA 0.1.11",
+        ),
+        (
+            ProgramPhase::Restarting,
+            "restarting",
+            "DSA is restarting to finish the update to 0.1.11",
+        ),
+    ] {
+        let line = dsa_cli::describe(&status(phase));
+        assert!(line.contains(&format!("\nUpdating DSA: {said}")), "{line}");
+        if phase != ProgramPhase::Downloading {
+            assert!(
+                line.contains("do not close DSA or start Android apps"),
+                "{line}"
+            );
+        }
+        let json = dsa_cli::status_json(&status(phase));
+        assert_eq!(json["program_update"]["phase"], name);
+        assert_eq!(json["program_update"]["version"], "0.1.11");
+        assert_eq!(json["program_update"]["in_progress"], true);
+    }
+    // An update that has ended is told by the news; the status line adds nothing.
+    for (phase, name) in [
+        (ProgramPhase::Applied, "applied"),
+        (ProgramPhase::Failed, "failed"),
+    ] {
+        assert_eq!(dsa_cli::describe(&status(phase)), "Android: Stopped");
+        let json = dsa_cli::status_json(&status(phase));
+        assert_eq!(json["program_update"]["phase"], name);
+        assert_eq!(json["program_update"]["in_progress"], false);
+    }
+}
+
+#[test]
+fn fr15_dsa_status_no_start_asks_a_running_service_only() {
+    let invocation = parse(&args("status --no-start --json")).unwrap();
+    assert_eq!(invocation.command, Cmd::Status);
+    assert!(invocation.no_start);
+    assert!(!parse(&args("status")).unwrap().no_start);
+    assert!(
+        parse(&args("start --no-start")).is_err(),
+        "only a status can be asked for without starting the service"
+    );
 }
 
 #[test]
@@ -1461,6 +1593,7 @@ fn fr17_dsa_memory_json_carries_the_guest_breakdown_and_the_host_processes() {
                     name: "system_server".into(),
                     pss_kb: 150 * 1024,
                     swap_pss_kb: 0,
+                    google_play: false,
                 }],
                 ..GuestMemory::default()
             },
@@ -1479,6 +1612,66 @@ fn fr17_dsa_memory_json_carries_the_guest_breakdown_and_the_host_processes() {
     assert_eq!(json["guest"]["top_processes"][0]["name"], "system_server");
     assert_eq!(json["host"][0]["role"], "vm");
     assert_eq!(json["host_total_kb"], 900_000);
+}
+
+#[test]
+fn nfr2_dsa_memory_json_counts_zram_compressed_and_google_play_services_apart() {
+    use dsa_host_core::memory::{
+        GooglePlayMemory, GuestMemory, GuestMemoryReport, MemorySnapshot, ProcessMemory,
+    };
+    const MIB: u64 = 1024;
+    let json = dsa_cli::memory_json(&MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: GuestMemory {
+                zram_original_kb: 300 * MIB,
+                zram_used_kb: 100 * MIB,
+                total_pss_kb: 500 * MIB,
+                swap_pss_kb: 300 * MIB,
+                top_processes: vec![ProcessMemory {
+                    pid: 700,
+                    name: "com.google.android.gms".into(),
+                    pss_kb: 81 * MIB,
+                    swap_pss_kb: 75 * MIB,
+                    google_play: true,
+                }],
+                google_play: Some(GooglePlayMemory {
+                    processes: 2,
+                    pss_kb: 135 * MIB,
+                    swap_pss_kb: 123 * MIB,
+                }),
+                ..GuestMemory::default()
+            },
+            age: Duration::from_secs(12),
+        }),
+        host: Vec::new(),
+    });
+    let guest = &json["guest"];
+    assert_eq!(guest["apps"]["resident_kb"], 200 * MIB);
+    assert_eq!(guest["apps"]["compressed_kb"], 100 * MIB);
+    assert_eq!(guest["apps"]["total_kb"], 300 * MIB);
+    assert_eq!(guest["google_play"]["processes"], 2);
+    assert_eq!(guest["google_play"]["resident_kb"], 12 * MIB);
+    assert_eq!(guest["google_play"]["compressed_kb"], 41 * MIB);
+    assert_eq!(guest["google_play"]["total_kb"], 53 * MIB);
+    let gms = &guest["top_processes"][0];
+    assert_eq!(gms["google_play"], true);
+    assert_eq!(gms["resident_kb"], 6 * MIB);
+    assert_eq!(gms["compressed_kb"], 25 * MIB);
+
+    let without = dsa_cli::memory_json(&MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: GuestMemory {
+                total_pss_kb: 100 * MIB,
+                swap_pss_kb: 40 * MIB,
+                ..GuestMemory::default()
+            },
+            age: Duration::from_secs(1),
+        }),
+        host: Vec::new(),
+    });
+    assert!(without["guest"]["google_play"].is_null());
+    assert!(without["guest"]["apps"]["compressed_kb"].is_null());
+    assert_eq!(without["guest"]["apps"]["total_kb"], 60 * MIB);
 }
 
 #[test]
@@ -1659,6 +1852,49 @@ fn fr11_dsa_apk_info_reads_the_apk_and_says_it_updates_the_installed_app() {
     let text = stdout(&dsa_with_path(&endpoint, "apk-info", &path, ""));
     assert!(text.contains("Notes (com.example.notes)"), "{text}");
     assert!(text.contains("this APK updates it"), "{text}");
+}
+
+#[test]
+fn fr25_dsa_apk_info_says_whether_android_runs_arm64_code() {
+    use dsa_host_core::apk_info::fixture::notes_apk;
+    use dsa_host_core::arm_translation::Package;
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let digitalis = Package {
+        name: "Digitalis".into(),
+        version: "17-abefbe2b1600".into(),
+        library: "libberberis_arm64.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    };
+    let ((listener, _, _), endpoint) = local_pair();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())));
+    let _service = RunningService::start_service(listener, service);
+    let path = apk_file("notes-arm.apk", &notes_apk());
+
+    // Before Android runs: it starts with the image's default translator, so an app with
+    // arm64-v8a code runs, and the installer has nothing to warn of.
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert_eq!(json["android"], "stopped");
+    assert_eq!(json["runs_arm64"], true, "{json}");
+
+    // With the translator turned off, it does not.
+    let off = dsa(&endpoint, "settings set arm-translation off");
+    assert!(off.status.success(), "{}", stderr(&off));
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert_eq!(json["runs_arm64"], false, "{json}");
+}
+
+#[test]
+fn fr25_dsa_apk_info_cannot_say_whether_arm64_code_runs_without_the_settings() {
+    use dsa_host_core::apk_info::fixture::notes_apk;
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+    let path = apk_file("notes-unknown.apk", &notes_apk());
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert!(json["runs_arm64"].is_null(), "{json}");
 }
 
 #[test]
@@ -3021,6 +3257,7 @@ impl dsa_host_core::update::versions::AndroidVersions for FakeVersions {
             target_major: target_major(channel, &[16, 17]).unwrap(),
             on_trial: false,
             notice: None,
+            restart_pending: None,
         })
     }
     fn choose(
@@ -3071,6 +3308,76 @@ fn fr14_dsa_android_shows_the_version_and_moves_down_only_with_erase_data() {
     assert_eq!(parsed.android, Some(Channel::Latest));
     assert!(parse(&args("android use seventeen")).is_err());
     assert!(parse(&args("android use")).is_err());
+}
+
+#[test]
+fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_android_versions(Arc::new(FakeVersions::default()))
+        .with_settings(
+            Arc::new(MemorySettings::default()),
+            ServiceFacts {
+                version: "0.0.9".into(),
+                log_dir: None,
+                program_updates_available: true,
+                update_channel_available: true,
+                image_updates_available: true,
+                android_version: None,
+            },
+        );
+    let _service = RunningService::start_service(listener, service);
+
+    // The setting is on by default, and the user's Android follows a change at once.
+    assert_eq!(
+        json_of(&dsa(&endpoint, "settings --json"))["image_auto_restart"],
+        true
+    );
+    let shown = stdout(&dsa(&endpoint, "settings"));
+    assert!(
+        shown.contains("Restart into a downloaded Android image by itself: on"),
+        "{shown}"
+    );
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set image-auto-restart off --json",
+    ));
+    assert_eq!(changed["image_auto_restart"], false);
+    let android = androids.of(&user).unwrap();
+    assert_eq!(*android.image_auto_restart.lock().unwrap(), [false]);
+    assert!(parse(&args("settings set image-auto-restart maybe")).is_err());
+
+    // Nothing waits: `dsa android restart` says so and restarts nothing.
+    let json = json_of(&dsa(&endpoint, "android --json"));
+    assert_eq!(json["restart_pending"], serde_json::Value::Null);
+    let nothing = json_of(&dsa(&endpoint, "android restart --json"));
+    assert_eq!(nothing["restarting"], serde_json::Value::Null);
+    assert!(android.restarted_into.lock().unwrap().is_empty());
+
+    // An image waits: the version report says which, and the restart applies it.
+    *android.restart_pending.lock().unwrap() = Some("17.0.0-16373615-9".into());
+    let json = json_of(&dsa(&endpoint, "android version --json"));
+    assert_eq!(json["restart_pending"], "17.0.0-16373615-9");
+    let shown = stdout(&dsa(&endpoint, "android version"));
+    assert!(shown.contains("dsa android restart"), "{shown}");
+    let restart = dsa(&endpoint, "android restart");
+    assert!(restart.status.success(), "{}", stderr(&restart));
+    assert!(
+        stdout(&restart).contains("17.0.0-16373615-9"),
+        "{}",
+        stdout(&restart)
+    );
+    assert_eq!(
+        *android.restarted_into.lock().unwrap(),
+        ["17.0.0-16373615-9"]
+    );
+    assert_eq!(
+        parse(&args("android restart")).unwrap().command,
+        Cmd::AndroidRestart
+    );
 }
 
 #[test]
@@ -3130,7 +3437,8 @@ fn gapps_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> Runn
     let work = std::env::temp_dir().join(format!("dsa-cli-gapps-{}", std::process::id()));
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
-        .with_gapps(Source::new(Arc::new(host), work).with_project(project));
+        .with_gapps(Source::new(Arc::new(host), work).with_project(project))
+        .with_addon_disks(addon_disks());
     RunningService::start_service(listener, service)
 }
 

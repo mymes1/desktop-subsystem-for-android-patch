@@ -1,5 +1,6 @@
-//! The Google apps' image the host installs in the guest, through the router as the host
-//! reaches it, with a scratch folder standing in for the user's disk.
+//! The Google apps' image an older host left on the user's disk, which the host reads and then
+//! removes through the router as it reaches it, with a scratch folder standing in for the
+//! user's disk.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -9,9 +10,9 @@ use dsa_guest_channeld::gapps::{Gapps, GuestFacts, IMAGE};
 use dsa_guest_channeld::router::Router;
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    Envelope, GappsChunk, GappsInstall, GappsQuery, GappsRemove, GappsState, GoogleDeviceId,
+    AddonImage, AddonImagePart, AddonImageRead, Envelope, GappsQuery, GappsRemove, GappsState,
+    GoogleDeviceId,
 };
-use sha2::{Digest, Sha256};
 
 fn scratch(name: &str) -> PathBuf {
     let dir =
@@ -37,77 +38,106 @@ fn send(router: &Router, body: Body) {
     router.from_host(&dsa_protocol::encode(&Envelope { body: Some(body) }));
 }
 
-fn answers(from_guest: &mpsc::Receiver<Vec<u8>>) -> Vec<GappsState> {
-    std::iter::from_fn(|| from_guest.try_recv().ok())
-        .map(|frame| match dsa_protocol::decode(&frame).unwrap().body {
-            Some(Body::GappsState(state)) => state,
-            other => panic!("expected GappsState, got {other:?}"),
-        })
-        .collect()
+fn state(from_guest: &mpsc::Receiver<Vec<u8>>) -> GappsState {
+    match dsa_protocol::decode(&from_guest.try_recv().unwrap())
+        .unwrap()
+        .body
+    {
+        Some(Body::GappsState(state)) => state,
+        other => panic!("expected GappsState, got {other:?}"),
+    }
 }
 
-fn install(router: &Router, id: u32, image: &[u8], sha256: Vec<u8>) {
-    send(
-        router,
-        Body::GappsInstall(GappsInstall {
-            transfer_id: id,
-            size: image.len() as u64,
-            sha256,
-        }),
-    );
-    for (index, data) in image.chunks(4096).enumerate() {
-        send(
-            router,
-            Body::GappsChunk(GappsChunk {
-                transfer_id: id,
-                offset: (index * 4096) as u64,
-                data: data.to_vec(),
-            }),
-        );
+fn part(from_guest: &mpsc::Receiver<Vec<u8>>) -> AddonImagePart {
+    match dsa_protocol::decode(&from_guest.try_recv().unwrap())
+        .unwrap()
+        .body
+    {
+        Some(Body::AddonImagePart(part)) => part,
+        other => panic!("expected AddonImagePart, got {other:?}"),
     }
 }
 
 #[test]
-fn fr32_the_image_is_kept_reported_and_removed() {
+fn fr32_an_image_left_on_data_is_reported_read_and_removed() {
     let dir = scratch("whole");
     let (router, from_guest) = router(&dir);
     send(&router, Body::GappsQuery(GappsQuery {}));
-    let before = answers(&from_guest).remove(0);
+    let before = state(&from_guest);
     assert!(!before.installed);
     assert_eq!(before.sdk, 36);
     assert_eq!(before.abi, "x86_64");
     assert_eq!(before.abilist, "x86_64,arm64-v8a");
 
+    // What an older host sent.
     let image: Vec<u8> = (0..10_000u32).map(|i| i as u8).collect();
-    install(&router, 9, &image, Sha256::digest(&image).to_vec());
-    let last = answers(&from_guest).pop().unwrap();
-    assert!(last.done, "{}", last.error);
-    assert!(last.installed);
-    assert!(!last.active, "the image is used from the next boot");
-    assert_eq!(std::fs::read(dir.join(IMAGE)).unwrap(), image);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(IMAGE), &image).unwrap();
+    send(&router, Body::GappsQuery(GappsQuery {}));
+    assert!(state(&from_guest).installed);
+
+    let mut read = Vec::new();
+    loop {
+        send(
+            &router,
+            Body::AddonImageRead(AddonImageRead {
+                image: AddonImage::Gapps as i32,
+                offset: read.len() as u64,
+                length: 4096,
+            }),
+        );
+        let part = part(&from_guest);
+        assert!(part.error.is_empty(), "{}", part.error);
+        assert_eq!(part.image(), AddonImage::Gapps);
+        assert_eq!(part.size, image.len() as u64);
+        if part.data.is_empty() {
+            break;
+        }
+        read.extend(part.data);
+    }
+    assert_eq!(read, image);
 
     send(&router, Body::GappsRemove(GappsRemove {}));
-    let removed = answers(&from_guest).remove(0);
-    assert!(removed.done);
+    let removed = state(&from_guest);
+    assert!(removed.done, "{}", removed.error);
     assert!(!removed.installed);
+    assert!(!removed.active, "a mounted image stays until the next boot");
     assert!(!dir.join(IMAGE).exists());
+
+    // A read of an image that is not there says so.
+    send(
+        &router,
+        Body::AddonImageRead(AddonImageRead {
+            image: AddonImage::Gapps as i32,
+            offset: 0,
+            length: 4096,
+        }),
+    );
+    let gone = part(&from_guest);
+    assert!(!gone.error.is_empty());
+    assert_eq!(gone.size, 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn fr32_an_image_that_does_not_arrive_intact_leaves_the_old_one() {
-    let dir = scratch("digest");
+fn fr32_a_guest_without_the_translator_store_says_it_has_no_such_image() {
+    let dir = scratch("other");
     let (router, from_guest) = router(&dir);
-    let old = b"old image".to_vec();
-    install(&router, 1, &old, Sha256::digest(&old).to_vec());
-    let _ = answers(&from_guest);
-    let new = b"new image, damaged on the way".to_vec();
-    install(&router, 2, &new, Sha256::digest(b"something else").to_vec());
-    let last = answers(&from_guest).pop().unwrap();
-    assert!(!last.done);
-    assert!(last.error.contains("SHA-256"), "{}", last.error);
-    assert_eq!(std::fs::read(dir.join(IMAGE)).unwrap(), old);
-    let _ = std::fs::remove_dir_all(&dir);
+    send(
+        &router,
+        Body::AddonImageRead(AddonImageRead {
+            image: AddonImage::ArmTranslation as i32,
+            offset: 0,
+            length: 16,
+        }),
+    );
+    let answer = part(&from_guest);
+    assert_eq!(answer.image(), AddonImage::ArmTranslation);
+    assert!(
+        answer.error.contains("no such add-on image"),
+        "{}",
+        answer.error
+    );
 }
 
 #[test]
@@ -118,6 +148,10 @@ fn fr32_only_the_agent_says_the_device_id_and_no_client_says_where_the_apps_stan
     let state = Body::GappsState(GappsState::default());
     assert!(router
         .from_guest(peer, dsa_protocol::encode(&Envelope { body: Some(state) }))
+        .is_err());
+    let part = Body::AddonImagePart(AddonImagePart::default());
+    assert!(router
+        .from_guest(peer, dsa_protocol::encode(&Envelope { body: Some(part) }))
         .is_err());
     let id = Body::GoogleDeviceId(GoogleDeviceId { id: "1".into() });
     assert!(router

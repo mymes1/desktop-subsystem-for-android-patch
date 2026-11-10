@@ -5,6 +5,13 @@
 //! The guest's report says where its memory goes (page cache, app memory, compressed swap,
 //! the largest processes); the host's numbers say what that costs the host. Together they
 //! show whether memory the guest is not using went back to the host.
+//!
+//! A process's proportional set size (PSS) counts what it has swapped out to zram at the size
+//! the pages had before compression. zram holds them in about a third of that, so a PSS taken
+//! as it is shows an idle guest two or three times bigger than it costs. Every process figure
+//! here is what it costs: what is resident, plus its share of zram at the compression ratio
+//! zram measures ([`MemoryShare`]). Google Play services, which the user chose to install, is
+//! counted on a line of its own, so its cost is not taken for DSA's.
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -20,13 +27,43 @@ use crate::tasks::TaskEvent;
 /// How often the service logs each running Android's memory: as often as the guest reports.
 pub const LOG_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
-/// One guest process's share of the guest's memory, in KiB.
+/// One guest process's share of the guest's memory, in KiB, as the guest counts it:
+/// `swap_pss_kb` is the part of `pss_kb` swapped out to zram, at its size before compression.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProcessMemory {
     pub pid: i32,
     pub name: String,
     pub pss_kb: u64,
     pub swap_pss_kb: u64,
+    /// It belongs to Google Play services (the Google apps the user installed).
+    pub google_play: bool,
+}
+
+/// Every process of Google Play services together, as the guest counts them, in KiB.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GooglePlayMemory {
+    pub processes: u32,
+    pub pss_kb: u64,
+    pub swap_pss_kb: u64,
+}
+
+/// What some of the guest's processes cost the guest's memory, in KiB: their pages resident
+/// in RAM, and their share of what zram holds compressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MemoryShare {
+    pub resident_kb: u64,
+    /// `None` when they have pages in zram but the guest could not say how well zram
+    /// compresses (its statistics were unreadable), so their compressed size is not known.
+    pub compressed_kb: Option<u64>,
+    /// What they have in zram at the size before compression, as their PSS counts it.
+    pub swapped_out_kb: u64,
+}
+
+impl MemoryShare {
+    /// What they cost: resident plus compressed, the compressed part left out when unknown.
+    pub fn total_kb(&self) -> u64 {
+        self.resident_kb + self.compressed_kb.unwrap_or(0)
+    }
 }
 
 /// How the guest uses its memory, in KiB, as its agent last reported it.
@@ -45,10 +82,15 @@ pub struct GuestMemory {
     pub zram_original_kb: u64,
     pub zram_used_kb: u64,
     pub total_pss_kb: u64,
+    /// The part of `total_pss_kb` swapped out to zram, at its size before compression.
+    pub swap_pss_kb: u64,
     /// Largest first.
     pub top_processes: Vec<ProcessMemory>,
     /// What the kernel itself holds.
     pub kernel: KernelMemory,
+    /// Google Play services' processes; `None` when none runs (or the Google apps are not
+    /// installed).
+    pub google_play: Option<GooglePlayMemory>,
 }
 
 /// What the guest's kernel itself holds, in KiB, from /proc/meminfo, and the memory it was
@@ -161,8 +203,73 @@ impl GuestMemory {
         self.swap_total_kb.saturating_sub(self.swap_free_kb)
     }
 
+    /// How zram compresses, as `(memory it uses, size of what it stores)` in KiB: from zram's
+    /// own statistics (mm_stat), or, without the size it stores, the swap in use from
+    /// /proc/meminfo. `None` when either is unknown.
+    pub fn zram_ratio(&self) -> Option<(u64, u64)> {
+        let stored = if self.zram_original_kb > 0 {
+            self.zram_original_kb
+        } else {
+            self.swap_used_kb()
+        };
+        (stored > 0 && self.zram_used_kb > 0).then_some((self.zram_used_kb, stored))
+    }
+
+    /// What `swapped_out_kb` of pages swapped out (at their size before compression) take in
+    /// zram, at the ratio zram measures; `None` when that ratio is unknown. zram never stores
+    /// a page in more than its own size, so the share is never more than `swapped_out_kb`.
+    pub fn compressed_kb(&self, swapped_out_kb: u64) -> Option<u64> {
+        if swapped_out_kb == 0 {
+            return Some(0);
+        }
+        let (used, stored) = self.zram_ratio()?;
+        let share = (u128::from(swapped_out_kb) * u128::from(used) + u128::from(stored) / 2)
+            / u128::from(stored);
+        Some(u64::try_from(share).unwrap_or(u64::MAX).min(swapped_out_kb))
+    }
+
+    /// What processes with this PSS, `swap_pss_kb` of it swapped out, cost.
+    pub fn share(&self, pss_kb: u64, swap_pss_kb: u64) -> MemoryShare {
+        let swapped_out_kb = swap_pss_kb.min(pss_kb);
+        MemoryShare {
+            resident_kb: pss_kb - swapped_out_kb,
+            compressed_kb: self.compressed_kb(swapped_out_kb),
+            swapped_out_kb,
+        }
+    }
+
+    /// What the processes the report counts (the apps and the system server) cost together.
+    /// A report from an agent that does not send the total swapped out counts the largest
+    /// processes' instead, which is less than all.
+    pub fn apps(&self) -> MemoryShare {
+        let swapped_out = if self.swap_pss_kb > 0 {
+            self.swap_pss_kb
+        } else {
+            self.top_processes.iter().map(|p| p.swap_pss_kb).sum()
+        };
+        self.share(self.total_pss_kb, swapped_out)
+    }
+
+    /// What Google Play services costs, `None` when none of its processes runs.
+    pub fn google_play_share(&self) -> Option<MemoryShare> {
+        self.google_play
+            .map(|play| self.share(play.pss_kb, play.swap_pss_kb))
+    }
+
+    /// What one of the largest processes costs.
+    pub fn process_share(&self, process: &ProcessMemory) -> MemoryShare {
+        self.share(process.pss_kb, process.swap_pss_kb)
+    }
+
     pub fn from_control(memory: control::GuestMemory) -> GuestMemory {
+        let google_play = (memory.google_play_processes > 0).then_some(GooglePlayMemory {
+            processes: memory.google_play_processes,
+            pss_kb: memory.google_play_pss_kb,
+            swap_pss_kb: memory.google_play_swap_pss_kb,
+        });
         GuestMemory {
+            google_play,
+            swap_pss_kb: memory.swap_pss_kb,
             mem_total_kb: memory.mem_total_kb,
             mem_free_kb: memory.mem_free_kb,
             mem_available_kb: memory.mem_available_kb,
@@ -184,6 +291,7 @@ impl GuestMemory {
                     name: p.name,
                     pss_kb: p.pss_kb,
                     swap_pss_kb: p.swap_pss_kb,
+                    google_play: p.google_play,
                 })
                 .collect(),
             kernel: KernelMemory {
@@ -269,16 +377,21 @@ impl MemorySnapshot {
             None => line.push_str("; guest has not reported"),
             Some(report) => {
                 let g = &report.memory;
+                let apps = g.apps();
+                let play = g
+                    .google_play_share()
+                    .map_or("none".to_string(), |play| share_mib(&play));
                 line.push_str(&format!(
-                    "; guest {}/{} MiB used, cache {}, apps {}, swap {} (zram {}), pss {} MiB, \
-                     {} s ago",
+                    "; guest {}/{} MiB used, cache {}, apps {}, swap {} (zram {}), processes {}, \
+                     Google Play services {}, {} s ago",
                     mib(g.used_kb()),
                     mib(g.mem_total_kb),
                     mib(g.cached_kb + g.buffers_kb),
                     mib(g.anon_pages_kb),
                     mib(g.swap_used_kb()),
                     mib(g.zram_used_kb),
-                    mib(g.total_pss_kb),
+                    share_mib(&apps),
+                    play,
                     report.age.as_secs()
                 ));
             }
@@ -290,6 +403,19 @@ impl MemorySnapshot {
 /// KiB to whole MiB, rounded to nearest.
 pub(crate) fn mib(kb: u64) -> u64 {
     (kb + 512) / 1024
+}
+
+/// A share in MiB as the log and `dsa memory` write it: what it costs, then its resident and
+/// compressed parts, `?` for a compressed size zram could not measure.
+fn share_mib(share: &MemoryShare) -> String {
+    format!(
+        "{} MiB ({} resident, {} compressed in zram)",
+        mib(share.total_kb()),
+        mib(share.resident_kb),
+        share
+            .compressed_kb
+            .map_or("?".to_string(), |kb| mib(kb).to_string())
+    )
 }
 
 impl fmt::Display for MemorySnapshot {
@@ -374,9 +500,42 @@ impl fmt::Display for MemorySnapshot {
             mib(g.zram_original_kb),
             mib(g.zram_used_kb)
         )?;
-        writeln!(f, "  processes: {} MiB PSS in all", mib(g.total_pss_kb))?;
+        let apps = g.apps();
+        writeln!(
+            f,
+            "  processes: {} in all ({} MiB swapped out before compression)",
+            share_mib(&apps),
+            mib(apps.swapped_out_kb)
+        )?;
+        match g.google_play_share() {
+            Some(play) => writeln!(
+                f,
+                "  Google Play services: {} in {} processes ({} MiB swapped out before \
+                 compression)",
+                share_mib(&play),
+                g.google_play.map_or(0, |p| p.processes),
+                mib(play.swapped_out_kb)
+            )?,
+            None => writeln!(f, "  Google Play services: not running")?,
+        }
         for p in &g.top_processes {
-            writeln!(f, "    {:>6} MiB  {:<6} {}", mib(p.pss_kb), p.pid, p.name)?;
+            let share = g.process_share(p);
+            writeln!(
+                f,
+                "    {:>6} MiB  {:<6} {}{} ({} resident, {} compressed)",
+                mib(share.total_kb()),
+                p.pid,
+                p.name,
+                if p.google_play {
+                    " [Google Play services]"
+                } else {
+                    ""
+                },
+                mib(share.resident_kb),
+                share
+                    .compressed_kb
+                    .map_or("?".to_string(), |kb| mib(kb).to_string())
+            )?;
         }
         Ok(())
     }
@@ -409,8 +568,13 @@ pub fn snapshot_to_wire(snapshot: &MemorySnapshot) -> types::Memory {
                         name: p.name.clone(),
                         pss_kb: p.pss_kb,
                         swap_pss_kb: p.swap_pss_kb,
+                        google_play: p.google_play,
                     })
                     .collect(),
+                swap_pss_kb: g.swap_pss_kb,
+                google_play_processes: g.google_play.map_or(0, |p| p.processes),
+                google_play_pss_kb: g.google_play.map_or(0, |p| p.pss_kb),
+                google_play_swap_pss_kb: g.google_play.map_or(0, |p| p.swap_pss_kb),
                 age_seconds: report.age.as_secs(),
                 slab_unreclaimable_kb: g.kernel.slab_unreclaimable_kb,
                 kernel_stack_kb: g.kernel.kernel_stack_kb,
@@ -463,8 +627,15 @@ pub fn snapshot_from_wire(memory: types::Memory) -> MemorySnapshot {
                         name: p.name,
                         pss_kb: p.pss_kb,
                         swap_pss_kb: p.swap_pss_kb,
+                        google_play: p.google_play,
                     })
                     .collect(),
+                swap_pss_kb: g.swap_pss_kb,
+                google_play: (g.google_play_processes > 0).then_some(GooglePlayMemory {
+                    processes: g.google_play_processes,
+                    pss_kb: g.google_play_pss_kb,
+                    swap_pss_kb: g.google_play_swap_pss_kb,
+                }),
                 kernel: KernelMemory {
                     slab_unreclaimable_kb: g.slab_unreclaimable_kb,
                     kernel_stack_kb: g.kernel_stack_kb,
@@ -603,6 +774,13 @@ pub enum GrowthAction {
 ///   not a wait, keeps the size from swinging.
 /// - If memory added does not show in the guest's total within 30 seconds, give up growing:
 ///   the platform or the guest cannot hot-add.
+/// - A resize the platform refuses or that times out ([`MemoryGrowth::refused`]) leaves the VM
+///   at the size before it and is tried again, in steps half the size of the one that failed
+///   (down to 128 MiB), after a wait that doubles with each failure in a row (5 seconds up to
+///   5 minutes). A failure never stops later resizes: taking 1.5 GiB back in one request timed
+///   out in Hyper-V while the guest still held the pages, and the VM then kept the memory for
+///   the rest of the session. Each resize that goes through ([`MemoryGrowth::applied`]) ends
+///   the wait and lets the steps double back toward their full size.
 #[derive(Debug, Clone)]
 pub struct MemoryGrowth {
     base_mb: u64,
@@ -612,6 +790,16 @@ pub struct MemoryGrowth {
     /// The guest total before the last growth, and when it was asked for.
     awaiting: Option<(u64, Instant)>,
     stopped: bool,
+    /// The size before the last resize asked for, while the platform has not answered it.
+    previous_mb: Option<u64>,
+    /// The most one growth or one shrink may change, after a resize of that kind failed.
+    grow_limit_mb: Option<u64>,
+    shrink_limit_mb: Option<u64>,
+    /// Where a shrink that goes back in steps is headed.
+    shrink_goal_mb: Option<u64>,
+    /// Resizes that failed in a row, and when the next may be tried.
+    failures: u32,
+    retry_at: Option<Instant>,
 }
 
 /// Memory is added and removed in steps of this, in MiB, the guest's memory block size.
@@ -619,6 +807,9 @@ const GROWTH_GRANULE_MB: u64 = 128;
 const GROW_COOLDOWN: Duration = Duration::from_secs(5);
 const SHRINK_COOLDOWN: Duration = Duration::from_secs(5);
 const HOT_ADD_DEADLINE: Duration = Duration::from_secs(30);
+/// The wait before the first retry of a failed resize; it doubles with each failure in a row.
+const RETRY_FIRST: Duration = Duration::from_secs(5);
+const RETRY_MOST: Duration = Duration::from_secs(5 * 60);
 
 fn round_up_mb(mb: u64) -> u64 {
     mb.div_ceil(GROWTH_GRANULE_MB) * GROWTH_GRANULE_MB
@@ -634,6 +825,12 @@ impl MemoryGrowth {
             last_change: None,
             awaiting: None,
             stopped: false,
+            previous_mb: None,
+            grow_limit_mb: None,
+            shrink_limit_mb: None,
+            shrink_goal_mb: None,
+            failures: 0,
+            retry_at: None,
         }
     }
 
@@ -650,6 +847,13 @@ impl MemoryGrowth {
     /// Takes in a pressure report and says what to do now, if anything.
     pub fn on_pressure(&mut self, p: &GuestPressure, now: Instant) -> Option<GrowthAction> {
         if self.stopped {
+            return None;
+        }
+        // One resize at a time: the platform has not answered the last one yet.
+        if self.in_flight() {
+            return None;
+        }
+        if self.retry_at.is_some_and(|at| now < at) {
             return None;
         }
         let total_mb = p.mem_total_kb / 1024;
@@ -677,9 +881,13 @@ impl MemoryGrowth {
             if self.current_mb >= self.max_mb || !since_change(GROW_COOLDOWN) {
                 return None;
             }
-            let step = (self.current_mb / 2).max(1024);
+            let mut step = (self.current_mb / 2).max(1024);
+            if let Some(limit) = self.grow_limit_mb {
+                step = step.min(limit);
+            }
             let target = round_up_mb(self.current_mb + step).min(self.max_mb);
             self.awaiting = Some((total_mb, now));
+            self.shrink_goal_mb = None;
             return Some(self.resize(target, now));
         }
         if self.current_mb <= self.base_mb
@@ -690,24 +898,77 @@ impl MemoryGrowth {
         }
         let used_mb = p.used_mb();
         let want = round_up_mb(used_mb + (used_mb / 2).max(1024)).max(self.base_mb);
-        // Not worth a balloon for less than half a gibibyte.
-        if want + 512 > self.current_mb {
+        // Not worth a balloon for less than half a gibibyte, unless it is the rest of a shrink
+        // that goes back in steps.
+        let resuming = self.shrink_goal_mb.is_some();
+        if want >= self.current_mb || (!resuming && want + 512 > self.current_mb) {
+            self.shrink_goal_mb = None;
             return None;
         }
-        Some(self.resize(want, now))
+        // After a shrink failed, the memory goes back in smaller steps.
+        let target = match self.shrink_limit_mb {
+            Some(limit) => want.max(self.current_mb.saturating_sub(limit)),
+            None => want,
+        };
+        self.shrink_goal_mb = (target > want).then_some(want);
+        Some(self.resize(target, now))
     }
 
     fn resize(&mut self, mb: u64, now: Instant) -> GrowthAction {
+        self.previous_mb = Some(self.current_mb);
         self.current_mb = mb;
         self.last_change = Some(now);
         GrowthAction::Resize(mb)
     }
 
-    /// The platform refused the last resize: stay at the size before it, and stop growing.
-    pub fn refused(&mut self, previous_mb: u64) {
+    /// The platform set the VM to the size the last [`GrowthAction::Resize`] asked for. Later
+    /// resizes need not wait, and a step that was cut down after a failure doubles again.
+    pub fn applied(&mut self) {
+        self.previous_mb = None;
+        self.failures = 0;
+        self.retry_at = None;
+        let double = |limit: Option<u64>| limit.and_then(|mb| mb.checked_mul(2));
+        self.grow_limit_mb = double(self.grow_limit_mb);
+        self.shrink_limit_mb = double(self.shrink_limit_mb);
+    }
+
+    /// The platform refused the last resize, or it did not finish in time, at `now`. The VM
+    /// counts as still at the size before it. The next resize of that kind is at most half as
+    /// large, down to 128 MiB, and nothing is asked for until the retry wait has passed.
+    pub fn refused(&mut self, now: Instant) {
+        let Some(previous_mb) = self.previous_mb.take() else {
+            return;
+        };
+        let failed_mb = self.current_mb.abs_diff(previous_mb);
+        let half = round_up_mb((failed_mb / 2).max(GROWTH_GRANULE_MB));
+        if self.current_mb > previous_mb {
+            self.grow_limit_mb = Some(half);
+            self.awaiting = None;
+        } else {
+            self.shrink_limit_mb = Some(half);
+            // The rest still goes back, in the smaller steps.
+            self.shrink_goal_mb = Some(self.current_mb);
+        }
         self.current_mb = previous_mb;
-        self.awaiting = None;
-        self.stopped = true;
+        self.failures = self.failures.saturating_add(1);
+        let wait = RETRY_FIRST
+            .saturating_mul(1 << self.failures.saturating_sub(1).min(16))
+            .min(RETRY_MOST);
+        self.retry_at = Some(now + wait);
+    }
+
+    /// Whether the last [`GrowthAction::Resize`] has not been answered yet
+    /// ([`MemoryGrowth::applied`] or [`MemoryGrowth::refused`]). No other resize is asked for
+    /// meanwhile.
+    pub fn in_flight(&self) -> bool {
+        self.previous_mb.is_some()
+    }
+
+    /// How long until a resize may be tried again after a failure, if one is being waited out.
+    pub fn retry_in(&self, now: Instant) -> Option<Duration> {
+        self.retry_at
+            .map(|at| at.saturating_duration_since(now))
+            .filter(|wait| !wait.is_zero())
     }
 }
 

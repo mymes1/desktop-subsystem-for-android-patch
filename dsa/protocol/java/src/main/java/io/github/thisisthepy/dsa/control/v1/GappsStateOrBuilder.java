@@ -9,27 +9,7 @@ public interface GappsStateOrBuilder extends
 
   /**
    * <pre>
-   * The transfer this answers, or 0.
-   * </pre>
-   *
-   * <code>uint32 transfer_id = 1;</code>
-   * @return The transferId.
-   */
-  int getTransferId();
-
-  /**
-   * <pre>
-   * How many bytes of that transfer the daemon has written.
-   * </pre>
-   *
-   * <code>uint64 received = 2;</code>
-   * @return The received.
-   */
-  long getReceived();
-
-  /**
-   * <pre>
-   * The transfer is complete and its image checked and in place.
+   * The removal this answers is done.
    * </pre>
    *
    * <code>bool done = 3;</code>
@@ -39,8 +19,7 @@ public interface GappsStateOrBuilder extends
 
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -49,8 +28,7 @@ public interface GappsStateOrBuilder extends
   java.lang.String getError();
   /**
    * <pre>
-   * Non-empty when the transfer or the removal failed: why, in words a person can act on. A
-   * failed transfer leaves the image that was there before.
+   * Non-empty when the removal failed: why, in words a person can act on.
    * </pre>
    *
    * <code>string error = 4;</code>
@@ -61,7 +39,8 @@ public interface GappsStateOrBuilder extends
 
   /**
    * <pre>
-   * A Google apps image is on the user's disk.
+   * A Google apps image a DSA from before the add-on disk sent is still on the user's disk
+   * (/data), for the host to move onto the add-on disk and then remove.
    * </pre>
    *
    * <code>bool installed = 5;</code>

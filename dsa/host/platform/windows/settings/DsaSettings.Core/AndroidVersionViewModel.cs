@@ -15,7 +15,8 @@ public sealed record AndroidVersionInfo(
     IReadOnlyList<int> Supported,
     int TargetMajor,
     bool OnTrial,
-    string? Notice)
+    string? Notice,
+    string? RestartPending = null)
 {
     public static AndroidVersionInfo Parse(string json)
     {
@@ -33,7 +34,8 @@ public sealed record AndroidVersionInfo(
             supported,
             root.GetProperty("target_major").GetInt32(),
             root.TryGetProperty("on_trial", out var trial) && trial.ValueKind == JsonValueKind.True,
-            Text("notice"));
+            Text("notice"),
+            Text("restart_pending") is { Length: > 0 } pending ? pending : null);
     }
 }
 
@@ -119,9 +121,21 @@ public sealed partial class AndroidVersionViewModel : ObservableObject
     /// waiting.</summary>
     public string UpdateStatusText =>
         _info is null ? ""
-        : IsDownloading || HasNotice ? Notice
+        : IsDownloading ? Notice
+        : IsRestartPending ? string.Format(CultureInfo.CurrentCulture, _text.Get("Android_RestartPending"), RestartPending)
+        : HasNotice ? Notice
         : IsSwitching ? SwitchingText
         : _text.Get("Android_UpToDate");
+
+    /// <summary>The downloaded image the user's running Android waits to restart into, or
+    /// null when none waits.</summary>
+    public string? RestartPending => _info?.RestartPending;
+
+    /// <summary>Whether the [Restart now] button is shown.</summary>
+    public bool IsRestartPending => RestartPending is not null;
+
+    /// <summary>Whether [Restart now] can be pressed now.</summary>
+    public bool CanRestartNow => !_busy && IsRestartPending;
 
     /// <summary>Whether the service can be asked to check for an Android image now.</summary>
     public bool CanCheckNow => !_busy && _info is not null;
@@ -232,7 +246,32 @@ public sealed partial class AndroidVersionViewModel : ObservableObject
         await RunAsync(UseArguments(choice, eraseData));
     }
 
-    private async Task RunAsync(string[] args)
+    private static readonly string[] VersionArguments = { "android", "version", "--json" };
+
+    /// <summary>The dsa arguments that restart Android now into the image that waits.</summary>
+    public static readonly string[] RestartArguments = { "android", "restart", "--json" };
+
+    /// <summary>Throws what the service said when the command failed.</summary>
+    private static void Check(CliResult result)
+    {
+        if (result.ExitCode != 0)
+        {
+            var detail = result.Error.StartsWith("dsa: ", StringComparison.Ordinal) ? result.Error[5..] : result.Error;
+            var problem = detail.Contains("cannot reach the DSA service", StringComparison.Ordinal)
+                ? Problem.ServiceUnreachable
+                : Problem.Refused;
+            throw new DsaException(problem, detail);
+        }
+    }
+
+    /// <summary>Restarts Android now into the downloaded image that waits for it, then reads
+    /// the version again.</summary>
+    public async Task RestartNowAsync()
+    {
+        await RunAsync(RestartArguments, thenRead: true);
+    }
+
+    private async Task RunAsync(string[] args, bool thenRead = false)
     {
         _busy = true;
         Changed(nameof(IsBusy));
@@ -240,13 +279,11 @@ public sealed partial class AndroidVersionViewModel : ObservableObject
         try
         {
             var result = await _cli.RunAsync(args).ConfigureAwait(true);
-            if (result.ExitCode != 0)
+            Check(result);
+            if (thenRead)
             {
-                var detail = result.Error.StartsWith("dsa: ", StringComparison.Ordinal) ? result.Error[5..] : result.Error;
-                var problem = detail.Contains("cannot reach the DSA service", StringComparison.Ordinal)
-                    ? Problem.ServiceUnreachable
-                    : Problem.Refused;
-                throw new DsaException(problem, detail);
+                result = await _cli.RunAsync(VersionArguments).ConfigureAwait(true);
+                Check(result);
             }
             Show(AndroidVersionInfo.Parse(result.Output));
             _error = null;

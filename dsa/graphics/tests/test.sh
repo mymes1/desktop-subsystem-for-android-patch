@@ -21,6 +21,10 @@ mkdir -p "$out"
 "$out/shadow_blocks_test"
 
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/shadow_memory_test.cpp" -o "$out/shadow_memory_test"
+"$out/shadow_memory_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
     "$here/lost_stream_test.cpp" -o "$out/lost_stream_test"
 "$out/lost_stream_test"
 
@@ -31,6 +35,10 @@ mkdir -p "$out"
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../host" \
     "$here/frame_crop_test.cpp" -o "$out/frame_crop_test"
 "$out/frame_crop_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../host" \
+    "$here/copy_wait_test.cpp" -o "$out/copy_wait_test"
+"$out/copy_wait_test"
 
 # The upstream headers are not ours to warn about.
 upstream=(

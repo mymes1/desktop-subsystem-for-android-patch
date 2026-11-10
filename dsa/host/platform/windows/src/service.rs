@@ -42,8 +42,8 @@ use dsa_host_core::update::program_service::{
     ProgramStatus, ProgramUpdates, Timing, WithProgramStatus,
 };
 use dsa_host_core::update::service::{
-    check_alerting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
-    UpdatingAndroid,
+    check_alerting, follow_waiting_image, next_image_check, CheckNow, Download, StoreVersions,
+    UpdateNotices, UpdatingAndroid, WAITING_IMAGE_CHECK,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::WindowManagerKeeper;
@@ -367,13 +367,21 @@ pub fn create_user_android(
     .with_bootconfig({
         // An ARM translator (the package the user installed, else the image's default one) is
         // used only while the user's setting is on, and only from a boot that is told so; so
-        // are the Google apps the user installed.
+        // are the Google apps the user installed. Their images are on the add-on disk this
+        // boot attaches.
         let store = settings_store(config);
         let user = sid.to_string();
         Box::new(move |vm: &AndroidVmConfig| {
+            use dsa_host_core::addon_disk::{self, AddonDisk, Format};
             let image = vm.initrd.as_deref().and_then(std::path::Path::parent);
-            dsa_host_core::arm_translation::bootconfig_for(&*store, &user, image)
-                + &dsa_host_core::gapps::bootconfig_for(&*store, &user)
+            let attached = vm
+                .addon_disk
+                .as_ref()
+                .map(|path| AddonDisk::new(path, Format::Vhd).attached())
+                .unwrap_or_default();
+            addon_disk::bootconfig(&attached).to_string()
+                + &dsa_host_core::arm_translation::bootconfig_for(&*store, &user, image, &attached)
+                + &dsa_host_core::gapps::bootconfig_for(&*store, &user, &attached)
         })
     })
     .with_boot_properties({
@@ -527,14 +535,20 @@ pub fn create_user_android(
     }
     Ok(match updates {
         None => session as Arc<dyn UserAndroid>,
-        Some(updates) => Arc::new(UpdatingAndroid {
-            session,
-            store: Arc::clone(&updates.store),
-            notices: Arc::clone(&updates.notices),
-            boot_timeout: updates.boot_timeout,
-            trial_running: Arc::clone(&updates.trial_running),
-            rollback: Default::default(),
-        }),
+        Some(updates) => {
+            let android = Arc::new(UpdatingAndroid {
+                session,
+                store: Arc::clone(&updates.store),
+                notices: Arc::clone(&updates.notices),
+                boot_timeout: updates.boot_timeout,
+                trial_running: Arc::clone(&updates.trial_running),
+                rollback: Default::default(),
+                image_restart: Default::default(),
+            });
+            // An image downloaded while the user's Android runs is applied by restarting it.
+            follow_waiting_image(&android, WAITING_IMAGE_CHECK);
+            android as Arc<dyn UserAndroid>
+        }
     })
 }
 
@@ -978,6 +992,9 @@ where
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
+                // So is restarting into a downloaded Android image by itself; on unless they
+                // turned it off.
+                android.image_auto_restart(settings.as_ref().is_none_or(|s| s.image_auto_restart));
                 // So is file sharing, on with every folder unless they chose otherwise.
                 android.share_folders(
                     settings.as_ref().is_none_or(|s| s.file_sharing),
@@ -1093,6 +1110,22 @@ where
         )
         .with_package_dir(config.machine_root().gapps()),
     );
+    // Each user's add-ons, on the add-on disk beside their Android disk, which their VM
+    // attaches read only.
+    service = service.with_addon_disks({
+        let config = config.clone();
+        Arc::new(move |sid: &str| {
+            let vm = config.user_vm(sid).map_err(|e| e.to_string())?;
+            let path = vm
+                .config
+                .addon_disk
+                .ok_or_else(|| format!("{sid}'s VM has no add-on disk"))?;
+            Ok(dsa_host_core::addon_disk::AddonDisk::new(
+                path,
+                dsa_host_core::addon_disk::Format::Vhd,
+            ))
+        })
+    });
     if let Some(versions) = version_store {
         service = service.with_android_versions(Arc::new(versions));
     }

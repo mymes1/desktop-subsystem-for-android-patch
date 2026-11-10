@@ -5,8 +5,11 @@ package io.github.thisisthepy.dsa.control.v1;
 
 /**
  * <pre>
- * Host to guest, to the control daemon: remove the installed ARM translation package. The
- * guest goes on using a package it has mounted until it restarts. Answered with
+ * Host to guest, to the control daemon: remove the ARM translation package's image that a DSA
+ * from before the add-on disk left on the user's disk (/data/vendor/dsa/arm-translation). The
+ * host keeps an installed package on the add-on disk, which only the host writes; this removes
+ * the old copy once the host has moved it there, or once the user removed the package. The
+ * guest goes on using an image it has mounted until it restarts. Answered with
  * ArmTranslationState.
  * </pre>
  *
@@ -102,8 +105,11 @@ public  final class ArmTranslationRemove extends
 
   /**
    * <pre>
-   * Host to guest, to the control daemon: remove the installed ARM translation package. The
-   * guest goes on using a package it has mounted until it restarts. Answered with
+   * Host to guest, to the control daemon: remove the ARM translation package's image that a DSA
+   * from before the add-on disk left on the user's disk (/data/vendor/dsa/arm-translation). The
+   * host keeps an installed package on the add-on disk, which only the host writes; this removes
+   * the old copy once the host has moved it there, or once the user removed the package. The
+   * guest goes on using an image it has mounted until it restarts. Answered with
    * ArmTranslationState.
    * </pre>
    *

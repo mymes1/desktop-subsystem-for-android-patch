@@ -24,7 +24,9 @@
 //! is ready, was applied, or failed. Those toasts are DSA's ([`DSA_APP_ID`], under the
 //! settings app's logo), one per kind of update, so the news that an update was applied
 //! replaces the news that it was ready. A click on one opens the settings app's Updates page
-//! ([`open_update_settings`]); nothing about it goes to Android.
+//! ([`open_update_settings`]); nothing about it goes to Android. The question whether Android
+//! restarts into a downloaded image has two buttons: [Restart now] launches this program with
+//! [`restart_uri`], which asks the service to restart, and [Later] only closes the toast.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -37,7 +39,7 @@ use std::time::Duration;
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::native_abi::in_user_language;
 use dsa_host_core::notifications::{Notification, NotificationAction, NotificationEvent};
-use dsa_host_core::update::alerts::{is_update_key, thread_of};
+use dsa_host_core::update::alerts::{buttons_of, is_update_key, thread_of, RESTART_NOW};
 use dsa_transport::Connector;
 use sha2::{Digest, Sha256};
 
@@ -137,8 +139,15 @@ pub fn activation_uri(key: &str) -> String {
     format!("{PROTOCOL}:open?key={}", percent_encode(key))
 }
 
-/// What a launched URI asks for, or `None` for a URI that is not one of ours or is damaged.
-pub fn parse_activation(uri: &str) -> Option<NotificationAction> {
+/// The URI the [Restart now] button on DSA's question about a downloaded Android image
+/// launches.
+pub fn restart_uri(key: &str) -> String {
+    format!("{PROTOCOL}:restart?key={}", percent_encode(key))
+}
+
+/// The verb and the key a launched URI names, or `None` for a URI that is not one of ours or
+/// is damaged.
+fn verb_and_key(uri: &str) -> Option<(String, String)> {
     let rest = uri.trim().trim_matches('"').strip_prefix(PROTOCOL)?;
     let rest = rest.strip_prefix(':')?;
     let rest = rest.trim_start_matches('/');
@@ -150,10 +159,21 @@ pub fn parse_activation(uri: &str) -> Option<NotificationAction> {
     if !dsa_host_core::notifications::valid_key(&key) {
         return None;
     }
-    match verb.trim_end_matches('/') {
-        "open" => Some(NotificationAction::Open { key }),
+    Some((verb.trim_end_matches('/').to_string(), key))
+}
+
+/// What a launched URI asks for, or `None` for a URI that is not one of ours or is damaged.
+pub fn parse_activation(uri: &str) -> Option<NotificationAction> {
+    match verb_and_key(uri)? {
+        (verb, key) if verb == "open" => Some(NotificationAction::Open { key }),
         _ => None,
     }
+}
+
+/// Whether a launched URI is the [Restart now] button of DSA's question about a downloaded
+/// Android image.
+pub fn is_restart(uri: &str) -> bool {
+    verb_and_key(uri).is_some_and(|(verb, key)| verb == "restart" && is_update_key(&key))
 }
 
 /// Whether the user reads Windows in Korean.
@@ -194,8 +214,29 @@ pub fn toast_xml(notification: &Notification, icon: Option<&Path>) -> String {
     } else {
         ""
     };
+    // DSA's question whether Android restarts into a downloaded image: [Restart now] launches
+    // this program to ask the service, and [Later] only closes the toast.
+    let mut actions = String::new();
+    for button in buttons_of(&notification.key, user_reads_korean()) {
+        let action = if button.action == RESTART_NOW {
+            format!(
+                "<action content=\"{}\" arguments=\"{}\" activationType=\"protocol\"/>",
+                xml(&button.label),
+                xml(&restart_uri(&notification.key))
+            )
+        } else {
+            format!(
+                "<action content=\"{}\" arguments=\"dismiss\" activationType=\"system\"/>",
+                xml(&button.label)
+            )
+        };
+        actions.push_str(&action);
+    }
+    if !actions.is_empty() {
+        actions = format!("<actions>{actions}</actions>");
+    }
     format!(
-        "<toast launch=\"{}\" activationType=\"protocol\"><visual><binding template=\"ToastGeneric\">{lines}</binding></visual>{audio}</toast>",
+        "<toast launch=\"{}\" activationType=\"protocol\"><visual><binding template=\"ToastGeneric\">{lines}</binding></visual>{actions}{audio}</toast>",
         xml(&activation_uri(&notification.key))
     )
 }
@@ -428,6 +469,15 @@ fn write_icon(dir: &Path, tag: &str, png: &[u8]) -> Option<PathBuf> {
 /// Handles `dsa-wm --notification <uri>`, which Windows runs when a toast is clicked: passes
 /// the click to the service through `connector`. Returns what went wrong, if anything.
 pub fn activate(uri: &str, connector: &mut dyn Connector) -> Result<(), String> {
+    // [Restart now] on DSA's question: the service restarts Android into the new image.
+    if is_restart(uri) {
+        let mut client = HostApiClient::connect(connector, "dsa-wm restart for update", ANSWER)
+            .map_err(|e| e.to_string())?;
+        return client
+            .restart_for_update()
+            .map(drop)
+            .map_err(|e| e.to_string());
+    }
     let action =
         parse_activation(uri).ok_or_else(|| format!("{uri:?} is not a DSA notification"))?;
     // The app's window comes from the window manager, which may bring it to the front: the
@@ -869,6 +919,31 @@ mod tests {
         assert!(dsa_host_core::update::alerts::is_update_key(action.key()));
         assert_eq!(UPDATE_PAGE_ARGUMENTS, ["--page", "updates"]);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn fr14_the_question_to_restart_has_restart_now_and_later_buttons() {
+        use dsa_host_core::update::alerts::{AlertKind, Subject, UpdateAlert};
+        let asked = in_user_language(
+            UpdateAlert::new(Subject::Android, AlertKind::Restart, "16.0.3").notification(),
+            false,
+        );
+        let xml = toast_xml(&asked, None);
+        assert!(xml.contains("<actions>"), "{xml}");
+        assert!(xml.contains("content=\"Restart now\""), "{xml}");
+        assert!(xml.contains(&super::xml(&restart_uri(&asked.key))), "{xml}");
+        assert!(
+            xml.contains("content=\"Later\" arguments=\"dismiss\" activationType=\"system\""),
+            "{xml}"
+        );
+        // [Restart now] asks the service; a click on the toast still opens the settings.
+        assert!(is_restart(&restart_uri(&asked.key)));
+        assert!(!is_restart(&activation_uri(&asked.key)));
+        assert!(!is_restart(&restart_uri("0|com.example.chat|1|null|10100")));
+        assert!(parse_activation(&restart_uri(&asked.key)).is_none());
+        // Other news has no buttons.
+        let ready = UpdateAlert::new(Subject::Android, AlertKind::Ready, "16.0.3").notification();
+        assert!(!toast_xml(&ready, None).contains("<actions>"));
     }
 
     #[test]

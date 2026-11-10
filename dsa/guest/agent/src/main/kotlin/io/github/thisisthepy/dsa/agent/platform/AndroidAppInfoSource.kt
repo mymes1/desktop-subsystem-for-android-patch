@@ -20,8 +20,8 @@ import java.io.ByteArrayOutputStream
  * window program on the host.
  *
  * The icon is drawn at [WINDOW_ICON_SIZE] pixels. The host draws the window's splash from it
- * before the app's first frame, 160 dp large like the app's own splash, which is 320 pixels on
- * a 200% monitor; at 512 the host scales it down on every monitor up to 320%, and never up.
+ * before the app's first frame, 160 dp large like the app's own splash, which is 192 pixels on
+ * a 200% monitor; at 512 the host scales it down on every monitor up to 500%, and never up.
  * The host makes the program's 256 pixel icon from it too. Adaptive icons are drawn with the
  * launcher's mask, as a launcher shows them.
  *
@@ -46,8 +46,15 @@ class AndroidAppInfoSource(
         }
         val label = app.loadLabel(pm).toString().ifEmpty { packageName }
         var size = WINDOW_ICON_SIZE
+        // The icon a launcher shows, which the Start menu shows too: the launcher activity's,
+        // which may differ from the app's own, as an activity alias's often does.
+        val iconRes = try {
+            launcherIconResource(pm, packageName) ?: app.icon
+        } catch (e: RuntimeException) {
+            app.icon
+        }
         val drawable = try {
-            sharpIcon(pm, app, app.icon, WINDOW_ICON_SIZE) { pm.getApplicationIcon(app) }
+            sharpIcon(pm, app, iconRes, WINDOW_ICON_SIZE) { pm.getApplicationIcon(app) }
         } catch (e: Exception) {
             log.warn("could not load the icon of $packageName", e)
             null
@@ -62,7 +69,7 @@ class AndroidAppInfoSource(
                     large
                 } else {
                     size = ICON_SIZE
-                    sharpIconPng(pm, app, app.icon) { pm.getApplicationIcon(app) }
+                    sharpIconPng(pm, app, iconRes) { pm.getApplicationIcon(app) }
                 }
             }
         } catch (e: Exception) {
@@ -77,6 +84,19 @@ class AndroidAppInfoSource(
         }
         return AppDetails(label, icon, captionIcon, supportsMultipleWindows(pm, packageName))
     }
+}
+
+/**
+ * The icon resource of [packageName]'s launcher activity, as the list of installed apps draws
+ * it (the activity's or alias's own icon, else the app's); null when the app has no launcher
+ * activity of its own or none with an icon.
+ */
+internal fun launcherIconResource(pm: PackageManager, packageName: String): Int? {
+    val launch = pm.getLaunchIntentForPackage(packageName) ?: return null
+    val resolved = pm.resolveActivity(launch, PackageManager.ResolveInfoFlags.of(0)) ?: return null
+    // A match whose icon comes from another package cannot be loaded from this app's resources.
+    if (resolved.resolvePackageName != null || resolved.activityInfo?.packageName != packageName) return null
+    return resolved.iconResource.takeIf { it != 0 }
 }
 
 /**
@@ -128,9 +148,10 @@ internal fun iconPng(drawable: Drawable, size: Int = ICON_SIZE): ByteArray {
  * The icon [iconRes] of [app] drawn as a square PNG of [size] pixels, loaded at the density at
  * which its bitmaps are at least that large.
  *
- * The package manager loads an icon at the agent's own density, the guest display's 160 dpi,
- * where a launcher icon is 48 pixels and an adaptive icon's layers 108: drawn into 256 pixels
- * that is scaled up five times and blurred. [fallback] is the icon as the package manager
+ * The package manager loads an icon at the agent's own density, the guest display's (96 dpi
+ * on a 100% main monitor), where a launcher icon is 29 pixels and an adaptive icon's layers
+ * 65: drawn into 256 pixels
+ * that is scaled up eight times and blurred. [fallback] is the icon as the package manager
  * gives it, for an app whose icon cannot be read by resource.
  */
 internal fun sharpIconPng(pm: PackageManager, app: ApplicationInfo, iconRes: Int, size: Int = ICON_SIZE, fallback: () -> Drawable): ByteArray =

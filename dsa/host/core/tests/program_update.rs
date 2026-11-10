@@ -9,7 +9,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dsa_host_core::host_api::{UserAndroid, UserAndroids};
+use dsa_host_core::host_api::{ProgramPhase, ProgramProgress, UserAndroid, UserAndroids};
 use dsa_host_core::host_api_conformance::{FakeAndroid, FakeAndroids};
 use dsa_host_core::input::{PointerAction, PointerEvent, PointerTool};
 use dsa_host_core::session::SessionState;
@@ -1503,4 +1503,195 @@ fn fr15_a_click_on_an_update_alert_does_not_reach_android() {
             key: "dsa:update:program:ready:0.1.1".into(),
         })
         .unwrap();
+}
+
+/// Where the update stood each time it was looked at.
+type Seen = Arc<Mutex<Vec<Option<ProgramProgress>>>>;
+
+/// The users' Android, noting where the update stood when it was asked to stop them all.
+/// With `stuck`, one of them does not stop.
+struct StopObserved {
+    androids: Arc<FakeAndroids>,
+    status: Arc<ProgramStatus>,
+    seen: Seen,
+    stuck: bool,
+}
+
+impl UserAndroids for StopObserved {
+    fn android(&self, user: &str) -> Result<Arc<dyn UserAndroid>, String> {
+        self.androids.android(user)
+    }
+    fn running(&self) -> Vec<(String, SessionState)> {
+        self.androids.running()
+    }
+    fn stop_all(&self, timeout: Duration) -> Vec<(String, SessionState)> {
+        self.seen.lock().unwrap().push(self.status.progress());
+        if self.stuck {
+            return vec![("alice".into(), SessionState::Stopping)];
+        }
+        self.androids.stop_all(timeout)
+    }
+}
+
+/// The project's files, noting where the update stood while the setup file downloaded.
+struct FetchObserved {
+    fetch: MemoryFetch,
+    status: Arc<ProgramStatus>,
+    seen: Seen,
+}
+
+impl Fetch for FetchObserved {
+    fn fetch(&self, url: &str, out: &mut dyn Write) -> Result<u64, String> {
+        if url == SETUP_URL {
+            self.seen.lock().unwrap().push(self.status.progress());
+        }
+        self.fetch.fetch(url, out)
+    }
+}
+
+/// What an observed service saw: its updates, their status, and where the update stood
+/// during each download of the setup file and each stop of every Android.
+struct Observed {
+    updates: Arc<ProgramUpdates>,
+    status: Arc<ProgramStatus>,
+    downloads: Seen,
+    stops: Seen,
+}
+
+/// The program updates of a service of version `running` whose downloads and stops are
+/// observed.
+fn observed_service(h: &Harness, running: &str, stuck: bool) -> Observed {
+    let status = Arc::new(ProgramStatus::default());
+    let (downloads, stops) = (Seen::default(), Seen::default());
+    let updates = ProgramUpdates::new(
+        settings(&h.root, running),
+        Box::new(FetchObserved {
+            fetch: h.fetch.clone(),
+            status: Arc::clone(&status),
+            seen: Arc::clone(&downloads),
+        }),
+        Box::new(h.installer.clone()),
+        Arc::new(StopObserved {
+            androids: Arc::clone(&h.androids),
+            status: Arc::clone(&status),
+            seen: Arc::clone(&stops),
+            stuck,
+        }),
+        Arc::clone(&status),
+        "test",
+    );
+    Observed {
+        updates,
+        status,
+        downloads,
+        stops,
+    }
+}
+
+/// Where the update stands, as a settings app reads it from the local API.
+fn status_on_desktop(status: &Arc<ProgramStatus>) -> Option<ProgramProgress> {
+    let (_service, desktop) = desktops(status);
+    dsa_host_core::host_api::HostApiClient::connect(
+        &mut DesktopOf(desktop, "alice"),
+        "settings",
+        Duration::from_secs(10),
+    )
+    .unwrap()
+    .status()
+    .unwrap()
+    .program_update
+}
+
+fn progress(phase: ProgramPhase, version: &str) -> Option<ProgramProgress> {
+    Some(ProgramProgress::new(phase, version))
+}
+
+#[test]
+fn fr15_the_status_reports_each_phase_of_an_update_until_the_new_version_runs() {
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let old = observed_service(&h, "0.1.0", false);
+    assert_eq!(status_on_desktop(&old.status), None, "no update has run");
+    h.android_of("alice").start();
+
+    old.updates.install_now().unwrap();
+    assert_eq!(
+        old.downloads.lock().unwrap().as_slice(),
+        &[progress(ProgramPhase::Downloading, "0.1.1")],
+        "downloading while the setup file comes"
+    );
+    assert_eq!(
+        old.stops.lock().unwrap().as_slice(),
+        &[progress(ProgramPhase::StoppingAndroid, "0.1.1")],
+        "stopping Android before setup runs"
+    );
+    assert_eq!(
+        status_on_desktop(&old.status),
+        progress(ProgramPhase::Installing, "0.1.1"),
+        "installing while setup runs"
+    );
+    assert!(ProgramPhase::Installing.in_progress());
+
+    // Setup replaced the files under this service, which restarts into them.
+    h.installer.files_are("0.1.1.0");
+    h.installer.end(0, 0);
+    assert!(eventually(|| h.installer.restarts() == 1));
+    assert_eq!(
+        status_on_desktop(&old.status),
+        progress(ProgramPhase::Restarting, "0.1.1")
+    );
+
+    // The service from the new files says the update is done.
+    drop(old);
+    let (_new, status) = h.service("0.1.1");
+    let applied = status_on_desktop(&status).unwrap();
+    assert_eq!(
+        applied,
+        ProgramProgress::new(ProgramPhase::Applied, "0.1.1")
+    );
+    assert!(!applied.phase.in_progress());
+    assert_eq!(applied.to_string(), "updated to DSA 0.1.1");
+}
+
+#[test]
+fn fr15_the_status_reports_a_failed_update_and_a_finished_download_reports_no_phase() {
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let service = observed_service(&h, "0.1.0", false);
+    // The service's own check downloads, then nothing is under way: the update waits.
+    service.updates.check().unwrap();
+    assert_eq!(
+        service.downloads.lock().unwrap().as_slice(),
+        &[progress(ProgramPhase::Downloading, "0.1.1")]
+    );
+    assert_eq!(status_on_desktop(&service.status), None);
+
+    service.updates.install_now().unwrap();
+    h.installer.end(0, 1603);
+    assert!(eventually(|| service.status.installing().is_none()));
+    let failed = status_on_desktop(&service.status).unwrap();
+    assert_eq!(failed, ProgramProgress::new(ProgramPhase::Failed, "0.1.1"));
+    assert!(!failed.phase.in_progress());
+}
+
+#[test]
+fn fr15_an_update_refused_because_android_did_not_stop_reports_no_phase() {
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let service = observed_service(&h, "0.1.0", true);
+    let why = service.updates.install_now().unwrap_err();
+    assert!(why.to_string().contains("did not stop in time"), "{why}");
+    assert_eq!(
+        service.stops.lock().unwrap().as_slice(),
+        &[progress(ProgramPhase::StoppingAndroid, "0.1.1")]
+    );
+    assert_eq!(
+        status_on_desktop(&service.status),
+        None,
+        "nothing is under way any more"
+    );
+    assert_eq!(h.installer.runs(), 0);
 }

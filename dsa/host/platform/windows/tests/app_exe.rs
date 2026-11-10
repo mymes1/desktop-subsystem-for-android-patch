@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use dsa_exe_resources::{parse_ico, LANG_EN_US, RT_GROUP_ICON, RT_ICON, RT_VERSION};
 use dsa_host_core::tasks::AppInfo;
-use dsa_host_windows::app_exe::{ensure, program_name, program_path, NOTE_NAME};
+use dsa_host_windows::app_exe::{
+    ensure, ensure_installed, program_name, program_path, ProgramLauncher, NOTE_NAME,
+};
 use windows_sys::Win32::Foundation::FreeLibrary;
 use windows_sys::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
@@ -269,6 +271,99 @@ fn fr3_a_running_program_under_an_old_name_does_not_keep_the_old_name() {
     ensure(template, &dir, "com.example.clock", Some(&clock())).unwrap();
     assert!(!bare.exists());
     assert!(program.exists());
+}
+
+/// The same icon drawn another way: other bytes of a PNG Windows reads just as well.
+fn other_png() -> Vec<u8> {
+    let mut png = png();
+    png.push(0);
+    png
+}
+
+/// `clock()` as the list of installed apps describes it, at `version`.
+fn listed_clock(icon: Vec<u8>, version: i64) -> AppInfo {
+    AppInfo {
+        icon_png: icon,
+        version_code: version,
+        last_update_time_ms: 1_700_000_000_000,
+        ..clock()
+    }
+}
+
+/// Opens `path` without sharing deletion, as a running program's file is held.
+fn hold(path: &Path) -> std::fs::File {
+    use std::os::windows::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1) // FILE_SHARE_READ only
+        .open(path)
+        .unwrap()
+}
+
+#[test]
+fn fr7_the_start_menu_keeps_the_program_its_window_made_until_the_app_is_updated() {
+    let dir = fresh_dir("sources");
+    let template = Path::new(TEMPLATE);
+    let (program, _) = ensure(template, &dir, "com.example.clock", Some(&clock())).unwrap();
+    let made = std::fs::metadata(&program).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    // The list draws the same icon smaller: the program the window made stays, even while
+    // it runs, so no "in use" is reported.
+    let held = hold(&program);
+    let (same, note) = ensure_installed(template, &dir, &listed_clock(other_png(), 1)).unwrap();
+    assert_eq!(same, program);
+    assert!(note.is_none(), "{note:?}");
+    assert_eq!(
+        std::fs::metadata(&program).unwrap().modified().unwrap(),
+        made
+    );
+    assert_eq!(resource(&program, RT_ICON, 1, 0), Some(png()));
+    drop(held);
+    // An update of the app brings its icon from the list.
+    ensure_installed(template, &dir, &listed_clock(other_png(), 2)).unwrap();
+    assert_eq!(resource(&program, RT_ICON, 1, 0), Some(other_png()));
+}
+
+#[test]
+fn fr7_a_running_program_takes_its_new_icon_once_its_windows_close() {
+    let dir = fresh_dir("in-use");
+    let template = Path::new(TEMPLATE);
+    // Made before the guest could draw the app's icon: the window host's own icon.
+    let bare = AppInfo {
+        icon_png: Vec::new(),
+        ..clock()
+    };
+    let (program, _) = ensure(template, &dir, "com.example.clock", Some(&bare)).unwrap();
+    assert!(resource(&program, RT_ICON, 2, 0).is_some());
+    let held = hold(&program);
+    let (_, note) = ensure_installed(template, &dir, &listed_clock(png(), 1)).unwrap();
+    assert!(note.is_some(), "a running program cannot be replaced");
+    drop(held);
+    let (_, note) = ensure_installed(template, &dir, &listed_clock(png(), 1)).unwrap();
+    assert!(note.is_none());
+    assert_eq!(resource(&program, RT_ICON, 1, 0), Some(png()));
+}
+
+#[test]
+fn fr7_a_program_that_ran_without_its_icon_takes_it_when_its_window_host_ends() {
+    use dsa_host_windows::compositor::hosts::HostLauncher;
+    let dir = fresh_dir("ended");
+    let template = Path::new(TEMPLATE);
+    let bare = AppInfo {
+        icon_png: Vec::new(),
+        ..clock()
+    };
+    let (program, _) = ensure(template, &dir, "com.example.clock", Some(&bare)).unwrap();
+    let mut launcher = ProgramLauncher::new(template.to_path_buf(), dir.clone(), None);
+    // The icon became known while the program ran, and its process is still ending.
+    let held = hold(&program);
+    launcher.ended("com.example.clock", Some(&clock()));
+    // Still the window host's own icon, with all its sizes.
+    assert!(resource(&program, RT_ICON, 2, 0).is_some());
+    drop(held);
+    launcher.tick();
+    assert_eq!(resource(&program, RT_ICON, 1, 0), Some(png()));
+    assert_eq!(resource(&program, RT_ICON, 2, 0), None);
 }
 
 #[test]

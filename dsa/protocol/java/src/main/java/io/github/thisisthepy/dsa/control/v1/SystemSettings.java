@@ -462,6 +462,56 @@ public  final class SystemSettings extends
     accentColor_ = 0;
   }
 
+  public static final int FONT_SCALE_FIELD_NUMBER = 8;
+  private float fontScale_;
+  /**
+   * <pre>
+   * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+   * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+   * a host pixel, and scales text separately from everything else, so this is 160/96 times
+   * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+   * the guest's as it is.
+   * </pre>
+   *
+   * <code>float font_scale = 8;</code>
+   * @return The fontScale.
+   */
+  @java.lang.Override
+  public float getFontScale() {
+    return fontScale_;
+  }
+  /**
+   * <pre>
+   * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+   * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+   * a host pixel, and scales text separately from everything else, so this is 160/96 times
+   * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+   * the guest's as it is.
+   * </pre>
+   *
+   * <code>float font_scale = 8;</code>
+   * @param value The fontScale to set.
+   */
+  private void setFontScale(float value) {
+    
+    fontScale_ = value;
+  }
+  /**
+   * <pre>
+   * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+   * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+   * a host pixel, and scales text separately from everything else, so this is 160/96 times
+   * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+   * the guest's as it is.
+   * </pre>
+   *
+   * <code>float font_scale = 8;</code>
+   */
+  private void clearFontScale() {
+    
+    fontScale_ = 0F;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.SystemSettings parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1014,6 +1064,58 @@ public  final class SystemSettings extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+     * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+     * a host pixel, and scales text separately from everything else, so this is 160/96 times
+     * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+     * the guest's as it is.
+     * </pre>
+     *
+     * <code>float font_scale = 8;</code>
+     * @return The fontScale.
+     */
+    @java.lang.Override
+    public float getFontScale() {
+      return instance.getFontScale();
+    }
+    /**
+     * <pre>
+     * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+     * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+     * a host pixel, and scales text separately from everything else, so this is 160/96 times
+     * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+     * the guest's as it is.
+     * </pre>
+     *
+     * <code>float font_scale = 8;</code>
+     * @param value The fontScale to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFontScale(float value) {
+      copyOnWrite();
+      instance.setFontScale(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The guest's font scale (Settings.System.FONT_SCALE), so text in Android apps is the size
+     * of the host's text. Android draws at 96 dpi at a host scale of 100%, where a dp is 0.6 of
+     * a host pixel, and scales text separately from everything else, so this is 160/96 times
+     * the host's text size setting: about 1.667 at a text size of 100%, 2.5 at 150%. 0 leaves
+     * the guest's as it is.
+     * </pre>
+     *
+     * <code>float font_scale = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFontScale() {
+      copyOnWrite();
+      instance.clearFontScale();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.SystemSettings)
   }
   @java.lang.Override
@@ -1037,10 +1139,11 @@ public  final class SystemSettings extends
             "firstDayOfWeek_",
             "darkMode_",
             "accentColor_",
+            "fontScale_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0001\u0000\u0001\u0208\u0002\u021a" +
-              "\u0003\u0208\u0004\u0007\u0005\u000b\u0006\u0007\u0007\u0006";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0001\u0000\u0001\u0208\u0002\u021a\u0003\u0208" +
+              "\u0004\u0007\u0005\u000b\u0006\u0007\u0007\u0006\b\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

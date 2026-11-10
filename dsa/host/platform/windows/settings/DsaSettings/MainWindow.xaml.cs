@@ -36,6 +36,8 @@ public partial class MainWindow : FluentWindow
         // Width and Height are the size it prefers; on a screen too small for that it opens
         // smaller, inside the work area, so its title bar can be grabbed.
         StartupPlacement.Attach(this);
+        // The title bar dims while another window has the focus, as Windows' own do.
+        TitleBarActivation.Attach(this);
         InstallBar.DataContext = App.Install;
         App.Install.PropertyChanged += (_, _) => InstallBar.Severity = App.Install.Severity switch
         {

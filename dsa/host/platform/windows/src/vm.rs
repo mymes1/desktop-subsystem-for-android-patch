@@ -111,6 +111,9 @@ pub struct AndroidVmConfig {
     /// The small disk of fixed size the guest kernel keeps its last log on (pstore), attached
     /// writable after the other disks. With none the guest keeps no log across a panic.
     pub pstore_disk: Option<PathBuf>,
+    /// The user's add-on disk (a fixed VHD holding the images of the add-ons they installed),
+    /// attached read only after the pstore disk. With none the guest has no add-ons.
+    pub addon_disk: Option<PathBuf>,
     /// SIDs, besides SYSTEM, allowed to bind and connect Hyper-V sockets to this VM: the user
     /// the VM runs for.
     pub socket_sids: Vec<String>,
@@ -451,6 +454,14 @@ impl AndroidVmConfig {
                 "Type": "VirtualDisk",
                 "Path": path_string(pstore),
                 "ReadOnly": false,
+            });
+        }
+        if let Some(addons) = &self.addon_disk {
+            let lun = attachments.as_object().map_or(0, |a| a.len()).to_string();
+            attachments[lun] = json!({
+                "Type": "VirtualDisk",
+                "Path": path_string(addons),
+                "ReadOnly": true,
             });
         }
         devices["Scsi"]["0"]["Attachments"] = attachments;

@@ -123,13 +123,20 @@ pub enum ToHost {
     AppMenu {
         new_window: bool,
     },
+    /// The app's icon changed since its window host's program was made with it: every window
+    /// of the app shows this one at once. `caption_icon_png` is the title bar's (an adaptive
+    /// icon's foreground), empty when the icon is not adaptive. About the app, like `AppMenu`.
+    AppIcon {
+        icon_png: Vec<u8>,
+        caption_icon_png: Vec<u8>,
+    },
 }
 
 impl ToHost {
     /// The task whose window the message is about; `None` for a message about the app.
     pub fn task_id(&self) -> Option<i32> {
         Some(match self {
-            ToHost::AppMenu { .. } => return None,
+            ToHost::AppMenu { .. } | ToHost::AppIcon { .. } => return None,
             ToHost::Show { task_id, .. }
             | ToHost::Retitle { task_id, .. }
             | ToHost::Resize { task_id, .. }
@@ -260,6 +267,28 @@ struct AppHost {
     link: Link,
     /// The tasks whose windows this window host has or is about to have.
     tasks: BTreeSet<i32>,
+    /// The icon the window host shows: the one its program was made with, or the one it was
+    /// last sent. `None` while it is not known, as for a window host the user started.
+    icon: Option<Icon>,
+}
+
+/// An app's icon and its title bar's icon, as PNG images.
+type Icon = (Vec<u8>, Vec<u8>);
+
+/// The icon of `app`, when the guest drew one.
+fn icon_of(app: &AppInfo) -> Option<Icon> {
+    (!app.icon_png.is_empty()).then(|| (app.icon_png.clone(), app.caption_icon_png.clone()))
+}
+
+/// The message that shows `icon` on every window of an app.
+fn icon_message(host: HostId, icon: &Icon) -> HostAction {
+    HostAction::Send {
+        host,
+        message: ToHost::AppIcon {
+            icon_png: icon.0.clone(),
+            caption_icon_png: icon.1.clone(),
+        },
+    }
 }
 
 /// The window hosts and the task windows each one shows.
@@ -277,37 +306,49 @@ impl WindowHosts {
     }
 
     /// Records an app's name and icon, for the next time its window host is made. A window
-    /// host that waits for them is started now.
+    /// host that waits for them is started now; one that runs is told of a new icon.
     pub fn app(&mut self, app: &AppInfo, now: Instant) -> Vec<HostAction> {
         if !is_valid_package(&app.package_name) {
             return Vec::new();
         }
         let offered = self.offers_new_window(&app.package_name);
         self.apps.insert(app.package_name.clone(), app.clone());
-        match self.hosts.get_mut(&app.package_name) {
-            // A window host that runs hears when its app starts or stops supporting several
-            // windows, as an update of the app may change it.
-            Some(AppHost {
-                link: Link::Attached { host, .. },
-                ..
-            }) if offered != app.multiple_windows => vec![HostAction::Send {
-                host: *host,
-                message: ToHost::AppMenu {
-                    new_window: app.multiple_windows,
-                },
-            }],
-            Some(AppHost {
-                link: Link::Starting { since, named, .. },
-                ..
-            }) if !*named => {
+        let Some(host) = self.hosts.get_mut(&app.package_name) else {
+            return Vec::new();
+        };
+        match &mut host.link {
+            Link::Attached { host: id, .. } => {
+                let id = *id;
+                let mut actions = Vec::new();
+                // A window host that runs hears when its app starts or stops supporting
+                // several windows, as an update of the app may change it.
+                if offered != app.multiple_windows {
+                    actions.push(HostAction::Send {
+                        host: id,
+                        message: ToHost::AppMenu {
+                            new_window: app.multiple_windows,
+                        },
+                    });
+                }
+                // Its windows show a new icon at once; its program takes it once it ends.
+                if let Some(icon) = icon_of(app).filter(|icon| host.icon.as_ref() != Some(icon)) {
+                    actions.push(icon_message(id, &icon));
+                    host.icon = Some(icon);
+                }
+                actions
+            }
+            Link::Starting { since, named, .. } if !*named => {
                 *named = true;
                 *since = now;
+                host.icon = icon_of(app);
                 vec![HostAction::Start {
                     package: app.package_name.clone(),
                     app: Some(Box::new(app.clone())),
                 }]
             }
-            _ => Vec::new(),
+            // Started already with what was known then: it hears of the new icon when it
+            // attaches.
+            Link::Starting { .. } => Vec::new(),
         }
     }
 
@@ -413,6 +454,7 @@ impl WindowHosts {
                 let app = self.hosts.entry(package_name.clone()).or_insert_with(|| {
                     // Without the app's name yet, the start waits for it a little.
                     let named = info.is_some();
+                    let icon = info.as_ref().and_then(icon_of);
                     if named {
                         actions.push(HostAction::Start {
                             package: package_name.clone(),
@@ -426,6 +468,7 @@ impl WindowHosts {
                             pending: Vec::new(),
                         },
                         tasks: BTreeSet::new(),
+                        icon,
                     }
                 });
                 app.tasks.insert(*task_id);
@@ -606,11 +649,17 @@ impl WindowHosts {
                 actions
             }
             Some(_) => {
-                // The menu goes first, so the windows open with it.
+                // The menu goes first, so the windows open with it, and the app's icon when it
+                // changed after the program was made.
                 let menu = self.app_menu(host, package);
+                let latest = self.apps.get(package).and_then(icon_of);
                 let Some(app) = self.hosts.get_mut(package) else {
                     unreachable!("matched above");
                 };
+                let icon = latest.filter(|icon| app.icon.as_ref() != Some(icon));
+                if icon.is_some() {
+                    app.icon = icon.clone();
+                }
                 let Link::Starting { pending, .. } = std::mem::replace(
                     &mut app.link,
                     Link::Attached {
@@ -621,6 +670,7 @@ impl WindowHosts {
                     unreachable!("matched above");
                 };
                 let mut actions: Vec<HostAction> = std::iter::once(menu)
+                    .chain(icon.map(|icon| icon_message(host, &icon)))
                     .chain(
                         pending
                             .into_iter()
@@ -645,6 +695,9 @@ impl WindowHosts {
                 actions
             }
             None if launch => {
+                // The user started the program the Start menu made, whose icon may be older
+                // than the one the guest gave since.
+                let icon = self.apps.get(package).and_then(icon_of);
                 self.hosts.insert(
                     package.to_string(),
                     AppHost {
@@ -653,9 +706,13 @@ impl WindowHosts {
                             waiting_since: Some(now),
                         },
                         tasks: BTreeSet::new(),
+                        icon: icon.clone(),
                     },
                 );
-                vec![self.app_menu(host, package), launch_action()]
+                std::iter::once(self.app_menu(host, package))
+                    .chain(icon.map(|icon| icon_message(host, &icon)))
+                    .chain(std::iter::once(launch_action()))
+                    .collect()
             }
             None => vec![HostAction::Disconnect {
                 host,
@@ -715,9 +772,11 @@ impl WindowHosts {
                 if !*named && now.duration_since(*since) >= APP_INFO_WAIT {
                     *named = true;
                     *since = now;
+                    let info = self.apps.get(package).cloned();
+                    app.icon = info.as_ref().and_then(icon_of);
                     actions.push(HostAction::Start {
                         package: package.clone(),
-                        app: self.apps.get(package).cloned().map(Box::new),
+                        app: info.map(Box::new),
                     });
                 }
             }
@@ -915,6 +974,13 @@ pub fn to_wire(message: &ToHost) -> Body {
         ToHost::AppMenu { new_window } => {
             Body::AppMenu(dsa_protocol::window_host::types::AppMenu { new_window })
         }
+        ToHost::AppIcon {
+            icon_png,
+            caption_icon_png,
+        } => Body::AppIcon(dsa_protocol::window_host::types::AppIcon {
+            icon_png,
+            caption_icon_png,
+        }),
     }
 }
 
@@ -1024,6 +1090,12 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
         },
         Body::AppMenu(menu) => ToHost::AppMenu {
             new_window: menu.new_window,
+        },
+        // An empty icon would leave the windows with none; the window keeps the one it has.
+        Body::AppIcon(icon) if icon.icon_png.is_empty() => return None,
+        Body::AppIcon(icon) => ToHost::AppIcon {
+            icon_png: icon.icon_png,
+            caption_icon_png: icon.caption_icon_png,
         },
         _ => return None,
     })
@@ -1724,6 +1796,14 @@ mod tests {
             },
             ToHost::AppMenu { new_window: true },
             ToHost::AppMenu { new_window: false },
+            ToHost::AppIcon {
+                icon_png: vec![0x89, b'P', b'N', b'G'],
+                caption_icon_png: vec![1, 2],
+            },
+            ToHost::AppIcon {
+                icon_png: vec![3],
+                caption_icon_png: Vec::new(),
+            },
         ] {
             assert_eq!(to_host_from_wire(&to_wire(&message)), Some(message));
         }
@@ -1807,5 +1887,105 @@ mod tests {
         assert_eq!(attach.package_name, CLOCK);
         assert_eq!(attach.process_id, 42);
         assert!(attach.launch);
+    }
+
+    fn drawn(package: &str, icon: u8, caption: u8) -> AppInfo {
+        AppInfo {
+            icon_png: vec![icon],
+            caption_icon_png: vec![caption],
+            ..info(package)
+        }
+    }
+
+    fn icon_sent(host: HostId, icon: u8, caption: u8) -> HostAction {
+        HostAction::Send {
+            host,
+            message: ToHost::AppIcon {
+                icon_png: vec![icon],
+                caption_icon_png: vec![caption],
+            },
+        }
+    }
+
+    #[test]
+    fn fr7_an_open_window_hears_of_its_apps_new_icon_at_once() {
+        let now = Instant::now();
+        let mut hosts = WindowHosts::new();
+        hosts.app(&drawn(CLOCK, 1, 1), now);
+        hosts.change(&open(1, CLOCK), now);
+        // The program was made with the icon it shows, so nothing is sent with the windows.
+        assert_eq!(
+            hosts.attached(HostId(1), CLOCK, false, now),
+            vec![
+                menu(HostId(1), false),
+                HostAction::Send {
+                    host: HostId(1),
+                    message: show(1)
+                }
+            ]
+        );
+        // The same icon again changes nothing; a new one reaches the running window host.
+        assert!(hosts.app(&drawn(CLOCK, 1, 1), now).is_empty());
+        assert_eq!(
+            hosts.app(&drawn(CLOCK, 2, 3), now),
+            vec![icon_sent(HostId(1), 2, 3)]
+        );
+        assert!(hosts.app(&drawn(CLOCK, 2, 3), now).is_empty());
+        // An icon the guest could not draw leaves the one the windows show.
+        assert!(hosts.app(&info(CLOCK), now).is_empty());
+        assert!(hosts.app(&drawn(CLOCK, 2, 3), now).is_empty());
+    }
+
+    #[test]
+    fn fr7_a_window_host_started_without_its_icon_gets_it_when_it_attaches() {
+        let now = Instant::now();
+        let mut hosts = WindowHosts::new();
+        // The guest could not draw the icon yet when the program was made.
+        hosts.app(&info(CLOCK), now);
+        assert!(matches!(
+            hosts.change(&open(1, CLOCK), now).as_slice(),
+            [HostAction::Start { .. }]
+        ));
+        // It could before the window host connected.
+        assert!(hosts.app(&drawn(CLOCK, 4, 5), now).is_empty());
+        assert_eq!(
+            hosts.attached(HostId(1), CLOCK, false, now),
+            vec![
+                menu(HostId(1), false),
+                icon_sent(HostId(1), 4, 5),
+                HostAction::Send {
+                    host: HostId(1),
+                    message: show(1)
+                }
+            ]
+        );
+        // Told once.
+        assert!(hosts.app(&drawn(CLOCK, 4, 5), now).is_empty());
+    }
+
+    #[test]
+    fn fr7_a_window_host_the_user_started_shows_the_apps_latest_icon() {
+        let now = Instant::now();
+        let mut hosts = WindowHosts::new();
+        hosts.app(&drawn(CLOCK, 6, 7), now);
+        assert_eq!(
+            hosts.attached(HostId(1), CLOCK, true, now),
+            vec![
+                menu(HostId(1), false),
+                icon_sent(HostId(1), 6, 7),
+                HostAction::Launch {
+                    package: CLOCK.into()
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn fr7_an_empty_icon_on_the_wire_is_not_shown() {
+        let empty = Body::AppIcon(dsa_protocol::window_host::types::AppIcon {
+            icon_png: Vec::new(),
+            caption_icon_png: vec![1],
+        });
+        assert_eq!(to_host_from_wire(&empty), None);
     }
 }

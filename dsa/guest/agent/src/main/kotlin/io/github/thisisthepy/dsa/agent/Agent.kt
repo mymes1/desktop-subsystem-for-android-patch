@@ -11,6 +11,8 @@ import io.github.thisisthepy.dsa.agent.diagnostics.CrashRecordSource
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
 import io.github.thisisthepy.dsa.agent.diagnostics.NativeLibraryCrashes
+import io.github.thisisthepy.dsa.agent.gapps.ComponentStates
+import io.github.thisisthepy.dsa.agent.gapps.DesktopPlayServices
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
 import io.github.thisisthepy.dsa.agent.install.AppReinstaller
@@ -33,6 +35,12 @@ import io.github.thisisthepy.dsa.agent.input.TouchSounds
 import io.github.thisisthepy.dsa.agent.input.UnhandledKeys
 import io.github.thisisthepy.dsa.agent.files.DragCatcher
 import io.github.thisisthepy.dsa.agent.files.DragOut
+import io.github.thisisthepy.dsa.agent.files.GuestDrag
+import io.github.thisisthepy.dsa.agent.geocode.GeocodeAnswer
+import io.github.thisisthepy.dsa.agent.geocode.GeocodeLookup
+import io.github.thisisthepy.dsa.agent.geocode.HostGeocoder
+import io.github.thisisthepy.dsa.agent.location.NetworkLocation
+import io.github.thisisthepy.dsa.agent.location.NetworkLocationSink
 import io.github.thisisthepy.dsa.agent.files.FileOpener
 import io.github.thisisthepy.dsa.agent.files.FileReceiver
 import io.github.thisisthepy.dsa.agent.files.MediaScan
@@ -69,6 +77,7 @@ import io.github.thisisthepy.dsa.agent.tasks.LauncherApps
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskReporter
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
+import io.github.thisisthepy.dsa.agent.tasks.restartedByFontScale
 import io.github.thisisthepy.dsa.agent.trace.FrameStatsTrace
 import io.github.thisisthepy.dsa.agent.trace.InputTrace
 import io.github.thisisthepy.dsa.agent.trace.ResizeTrace
@@ -121,6 +130,11 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
  * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
+ * With Google Play installed, the parts of Play services a desktop does not use stay off,
+ * across Play services' updates ([DesktopPlayServices]).
+ * The host's location is also the guest's network location ([NetworkLocation]), the guest's
+ * geocoder asks the host ([HostGeocoder]), and what apps share through "Share on PC" goes to
+ * the host's share UI, its files read like a drag's ([DragOut.share]).
  */
 class Agent(
     private val ownPackage: String,
@@ -177,6 +191,9 @@ class Agent(
     private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
     private val unhandledKeys: UnhandledKeys = UnhandledKeys.NONE,
     private val editorFocused: () -> Boolean = { false },
+    componentStates: ComponentStates = ComponentStates.NONE,
+    /** Tells the user that a share did not reach the PC (the host's reason, or empty). */
+    shareNotice: (String) -> Unit = {},
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -320,6 +337,7 @@ class Agent(
         log = log,
         clock = clock,
     )
+    private val playServices = DesktopPlayServices(componentStates, scheduler, log, clock)
     private val freeform = FreeformSetup(windowing, scheduler, log)
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
     private val captions = CaptionInsets(actions, log)
@@ -351,7 +369,10 @@ class Agent(
         send = { frame -> channel.send(frame) },
         log = log,
         run = dragRunner ?: { work -> dragThread.execute(work) },
+        notify = shareNotice,
     )
+    private val networkLocation = NetworkLocation({ frame -> channel.send(frame) }, log, isConnected = { channel.connected })
+    private val geocoder = HostGeocoder({ frame -> channel.send(frame) }, log, isConnected = { channel.connected }, scheduler)
     private val accessibilityExport = AccessibilityExport(
         accessibility,
         scheduler,
@@ -374,6 +395,7 @@ class Agent(
         scheduler.post {
             freeform.start()
             closedApps.configure()
+            playServices.start()
             try {
                 inputMethods.useHostInputMethod()
             } catch (e: Exception) {
@@ -521,6 +543,7 @@ class Agent(
         widgetManager.connected()
         apkInstaller.connected()
         printer.connected()
+        networkLocation.connected()
         installed.resend()
         memoryReporter?.connected()
         links.connected()
@@ -616,6 +639,8 @@ class Agent(
         if (googleDeviceIds.handle(envelope)) return true
         if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
+        if (networkLocation.handle(envelope)) return true
+        if (geocoder.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true
         if (appReinstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
@@ -687,6 +712,39 @@ class Agent(
         scheduler.post { printer.queued(job) }
     }
 
+    /**
+     * Android's location manager bound the network location provider ([sink]), or let it go
+     * (null). Called from any thread.
+     */
+    fun networkLocationProvider(sink: NetworkLocationSink?) {
+        scheduler.post {
+            networkLocation.sink = sink ?: NetworkLocationSink.NONE
+            if (sink == null) networkLocation.request(false, 0)
+        }
+    }
+
+    /**
+     * Android wants network locations every [intervalMillis], or none ([active] false); the
+     * host is asked for its location while it does. Called from any thread.
+     */
+    fun wantNetworkLocation(active: Boolean, intervalMillis: Long) {
+        scheduler.post { networkLocation.request(active, intervalMillis) }
+    }
+
+    /** An app looks an address up through Android's geocoder: the host answers. Called from any thread. */
+    fun geocode(lookup: GeocodeLookup, answer: GeocodeAnswer) {
+        scheduler.post { geocoder.lookup(lookup, answer) }
+    }
+
+    /**
+     * An app shared [drag] through "Share on PC": it goes to the host's share UI. [drag] is
+     * released once the host has its files, or at once when it cannot be shared. Called from
+     * any thread.
+     */
+    fun share(drag: GuestDrag, title: String, packageName: String, appLabel: String) {
+        dragOut.share(drag, title, packageName, appLabel) { channel.connected }
+    }
+
     /** Android canceled a job the print service was given. Called from any thread. */
     fun cancelPrint(job: QueuedPrintJob) {
         scheduler.post { printer.cancelRequested(job) }
@@ -756,6 +814,9 @@ class Agent(
             return
         }
         for (task in running) trace.boundsRead(task.taskId, task.bounds.right - task.bounds.left, task.bounds.bottom - task.bounds.top)
+        // A font scale the host asked for waits while an app that would be restarted for it
+        // is open.
+        settingsSync.tasksRunning(restartedByFontScale(running))
         val arranging = System.nanoTime()
         val bounds = arranger.arrange(running.filter(reporter::reportable))
         trace.applied((System.nanoTime() - arranging) / 1_000_000.0)

@@ -21,6 +21,7 @@ pub mod host_file;
 pub mod ime;
 pub mod keys;
 pub mod launch;
+pub mod live_icon;
 pub mod pointer;
 pub mod screenshot;
 pub mod splash;
@@ -155,8 +156,58 @@ pub struct HostSetup {
     pub accessibility: Option<accessibility::ApiConnect>,
 }
 
+/// A task's texture as the window manager announced it: its ID, the handle the window manager
+/// placed in this process, its size, and the texture opened from it.
+///
+/// The handle stays open while the texture is the task's, so that after a GPU reset, which
+/// removes the devices it was opened on, it can be opened again on the new ones. A texture the
+/// reset took with the window manager's own device does not open again; the window manager
+/// then makes a new one and announces it.
+struct Received {
+    id: u64,
+    handle: HANDLE,
+    size: (u32, u32),
+    opened: Option<OpenedTexture>,
+}
+
+impl Received {
+    /// The texture opened on `gpu`'s current devices, opening it again when a GPU reset
+    /// replaced the ones it was opened on. `None` when it does not open there.
+    fn current(&mut self, gpu: &Gpu, log: Option<&CompositorLogger>) -> Option<&OpenedTexture> {
+        let stale = self
+            .opened
+            .as_ref()
+            .is_none_or(|opened| opened.generation() != gpu.generation());
+        if stale {
+            self.opened = match gpu.open_shared(self.handle as isize, self.size) {
+                Ok(opened) => Some(opened),
+                Err(why) => {
+                    if self.opened.is_some() {
+                        note(
+                            log,
+                            &format!(
+                                "a task's frame texture does not open on the new Direct3D \
+                                 devices ({why}); the window waits for a new one"
+                            ),
+                        );
+                    }
+                    None
+                }
+            };
+        }
+        self.opened.as_ref()
+    }
+}
+
+impl Drop for Received {
+    fn drop(&mut self) {
+        // SAFETY: a handle the window manager duplicated into this process, closed once.
+        unsafe { CloseHandle(self.handle) };
+    }
+}
+
 /// Each task's texture, as the window manager last announced it.
-type Textures = HashMap<i32, (u64, OpenedTexture)>;
+type Textures = HashMap<i32, Received>;
 
 /// Runs the window host until the window manager closes the connection. An error says why
 /// it could not start.
@@ -182,7 +233,7 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
         )?));
     let gpu = match Gpu::new(luid, true) {
         Ok(gpu) => {
-            if luid.is_some() && !gpu.on_renderer_gpu {
+            if luid.is_some() && !gpu.on_renderer_gpu() {
                 note(
                     log.as_deref(),
                     "the window manager's GPU was not found; the windows may stay empty",
@@ -310,10 +361,6 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                         .ok(),
                     None => None,
                 };
-                // The window manager placed the handle in this process for this alone; the
-                // opened texture keeps what it needs.
-                // SAFETY: a handle the window manager duplicated into this process.
-                unsafe { CloseHandle(handle as HANDLE) };
                 trace_stage(
                     log.as_deref(),
                     texture.task_id,
@@ -326,14 +373,17 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                         millis(started.elapsed())
                     ),
                 );
-                match opened {
-                    Some(opened) => {
-                        textures.insert(texture.task_id, (texture.texture_id, opened));
-                    }
-                    None => {
-                        textures.remove(&texture.task_id);
-                    }
-                }
+                // Kept, opened or not: a texture that did not open because this process's
+                // devices were just removed opens on the new ones at the next frame.
+                textures.insert(
+                    texture.task_id,
+                    Received {
+                        id: texture.texture_id,
+                        handle: handle as HANDLE,
+                        size: (texture.width, texture.height),
+                        opened,
+                    },
+                );
             }
             Body::Frame(frame) => {
                 let presenter = if opening.remove(&frame.task_id) {
@@ -345,25 +395,29 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                         .get(&frame.task_id)
                         .cloned()
                 };
-                if let (Some(presenter), Some((id, texture))) =
-                    (presenter, textures.get(&frame.task_id))
-                {
-                    if *id == frame.texture_id {
-                        let started = std::time::Instant::now();
-                        if let Err(why) = presenter.present(texture, (frame.width, frame.height)) {
-                            note(log.as_deref(), &why);
-                        }
-                        if input_trace_on() {
-                            input_trace(
-                                "app.present",
-                                frame.task_id,
-                                &format!(
-                                    "sequence={} took={}",
-                                    frame.sequence,
-                                    millis(started.elapsed())
-                                ),
-                            );
-                        }
+                let texture = match (&gpu, textures.get_mut(&frame.task_id)) {
+                    (Some(gpu), Some(received)) if received.id == frame.texture_id => {
+                        received.current(gpu, log.as_deref())
+                    }
+                    _ => None,
+                };
+                if let (Some(presenter), Some(texture)) = (presenter, texture) {
+                    let started = std::time::Instant::now();
+                    // A failure (a GPU reset among them) is logged and the window stays: the
+                    // presenter moves to new devices, and the connection goes on.
+                    if let Err(why) = presenter.present(texture, (frame.width, frame.height)) {
+                        note(log.as_deref(), &why);
+                    }
+                    if input_trace_on() {
+                        input_trace(
+                            "app.present",
+                            frame.task_id,
+                            &format!(
+                                "sequence={} took={}",
+                                frame.sequence,
+                                millis(started.elapsed())
+                            ),
+                        );
                     }
                 }
                 // Answered even when nothing was shown, so the renderer never waits on it.

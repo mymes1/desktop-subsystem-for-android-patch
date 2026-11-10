@@ -32,4 +32,10 @@ struct YuvPlanes {
 bool copyNv12(const uint8_t* nv12, size_t size, uint32_t width, uint32_t height, uint32_t stride,
               const YuvPlanes& planes);
 
+// As above, into a buffer of `bufferWidth` by `bufferHeight` (at least the picture's size),
+// whose samples past the picture take the picture's edge, so nothing outside the picture is
+// ever zero (which shows as green). False, copying nothing, when the buffer is smaller.
+bool copyNv12(const uint8_t* nv12, size_t size, uint32_t width, uint32_t height, uint32_t stride,
+              const YuvPlanes& planes, uint32_t bufferWidth, uint32_t bufferHeight);
+
 }  // namespace dsa::codec2

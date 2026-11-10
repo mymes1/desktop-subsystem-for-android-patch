@@ -113,6 +113,8 @@ pub struct Status {
     pub last_reason: Option<String>,
     pub update_notice: Option<String>,
     pub problem: Option<String>,
+    /// Where an update of DSA itself stands, when one is under way or has just ended.
+    pub program_update: Option<ProgramUpdate>,
 }
 
 impl Status {
@@ -122,8 +124,81 @@ impl Status {
             last_reason: optional_text(json, "last_reason"),
             update_notice: optional_text(json, "update_notice"),
             problem: optional_text(json, "problem"),
+            program_update: ProgramUpdate::read(&json["program_update"]),
         }
     }
+}
+
+/// How far an update of DSA itself has got, as the service and the settings app see it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramUpdatePhase {
+    /// No update of DSA is under way.
+    None,
+    /// The app asked the service to install now and waits for its first word.
+    Starting,
+    Downloading,
+    /// Every user's Android is being stopped so the new version can be installed.
+    StoppingAndroid,
+    Installing,
+    /// The service is restarting into the new version, or is away while it is replaced.
+    Restarting,
+    /// The new version runs.
+    Applied,
+    /// The update failed and the version before it is still installed.
+    Failed,
+}
+
+impl ProgramUpdatePhase {
+    /// The phase a name of `dsa status --json` stands for. An unknown name, as a newer service
+    /// may give, is none.
+    pub fn parse(name: &str) -> ProgramUpdatePhase {
+        match name {
+            "downloading" => ProgramUpdatePhase::Downloading,
+            "stopping_android" => ProgramUpdatePhase::StoppingAndroid,
+            "installing" => ProgramUpdatePhase::Installing,
+            "restarting" => ProgramUpdatePhase::Restarting,
+            "applied" => ProgramUpdatePhase::Applied,
+            "failed" => ProgramUpdatePhase::Failed,
+            _ => ProgramUpdatePhase::None,
+        }
+    }
+
+    /// Whether the update is still under way, so the user should leave DSA alone.
+    pub fn in_progress(self) -> bool {
+        matches!(
+            self,
+            ProgramUpdatePhase::Starting
+                | ProgramUpdatePhase::Downloading
+                | ProgramUpdatePhase::StoppingAndroid
+                | ProgramUpdatePhase::Installing
+                | ProgramUpdatePhase::Restarting
+        )
+    }
+}
+
+/// Where an update of DSA stands: its phase and the version it installs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgramUpdate {
+    pub phase: ProgramUpdatePhase,
+    pub version: String,
+}
+
+impl ProgramUpdate {
+    fn read(json: &Value) -> Option<ProgramUpdate> {
+        let phase = ProgramUpdatePhase::parse(json["phase"].as_str().unwrap_or_default());
+        (phase != ProgramUpdatePhase::None).then(|| ProgramUpdate {
+            phase,
+            version: text(json, "version"),
+        })
+    }
+}
+
+/// What the service answered when asked to install the newest version of DSA now: the version
+/// it installs, or none when there is nothing to install, and its own words.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgramUpdateAnswer {
+    pub installing: Option<String>,
+    pub detail: String,
 }
 
 /// How Android reaches the network.
@@ -195,6 +270,9 @@ pub struct Settings {
     pub arm_translation: bool,
     pub stop_without_asking: bool,
     pub advanced_networking: bool,
+    /// Whether Android restarts by itself into an Android image the service downloaded. On
+    /// by default; off, the image is used the next time the user starts Android.
+    pub image_auto_restart: bool,
     pub network: Option<Network>,
     pub file_sharing: bool,
     pub shared_folders: Vec<String>,
@@ -269,6 +347,7 @@ impl Settings {
             arm_translation: flag(json, "arm_translation", true),
             stop_without_asking: flag(json, "stop_without_asking", false),
             advanced_networking: flag(json, "advanced_networking", false),
+            image_auto_restart: flag(json, "image_auto_restart", true),
             network: json
                 .get("network")
                 .filter(|n| n.is_object())
@@ -314,11 +393,45 @@ pub struct HostProcess {
     pub private_kb: u64,
 }
 
+/// What some of Android's processes cost, in KiB: their pages in memory, and their share of
+/// compressed memory (zram) at the compression zram measures. PSS counts what is swapped out
+/// at its size before compression, two or three times this. `compressed_kb` is `None` when the
+/// compression could not be measured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryShare {
+    pub resident_kb: u64,
+    pub compressed_kb: Option<u64>,
+}
+
+impl MemoryShare {
+    pub fn total_kb(&self) -> u64 {
+        self.resident_kb + self.compressed_kb.unwrap_or(0)
+    }
+
+    fn read(share: &Value) -> MemoryShare {
+        MemoryShare {
+            resident_kb: number(share, "resident_kb"),
+            compressed_kb: share["compressed_kb"].as_u64(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuestProcess {
     pub pid: i64,
     pub name: String,
     pub pss_kb: u64,
+    /// It belongs to Google Play services.
+    pub google_play: bool,
+    /// What it costs; `None` from a service that does not say.
+    pub cost: Option<MemoryShare>,
+}
+
+/// Every process of Google Play services together: how many, and what they cost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GooglePlayMemory {
+    pub processes: u64,
+    pub cost: MemoryShare,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -349,6 +462,10 @@ pub struct GuestMemory {
     pub top_processes: Vec<GuestProcess>,
     pub age_seconds: u64,
     pub kernel: Option<GuestKernel>,
+    /// What the processes cost together; `None` from a service that does not say.
+    pub apps: Option<MemoryShare>,
+    /// `None` while none of Google Play services' processes runs.
+    pub google_play: Option<GooglePlayMemory>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -411,10 +528,22 @@ impl Memory {
                         pid: signed(p, "pid"),
                         name: text(p, "name"),
                         pss_kb: number(p, "pss_kb"),
+                        google_play: p["google_play"].as_bool().unwrap_or(false),
+                        cost: p.get("resident_kb").map(|_| MemoryShare::read(p)),
                     })
                     .collect(),
                 age_seconds: number(g, "age_seconds"),
                 kernel,
+                apps: g
+                    .get("apps")
+                    .filter(|a| a.is_object())
+                    .map(MemoryShare::read),
+                google_play: g.get("google_play").filter(|p| p.is_object()).map(|p| {
+                    GooglePlayMemory {
+                        processes: number(p, "processes"),
+                        cost: MemoryShare::read(p),
+                    }
+                }),
             }
         });
         Memory {
@@ -702,6 +831,8 @@ pub struct AndroidVersion {
     pub supported: Vec<i64>,
     pub target_major: i64,
     pub notice: Option<String>,
+    /// The downloaded image the user's running Android waits to restart into, if one does.
+    pub restart_pending: Option<String>,
 }
 
 impl AndroidVersion {
@@ -718,6 +849,7 @@ impl AndroidVersion {
                 .collect(),
             target_major: signed(json, "target_major"),
             notice: optional_text(json, "notice"),
+            restart_pending: optional_text(json, "restart_pending").filter(|v| !v.is_empty()),
         }
     }
 }
@@ -1218,6 +1350,21 @@ impl Client {
         Ok(Status::read(&self.json(&["status"])?))
     }
 
+    /// The status from a running service only. While the service is being replaced this
+    /// fails rather than start the old service again.
+    pub fn running_status(&self) -> Result<Status, Failure> {
+        Ok(Status::read(&self.json(&["status", "--no-start"])?))
+    }
+
+    /// Asks the service to install the newest version of DSA now.
+    pub fn update_now(&self) -> Result<ProgramUpdateAnswer, Failure> {
+        let json = self.json(&["update"])?;
+        Ok(ProgramUpdateAnswer {
+            installing: optional_text(&json, "installing"),
+            detail: text(&json, "detail"),
+        })
+    }
+
     /// Starts Android and waits until it has started or failed.
     pub fn start(&self) -> Result<Status, Failure> {
         Ok(Status::read(&self.json(&[
@@ -1535,6 +1682,13 @@ impl Client {
 
     pub fn android_version(&self) -> Result<AndroidVersion, Failure> {
         Ok(AndroidVersion::read(&self.json(&["android", "version"])?))
+    }
+
+    /// Restarts the user's Android now into the downloaded image that waits for it, then
+    /// reads the version again.
+    pub fn restart_android(&self) -> Result<AndroidVersion, Failure> {
+        self.json(&["android", "restart"])?;
+        self.android_version()
     }
 
     /// Chooses an Android version for every user of the computer, which only an

@@ -8,6 +8,7 @@ final class AppModel: ObservableObject {
     let cli: ProcessDsaCli
     let service: DsaService
     let general: GeneralViewModel
+    let programUpdate: ProgramUpdateViewModel
     let settings: SettingsViewModel
     let gapps: GappsViewModel
     let memory: MemoryViewModel
@@ -23,6 +24,10 @@ final class AppModel: ObservableObject {
         cli = ProcessDsaCli(path: ProcessDsaCli.locate())
         service = DsaService(cli: cli)
         general = GeneralViewModel(service: service, text: appText)
+        let update = ProgramUpdateViewModel(service: service, text: appText)
+        programUpdate = update
+        // While an update of DSA runs, the menu bar's poll never starts the service under setup.
+        general.updating = { update.inProgress }
         settings = SettingsViewModel(service: service, text: appText)
         settings.isAdministrator = Shell.isAdministrator
         gapps = GappsViewModel(service: service, text: appText)

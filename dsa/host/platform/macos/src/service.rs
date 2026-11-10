@@ -32,7 +32,8 @@ use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_alerting, next_image_check, CheckNow, StoreVersions, UpdateNotices, UpdatingAndroid,
+    check_alerting, follow_waiting_image, next_image_check, CheckNow, StoreVersions, UpdateNotices,
+    UpdatingAndroid, WAITING_IMAGE_CHECK,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::{WindowManagerHost, WindowManagerKeeper};
@@ -237,6 +238,19 @@ impl Planner {
                 read_only: false,
             });
         }
+        // The add-on disk this start attaches: a change the user made while Android ran takes
+        // the place of the disk before now, and a disk without add-ons is not attached.
+        let attached = dsa_host_core::addon_disk::AddonDisk::new(
+            self.user.addon_disk(),
+            dsa_host_core::addon_disk::Format::Raw,
+        )
+        .prepare_for_boot();
+        if !attached.is_empty() {
+            disks.push(Disk {
+                path: self.user.addon_disk(),
+                read_only: true,
+            });
+        }
         let cmdline = crate::cmdline::for_virtualization_framework(
             &files.kernel_cmdline,
             &self.config.kernel_cmdline,
@@ -280,11 +294,14 @@ impl Planner {
         Ok(BootPlan {
             vm,
             properties: Some(properties),
-            bootconfig: dsa_host_core::arm_translation::bootconfig_for(
-                &*self.settings,
-                &self.name,
-                Some(dir.as_path()),
-            ) + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name),
+            bootconfig: dsa_host_core::addon_disk::bootconfig(&attached).to_string()
+                + &dsa_host_core::arm_translation::bootconfig_for(
+                    &*self.settings,
+                    &self.name,
+                    Some(dir.as_path()),
+                    &attached,
+                )
+                + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name, &attached),
         })
     }
 }
@@ -566,16 +583,22 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     }
     Ok(match &shared.store {
         None => session as Arc<dyn UserAndroid>,
-        Some(store) => Arc::new(UpdatingAndroid {
-            session,
-            store: Arc::clone(store),
-            notices: Arc::clone(&shared.notices),
-            boot_timeout: Duration::from_secs(
-                config.update.as_ref().map_or(300, |u| u.boot_timeout_secs),
-            ),
-            trial_running: Arc::new(AtomicBool::new(false)),
-            rollback: Default::default(),
-        }),
+        Some(store) => {
+            let android = Arc::new(UpdatingAndroid {
+                session,
+                store: Arc::clone(store),
+                notices: Arc::clone(&shared.notices),
+                boot_timeout: Duration::from_secs(
+                    config.update.as_ref().map_or(300, |u| u.boot_timeout_secs),
+                ),
+                trial_running: Arc::new(AtomicBool::new(false)),
+                rollback: Default::default(),
+                image_restart: Default::default(),
+            });
+            // An image downloaded while the user's Android runs is applied by restarting it.
+            follow_waiting_image(&android, WAITING_IMAGE_CHECK);
+            android as Arc<dyn UserAndroid>
+        }
     })
 }
 
@@ -598,6 +621,7 @@ fn apply_settings(
     android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
     android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
     android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
+    android.image_auto_restart(settings.as_ref().is_none_or(|s| s.image_auto_restart));
     android.share_folders(
         settings.as_ref().is_none_or(|s| s.file_sharing),
         settings
@@ -790,6 +814,17 @@ pub fn serve(
         Arc::new(CurlFetch),
         config.settings_dir(&user).with_file_name("gapps"),
     ));
+    // The user's add-ons, on the add-on disk in their folder, which their VM attaches read
+    // only. This agent serves its own user alone.
+    service = service.with_addon_disks({
+        let addons = user.addon_disk();
+        Arc::new(move |_: &str| {
+            Ok(dsa_host_core::addon_disk::AddonDisk::new(
+                &addons,
+                dsa_host_core::addon_disk::Format::Raw,
+            ))
+        })
+    });
     if let Some(store) = &store {
         // The agent keeps this user's own images, so the choice is theirs alone.
         service = service.with_android_versions(Arc::new(StoreVersions {

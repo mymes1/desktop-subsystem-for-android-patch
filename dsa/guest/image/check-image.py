@@ -416,13 +416,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         for section in sections:
             first = section.split("\n", 1)[0]
             trigger = first[3:] if first.startswith("on ") else first
-            if "mount " in section and trigger != "post-fs-data && property:ro.boot.dsa.gapps=on":
+            if "mount " in section and not trigger.startswith("post-fs-data && property:ro.boot.dsa.gapps=on"):
                 problems.append("dsa-gapps.rc lays the Google apps over the system without waiting "
                                 "for the host to say they are installed")
         if "on post-fs-data && property:ro.boot.dsa.gapps=on" not in rc:
             problems.append("dsa-gapps.rc never lays the Google apps over the system")
         # Each folder the Google apps are laid over is in the system, so its overlay mounts.
         problems += make_image.gapps_folder_problems(names)
+    # The add-on disk the Google apps and a user's ARM translation package are mounted from.
+    problems += make_image.addon_disk_problems(names, z.read)
     if "SYSTEM/etc/dsa/gapps-on.prop" in names:
         on = [line.strip() for line in
               z.read("SYSTEM/etc/dsa/gapps-on.prop").decode(errors="replace").splitlines()]
@@ -572,6 +574,34 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     ]:
         if f"{prop}={val}" not in props and f"{prop}={val}" not in vendor_props:
             problems.append(f"neither SYSTEM nor VENDOR build.prop sets {prop}={val}")
+    # The OpenGL ES version PackageManager reports as reqGlEsVersion. Without it Google Play
+    # hides every app that asks for OpenGL ES (YouTube, Chrome, most games) as incompatible.
+    gles = f"ro.opengles.version={make_image.OPENGLES_VERSION}"
+    if gles not in vendor_props.splitlines():
+        problems.append(f"VENDOR/build.prop does not set {gles} (OpenGL ES 3.2), so Android reports "
+                        "no OpenGL ES and Google Play hides the apps that need it")
+    for name in sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default")):
+        for line in z.read(name).decode(errors="replace").splitlines():
+            if line.startswith("ro.opengles.version=") and line != gles:
+                problems.append(f"{name} sets {line}, not {gles}")
+    # What else Google Play compares with an app's manifest: the features every app it lists
+    # takes for granted, declared in the vendor permissions and not taken away by DSA's list
+    # of unavailable features. The Vulkan features come from the Cuttlefish Vulkan APEX.
+    declared, unavailable = set(), set()
+    for name in sorted(n for n in names if re.match(r"(VENDOR|SYSTEM|SYSTEM_EXT|PRODUCT|ODM)/etc/permissions/[^/]+\.xml$", n)):
+        text = z.read(name).decode(errors="replace")
+        declared.update(re.findall(r'<feature\s+name="([^"]+)"', text))
+        unavailable.update(re.findall(r'<unavailable-feature\s+name="([^"]+)"', text))
+    for feature in ["android.software.app_widgets", "android.software.home_screen",
+                    "android.software.input_methods", "android.hardware.screen.portrait",
+                    "android.hardware.screen.landscape", "android.hardware.touchscreen"]:
+        if feature not in declared:
+            problems.append(f"no permissions file declares {feature}, so Google Play hides the apps that need it")
+        if feature in unavailable:
+            problems.append(f"a permissions file marks {feature} unavailable, so Google Play hides the apps that need it")
+    if not any(re.match(r"VENDOR/apex/[^/]*vulkan[^/]*\.apex$", n) for n in names):
+        problems.append("the image has no Vulkan APEX (com.google.cf.vulkan), so Android declares no "
+                        "Vulkan features and Google Play hides the apps that need Vulkan")
     # The density every app starts at is the boot's (the user's main monitor's). A build.prop
     # value comes before the script that sets it and would hold every boot at one density.
     for name, text in [("SYSTEM", props), ("VENDOR", vendor_props)]:
@@ -668,6 +698,7 @@ for boot_arg in [
     "androidboot.hardware.vulkan=ranchu",
     "androidboot.hardware.gralloc=minigbm",
     "androidboot.cpuvulkan.version=0",
+    f"androidboot.opengles.version={make_image.OPENGLES_VERSION}",
 ]:
     if boot_arg not in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line does not contain {boot_arg}")

@@ -1,12 +1,17 @@
 # ARM app translation. The host adds androidboot.dsa.arm_translation to the boot's bootconfig
 # only while translation is on: "on" when the user installed a translation package, whose
-# system image (erofs) is on the user's disk, where dsa-channeld wrote it; "default" when they
-# did not and this x86_64 image carries its own default package, at
-# /system/etc/dsa/arm-translation/default.img. Here init mounts that image through a loop
-# device at /mnt/dsa-arm-translation before the zygote starts, and makes each part of it
-# reachable where the runtime, the linker and the translator look for it. The properties come
-# from /system/etc/dsa/arm-translation-<value>.prop, which the product build.prop imports on
-# the same condition. A system script, because only init itself may bind anything onto /system.
+# system image (erofs) is arm-translation.img on the user's add-on disk, which dsa-addons.rc
+# mounts at /mnt/dsa-addons before this runs; "default" when they did not and this x86_64 image
+# carries its own default package, at /system/etc/dsa/arm-translation/default.img. With "on",
+# androidboot.dsa.arm_translation_image says where the package's image is: "disk" for the
+# add-on disk, and "data" for one boot after an update from a DSA that sent it to the user's
+# disk, /data/vendor/dsa/arm-translation/system.img. In that boot the host moves it onto the
+# add-on disk and has dsa-channeld delete it from /data, so nothing of it stays there. Here
+# init mounts the image straight from its file at /mnt/dsa-arm-translation before the zygote
+# starts, and makes each part of it reachable where the runtime, the linker and the translator
+# look for it. The properties come from /system/etc/dsa/arm-translation-<value>.prop, which the
+# product build.prop imports on the same condition. A system script, because only init itself
+# may bind anything onto /system.
 #
 # Nothing is laid over /system/bin, /system/lib64 or /system/etc. An overlay there makes every
 # program in the folder run through overlayfs, which looks each file up with init's
@@ -27,52 +32,68 @@
 #                       libraries; one under /mnt would get none.
 #   system/etc/ld.config.arm64.txt  onto the empty /system/etc/ld.config.arm64.txt: the ARM64
 #                       linker reads its namespaces from that path only.
+#   system/lib64/libberberis_exec_region.so  onto the empty file of that name in /system/lib64:
+#                       Berberis (Digitalis) opens the library its translated code runs in by
+#                       that absolute path, not by name, so it may load it at an address it
+#                       reserved first. Without it every ARM app aborted as it started
+#                       ("exec_region_elf_backed.cc:48: CHECK failed: 0 != 0"). The linker
+#                       checks the path it really opened against the namespace, which is why
+#                       this is a bind and not a link into the mount.
 # /system/etc/cpuinfo.arm64.txt and /system/etc/berberis are links into the mount, for the
 # translators that carry them, and /system/bin/berberis_program_runner_binfmt_misc_arm64 and
 # /system/bin/ndk_translation_program_runner_binfmt_misc_arm64 links to the bound runners, for
 # packages whose rules still name those. Each binding keeps the image's nosuid, which is harmless: no
 # program there changes domain.
 #
+# erofs reads the image file itself (file-backed erofs), not through a loop device, which kept
+# a second copy of every page read from the image in the file's own page cache. directio asks
+# erofs to read the file's data without that copy where the file's filesystem allows it: the
+# add-on disk's erofs does for its uncompressed files. Where it does not (a compressed file in
+# /system, an encrypted one in /data without inline encryption) the read is an ordinary cached
+# one, as before. erofs opens and reads the file with init's credentials, whichever process
+# asked for the page.
+#
 # The image's files are labelled system libraries (context=), and its superblock gets a
 # filesystem type of its own (fscontext=, sepolicy/arm-translation.cil), which every domain
 # may statfs: statfs on each of those folders reports the image's superblock. Both go in one
-# comma-separated argument: init passes only the last argument that is not a flag to the
-# kernel and drops any other, and context= alone relabels the superblock to a file type, which
-# the kernel refuses ("denied { relabelto } ... system_lib_file ... tclass=filesystem").
+# comma-separated argument with directio: init passes only the last argument that is not a flag
+# to the kernel and drops any other, and context= alone relabels the superblock to a file type,
+# which the kernel refuses ("denied { relabelto } ... system_lib_file ... tclass=filesystem").
 #
 # ARM64 programs an app starts run through the package's translator: init mounts binfmt_misc,
 # which nothing else in Android mounts, and registers the package's handlers, which name their
 # runner under /system/bin/dsa-arm-translation. Init has no "or" for property triggers, and an
 # action it triggers from here would run only after the zygote starts, so each value has its
-# own copy of the same steps.
-on post-fs-data && property:ro.boot.dsa.arm_translation=on
-    mkdir /data/vendor/dsa 0771 system system
-    mkdir /data/vendor/dsa/arm-translation 0770 system system
+# own copy of the same steps. init runs the actions of one trigger in the order this file gives
+# them, so a user's package is mounted, from wherever it is, before its parts are bound.
+on post-fs-data && property:ro.boot.dsa.arm_translation=on && property:ro.boot.dsa.arm_translation_image=disk
     mkdir /mnt/dsa-arm-translation 0755 root root
-    mount erofs loop@/data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro nodev nosuid fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+    mount erofs /mnt/dsa-addons/arm-translation.img /mnt/dsa-arm-translation ro nodev nosuid directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+
+on post-fs-data && property:ro.boot.dsa.arm_translation=on && property:ro.boot.dsa.arm_translation_image=data
+    mkdir /mnt/dsa-arm-translation 0755 root root
+    mount erofs /data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro nodev nosuid directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+
+on post-fs-data && property:ro.boot.dsa.arm_translation=on
     mount none /mnt/dsa-arm-translation/system/lib64 /system_ext/lib64 bind
     mount none /mnt/dsa-arm-translation/system/lib64/arm64 /system/lib64/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin /system/bin/dsa-arm-translation bind
     mount none /mnt/dsa-arm-translation/system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt bind
+    mount none /mnt/dsa-arm-translation/system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so bind
     mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_exe /proc/sys/fs/binfmt_misc/register
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_dyn /proc/sys/fs/binfmt_misc/register
 
 on post-fs-data && property:ro.boot.dsa.arm_translation=default
     mkdir /mnt/dsa-arm-translation 0755 root root
-    mount erofs loop@/system/etc/dsa/arm-translation/default.img /mnt/dsa-arm-translation ro nodev nosuid fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
+    mount erofs /system/etc/dsa/arm-translation/default.img /mnt/dsa-arm-translation ro nodev nosuid directio,fscontext=u:object_r:dsa_arm_translation_fs:s0,context=u:object_r:system_lib_file:s0
     mount none /mnt/dsa-arm-translation/system/lib64 /system_ext/lib64 bind
     mount none /mnt/dsa-arm-translation/system/lib64/arm64 /system/lib64/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin/arm64 /system/bin/arm64 bind
     mount none /mnt/dsa-arm-translation/system/bin /system/bin/dsa-arm-translation bind
     mount none /mnt/dsa-arm-translation/system/etc/ld.config.arm64.txt /system/etc/ld.config.arm64.txt bind
+    mount none /mnt/dsa-arm-translation/system/lib64/libberberis_exec_region.so /system/lib64/libberberis_exec_region.so bind
     mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_exe /proc/sys/fs/binfmt_misc/register
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_dyn /proc/sys/fs/binfmt_misc/register
-
-# Without a package the directory still exists, so dsa-channeld can write one the user
-# installs while Android runs; it takes effect at the next start.
-on post-fs-data
-    mkdir /data/vendor/dsa 0771 system system
-    mkdir /data/vendor/dsa/arm-translation 0770 system system

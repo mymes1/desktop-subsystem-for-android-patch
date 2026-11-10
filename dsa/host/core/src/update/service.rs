@@ -12,6 +12,7 @@ use ed25519_dalek::VerifyingKey;
 use super::alerts::{AlertKind, Subject, UpdateAlert, UpdateAlerts};
 use super::manifest::{self, ImageEntry};
 use super::policy::{decide_for, Decision, InstalledImage};
+use super::restart::ImageRestart;
 use super::store::{Fetch, ImageStore};
 use super::trial::{self, Boot, Outcome};
 use super::versions::{AndroidVersions, Channel, ChooseError, VersionReport};
@@ -487,6 +488,148 @@ pub struct UpdatingAndroid {
     pub trial_running: Arc<AtomicBool>,
     /// This user's rollback, while one runs.
     pub rollback: Arc<Rollback>,
+    /// The image this user's running Android booted from, and its restart into one downloaded
+    /// since ([`follow_waiting_image`]).
+    pub image_restart: Arc<ImageRestart>,
+}
+
+/// How often a user's Android looks whether a downloaded image waits for it.
+pub const WAITING_IMAGE_CHECK: Duration = Duration::from_secs(1);
+
+/// Restarts `android` into each image downloaded while it runs, from a thread of its own that
+/// looks every `every` ([`UpdatingAndroid::apply_waiting_image`]), until `android` is dropped.
+pub fn follow_waiting_image(android: &Arc<UpdatingAndroid>, every: Duration) {
+    let watched = Arc::downgrade(android);
+    let spawned = thread::Builder::new()
+        .name("dsa-image-restart".into())
+        .spawn(move || loop {
+            thread::sleep(every);
+            let Some(android) = watched.upgrade() else {
+                return;
+            };
+            android.apply_waiting_image();
+        });
+    if let Err(why) = spawned {
+        eprintln!(
+            "update: a downloaded Android image waits for the next start, since nothing can \
+             follow it: {why}"
+        );
+    }
+}
+
+impl UpdatingAndroid {
+    /// Whether Android runs with its agent: what a restart into a new image applies to.
+    fn running(state: SessionState) -> bool {
+        matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        )
+    }
+
+    /// Whether a new image is being booted on trial, or given up for the previous one, now.
+    fn trying_image(&self) -> bool {
+        self.trial_running.load(Ordering::SeqCst) || self.rollback.running()
+    }
+
+    /// Follows which image the running Android booted from: forgotten once it has stopped,
+    /// and, for a start that did not say, the current one.
+    fn follow_booted(&self) {
+        match self.session.state() {
+            SessionState::Stopped => self.image_restart.set_booted(None),
+            SessionState::Stopping => {}
+            _ => {
+                if let Ok(state) = self.store.state() {
+                    self.image_restart.learn_booted(&state.current.version);
+                }
+            }
+        }
+    }
+
+    /// The image the running Android waits to restart into: the current one, when it booted
+    /// from another.
+    fn waiting_image(&self) -> Option<String> {
+        if !Self::running(self.session.state()) {
+            return None;
+        }
+        let current = self.store.state().ok()?.current.version;
+        if !self.store.has_image(&current) {
+            return None;
+        }
+        let booted = self.image_restart.booted()?;
+        (booted != current).then_some(current)
+    }
+
+    /// Applies the image downloaded since this Android started, if one waits: restarts into it
+    /// at once when the user asked to, or when the auto-restart setting is on and no app window
+    /// is open (Android dozes, or is frozen); with windows open, asks the user. With the
+    /// setting off, the image waits for the next start. [`follow_waiting_image`] calls this.
+    pub fn apply_waiting_image(&self) {
+        if self.image_restart.restarting() || self.trying_image() {
+            return;
+        }
+        self.follow_booted();
+        let waiting = self.waiting_image();
+        self.image_restart.waiting(waiting.as_deref());
+        let Some(version) = waiting else {
+            return;
+        };
+        if self.image_restart.take_restart_now(&version) {
+            return self.restart_into(&version);
+        }
+        if !self.image_restart.auto() {
+            return;
+        }
+        match self.session.state() {
+            SessionState::Dozing | SessionState::Frozen => self.restart_into(&version),
+            // Asked once for each image; the question then stands until it is answered.
+            SessionState::Active if self.image_restart.ask(&version) => eprintln!(
+                "update: Android {version} waits for this user's app windows to close, or for \
+                 the user to restart Android now"
+            ),
+            _ => {}
+        }
+    }
+
+    /// Stops this Android and starts it again from `version`, the current image: on trial
+    /// when it is new, so a failure goes back to the previous image.
+    fn restart_into(&self, version: &str) {
+        if !self.image_restart.begin() {
+            return;
+        }
+        let on_trial = self.store.state().is_ok_and(|state| state.on_trial);
+        eprintln!("update: restarting Android into Android {version}");
+        // A stop that failed leaves the session in Stopping, where a start is ignored; asking
+        // again retries it.
+        for _ in 0..2 {
+            self.session.stop();
+            if self
+                .session
+                .wait_for(SessionState::Stopped, Duration::from_secs(120))
+            {
+                break;
+            }
+        }
+        if self.session.state() != SessionState::Stopped {
+            eprintln!(
+                "update: Android did not stop, so Android {version} waits for its next start"
+            );
+            return self.image_restart.end();
+        }
+        self.image_restart.set_booted(None);
+        self.start();
+        // A new image's trial tells the user how it went; one that passed its trial on
+        // another user's Android is told here.
+        if !on_trial
+            && self
+                .session
+                .wait_for(SessionState::Active, self.boot_timeout)
+        {
+            self.image_restart.applied(version);
+            self.notices
+                .set(format!("Android was updated to {version}"));
+        }
+        self.image_restart.end();
+    }
 }
 
 impl UserAndroid for UpdatingAndroid {
@@ -521,13 +664,65 @@ impl UserAndroid for UpdatingAndroid {
         }
     }
     fn update_notice(&self) -> Option<String> {
+        if let Some(version) = self.image_restart.asked() {
+            return Some(format!(
+                "Android {version} is downloaded; restart Android to use it now (dsa android \
+                 restart), or it is used once every Android app window is closed"
+            ));
+        }
         self.notices.get()
     }
     fn untold_update_alerts(&self, user: &str) -> Vec<UpdateAlert> {
-        self.notices.alerts().untold(user)
+        let mut alerts = self.notices.alerts().untold(user);
+        // A running Android that restarts by itself does not use a downloaded image at its
+        // next start, as that news says: it restarts into it, or asks first.
+        let up = self.session.state() != SessionState::Stopped
+            || self.image_restart.restarting()
+            || self.rollback.running();
+        if self.image_restart.auto() && up {
+            alerts.retain(|alert| {
+                !(alert.subject == Subject::Android && alert.kind == AlertKind::Ready)
+            });
+        }
+        for alert in self.image_restart.untold() {
+            if !alerts.iter().any(|known| known.key() == alert.key()) {
+                alerts.push(alert);
+            }
+        }
+        alerts
     }
     fn update_alert_told(&self, user: &str, alert: &UpdateAlert) {
-        self.notices.alerts().told(user, alert)
+        self.notices.alerts().told(user, alert);
+        self.image_restart.told(alert);
+    }
+    fn image_auto_restart(&self, on: bool) {
+        self.image_restart.set_auto(on)
+    }
+    fn restart_pending(&self) -> Option<String> {
+        if self.trying_image() || self.image_restart.restarting() {
+            return None;
+        }
+        self.follow_booted();
+        self.waiting_image()
+    }
+    fn restart_for_update(&self) -> Result<Option<String>, String> {
+        if self.trying_image() || self.image_restart.restarting() {
+            return Err(
+                "a new Android image is starting for its first time now; try again once it \
+                 has started"
+                    .into(),
+            );
+        }
+        self.follow_booted();
+        let Some(version) = self.waiting_image() else {
+            return Ok(None);
+        };
+        // The follower restarts it within a moment, so two restarts never run at once.
+        self.image_restart.ask_restart_now(&version);
+        Ok(Some(version))
+    }
+    fn program_update(&self) -> Option<crate::host_api::ProgramProgress> {
+        UserAndroid::program_update(&*self.session)
     }
     fn vm_id(&self) -> Option<String> {
         UserAndroid::vm_id(&*self.session)
@@ -565,13 +760,13 @@ impl UserAndroid for UpdatingAndroid {
     fn links_in_android(&self, on: bool) {
         UserAndroid::links_in_android(&*self.session, on)
     }
-    fn install_arm_translation(
+    fn read_addon_image(
         &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
-        UserAndroid::install_arm_translation(&*self.session, size, sha256, content)
+        addon: crate::addon_disk::Addon,
+        offset: u64,
+        length: u32,
+    ) -> Result<crate::host_api::AddonImagePart, crate::host_api::InstallError> {
+        UserAndroid::read_addon_image(&*self.session, addon, offset, length)
     }
     fn remove_arm_translation(
         &self,
@@ -580,14 +775,6 @@ impl UserAndroid for UpdatingAndroid {
     }
     fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
         UserAndroid::arm_translation(&*self.session)
-    }
-    fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn std::io::Read,
-    ) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
-        UserAndroid::install_gapps(&*self.session, size, sha256, content)
     }
     fn remove_gapps(&self) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
         UserAndroid::remove_gapps(&*self.session)
@@ -690,6 +877,11 @@ impl UserAndroid for UpdatingAndroid {
                 .as_ref()
                 .is_none_or(|previous| !self.store.has_image(&previous.version))
         });
+        // A stopped Android boots the current image, which it runs from now on.
+        if self.session.state() == SessionState::Stopped {
+            self.image_restart
+                .set_booted(state.as_ref().map(|s| s.current.version.clone()));
+        }
         if self.session.state() != SessionState::Stopped
             || !on_trial
             || self.trial_running.swap(true, Ordering::SeqCst)
@@ -703,12 +895,23 @@ impl UserAndroid for UpdatingAndroid {
         let running = Arc::clone(&self.trial_running);
         let timeout = self.boot_timeout;
         let rollback = Arc::clone(&self.rollback);
+        let image_restart = Arc::clone(&self.image_restart);
         thread::spawn(move || {
             let mut guest = TrialBoot {
                 session: SessionBoot(session),
                 rollback,
             };
             let outcome = trial::start(&store, &mut guest, timeout);
+            // What runs once the trial is over: the new image, the previous one, or nothing.
+            match &outcome {
+                Ok(
+                    Outcome::Booted { image, .. }
+                    | Outcome::RolledBack { image, .. }
+                    | Outcome::RolledBackNotReady { image, .. },
+                ) => image_restart.set_booted(Some(image.version.clone())),
+                Ok(Outcome::GaveUp { .. }) => image_restart.set_booted(None),
+                Ok(Outcome::Undecided { .. }) | Err(_) => {}
+            }
             if let Some(alert) = outcome.as_ref().ok().and_then(alert_of) {
                 notices.raise(alert);
             }

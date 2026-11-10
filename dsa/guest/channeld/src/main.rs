@@ -477,6 +477,85 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn reclaim_idle_memory(_router: Arc<Router>) {}
 
+    /// Pages an app that no window shows back out to zram a few seconds after something woke
+    /// it (see `pageout`), instead of leaving what the wake read back resident until the next
+    /// idle reclaim. Logs what each pageout returned. Starts once Android has booted, so the
+    /// boot's own work is left alone, and stops for good if the kernel or the policy refuses it.
+    #[cfg(target_os = "android")]
+    fn page_out_after_wakes(router: Arc<Router>) {
+        use dsa_guest_channeld::pageout::system::{page_out, samples, Refused};
+        use dsa_guest_channeld::pageout::{Pageout, PageoutPolicy, SAMPLE_INTERVAL};
+        // The daemon runs ahead of apps so pointer events never wait; a pageout is work that
+        // may wait for them, so this thread runs behind them.
+        // SAFETY: setpriority on this thread's own id has no other effect.
+        unsafe {
+            libc::setpriority(libc::PRIO_PROCESS, libc::gettid() as libc::id_t, 10);
+        }
+        while read_property("vendor.dsa.boot_completed") != "1" {
+            thread::sleep(SAMPLE_INTERVAL);
+        }
+        let start = std::time::Instant::now();
+        let mut pageout = Pageout::new(PageoutPolicy::default());
+        let mut unreadable = false;
+        loop {
+            thread::sleep(SAMPLE_INTERVAL);
+            let looked = match samples() {
+                Ok(looked) => {
+                    unreadable = false;
+                    looked
+                }
+                Err(error) => {
+                    if !unreadable {
+                        say!("cannot list the processes, so no app is paged out after it wakes: {error}");
+                        unreadable = true;
+                    }
+                    continue;
+                }
+            };
+            let windows = router.task_packages();
+            for target in pageout.look(start.elapsed(), &looked, &windows) {
+                match page_out(&target) {
+                    Ok(done) => {
+                        pageout.paged(target.pid, done.after.rss_anon_kb);
+                        say!(
+                            "paged out {} (pid {}, oom_score_adj {}{}) after it woke: resident \
+                             anonymous {} -> {} MiB, swapped out {} -> {} MiB, {} MiB asked for, \
+                             {} ranges refused, {} ms",
+                            target.name,
+                            target.pid,
+                            target.oom_score_adj,
+                            if target.google_play {
+                                ", Google Play services"
+                            } else {
+                                ""
+                            },
+                            done.before.rss_anon_kb / 1024,
+                            done.after.rss_anon_kb / 1024,
+                            done.before.swap_kb / 1024,
+                            done.after.swap_kb / 1024,
+                            done.advised_bytes / (1024 * 1024),
+                            done.refused_ranges,
+                            done.took.as_millis()
+                        );
+                    }
+                    Err(Refused::Skipped(_)) => {}
+                    Err(Refused::NotAllowed(why)) => {
+                        say!(
+                            "WARNING: {why}. Apps woken in the background stay resident until \
+                             the next idle reclaim; no pageout is tried again until the daemon \
+                             restarts."
+                        );
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Off Android there are no app processes to page out.
+    #[cfg(not(target_os = "android"))]
+    fn page_out_after_wakes(_router: Arc<Router>) {}
+
     /// Tells the host how much memory the guest has, so it can add memory before the guest
     /// runs out and take it back once the guest no longer needs it.
     fn report_memory_pressure(router: Arc<Router>) {
@@ -627,6 +706,10 @@ mod daemon {
         {
             let router = Arc::clone(&router);
             thread::spawn(move || reclaim_idle_memory(router));
+        }
+        {
+            let router = Arc::clone(&router);
+            thread::spawn(move || page_out_after_wakes(router));
         }
         {
             let router = Arc::clone(&router);

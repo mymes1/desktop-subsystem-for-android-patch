@@ -32,7 +32,9 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar x:Name="TitleBar" Grid.Row="0" Height="32" ShowMaximize="False" />
+        <!-- Dims, and leaves the accent colour, while another window has the focus. -->
+        <ui:TitleBar x:Name="TitleBar" Grid.Row="0" Height="32" ShowMaximize="False"
+                     Style="{StaticResource WindowTitleBar}" />
 
         <Grid Grid.Row="1" Margin="{StaticResource ContentMargin}">
             <Grid.RowDefinitions>
@@ -77,9 +79,10 @@
                                    AutomationProperties.AutomationId="SourceText" />
                     </Grid>
                 </StackPanel>
+                <!-- Lifted while the window has the focus, dimmed while it does not. -->
                 <Border x:Name="AppIconTile" Grid.Column="1" VerticalAlignment="Top" CornerRadius="8"
                         Width="{StaticResource AppIconTileSize}" Height="{StaticResource AppIconTileSize}"
-                        Background="{StaticResource AppIconTileBrush}">
+                        Style="{StaticResource AppIconTile}">
                     <Image x:Name="AppIcon" HorizontalAlignment="Center" VerticalAlignment="Center"
                            Width="{StaticResource AppIconSize}" Height="{StaticResource AppIconSize}"
                            RenderOptions.BitmapScalingMode="HighQuality"

@@ -110,6 +110,11 @@ public sealed partial class GeneralViewModel : ObservableObject
 
     public Task RefreshAsync() => RunAsync(_service.StatusAsync);
 
+    /// <summary>Whether an update of DSA is under way. Meanwhile a poll asks a running service
+    /// only: setup stops the service, and starting it again would run the old version under
+    /// setup.</summary>
+    public Func<bool>? Updating { get; set; }
+
     /// <summary>Reads the state again without marking the page busy, as a timer does while
     /// the page is shown. Does nothing while a start or a stop is under way.</summary>
     public async Task PollAsync()
@@ -120,7 +125,9 @@ public sealed partial class GeneralViewModel : ObservableObject
         }
         try
         {
-            var status = await _service.StatusAsync().ConfigureAwait(true);
+            var status = Updating?.Invoke() == true
+                ? await _service.RunningStatusAsync().ConfigureAwait(true)
+                : await _service.StatusAsync().ConfigureAwait(true);
             if (_busy)
             {
                 return;
@@ -729,9 +736,12 @@ public sealed partial class MemoryViewModel : ObservableObject
             {
                 return Array.Empty<MemoryRow>();
             }
+            // What the processes cost: in memory, plus their compressed share of zram. A service
+            // that does not say counts their PSS as in memory.
+            var apps = guest.Apps ?? new MemoryShare(guest.TotalPssKb, 0);
             var rows = new List<MemoryRow>
             {
-                new(_text.Get("Memory_Apps"), _text.Get("Memory_AppsDetail"), Format.Size(guest.TotalPssKb)),
+                new(_text.Get("Memory_Apps"), ShareDetail(apps), Format.Size(apps.TotalKb)),
                 new(_text.Get("Memory_Cache"), _text.Get("Memory_CacheDetail"), Format.Size(guest.CachedKb + guest.BuffersKb)),
                 new(_text.Get("Memory_Kernel"), _text.Get("Memory_KernelDetail"), Format.Size(guest.SlabReclaimableKb)),
                 new(_text.Get("Memory_Shared"), "", Format.Size(guest.ShmemKb)),
@@ -740,15 +750,32 @@ public sealed partial class MemoryViewModel : ObservableObject
                     Format.Size(guest.ZramUsedKb)),
                 new(_text.Get("Memory_Free"), "", Format.Size(guest.FreeKb)),
             };
+            // Google Play services, which the user chose to install, on a line of its own, so
+            // what it costs is not taken for what Android and DSA cost.
+            if (guest.GooglePlay is { } play)
+            {
+                rows.Insert(1, new(_text.Get("Memory_GooglePlay"),
+                    string.Format(CultureInfo.CurrentCulture, _text.Get("Memory_GooglePlayDetail"),
+                        play.Processes, ShareDetail(play.Cost)),
+                    Format.Size(play.Cost.TotalKb)));
+            }
             return rows;
         }
     }
 
+    /// <summary>"N in memory, M compressed", with the compressed part unknown when zram could
+    /// not measure it.</summary>
+    private string ShareDetail(MemoryShare share) =>
+        string.Format(CultureInfo.CurrentCulture, _text.Get("Memory_AppsDetail"),
+            Format.Size(share.ResidentKb),
+            share.CompressedKb is { } compressed ? Format.Size(compressed) : _text.Get("Memory_Unknown"));
+
     public IReadOnlyList<MemoryRow> GuestProcessRows => (_report?.Guest?.TopProcesses ?? Array.Empty<GuestProcess>())
         .Select(p => new MemoryRow(
             p.Name,
-            string.Format(CultureInfo.CurrentCulture, _text.Get("Memory_GuestProcessDetail"), p.Pid),
-            Format.Size(p.PssKb)))
+            string.Format(CultureInfo.CurrentCulture,
+                _text.Get(p.GooglePlay ? "Memory_GuestProcessGooglePlay" : "Memory_GuestProcessDetail"), p.Pid),
+            Format.Size(p.Cost?.TotalKb ?? p.PssKb)))
         .ToList();
 
     public async Task RefreshAsync()

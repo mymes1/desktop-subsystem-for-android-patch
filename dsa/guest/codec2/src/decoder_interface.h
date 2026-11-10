@@ -53,6 +53,7 @@ class DecoderIntf : public android::SimpleInterface<void>::BaseParams {
     static C2R ColorAspectsSetter(bool mayBlock, C2P<C2StreamColorAspectsInfo::output>& me,
                                   const C2P<C2StreamColorAspectsTuning::output>& def);
     static C2R UsageSetter(bool mayBlock, C2P<C2StreamUsageTuning::output>& me);
+    static C2R PixelFormatSetter(bool mayBlock, C2P<C2StreamPixelFormatInfo::output>& me);
     static C2R DefaultColorAspectsSetter(bool mayBlock, C2P<C2StreamColorAspectsTuning::output>& me);
 
    private:

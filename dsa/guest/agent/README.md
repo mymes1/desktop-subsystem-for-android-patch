@@ -133,6 +133,26 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   (or its text), and streams each file from the app's provider in answer to `DragRead`.
   Content URIs and paths stay in the guest. `DragEnd` closes the streams and gives the
   access back, whether the drag was dropped or cancelled on the host.
+- **Share on PC.** "Share on PC" in Android's share sheet (`ShareActivity`, for `ACTION_SEND`
+  and `ACTION_SEND_MULTIPLE` of any type) sends the host `ShareToHost` with the shared text,
+  links and files. The host reads the files with `DragRead` under the share's ID, as a drag's,
+  ends the share with `DragEnd`, and shows its own share UI (Windows' share window with Nearby
+  sharing, the macOS share menu, the desktop portal on Linux). The activity shows nothing and
+  stays, in a task of its own the host shows no window for, until the host has the files,
+  since the app's read access lasts only while it does. A `ShareResult` that failed is shown
+  to the user as a toast.
+- **Network location and geocoding.** The image names the agent as the guest's network
+  location provider, with or without Google Play, and as its geocode provider without Google
+  Play; on a boot with the Google apps image an overlay names Google's geocoder instead. The
+  network provider (`HostNetworkLocationService`) asks the host for its location with
+  `LocationRequest` while Android wants network locations, and reports each `LocationFix` as a
+  `network` location; a `LocationStatus` that is not allowed disables the provider. The control
+  daemon tells the host what it and the GNSS HAL want together. The geocode provider
+  (`HostGeocodeService`) sends each lookup as `GeocodeRequest` and turns the `GeocodeResult`
+  into Android `Address`es, or into the `IOException` Android's geocoder reports when the
+  service is not available. The host answers a position from administrative boundary data it
+  keeps (country, province, city, district and neighbourhood, with no street or house number)
+  and an address with no positions; nothing goes to a server.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.
@@ -198,10 +218,19 @@ change.
 
 The host shows each task 1:1 in its window, so a window's client size in host pixels is the
 task's size in guest pixels, and the task's density keeps the app the size it should be on
-the window's monitor (160 dpi at 100%, 320 at 200%). Android starts at the density of the
-user's main monitor, so a window that opens there asks for nothing. A task whose top activity
-does not say it handles a change of density is never asked for another one: its window shows
-it scaled instead, and its client size is the task's size at that scale.
+the window's monitor (96 dpi at 100%, 192 at 200%: a dp is 1/160 inch and a host pixel at
+100% 1/96 inch). Android starts at the density of the user's main monitor, so a window that
+opens there asks for nothing. A task whose top activity does not say it handles a change of
+density is never asked for another one: its window shows it scaled instead, and its client
+size is the task's size at that scale.
+
+Text keeps the size of the host's text. Android scales text by its font scale, apart from
+everything else, so the host's `SystemSettings` carries a font scale of 160/96 times the
+host's text size setting, which the agent writes to `Settings.System.FONT_SCALE`. A change of
+font scale makes Android restart every activity that does not say it handles one (its
+`configChanges` include `fontScale`), so while an app task is open whose top or root activity
+does not, the agent holds the new scale, logs which apps it waits for, and applies it as soon
+as none is open. The first scale after the agent connects applies before any app opens.
 
 `ResizeTask` asks for a size. The task keeps its top left corner and takes the size, cut
 down to the display and moved back inside it if it would cross an edge. If the task then

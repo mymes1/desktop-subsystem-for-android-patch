@@ -1,0 +1,25 @@
+# The user's add-on disk: the images of the add-ons they installed (the Google apps, an ARM
+# translation package), which dsa-gapps.rc and dsa-arm-translation.rc mount. The host builds
+# the disk, one per user, and attaches it to the VM read only; only the host changes it, when
+# the user installs or removes an add-on, and the change takes effect at the next start. The
+# host adds androidboot.dsa.addon_disk=on to the boot's bootconfig only while it attaches one.
+#
+# The disk holds one partition, dsa_addons, whose by-name link ueventd makes as it makes the
+# links of every disk below the boot devices. The partition is an erofs file system that holds
+# each add-on's erofs image as a plain, uncompressed file (gapps.img, arm-translation.img).
+# Those images were kept on the user's disk, /data, until this disk: /data is encrypted, and
+# ext4 gives no direct I/O to an encrypted file without inline encryption, so every page read
+# from an image there was cached twice, once by the image file and once by erofs. The images
+# are public packages with nothing to keep secret, and here erofs gives direct I/O to an
+# uncompressed file, so the directio the scripts mount each image with takes effect.
+#
+# It is mounted before post-fs-data, where the scripts mount the images from it, and before
+# /data, which it does not need. The files are labelled system files (context=), which init
+# already reads, and the superblock gets a filesystem type of its own (fscontext=,
+# sepolicy/addons.cil). Both go in one comma-separated argument: init passes only the last
+# argument that is not a flag to the kernel, and context= alone relabels the superblock to a
+# file type, which the kernel refuses. Nothing on the disk runs, so it is noexec too; the
+# images mounted from it are mounts of their own and keep their own options.
+on post-fs && property:ro.boot.dsa.addon_disk=on
+    mkdir /mnt/dsa-addons 0755 root root
+    mount erofs /dev/block/by-name/dsa_addons /mnt/dsa-addons ro nodev nosuid noexec fscontext=u:object_r:dsa_addons_fs:s0,context=u:object_r:system_file:s0

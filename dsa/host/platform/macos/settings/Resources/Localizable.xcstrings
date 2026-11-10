@@ -1,6 +1,210 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "ProgramUpdateCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating DSA"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 업데이트 중"
+          }
+        }
+      }
+    },
+    "ProgramUpdateDone.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA updated"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA 업데이트 완료"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Getting the update ready"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트를 준비하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 내려받고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_StoppingAndroid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping Android to install DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 설치하기 위해 Android를 종료하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Installing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installing DSA {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA {0} 버전을 설치하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Restarting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA is restarting to finish the update"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트를 마치기 위해 DSA가 다시 시작하고 있습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Version": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전 {0}"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_KeepOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do not close DSA or start Android apps until the update is done."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트가 끝날 때까지 DSA를 닫거나 Android 앱을 시작하지 마십시오."
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Applied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated to {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트했습니다"
+          }
+        }
+      }
+    },
+    "ProgramUpdate_Failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updating to {0} failed. The version before it is still installed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트하지 못했습니다. 이전 버전이 그대로 설치되어 있습니다."
+          }
+        }
+      }
+    },
+    "ProgramUpdate_NotBack": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA has not come back after the update to {0}. If it does not start soon, restart the computer."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} 버전으로 업데이트한 뒤 DSA가 다시 시작하지 않았습니다. 곧 시작하지 않으면 컴퓨터를 다시 시작하십시오."
+          }
+        }
+      }
+    },
     "AboutAndroidVersionCard.Description": {
       "extractionState": "manual",
       "localizations": {
@@ -494,6 +698,108 @@
         }
       }
     },
+    "Android_RestartPending": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0} is downloaded. Restart Android to use it now."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0}을(를) 내려받았습니다. 지금 적용하려면 Android를 다시 시작하세요."
+          }
+        }
+      }
+    },
+    "AndroidRestartButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 다시 시작"
+          }
+        }
+      }
+    },
+    "AndroidRestartConfirm.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Android now?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 Android를 다시 시작할까요?"
+          }
+        }
+      }
+    },
+    "AndroidRestartConfirm.Body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android restarts into Android {0}. Its app windows close; open the apps again once it has started."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0}(으)로 다시 시작합니다. 앱 창이 닫히며, 시작이 끝나면 앱을 다시 열면 됩니다."
+          }
+        }
+      }
+    },
+    "ImageAutoRestartCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Android into updates by itself"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트 시 Android 자동으로 다시 시작"
+          }
+        }
+      }
+    },
+    "ImageAutoRestartCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본값은 켬입니다. 열린 앱 창이 없으면 내려받은 업데이트로 Android를 바로 다시 시작합니다. 창이 열려 있으면 먼저 묻거나, 창을 모두 닫을 때까지 기다립니다. 끄면 다음에 Android를 시작할 때 업데이트를 적용합니다."
+          }
+        }
+      }
+    },
     "AndroidFollowsCard.Header": {
       "extractionState": "manual",
       "localizations": {
@@ -942,13 +1248,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."
+            "value": "No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다."
+            "value": "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 열린 앱 창이 없을 때 Android를 다시 시작해 업데이트를 적용합니다."
           }
         }
       }
@@ -2353,13 +2659,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."
+            "value": "Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
+            "value": "추가 구성 요소 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
           }
         }
       }
@@ -2710,13 +3016,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deletes Google's apps from your Android disk. They are gone from the next start of Android."
+            "value": "Deletes Google's apps from your add-on disk. They are gone from the next start of Android."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 사라집니다."
+            "value": "추가 구성 요소 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 사라집니다."
           }
         }
       }
@@ -4960,13 +5266,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download signed security updates and new versions of Android. They apply at the next start of Android."
+            "value": "Download signed security updates and new versions of Android. They apply when Android restarts, as the setting below says."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 다음에 Android를 시작할 때 적용됩니다."
+            "value": "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 아래 설정에 따라 Android가 다시 시작할 때 적용됩니다."
           }
         }
       }
@@ -5776,13 +6082,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The apps and the system server, counted by their share (PSS)."
+            "value": "{0} in memory, {1} compressed"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "앱과 시스템 서버가 차지한 몫(PSS)입니다."
+            "value": "메모리 {0}, 압축 메모리 {1}"
           }
         }
       }
@@ -5838,6 +6144,40 @@
         }
       }
     },
+    "Memory_GooglePlay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play services"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play 서비스"
+          }
+        }
+      }
+    },
+    "Memory_GooglePlayDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Google apps you installed, {0} processes: {1}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치한 Google 앱, 프로세스 {0}개: {1}"
+          }
+        }
+      }
+    },
     "Memory_GuestProcessDetail": {
       "extractionState": "manual",
       "localizations": {
@@ -5851,6 +6191,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "프로세스 {0}"
+          }
+        }
+      }
+    },
+    "Memory_GuestProcessGooglePlay": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Process {0}, Google Play services"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 {0}, Google Play 서비스"
+          }
+        }
+      }
+    },
+    "Memory_Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알 수 없음"
           }
         }
       }

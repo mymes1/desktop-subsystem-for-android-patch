@@ -9,6 +9,8 @@ import io.github.thisisthepy.dsa.control.v1.DragOut as DragOutRequest
 import io.github.thisisthepy.dsa.control.v1.DragRead
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.PointerTool
+import io.github.thisisthepy.dsa.control.v1.ShareOutcome
+import io.github.thisisthepy.dsa.control.v1.ShareToHost
 import java.io.InputStream
 
 /** One thing an app drags: a file (a content URI it lets the drop target read) or text. */
@@ -59,6 +61,12 @@ fun interface DragCatcher {
  * copies it. DragEnd closes everything and gives the access back. One drag is open at a time:
  * a new one ends the last.
  *
+ * What an app shares through the agent's "Share on PC" target goes to the host the same way
+ * ([share]): a `ShareToHost` with the items, whose files the host reads with DragRead under the
+ * share's ID, and a DragEnd that ends it. A share stays open beside a drag and beside other
+ * shares, up to [MAX_SHARES]. The host's `ShareResult` says what became of it; a failure is
+ * told to the user ([notify]).
+ *
  * The work runs on [run], a thread of its own, because catching a drop waits for the window
  * manager and reading waits for the app's provider, and neither may hold up the agent.
  */
@@ -69,6 +77,11 @@ class DragOut(
     private val send: (ByteArray) -> Boolean,
     private val log: Log,
     private val run: (Runnable) -> Unit,
+    /**
+     * Tells the user that a share did not reach the PC: with the host's reason, or with an
+     * empty one when the PC could not be reached at all.
+     */
+    private val notify: (String) -> Unit = {},
 ) {
     private class Open(val id: Int, val drag: GuestDrag) {
         var reading: Int = -1
@@ -77,6 +90,9 @@ class DragOut(
     }
 
     private var open: Open? = null
+
+    /** The shares the host has not ended yet, by ID, oldest first. */
+    private val shares = linkedMapOf<Int, Open>()
     private var lastId = 0
 
     /** Takes a DragOut, DragRead or DragEnd frame. False for any other frame. */
@@ -94,9 +110,69 @@ class DragOut(
                 val dragId = envelope.dragEnd.dragId
                 run(Runnable { end(dragId) })
             }
+            Envelope.BodyCase.SHARE_RESULT -> {
+                val result = envelope.shareResult
+                when (result.outcome) {
+                    ShareOutcome.SHARE_OUTCOME_SHARED -> log.info("share ${result.shareId}: shared on the PC")
+                    ShareOutcome.SHARE_OUTCOME_CANCELED -> log.info("share ${result.shareId}: the user closed the PC's share window")
+                    else -> {
+                        log.warn("share ${result.shareId}: the PC could not share it: ${result.message}")
+                        notify(result.message)
+                    }
+                }
+                // The host ends the share with DragEnd too; a result that comes alone ends it.
+                val shareId = result.shareId
+                run(Runnable { end(shareId) })
+            }
             else -> return false
         }
         return true
+    }
+
+    /**
+     * Hands [drag], what an app shared, to the host's share UI under [title], from the app
+     * [packageName] named [appLabel]. A share that cannot be sent, because the host cannot
+     * be reached ([isConnected]) or the send fails, is released at once and told to the user.
+     * Called from any thread; the work runs on the drag thread.
+     */
+    fun share(drag: GuestDrag, title: String, packageName: String, appLabel: String, isConnected: () -> Boolean) {
+        run(Runnable { sendShare(drag, title, packageName, appLabel, isConnected()) })
+    }
+
+    private fun sendShare(drag: GuestDrag, title: String, packageName: String, appLabel: String, connected: Boolean) {
+        val items = drag.items
+        if (items.isEmpty() || !connected) {
+            if (!connected) notify("")
+            release(drag)
+            return
+        }
+        while (shares.size >= MAX_SHARES) {
+            val oldest = shares.keys.first()
+            log.warn("share $oldest: still open after $MAX_SHARES newer shares; ending it")
+            shares.remove(oldest)?.let { close(it) }
+        }
+        lastId = if (lastId == Int.MAX_VALUE) 1 else lastId + 1
+        val id = lastId
+        shares[id] = Open(id, drag)
+        val share = ShareToHost.newBuilder()
+            .setShareId(id)
+            .setTitle(title)
+            .setPackageName(packageName)
+            .setAppLabel(appLabel)
+        items.forEach { share.addItems(toWire(it)) }
+        log.info("share $id: ${items.size} item(s) from ${packageName.ifEmpty { "an app" }} for the PC")
+        if (!send(Envelope.newBuilder().setShareToHost(share).build().toByteArray())) {
+            shares.remove(id)?.let { close(it) }
+            notify("")
+        }
+    }
+
+    private fun release(drag: GuestDrag) {
+        try {
+            drag.release()
+        } catch (e: Exception) {
+            log.warn("could not give back the access to a share", e)
+        }
     }
 
     private fun offer(request: DragOutRequest) {
@@ -137,9 +213,9 @@ class DragOut(
 
     private fun read(read: DragRead) {
         val answer = DragData.newBuilder().setRequestId(read.requestId)
-        val drag = open
+        val drag = open?.takeIf { it.id == read.dragId } ?: shares[read.dragId]
         try {
-            require(drag != null && drag.id == read.dragId) { "the drag is over" }
+            require(drag != null) { "the drag is over" }
             val index = read.item
             val item = drag.drag.items.getOrNull(index)
             require(item != null && item.text == null) { "the drag has no file $index" }
@@ -186,6 +262,10 @@ class DragOut(
     }
 
     private fun end(dragId: Int) {
+        shares.remove(dragId)?.let {
+            close(it)
+            return
+        }
         val drag = open ?: return
         if (drag.id != dragId) return
         close(drag)
@@ -206,8 +286,11 @@ class DragOut(
         }
     }
 
-    private companion object {
+    companion object {
         /** The most one answer carries: 256 KiB, as the host asks for at most. */
-        const val MAX_READ = 256 * 1024
+        private const val MAX_READ = 256 * 1024
+
+        /** The most shares open at once; past it, the oldest is ended. */
+        const val MAX_SHARES = 8
     }
 }

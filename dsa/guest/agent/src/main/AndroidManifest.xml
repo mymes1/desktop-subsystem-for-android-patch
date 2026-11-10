@@ -12,7 +12,9 @@
   is enabled only while a host accessibility client watches a task. It is also the guest's
   widget host (platform/AndroidWidgets.kt), which draws the widgets the user placed on the
   host's desktop. Its print service (platform/HostPrintService.kt) sends what apps print to the
-  host's printers.
+  host's printers. It is the guest's network location provider, and without Google Play its
+  geocode provider, both answered by the host (platform/HostNetworkLocationService.kt,
+  platform/HostGeocodeService.kt), and "Share on PC" in the share sheet (platform/ShareActivity.kt).
   Every permission here is also in privapp-permissions-dsa-agent.xml, but for the runtime
   permissions, which default-permissions-dsa-agent.xml grants instead.
 -->
@@ -125,6 +127,17 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
+    <!--
+      Keeping the activity manager's cached process limit, which it reads from the device
+      configuration (DeviceConfig), and setting it again when something else changes it.
+    -->
+    <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
+    <uses-permission android:name="android.permission.WRITE_DEVICE_CONFIG" />
+    <!--
+      Being the guest's network location provider and geocode provider, which the location
+      manager binds only in a package that holds this.
+    -->
+    <uses-permission android:name="android.permission.INSTALL_LOCATION_PROVIDER" />
 
     <application
         android:name=".platform.AgentApplication"
@@ -174,6 +187,29 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="http" />
                 <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          "Share on PC" in Android's share sheet: it shows nothing, hands the text, links and
+          files an app shares to the agent, which sends them to the host's share UI, and stays
+          until the host has copied the files, since the app's read access lasts only while it
+          does. It runs in a task of its own (singleInstance), which the host shows no window
+          for, so the app that shared stays usable.
+        -->
+        <activity
+            android:name=".platform.ShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/share_target_name"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 
@@ -245,6 +281,42 @@
             <intent-filter>
                 <action android:name="android.printservice.PrintService" />
             </intent-filter>
+        </service>
+
+        <!--
+          The guest's network location provider: the image names the agent as the provider,
+          and the location manager binds it for the network provider, which reports the host's
+          location (platform/HostNetworkLocationService.kt). WRITE_SECURE_SETTINGS keeps every
+          caller but the system out, as Android's own location providers do.
+        -->
+        <service
+            android:name=".platform.HostNetworkLocationService"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS">
+            <intent-filter>
+                <action android:name="com.android.location.service.v3.NetworkLocationProvider" />
+            </intent-filter>
+            <meta-data
+                android:name="serviceVersion"
+                android:value="1" />
+        </service>
+
+        <!--
+          The guest's geocode provider without Google Play: Android's Geocoder asks it, and it
+          asks the host (platform/HostGeocodeService.kt). With the Google apps image an overlay
+          names Google's geocoder, and the system does not bind this one. Only the system may
+          bind it.
+        -->
+        <service
+            android:name=".platform.HostGeocodeService"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS">
+            <intent-filter>
+                <action android:name="com.android.location.service.GeocodeProvider" />
+            </intent-filter>
+            <meta-data
+                android:name="serviceVersion"
+                android:value="1" />
         </service>
 
         <!--

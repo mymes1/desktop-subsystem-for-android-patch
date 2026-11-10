@@ -56,8 +56,10 @@ git -C $GfxstreamDir clean -fdx
 # semaphore whose work finished but sat in a device's garbage for five seconds, because nothing
 # used that device meanwhile, is leaked and logged as pending for a negative time. Without 0017
 # every first use of a gralloc buffer is logged as an error, since each guest process opens a
-# shared ColorBuffer before it knows whether another made it. A patch that does not apply stops
-# the fetch.
+# shared ColorBuffer before it knows whether another made it. Without 0018 an image release the
+# GPU has not finished in three seconds hands its still pending fence back to the pool, the
+# next release resets it and submits with it again while the GPU may still signal it, and
+# nothing checks the renderer's device. A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -72,7 +74,8 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0014-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

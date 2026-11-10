@@ -10,6 +10,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <ui:ThemesDictionary Theme="Light" />
                 <ui:ControlsDictionary />
+                <!-- The title bar's colours, active and inactive, after the library's style it extends. -->
+                <ResourceDictionary Source="/TitleBarStyle.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <!-- The Windows type ramp, as App Installer uses it: Segoe UI Variable (Display for
@@ -33,10 +35,40 @@
             <Thickness x:Key="FooterPadding">32,20,32,24</Thickness>
             <sys:Double x:Key="AppIconTileSize">106</sys:Double>
             <sys:Double x:Key="AppIconSize">84</sys:Double>
-            <!-- The same light grey in both themes, as App Installer's tile: an icon made for a
-                 launcher reads on it whatever the window's colour is. -->
-            <SolidColorBrush x:Key="AppIconTileBrush" Color="#E6E6E6" />
             <sys:Double x:Key="PrimaryButtonMinWidth">120</sys:Double>
+
+            <!-- The icon's tile shows whether the window has the focus, as its title bar does.
+                 Active, it is a lifted card: a near-white layer in the light theme and a raised
+                 grey in the dark one, each with the theme's faint card stroke. Inactive, it
+                 settles back to a dimmed grey without the stroke. High contrast draws it in the
+                 theme's window colours, with the text colour as its edge while active and the
+                 disabled text colour while not.
+                 The window's resources carry the colours under the names without a suffix:
+                 TitleBarActivation copies the .Light, .Dark or .HighContrast ones there and
+                 again whenever the theme changes. -->
+            <SolidColorBrush x:Key="AppIconTileActiveBackground.Light" Color="#FCFCFC" />
+            <SolidColorBrush x:Key="AppIconTileActiveBorder.Light" Color="#14000000" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBackground.Light" Color="#E6E6E6" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBorder.Light" Color="Transparent" />
+            <SolidColorBrush x:Key="AppIconTileActiveBackground.Dark" Color="#3A3A3A" />
+            <SolidColorBrush x:Key="AppIconTileActiveBorder.Dark" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBackground.Dark" Color="#2B2B2B" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBorder.Dark" Color="Transparent" />
+            <SolidColorBrush x:Key="AppIconTileActiveBackground.HighContrast" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+            <SolidColorBrush x:Key="AppIconTileActiveBorder.HighContrast" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBackground.HighContrast" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+            <SolidColorBrush x:Key="AppIconTileInactiveBorder.HighContrast" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}" />
+            <Style x:Key="AppIconTile" TargetType="Border">
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Background" Value="{DynamicResource AppIconTileActiveBackground}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource AppIconTileActiveBorder}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource AppIconTileInactiveBackground}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource AppIconTileInactiveBorder}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
 
             <Style x:Key="AppNameText" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{DynamicResource StrongDisplayFont}" />

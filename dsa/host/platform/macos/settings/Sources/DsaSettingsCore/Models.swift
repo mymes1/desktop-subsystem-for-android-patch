@@ -24,13 +24,63 @@ public struct StatusInfo: Equatable, Sendable {
     public var lastReason: String?
     public var updateNotice: String?
     public var problem: String?
+    /// Where an update of DSA itself stands, when one is under way or has just ended.
+    public var programUpdate: ProgramUpdateProgress?
 
-    public init(state: SessionState, lastReason: String? = nil, updateNotice: String? = nil, problem: String? = nil) {
+    public init(state: SessionState, lastReason: String? = nil, updateNotice: String? = nil, problem: String? = nil,
+                programUpdate: ProgramUpdateProgress? = nil) {
         self.state = state
         self.lastReason = lastReason
         self.updateNotice = updateNotice
         self.problem = problem
+        self.programUpdate = programUpdate
     }
+}
+
+/// How far an update of DSA itself has got, as the service and the settings app see it. The
+/// raw values are the names `dsa status --json` writes.
+public enum ProgramUpdatePhase: String, Equatable, Sendable {
+    /// No update of DSA is under way.
+    case none = ""
+    /// The app asked the service to install now and waits for its first word.
+    case starting = "starting"
+    case downloading = "downloading"
+    /// Every user's Android is being stopped so setup can run.
+    case stoppingAndroid = "stopping_android"
+    case installing = "installing"
+    /// The service is restarting into the new version, or is away while setup replaces it.
+    case restarting = "restarting"
+    /// The new version runs.
+    case applied = "applied"
+    /// The update failed and the version before it is still installed.
+    case failed = "failed"
+
+    /// The phase a name of `dsa status --json` stands for. An unknown name, as a newer
+    /// service may give, is none.
+    public static func parse(_ name: String?) -> ProgramUpdatePhase {
+        guard let name, let phase = ProgramUpdatePhase(rawValue: name), phase != .starting else {
+            return .none
+        }
+        return phase
+    }
+}
+
+/// Where an update of DSA stands: its phase and the version it installs.
+public struct ProgramUpdateProgress: Equatable, Sendable {
+    public var phase: ProgramUpdatePhase
+    public var version: String
+
+    public init(phase: ProgramUpdatePhase, version: String) {
+        self.phase = phase
+        self.version = version
+    }
+}
+
+/// What the service answered when asked to install the newest version now: the version setup
+/// installs, or nil when there is nothing newer, and its own words.
+public struct ProgramUpdateAnswer: Equatable, Sendable {
+    public var installing: String?
+    public var detail: String
 }
 
 /// Which GPU the window manager renders on.
@@ -141,6 +191,9 @@ public struct SettingsInfo: Equatable, Sendable {
     /// Whether apps in Android may ask for root through an administrator's approval. The
     /// computer's setting, off by default; it applies from the next start of Android.
     public var rootElevation = false
+    /// Whether Android restarts by itself into an Android image the service downloaded. On by
+    /// default; off, the image is used the next time the user starts Android.
+    public var imageAutoRestart = true
 
     public init() {}
 
@@ -228,11 +281,32 @@ public struct HostProcess: Equatable, Sendable {
     public var privateKb: UInt64
 }
 
+/// What some of Android's processes cost, in KiB: their pages in memory, and their share of
+/// compressed memory (zram) at the compression zram measures. PSS counts what is swapped out
+/// at its size before compression, two or three times this. `compressedKb` is nil when the
+/// compression could not be measured.
+public struct MemoryShare: Equatable, Sendable {
+    public var residentKb: UInt64
+    public var compressedKb: UInt64?
+
+    public var totalKb: UInt64 { residentKb + (compressedKb ?? 0) }
+}
+
 public struct GuestProcess: Equatable, Sendable {
     public var pid: Int
     public var name: String
     public var pssKb: UInt64
     public var swapPssKb: UInt64
+    /// It belongs to Google Play services.
+    public var googlePlay: Bool = false
+    /// What it costs; nil from a service that does not say.
+    public var cost: MemoryShare? = nil
+}
+
+/// Every process of Google Play services together: how many, and what they cost.
+public struct GooglePlayMemory: Equatable, Sendable {
+    public var processes: UInt64
+    public var cost: MemoryShare
 }
 
 /// What the guest kernel holds for itself, in KiB.
@@ -249,6 +323,10 @@ public struct GuestMemoryInfo: Equatable, Sendable {
     public var topProcesses: [GuestProcess]
     public var ageSeconds: UInt64
     public var kernel: GuestKernelInfo?
+    /// What the processes cost together; nil from a service that does not say.
+    public var apps: MemoryShare? = nil
+    /// Nil while none of Google Play services' processes runs.
+    public var googlePlay: GooglePlayMemory? = nil
 }
 
 /// The memory of the user's Android. `vmBeyondGuestKb` is what the VM holds on the host

@@ -78,9 +78,35 @@ public sealed partial class DsaService
         ParseState(OptionalString(json, "state")),
         OptionalString(json, "last_reason"),
         OptionalString(json, "update_notice"),
-        OptionalString(json, "problem"));
+        OptionalString(json, "problem"),
+        json.TryGetProperty("program_update", out var update) && update.ValueKind == JsonValueKind.Object
+            ? ReadProgramUpdate(update)
+            : null);
+
+    /// <summary>The phase a name of <c>dsa status --json</c> stands for. An unknown name, as
+    /// a newer service may give, is none.</summary>
+    public static ProgramUpdatePhase ReadProgramUpdatePhase(string? name) => name switch
+    {
+        "downloading" => ProgramUpdatePhase.Downloading,
+        "stopping_android" => ProgramUpdatePhase.StoppingAndroid,
+        "installing" => ProgramUpdatePhase.Installing,
+        "restarting" => ProgramUpdatePhase.Restarting,
+        "applied" => ProgramUpdatePhase.Applied,
+        "failed" => ProgramUpdatePhase.Failed,
+        _ => ProgramUpdatePhase.None,
+    };
+
+    private static ProgramUpdateProgress? ReadProgramUpdate(JsonElement json) =>
+        ReadProgramUpdatePhase(OptionalString(json, "phase")) is var phase and not ProgramUpdatePhase.None
+            ? new ProgramUpdateProgress(phase, String(json, "version"))
+            : null;
 
     public async Task<StatusInfo> StatusAsync() => ReadStatus(await RunJsonAsync("status").ConfigureAwait(true));
+
+    /// <summary>The status from a running service only. While setup has stopped the service
+    /// this fails rather than start the old service again under setup.</summary>
+    public async Task<StatusInfo> RunningStatusAsync() =>
+        ReadStatus(await RunJsonAsync("status", "--no-start").ConfigureAwait(true));
 
     /// <summary>Starts Android and waits until it has started or failed.</summary>
     public async Task<StatusInfo> StartAsync() =>
@@ -124,7 +150,8 @@ public sealed partial class DsaService
         Bool(json, "touch_gestures_off", missing: true),
         ReadTouchGesturesState(OptionalString(json, "touch_gestures_state")),
         OptionalString(json, "touch_gestures_problem") is { Length: > 0 } problem ? problem : null,
-        Bool(json, "root_elevation"));
+        Bool(json, "root_elevation"),
+        Bool(json, "image_auto_restart", missing: true));
 
     /// <summary>The touch gestures state a name stands for. An empty or unknown name, as an
     /// older service gives, is unknown.</summary>
@@ -201,6 +228,10 @@ public sealed partial class DsaService
     /// <summary>Whether Windows' three- and four-finger touch gestures are off while a DSA app
     /// window is in front.</summary>
     public Task<SettingsInfo> SetTouchGesturesOffAsync(bool on) => SetAsync("touch-gestures-off", on ? "on" : "off");
+
+    /// <summary>Whether Android restarts by itself into an Android image the service
+    /// downloaded.</summary>
+    public Task<SettingsInfo> SetImageAutoRestartAsync(bool on) => SetAsync("image-auto-restart", on ? "on" : "off");
 
     /// <summary>Whether stopping an app from the notification area skips the question that
     /// confirms it.</summary>
@@ -349,7 +380,9 @@ public sealed partial class DsaService
                 foreach (var p in processes.EnumerateArray())
                 {
                     var pid = p.TryGetProperty("pid", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : 0;
-                    top.Add(new GuestProcess(pid, String(p, "name"), Number(p, "pss_kb"), Number(p, "swap_pss_kb")));
+                    top.Add(new GuestProcess(pid, String(p, "name"), Number(p, "pss_kb"), Number(p, "swap_pss_kb"),
+                        Bool(p, "google_play", false),
+                        p.TryGetProperty("resident_kb", out _) ? ReadShare(p) : null));
                 }
             }
             guest = new GuestMemoryInfo(
@@ -357,7 +390,11 @@ public sealed partial class DsaService
                 Number(g, "buffers_kb"), Number(g, "cached_kb"), Number(g, "anon_pages_kb"),
                 Number(g, "shmem_kb"), Number(g, "slab_reclaimable_kb"), Number(g, "swap_total_kb"),
                 Number(g, "swap_free_kb"), Number(g, "zram_original_kb"), Number(g, "zram_used_kb"),
-                Number(g, "total_pss_kb"), top, Number(g, "age_seconds"), ReadKernel(g));
+                Number(g, "total_pss_kb"), top, Number(g, "age_seconds"), ReadKernel(g),
+                g.TryGetProperty("apps", out var apps) && apps.ValueKind == JsonValueKind.Object ? ReadShare(apps) : null,
+                g.TryGetProperty("google_play", out var play) && play.ValueKind == JsonValueKind.Object
+                    ? new GooglePlayMemory((uint)Number(play, "processes"), ReadShare(play))
+                    : null);
         }
         return new MemoryReport(guest, host, Number(json, "host_total_kb"), OptionalNumber(json, "vm_beyond_guest_kb"));
     }
@@ -366,6 +403,11 @@ public sealed partial class DsaService
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetUInt64()
             : null;
+
+    /// <summary>What processes cost, from an object with <c>resident_kb</c> and
+    /// <c>compressed_kb</c> (null when zram's compression is unknown).</summary>
+    private static MemoryShare ReadShare(JsonElement share) =>
+        new(Number(share, "resident_kb"), OptionalNumber(share, "compressed_kb"));
 
     /// <summary>The kernel's own memory, or null from a service that does not report it.</summary>
     private static GuestKernelInfo? ReadKernel(JsonElement guest)
@@ -563,15 +605,13 @@ public sealed partial class DsaService
         return result.Output;
     }
 
-    /// <summary>Installs the newest version of DSA now. Returns what the service said.</summary>
-    public async Task<string> UpdateNowAsync()
+    /// <summary>Installs the newest version of DSA now. Returns the version setup installs, or
+    /// none when DSA is up to date, with what the service said.</summary>
+    public async Task<ProgramUpdateAnswer> UpdateNowAsync()
     {
-        var result = await _cli.RunAsync(new[] { "update" }).ConfigureAwait(true);
-        if (result.ExitCode != 0)
-        {
-            var detail = result.Error.StartsWith("dsa: ", StringComparison.Ordinal) ? result.Error[5..] : result.Error;
-            throw new DsaException(Problem.Refused, detail);
-        }
-        return result.Output;
+        var json = await RunJsonAsync("update").ConfigureAwait(true);
+        return new ProgramUpdateAnswer(
+            OptionalString(json, "installing") is { Length: > 0 } version ? version : null,
+            String(json, "detail"));
     }
 }

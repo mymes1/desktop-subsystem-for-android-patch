@@ -242,7 +242,7 @@
     <value>Apps and system</value>
   </data>
   <data name="Memory_AppsDetail" xml:space="preserve">
-    <value>The apps and the system server, counted by their share (PSS).</value>
+    <value>{0} in memory, {1} compressed</value>
   </data>
   <data name="Memory_Cache" xml:space="preserve">
     <value>Cache</value>
@@ -270,6 +270,18 @@
   </data>
   <data name="Memory_GuestProcessDetail" xml:space="preserve">
     <value>Process {0}</value>
+  </data>
+  <data name="Memory_GuestProcessGooglePlay" xml:space="preserve">
+    <value>Process {0}, Google Play services</value>
+  </data>
+  <data name="Memory_GooglePlay" xml:space="preserve">
+    <value>Google Play services</value>
+  </data>
+  <data name="Memory_GooglePlayDetail" xml:space="preserve">
+    <value>The Google apps you installed, {0} processes: {1}</value>
+  </data>
+  <data name="Memory_Unknown" xml:space="preserve">
+    <value>unknown</value>
   </data>
   <data name="DisplayTitle.Text" xml:space="preserve">
     <value>Display &amp; GPU</value>
@@ -359,7 +371,7 @@
     <value>Update the Android image automatically</value>
   </data>
   <data name="ImageUpdatesCard.Description" xml:space="preserve">
-    <value>Download signed security updates and new versions of Android. They apply at the next start of Android.</value>
+    <value>Download signed security updates and new versions of Android. They apply when Android restarts, as the setting below says.</value>
   </data>
   <data name="UpdatesMachineNote.Text" xml:space="preserve">
     <value>These settings apply to every user of this PC, and only an administrator can change them. A switch that stays off is not offered by this installation.</value>
@@ -405,6 +417,42 @@
   </data>
   <data name="UpdateNowFailed" xml:space="preserve">
     <value>DSA was not updated</value>
+  </data>
+  <data name="ProgramUpdateCard.Header" xml:space="preserve">
+    <value>Updating DSA</value>
+  </data>
+  <data name="ProgramUpdateDone.Title" xml:space="preserve">
+    <value>DSA updated</value>
+  </data>
+  <data name="ProgramUpdate_Starting" xml:space="preserve">
+    <value>Getting the update ready</value>
+  </data>
+  <data name="ProgramUpdate_Downloading" xml:space="preserve">
+    <value>Downloading DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_StoppingAndroid" xml:space="preserve">
+    <value>Stopping Android to install DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_Installing" xml:space="preserve">
+    <value>Installing DSA {0}</value>
+  </data>
+  <data name="ProgramUpdate_Restarting" xml:space="preserve">
+    <value>DSA is restarting to finish the update</value>
+  </data>
+  <data name="ProgramUpdate_Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="ProgramUpdate_KeepOpen" xml:space="preserve">
+    <value>Do not close DSA or start Android apps until the update is done.</value>
+  </data>
+  <data name="ProgramUpdate_Applied" xml:space="preserve">
+    <value>Updated to {0}</value>
+  </data>
+  <data name="ProgramUpdate_Failed" xml:space="preserve">
+    <value>Updating to {0} failed. The version before it is still installed.</value>
+  </data>
+  <data name="ProgramUpdate_NotBack" xml:space="preserve">
+    <value>DSA has not come back after the update to {0}. If it does not start soon, restart the computer.</value>
   </data>
   <data name="AdvancedTitle.Text" xml:space="preserve">
     <value>Advanced</value>
@@ -494,7 +542,7 @@
     <value>Remove the ARM translation package</value>
   </data>
   <data name="ArmRemoveCard.Description" xml:space="preserve">
-    <value>Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts.</value>
+    <value>Deletes the package from your add-on disk. ARM apps you installed stay, but do not run after Android restarts.</value>
   </data>
   <data name="ArmRemoveButton.Content" xml:space="preserve">
     <value>Remove</value>
@@ -572,7 +620,7 @@
     <value>Remove Google Play</value>
   </data>
   <data name="GappsRemoveCard.Description" xml:space="preserve">
-    <value>Deletes Google's apps from Android's disk. They are gone from the next start of Android. Apps you installed from the Play Store stay, but those that need Google Play services may stop working.</value>
+    <value>Deletes Google's apps from your add-on disk. They are gone from the next start of Android. Apps you installed from the Play Store stay, but those that need Google Play services may stop working.</value>
   </data>
   <data name="GappsRemoveButton.Content" xml:space="preserve">
     <value>Remove</value>
@@ -1086,6 +1134,9 @@
   </data>
   <data name="ApkWindow_AbiWarning" xml:space="preserve">
     <value>This app has code only for {0} processors, not for this PC's. Android runs it only with an ARM translation package, and may refuse to install it.</value>
+  </data>
+  <data name="ApkWindow_Abi32Warning" xml:space="preserve">
+    <value>This app has code only for {0} processors. The ARM translator runs only 64-bit ARM (arm64-v8a) code, so Android may refuse to install it or it may not start.</value>
   </data>
   <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
     <value>{0} is installed, but it did not open. {1}</value>
@@ -1847,10 +1898,28 @@
     <value>Android update</value>
   </data>
   <data name="Android_UpToDate" xml:space="preserve">
-    <value>No Android update is waiting. DSA checks every day, and an update applies at the next start of Android.</value>
+    <value>No Android update is waiting. DSA checks every day, and restarts Android into an update once no app window is open.</value>
   </data>
   <data name="AndroidCheckButton.Content" xml:space="preserve">
     <value>Check now</value>
+  </data>
+  <data name="Android_RestartPending" xml:space="preserve">
+    <value>Android {0} is downloaded. Restart Android to use it now.</value>
+  </data>
+  <data name="AndroidRestartButton.Content" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
+  <data name="AndroidRestartConfirm.Title" xml:space="preserve">
+    <value>Restart Android now?</value>
+  </data>
+  <data name="AndroidRestartConfirm.Body" xml:space="preserve">
+    <value>Android restarts into Android {0}. Its app windows close; open the apps again once it has started.</value>
+  </data>
+  <data name="ImageAutoRestartCard.Header" xml:space="preserve">
+    <value>Restart Android into updates by itself</value>
+  </data>
+  <data name="ImageAutoRestartCard.Description" xml:space="preserve">
+    <value>On by default. With no app window open, Android restarts into a downloaded update at once. With windows open, DSA asks first, or waits until you close them. Off, an update is used the next time you start Android.</value>
   </data>
   <data name="IdentitySpecsCard.Header" xml:space="preserve">
     <value>Device specifications</value>

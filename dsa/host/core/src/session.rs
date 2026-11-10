@@ -102,7 +102,7 @@
 //! ([`Session::print_result`]) goes back to the guest. A job canceled in the guest, or one the
 //! guest's agent no longer has because it went away, is withdrawn from the watcher.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -134,6 +134,7 @@ use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::gapps::GuestGapps;
+use crate::geocode::{self, GeocodeError, GeocodeErrorKind, GeocodeOutcome, GeocodeQuery};
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
@@ -151,6 +152,7 @@ use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
 use crate::root_approval::RootApproval;
 use crate::root_elevation::{AppLevel, Level};
+use crate::share::{ShareOutcome, ShareRequest};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -412,6 +414,15 @@ pub trait GuestLauncher: Send + 'static {
         Err(format!("this kind of guest cannot be resized to {mb} MiB"))
     }
 
+    /// A handle that resizes the running guest's memory from a thread of its own, for a
+    /// platform whose resize can take long (Hyper-V answered one after 45 s). The session's
+    /// thread then keeps serving windows, input and requests meanwhile. `None`, the default,
+    /// has the session call [`GuestLauncher::set_memory_mb`] on its own thread, for a resize
+    /// that returns at once.
+    fn memory_resizer(&mut self) -> Option<Box<dyn MemoryResizer>> {
+        None
+    }
+
     /// Growing the guest's memory did not work, for the reason given. The launcher starts the
     /// next guest at a fixed size instead.
     fn memory_growth_failed(&mut self, why: &str) {
@@ -593,6 +604,28 @@ enum Command {
     HostSleep(Sender<()>),
     /// The host woke, with its wall clock then.
     HostWoke(SystemTime),
+    /// A resize of the guest's memory, run on a thread of its own, finished.
+    MemoryResized(ResizeOutcome),
+}
+
+/// How a resize of the guest's memory went, for the session to take in.
+struct ResizeOutcome {
+    /// Which boot of the guest asked for it.
+    generation: u64,
+    before: u64,
+    mb: u64,
+    /// The guest's memory when it was asked for, for the log.
+    available_mb: u64,
+    stall_percent: f64,
+    result: Result<(), String>,
+}
+
+/// Resizes the running guest's memory from a thread other than the session's
+/// ([`GuestLauncher::memory_resizer`]).
+pub trait MemoryResizer: Send + 'static {
+    /// Sets the guest's memory to `mb` MiB, as [`GuestLauncher::set_memory_mb`] does. It may
+    /// take as long as the platform takes; the session goes on meanwhile.
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String>;
 }
 
 /// Says the device name a guest is given: the computer's name, as its last boot found it.
@@ -631,6 +664,12 @@ struct Shared {
     print_watchers: Mutex<Vec<Sender<PrintEvent>>>,
     /// The guest's print jobs on their way, and those a watcher has.
     prints: Mutex<print::Assembler>,
+    /// Who answers the address lookups of the guest's apps.
+    geocode_watchers: Mutex<Vec<Sender<GeocodeQuery>>>,
+    /// Who shows what the guest's apps share with the host.
+    share_watchers: Mutex<Vec<Sender<ShareRequest>>>,
+    /// The shares a watcher has and has not answered yet, by their ID.
+    open_shares: Mutex<HashSet<u32>>,
     /// The apps that run in the background, their media sessions, and who watches them.
     background: Mutex<BackgroundHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
@@ -649,6 +688,11 @@ struct Shared {
     gapps: Mutex<Option<Sender<control::GappsState>>>,
     /// Held for the length of an exchange about the Google apps, so they go one at a time.
     gapps_turn: Mutex<()>,
+    /// Who waits for the control daemon's part of an add-on image an older DSA left on the
+    /// user's disk, while one read is under way.
+    addon_image: Mutex<Option<Sender<control::AddonImagePart>>>,
+    /// Held for the length of one read of an add-on image, so they go one at a time.
+    addon_image_turn: Mutex<()>,
     /// Who waits for the agent's word on the Google Services Framework Android ID.
     device_id: Mutex<Option<Sender<String>>>,
     /// The widgets the agent hosts and who is watching them.
@@ -1048,6 +1092,17 @@ impl Shared {
         }
     }
 
+    /// Hands the control daemon's part of an add-on image to whoever reads it.
+    fn addon_image_event(&self, part: control::AddonImagePart) {
+        let waiting = self.addon_image.lock().unwrap_or_else(|e| e.into_inner());
+        match waiting.as_ref() {
+            Some(waiting) => {
+                let _ = waiting.send(part);
+            }
+            None => eprintln!("add-ons: dropped a part of an image, which nobody reads"),
+        }
+    }
+
     /// Hands the agent's Google Services Framework Android ID to whoever asked for it.
     fn device_id_event(&self, id: String) {
         if let Some(waiting) = self
@@ -1171,6 +1226,26 @@ impl Shared {
         delivered
     }
 
+    /// Hands a lookup to the first watcher still listening, and only to it. False when nobody
+    /// listens.
+    fn hand_geocode_query(&self, query: GeocodeQuery) -> bool {
+        hand_to_first(&self.geocode_watchers, query)
+    }
+
+    /// Hands a share to the first watcher still listening, and only to it, so one share UI
+    /// shows for it. False when nobody listens.
+    fn hand_share(&self, request: ShareRequest) -> bool {
+        let share_id = request.share_id;
+        let handed = hand_to_first(&self.share_watchers, request);
+        if handed {
+            self.open_shares
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(share_id);
+        }
+        handed
+    }
+
     /// Tells every watcher a print job is gone; only the one that has it acts on it.
     fn withdraw_print_job(&self, job_id: u32) {
         self.print_watchers
@@ -1260,6 +1335,9 @@ impl Session {
             notification_watchers: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
             prints: Mutex::new(print::Assembler::new()),
+            geocode_watchers: Mutex::new(Vec::new()),
+            share_watchers: Mutex::new(Vec::new()),
+            open_shares: Mutex::new(HashSet::new()),
             background: Mutex::new(BackgroundHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
@@ -1268,6 +1346,8 @@ impl Session {
             arm_translation_turn: Mutex::new(()),
             gapps: Mutex::new(None),
             gapps_turn: Mutex::new(()),
+            addon_image: Mutex::new(None),
+            addon_image_turn: Mutex::new(()),
             device_id: Mutex::new(None),
             widgets: Mutex::new(WidgetHub::default()),
             widget_requests: Mutex::new(HashMap::new()),
@@ -1300,6 +1380,8 @@ impl Session {
         let (commands, command_rx) = mpsc::channel();
         let incoming = Arc::new(Mutex::new(None));
         let worker = Worker {
+            own_commands: commands.clone(),
+            memory_generation: 0,
             launcher: Box::new(launcher),
             listener,
             handshake: Box::new(handshake),
@@ -2043,174 +2125,8 @@ impl Session {
         }
     }
 
-    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
-    /// SHA-256 is `sha256`, to the guest's control daemon, which keeps it on the user's disk
-    /// for the next boot. Returns where translation stands once the image is in place, or why
-    /// it is not. Needs a running guest. The image goes in chunks of [`apk::CHUNK_BYTES`],
-    /// never more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
-    pub fn install_arm_translation(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestArmTranslation, SessionError> {
-        let _turn = self
-            .shared
-            .arm_translation_turn
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let state = self.state();
-        if !matches!(
-            state,
-            SessionState::Active | SessionState::Dozing | SessionState::Frozen
-        ) {
-            return Err(SessionError::NotActive(state));
-        }
-        let transfer_id = self
-            .shared
-            .last_install
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1);
-        let (tx, events) = mpsc::channel();
-        *self
-            .shared
-            .arm_translation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        eprintln!(
-            "arm translation: sending a {size} byte image to Android as transfer {transfer_id}"
-        );
-        let result = self.send_arm_translation(transfer_id, size, sha256, content, &events);
-        *self
-            .shared
-            .arm_translation
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = None;
-        match &result {
-            Ok(guest) => eprintln!(
-                "arm translation: the image is in place; this boot's ABIs are {}",
-                guest.abilist
-            ),
-            Err(why) => eprintln!("arm translation: the image did not reach Android: {why}"),
-        }
-        result
-    }
-
-    fn send_arm_translation(
-        &self,
-        transfer_id: u32,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-        events: &Receiver<control::ArmTranslationState>,
-    ) -> Result<GuestArmTranslation, SessionError> {
-        let begin = Body::ArmTranslationInstall(control::ArmTranslationInstall {
-            transfer_id,
-            size,
-            sha256: sha256.to_vec(),
-        });
-        let state = self.send_image(
-            "the ARM translation image",
-            transfer_id,
-            size,
-            content,
-            begin,
-            &|offset, data| {
-                Body::ArmTranslationChunk(control::ArmTranslationChunk {
-                    transfer_id,
-                    offset,
-                    data,
-                })
-            },
-            events,
-            &|state: &control::ArmTranslationState| {
-                (
-                    state.transfer_id,
-                    state.received,
-                    state.done,
-                    state.error.clone(),
-                )
-            },
-        )?;
-        Ok(guest_arm_translation(state))
-    }
-
-    /// Sends an image the control daemon keeps on the user's disk: `begin`, then `size` bytes
-    /// of `content` as the chunks `chunk` makes, in pieces of [`apk::CHUNK_BYTES`] and never
-    /// more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
-    /// `answer` reads the daemon's answers as (transfer, bytes written, done, error). Returns
-    /// the answer that says the image is in place.
-    #[allow(clippy::too_many_arguments)]
-    fn send_image<S>(
-        &self,
-        what: &str,
-        transfer_id: u32,
-        size: u64,
-        content: &mut dyn Read,
-        begin: Body,
-        chunk: &dyn Fn(u64, Vec<u8>) -> Body,
-        events: &Receiver<S>,
-        answer: &dyn Fn(&S) -> (u32, u64, bool, String),
-    ) -> Result<S, SessionError> {
-        self.send(dsa_protocol::encode(&control::Envelope {
-            body: Some(begin),
-        }))?;
-        let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
-        let mut sent = 0u64;
-        let mut written = 0u64;
-        let mut waited = Duration::ZERO;
-        loop {
-            while sent < size && sent < written + window {
-                let length = (size - sent).min(apk::CHUNK_BYTES as u64) as usize;
-                let mut data = vec![0u8; length];
-                if let Err(error) = content.read_exact(&mut data) {
-                    return Err(SessionError::InstallRefused(format!(
-                        "{what} did not arrive whole: {error}"
-                    )));
-                }
-                self.send(dsa_protocol::encode(&control::Envelope {
-                    body: Some(chunk(sent, data)),
-                }))?;
-                sent += length as u64;
-            }
-            match events.recv_timeout(INSTALL_POLL) {
-                Ok(state) => {
-                    let (id, received, done, error) = answer(&state);
-                    if id != transfer_id {
-                        continue;
-                    }
-                    if !error.is_empty() {
-                        return Err(SessionError::InstallRefused(error));
-                    }
-                    if done {
-                        return Ok(state);
-                    }
-                    written = written.max(received);
-                    waited = Duration::ZERO;
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    let state = self.state();
-                    if !matches!(
-                        state,
-                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
-                    ) {
-                        return Err(SessionError::NotActive(state));
-                    }
-                    waited += INSTALL_POLL;
-                    if waited >= CHUNK_TIMEOUT {
-                        return Err(SessionError::InstallRefused(format!(
-                            "Android has not answered about {what} for {} s; it may be busy, \
-                             try again",
-                            CHUNK_TIMEOUT.as_secs()
-                        )));
-                    }
-                }
-                Err(RecvTimeoutError::Disconnected) => return Err(SessionError::Gone),
-            }
-        }
-    }
-
-    /// Asks the guest's control daemon to remove the ARM translation package's image.
+    /// Asks the guest's control daemon to remove the ARM translation package's image an older
+    /// DSA left on the user's disk.
     pub fn remove_arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
         let state = self.arm_translation_exchange(Body::ArmTranslationRemove(
             control::ArmTranslationRemove {},
@@ -2265,73 +2181,8 @@ impl Session {
         answer
     }
 
-    /// Sends the Google apps' system image, `size` bytes read from `content` whose SHA-256 is
-    /// `sha256`, to the guest's control daemon, which keeps it on the user's disk for the next
-    /// boot. Returns where the Google apps stand once the image is in place, or why it is not.
-    /// Needs a running guest.
-    pub fn install_gapps(
-        &self,
-        size: u64,
-        sha256: &[u8],
-        content: &mut dyn Read,
-    ) -> Result<GuestGapps, SessionError> {
-        let _turn = self
-            .shared
-            .gapps_turn
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let state = self.state();
-        if !matches!(
-            state,
-            SessionState::Active | SessionState::Dozing | SessionState::Frozen
-        ) {
-            return Err(SessionError::NotActive(state));
-        }
-        let transfer_id = self
-            .shared
-            .last_install
-            .fetch_add(1, Ordering::Relaxed)
-            .wrapping_add(1);
-        let (tx, events) = mpsc::channel();
-        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        eprintln!("gapps: sending a {size} byte image to Android as transfer {transfer_id}");
-        let begin = Body::GappsInstall(control::GappsInstall {
-            transfer_id,
-            size,
-            sha256: sha256.to_vec(),
-        });
-        let result = self.send_image(
-            "the Google apps image",
-            transfer_id,
-            size,
-            content,
-            begin,
-            &|offset, data| {
-                Body::GappsChunk(control::GappsChunk {
-                    transfer_id,
-                    offset,
-                    data,
-                })
-            },
-            &events,
-            &|state: &control::GappsState| {
-                (
-                    state.transfer_id,
-                    state.received,
-                    state.done,
-                    state.error.clone(),
-                )
-            },
-        );
-        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        match &result {
-            Ok(_) => eprintln!("gapps: the image is in place for the next start of Android"),
-            Err(why) => eprintln!("gapps: the image did not reach Android: {why}"),
-        }
-        result.map(guest_gapps)
-    }
-
-    /// Asks the guest's control daemon to remove the Google apps' image.
+    /// Asks the guest's control daemon to remove the Google apps' image an older DSA left on
+    /// the user's disk.
     pub fn remove_gapps(&self) -> Result<GuestGapps, SessionError> {
         let state = self.gapps_exchange(Body::GappsRemove(control::GappsRemove {}))?;
         if state.error.is_empty() {
@@ -2380,6 +2231,60 @@ impl Session {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
         id
+    }
+
+    /// Reads up to `length` bytes from `offset` of the add-on image `image` that an older DSA
+    /// left on the user's disk, which the host moves onto the add-on disk. Says why when the
+    /// guest cannot read it. Needs a guest that is active or dozing.
+    pub fn read_addon_image(
+        &self,
+        image: control::AddonImage,
+        offset: u64,
+        length: u32,
+    ) -> Result<control::AddonImagePart, SessionError> {
+        let state = self.state();
+        if !matches!(state, SessionState::Active | SessionState::Dozing) {
+            return Err(SessionError::NotActive(state));
+        }
+        let _turn = self
+            .shared
+            .addon_image_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (tx, parts) = mpsc::channel();
+        *self
+            .shared
+            .addon_image
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::AddonImageRead(control::AddonImageRead {
+                image: image as i32,
+                offset,
+                length,
+            })),
+        }));
+        let answer = sent.and_then(|()| loop {
+            match parts.recv_timeout(CHUNK_TIMEOUT) {
+                // An answer to an earlier read that gave up waiting is not this one's.
+                Ok(part) if part.image() != image || part.offset != offset => continue,
+                Ok(part) if !part.error.is_empty() => {
+                    break Err(SessionError::InstallRefused(part.error))
+                }
+                Ok(part) => break Ok(part),
+                Err(_) => {
+                    break Err(SessionError::NoAnswer(
+                        "Android did not send the part of the add-on image it was asked for".into(),
+                    ))
+                }
+            }
+        });
+        *self
+            .shared
+            .addon_image
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        answer
     }
 
     /// Sends `body` to the control daemon and waits for its GappsState.
@@ -2655,6 +2560,64 @@ impl Session {
         };
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(Body::PrintJobResult(outcome.to_control(guest_id))),
+        }))
+    }
+
+    /// The address lookups of the guest's apps from now on, each to one watcher only, which
+    /// answers it with [`Session::geocode_result`]. The watch lasts across restarts of the
+    /// guest.
+    pub fn watch_geocoding(&self) -> Receiver<GeocodeQuery> {
+        let (tx, rx) = mpsc::channel();
+        self.shared
+            .geocode_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        rx
+    }
+
+    /// Gives the guest what lookup `query_id` found. An answer for a guest that has stopped is
+    /// dropped: its app no longer waits.
+    pub fn geocode_result(
+        &self,
+        query_id: u32,
+        outcome: &GeocodeOutcome,
+    ) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::GeocodeResult(geocode::result_to_control(
+                query_id, outcome,
+            ))),
+        }))
+    }
+
+    /// What the guest's apps share with the host from now on, each share to one watcher only,
+    /// which reads its files, shows the host's share UI and answers with
+    /// [`Session::share_result`]. The watch lasts across restarts of the guest.
+    pub fn watch_shares(&self) -> Receiver<ShareRequest> {
+        let (tx, rx) = mpsc::channel();
+        self.shared
+            .share_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        rx
+    }
+
+    /// Tells the guest what became of share `share_id`. A share no watcher was given is left
+    /// alone.
+    pub fn share_result(&self, share_id: u32, outcome: &ShareOutcome) -> Result<(), SessionError> {
+        let open = self
+            .shared
+            .open_shares
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&share_id);
+        if !open {
+            eprintln!("share: the outcome of share {share_id} came for no share Android has open");
+            return Ok(());
+        }
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::ShareResult(outcome.to_control(share_id))),
         }))
     }
 
@@ -3801,6 +3764,24 @@ fn send_quietly(shared: &Shared, commands: &Sender<Command>, body: Body) {
     }
 }
 
+/// Hands `item` to the first of `watchers` still listening, and only to it, dropping those
+/// that have gone. False when nobody listens.
+fn hand_to_first<T: Clone>(watchers: &Mutex<Vec<Sender<T>>>, item: T) -> bool {
+    let mut delivered = false;
+    watchers
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .retain(|watcher| {
+            if delivered {
+                return true;
+            }
+            let sent = watcher.send(item.clone()).is_ok();
+            delivered = sent;
+            sent
+        });
+    delivered
+}
+
 /// How often an active session checks for requests while it waits on the channel.
 const POLL: Duration = Duration::from_millis(20);
 
@@ -3817,7 +3798,8 @@ const DEVICE_ID_WAIT: Duration = Duration::from_secs(2);
 /// What the guest's control daemon says of the Google apps, as the host keeps it.
 fn guest_gapps(state: control::GappsState) -> GuestGapps {
     GuestGapps {
-        installed: state.installed,
+        installed: false,
+        left_on_data: state.installed,
         active: state.active,
         sdk: state.sdk,
         abi: state.abi,
@@ -3829,7 +3811,8 @@ fn guest_gapps(state: control::GappsState) -> GuestGapps {
 /// What the guest's control daemon says of ARM translation, as the host keeps it.
 fn guest_arm_translation(state: control::ArmTranslationState) -> GuestArmTranslation {
     GuestArmTranslation {
-        installed: state.installed,
+        installed: false,
+        left_on_data: state.installed,
         active: state.active,
         abilist: state.abilist,
     }
@@ -3863,6 +3846,10 @@ const PREREQUISITE_POLL: Duration = Duration::from_secs(1);
 const DIAGNOSIS_POLL: Duration = Duration::from_secs(10);
 
 struct Worker {
+    /// Where work the session hands to other threads posts its outcome.
+    own_commands: Sender<Command>,
+    /// Counts the guest's boots, so a resize from an earlier one is not taken for this one's.
+    memory_generation: u64,
     launcher: Box<dyn GuestLauncher>,
     listener: Box<dyn Listener>,
     handshake: Box<dyn Handshake>,
@@ -3999,6 +3986,7 @@ impl Worker {
                         }
                         // A stopped guest's clock is set when it next boots.
                         Ok(Command::HostWoke(_)) => self.host_asleep = None,
+                        Ok(Command::MemoryResized(outcome)) => self.memory_resized(outcome),
                         Ok(Command::Shutdown) | Err(_) => return,
                     }
                 }
@@ -4031,6 +4019,7 @@ impl Worker {
                         }
                         // A stopped guest's clock is set when it next boots.
                         Ok(Command::HostWoke(_)) => self.host_asleep = None,
+                        Ok(Command::MemoryResized(outcome)) => self.memory_resized(outcome),
                         Ok(Command::Shutdown) | Err(_) => return,
                     }
                 }
@@ -4141,6 +4130,10 @@ impl Worker {
             }
             Command::HostWoke(wall_clock) => {
                 self.host_woke(wall_clock);
+                self.running()
+            }
+            Command::MemoryResized(outcome) => {
+                self.memory_resized(outcome);
                 self.running()
             }
         }
@@ -4272,6 +4265,56 @@ impl Worker {
                 self.send_body(Body::PrintJobResult(outcome.to_control(guest_id)));
             }
             print::Step::Withdraw { job_id } => self.shared.withdraw_print_job(job_id),
+        }
+    }
+
+    /// Hands an app's address lookup to a watcher in the user's session, or answers it at
+    /// once when it cannot be looked up.
+    fn geocode_request(&mut self, request: control::GeocodeRequest) {
+        let request_id = request.request_id;
+        let refused = match GeocodeQuery::from_control(&request) {
+            Err(error) => Some(error),
+            Ok(query) => (!self.shared.hand_geocode_query(query)).then(|| {
+                GeocodeError::new(
+                    GeocodeErrorKind::Refused,
+                    "no desktop session is open to look the address up in",
+                )
+            }),
+        };
+        if let Some(error) = refused {
+            let outcome: GeocodeOutcome = Err(error);
+            self.send_body(Body::GeocodeResult(geocode::result_to_control(
+                request_id, &outcome,
+            )));
+        }
+    }
+
+    /// Hands what an app shared to a watcher in the user's session. A share that cannot be
+    /// shown fails at once, and the guest gives back its access to the files.
+    fn share_to_host(&mut self, share: control::ShareToHost) {
+        let share_id = share.share_id;
+        let failed = match ShareRequest::from_control(&share) {
+            Err(why) => Some(why),
+            Ok(request) => {
+                eprintln!(
+                    "share: an app shares {} item(s) with the host",
+                    request.items.len()
+                );
+                (!self.shared.hand_share(request))
+                    .then(|| "no desktop session is open to show the share window in".to_string())
+            }
+        };
+        if let Some(why) = failed {
+            eprintln!("share: refused share {share_id} from the guest: {why}");
+            self.send_body(Body::ShareResult(
+                ShareOutcome::Failed(why).to_control(share_id),
+            ));
+            if share_id != 0 {
+                self.send_body(Body::DragEnd(control::DragEnd {
+                    drag_id: share_id,
+                    dropped: false,
+                }));
+            }
         }
     }
 
@@ -5187,33 +5230,100 @@ impl Worker {
     }
 
     /// The guest's control daemon says how much memory it has: the VM grows when the guest is
-    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A launcher that
-    /// cannot resize stops the growing, and the guest keeps the size it has.
+    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A resize the
+    /// launcher refuses or that times out is tried again in smaller steps; only memory that
+    /// was added and never reached the guest stops the growing.
+    ///
+    /// The resize itself runs on a thread of its own when the launcher gives a
+    /// [`MemoryResizer`]: Hyper-V took 45 s to answer one, and the session's thread, which
+    /// serves windows, input and the apps' requests, must not wait for it. Its outcome comes
+    /// back as a command ([`Worker::memory_resized`]). [`MemoryGrowth`] asks for no other
+    /// resize while one is in flight.
     fn guest_memory_pressure(&mut self, pressure: GuestPressure) {
         let Some(growth) = self.memory_growth.as_mut() else {
             return;
         };
         let before = growth.current_mb();
-        match growth.on_pressure(&pressure, Instant::now()) {
-            None => {}
+        let mb = match growth.on_pressure(&pressure, Instant::now()) {
+            None => return,
             Some(GrowthAction::GiveUp(why)) => {
                 eprintln!("memory: Android's memory no longer grows: {why}");
                 self.launcher.memory_growth_failed(&why);
+                return;
             }
-            Some(GrowthAction::Resize(mb)) => match self.launcher.set_memory_mb(mb) {
-                Ok(()) => eprintln!(
+            Some(GrowthAction::Resize(mb)) => mb,
+        };
+        let outcome = |result| ResizeOutcome {
+            generation: 0,
+            before,
+            mb,
+            available_mb: pressure.mem_available_kb / 1024,
+            stall_percent: pressure.stall_percent,
+            result,
+        };
+        let generation = self.memory_generation;
+        let Some(mut resizer) = self.launcher.memory_resizer() else {
+            let result = self.launcher.set_memory_mb(mb);
+            self.memory_resized(ResizeOutcome {
+                generation,
+                ..outcome(result)
+            });
+            return;
+        };
+        let commands = self.own_commands.clone();
+        let mut done = ResizeOutcome {
+            generation,
+            ..outcome(Ok(()))
+        };
+        let spawned = thread::Builder::new()
+            .name("dsa-memory-resize".into())
+            .spawn(move || {
+                done.result = resizer.set_memory_mb(done.mb);
+                let _ = commands.send(Command::MemoryResized(done));
+            });
+        if let Err(error) = spawned {
+            self.memory_resized(ResizeOutcome {
+                generation,
+                ..outcome(Err(format!("the resize could not be started: {error}")))
+            });
+        }
+    }
+
+    /// A resize asked for by [`Worker::guest_memory_pressure`] finished. One from an earlier
+    /// boot of the guest says nothing about this one and is dropped.
+    fn memory_resized(&mut self, outcome: ResizeOutcome) {
+        if outcome.generation != self.memory_generation {
+            return;
+        }
+        let Some(growth) = self.memory_growth.as_mut() else {
+            return;
+        };
+        let ResizeOutcome {
+            before, mb, result, ..
+        } = outcome;
+        match result {
+            Ok(()) => {
+                growth.applied();
+                eprintln!(
                     "memory: Android's memory {} from {before} to {mb} MiB ({} MiB available, \
                      {:.1}% stalled)",
                     if mb > before { "grows" } else { "shrinks" },
-                    pressure.mem_available_kb / 1024,
-                    pressure.stall_percent
-                ),
-                Err(why) => {
-                    growth.refused(before);
-                    eprintln!("memory: Android's memory could not be set to {mb} MiB: {why}");
-                    self.launcher.memory_growth_failed(&why);
-                }
-            },
+                    outcome.available_mb,
+                    outcome.stall_percent
+                )
+            }
+            Err(why) => {
+                // A refused or timed-out resize is tried again in a smaller step; it never
+                // stops later ones (see MemoryGrowth::refused).
+                let now = Instant::now();
+                growth.refused(now);
+                let wait = growth.retry_in(now).unwrap_or_default().as_secs();
+                eprintln!(
+                    "memory: Android's memory could not be set from {before} to {mb} MiB \
+                     ({why}); it stays at {before} MiB and is resized again in smaller steps \
+                     in {wait} s"
+                );
+            }
         }
     }
 
@@ -5546,6 +5656,7 @@ impl Worker {
         // The guest renders while it boots, before the agent connects, and the compositor
         // binds its sockets to this ID, so it is known from the moment the guest runs.
         self.shared.set_vm_id(self.launcher.vm_id());
+        self.memory_generation = self.memory_generation.wrapping_add(1);
         self.memory_growth = self.launcher.memory_range_mb().map(|(base, max)| {
             eprintln!("memory: Android starts with {base} MiB and may grow to {max} MiB");
             MemoryGrowth::new(base, max)
@@ -5702,6 +5813,10 @@ impl Worker {
             Command::HostWoke(wall_clock) => {
                 self.host_asleep = None;
                 self.clock_pending = Some((wall_clock, Instant::now()));
+                true
+            }
+            Command::MemoryResized(outcome) => {
+                self.memory_resized(outcome);
                 true
             }
             Command::Stop => {
@@ -5995,6 +6110,7 @@ impl Worker {
             ),
             Some(Body::ArmTranslationState(state)) => self.shared.arm_translation_event(state),
             Some(Body::GappsState(state)) => self.shared.gapps_event(state),
+            Some(Body::AddonImagePart(part)) => self.shared.addon_image_event(part),
             Some(Body::GoogleDeviceId(id)) => self.shared.device_id_event(id.id),
             Some(Body::InstallResult(result)) => self.shared.install_event(
                 result.transfer_id,
@@ -6104,6 +6220,8 @@ impl Worker {
                 let step = self.prints().cancel(cancel.job_id);
                 self.print_step(step);
             }
+            Some(Body::GeocodeRequest(request)) => self.geocode_request(request),
+            Some(Body::ShareToHost(share)) => self.share_to_host(share),
             Some(Body::PowerHint(hint)) => match PowerHint::from_control(&hint) {
                 Ok(hint) => self.shared.publish_power(GuestPower::Hint(hint)),
                 Err(why) => eprintln!("power: dropped a hint from the guest: {why}"),
@@ -6139,13 +6257,10 @@ impl Worker {
             | Some(Body::DragOut(_))
             | Some(Body::DragRead(_))
             | Some(Body::DragEnd(_))
-            | Some(Body::ArmTranslationInstall(_))
-            | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))
             | Some(Body::ArmTranslationQuery(_))
-            | Some(Body::GappsInstall(_))
-            | Some(Body::GappsChunk(_))
             | Some(Body::GappsRemove(_))
+            | Some(Body::AddonImageRead(_))
             | Some(Body::GappsQuery(_))
             | Some(Body::GoogleDeviceIdQuery(_))
             | Some(Body::NotificationClicked(_))
@@ -6156,6 +6271,8 @@ impl Worker {
             | Some(Body::ApkChunk(_))
             | Some(Body::CancelInstall(_))
             | Some(Body::PrintJobResult(_))
+            | Some(Body::GeocodeResult(_))
+            | Some(Body::ShareResult(_))
             | Some(Body::QueryPackage(_))
             | Some(Body::UninstallApp(_))
             | Some(Body::ReinstallApp(_))
@@ -6258,6 +6375,12 @@ impl Worker {
         self.shared.clear_tasks();
         // So do its print jobs.
         self.end_print_jobs();
+        // And its shares: an outcome that comes later is for no share the next guest has.
+        self.shared
+            .open_shares
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         // So do its notifications.
         self.clear_notifications();
         // And its background apps and media sessions.

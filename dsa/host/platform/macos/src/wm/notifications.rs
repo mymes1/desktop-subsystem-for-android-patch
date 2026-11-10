@@ -5,7 +5,8 @@
 //! each one ([`crate::shell::notifications`]), reconnecting whenever the service restarts. What
 //! the user does with a banner comes back from the Notification Center: a click or a clearing
 //! of an Android notification goes to the service, which passes it to Android; a click on DSA's
-//! news about an update opens the settings app's Updates page instead.
+//! news about an update opens the settings app's Updates page instead, and [Restart now] on
+//! its question whether Android restarts into a downloaded image asks the service to restart.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -24,7 +25,7 @@ use dsa_host_unix::socket::UnixLocalConnector;
 use super::hosts::BUILD;
 use super::log;
 use crate::compositor::menu_bar::korean;
-use crate::shell::notifications::{NotificationCenter, UPDATES_URL};
+use crate::shell::notifications::{NotificationCenter, Response, UPDATES_URL};
 
 /// How long to wait for the service before trying again.
 const RETRY: Duration = Duration::from_secs(2);
@@ -58,8 +59,20 @@ fn open_updates() {
 
 /// Passes what the user did with each banner on: to the service for Android's notifications,
 /// to the settings app for DSA's news about updates.
-fn act(host_api: PathBuf, actions: Receiver<NotificationAction>) {
-    for action in actions {
+fn act(host_api: PathBuf, responses: Receiver<Response>) {
+    for response in responses {
+        let action = match response {
+            Response::Notification(action) => action,
+            // [Restart now] on DSA's question: the service restarts Android into the new image.
+            Response::RestartForUpdate => {
+                let asked = connect(&host_api)
+                    .and_then(|mut client| client.restart_for_update().map_err(|e| e.to_string()));
+                if let Err(why) = asked {
+                    log(&format!("Android was not restarted: {why}"));
+                }
+                continue;
+            }
+        };
         if is_update_key(action.key()) {
             if matches!(action, NotificationAction::Open { .. }) {
                 open_updates();
@@ -86,7 +99,7 @@ pub fn show(host_api: PathBuf, icons: PathBuf, stop: Arc<AtomicBool>) {
         .name("dsa-wm-notifications".into())
         .spawn(move || {
             let (actions, acted) = channel();
-            let center = match NotificationCenter::new(actions, icons) {
+            let center = match NotificationCenter::new(actions, icons, korean()) {
                 Ok(center) => center,
                 Err(why) => return log(&format!("notifications are not shown: {why}")),
             };

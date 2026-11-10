@@ -332,6 +332,21 @@ pub struct AppMenu {
     #[prost(bool, tag = "1")]
     pub new_window: bool,
 }
+/// Window manager to window host: the app's icon changed since the window host's program was
+/// made with it (the app was updated, or its icon could not be drawn before). Every window of
+/// the app shows it at once: on the taskbar, in Alt+Tab and in the title bar. The program's
+/// own icon takes it the next time the program is made.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppIcon {
+    /// The app's launcher icon, as a square PNG image. Never empty.
+    #[prost(bytes = "vec", tag = "1")]
+    pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+    /// square PNG image. Empty for an app whose icon is not adaptive, which shows `icon_png`
+    /// there too.
+    #[prost(bytes = "vec", tag = "2")]
+    pub caption_icon_png: ::prost::alloc::vec::Vec<u8>,
+}
 /// Window host to window manager: the user chose an item of the task window's system menu.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct MenuChosen {
@@ -368,7 +383,7 @@ pub struct SetWindowMode {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32, 33, 34, 35, 36, 60, 61"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32, 33, 34, 35, 36, 60, 61, 62"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -432,6 +447,8 @@ pub mod envelope {
         SetWindowMode(super::SetWindowMode),
         #[prost(message, tag = "61")]
         ImeEditor(super::ImeEditor),
+        #[prost(message, tag = "62")]
+        AppIcon(super::AppIcon),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

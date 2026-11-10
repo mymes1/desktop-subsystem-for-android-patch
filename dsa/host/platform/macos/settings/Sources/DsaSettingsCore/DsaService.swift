@@ -35,10 +35,22 @@ public final class DsaService {
             state: SessionState.parse(json.optionalString("state")),
             lastReason: json.optionalString("last_reason"),
             updateNotice: json.optionalString("update_notice"),
-            problem: json.optionalString("problem"))
+            problem: json.optionalString("problem"),
+            programUpdate: readProgramUpdate(json["program_update"]))
+    }
+
+    static func readProgramUpdate(_ json: Json) -> ProgramUpdateProgress? {
+        let phase = ProgramUpdatePhase.parse(json.optionalString("phase"))
+        return phase == .none ? nil : ProgramUpdateProgress(phase: phase, version: json.string("version"))
     }
 
     public func status() async throws -> StatusInfo { DsaService.readStatus(try await runJson(["status"])) }
+
+    /// The status from a running service only. While setup has stopped the service this fails
+    /// rather than start the old service again under setup.
+    public func runningStatus() async throws -> StatusInfo {
+        DsaService.readStatus(try await runJson(["status", "--no-start"]))
+    }
 
     /// Starts Android and waits until it has started or failed.
     public func start() async throws -> StatusInfo {
@@ -85,6 +97,7 @@ public final class DsaService {
         s.adbAutoConnect = json.bool("adb_auto_connect", missing: true)
         s.adbAutoConnectState = AdbAutoConnectState.read(json.optionalString("adb_auto_connect_state"))
         s.rootElevation = json.bool("root_elevation")
+        s.imageAutoRestart = json.bool("image_auto_restart", missing: true)
         return s
     }
 
@@ -133,6 +146,8 @@ public final class DsaService {
     }
     public func setProgramUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("program-updates", onOff(on)) }
     public func setImageUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("image-updates", onOff(on)) }
+    /// Whether Android restarts by itself into an Android image the service downloaded.
+    public func setImageAutoRestart(_ on: Bool) async throws -> SettingsInfo { try await set("image-auto-restart", onOff(on)) }
     /// Chooses the release channel: on takes pre-releases as well as stable releases.
     public func setPrereleaseUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("prerelease-updates", onOff(on)) }
     public func setInputTrace(_ on: Bool) async throws -> SettingsInfo { try await set("input-trace", onOff(on)) }
@@ -228,8 +243,14 @@ public final class DsaService {
         var guest: GuestMemoryInfo?
         let g = json["guest"]
         if g.isObject {
+            // What processes cost: resident_kb, and compressed_kb, null when zram's compression
+            // is unknown.
+            func share(_ s: Json) -> MemoryShare {
+                MemoryShare(residentKb: s.uint("resident_kb"), compressedKb: s.optionalUInt("compressed_kb"))
+            }
             let top = g["top_processes"].items.map {
-                GuestProcess(pid: $0.int("pid"), name: $0.string("name"), pssKb: $0.uint("pss_kb"), swapPssKb: $0.uint("swap_pss_kb"))
+                GuestProcess(pid: $0.int("pid"), name: $0.string("name"), pssKb: $0.uint("pss_kb"), swapPssKb: $0.uint("swap_pss_kb"),
+                             googlePlay: $0.bool("google_play"), cost: $0.has("resident_kb") ? share($0) : nil)
             }
             let k = g["kernel"]
             let kernel = k.isObject
@@ -246,7 +267,11 @@ public final class DsaService {
                 shmemKb: g.uint("shmem_kb"), slabReclaimableKb: g.uint("slab_reclaimable_kb"),
                 swapTotalKb: g.uint("swap_total_kb"), swapFreeKb: g.uint("swap_free_kb"),
                 zramOriginalKb: g.uint("zram_original_kb"), zramUsedKb: g.uint("zram_used_kb"),
-                totalPssKb: g.uint("total_pss_kb"), topProcesses: top, ageSeconds: g.uint("age_seconds"), kernel: kernel)
+                totalPssKb: g.uint("total_pss_kb"), topProcesses: top, ageSeconds: g.uint("age_seconds"), kernel: kernel,
+                apps: g["apps"].isObject ? share(g["apps"]) : nil,
+                googlePlay: g["google_play"].isObject
+                    ? GooglePlayMemory(processes: g["google_play"].uint("processes"), cost: share(g["google_play"]))
+                    : nil)
         }
         return MemoryReport(guest: guest, host: host, hostTotalKb: json.uint("host_total_kb"),
                             vmBeyondGuestKb: json.optionalUInt("vm_beyond_guest_kb"))
@@ -362,12 +387,11 @@ public final class DsaService {
         try await runText(["logs", "collect", "-o", path])
     }
 
-    /// Installs the newest version of DSA now. Returns what the service said.
-    public func updateNow() async throws -> String {
-        let result = try await cli.run(["update"])
-        if result.exitCode != 0 {
-            throw DsaError(.refused, DsaError.detail(of: result))
-        }
-        return result.output
+    /// Installs the newest version of DSA now. Returns the version setup installs, or none
+    /// when DSA is up to date, with what the service said.
+    public func updateNow() async throws -> ProgramUpdateAnswer {
+        let json = try await runJson(["update"])
+        let installing = json.optionalString("installing") ?? ""
+        return ProgramUpdateAnswer(installing: installing.isEmpty ? nil : installing, detail: json.string("detail"))
     }
 }
