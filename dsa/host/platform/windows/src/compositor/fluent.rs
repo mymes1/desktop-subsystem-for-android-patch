@@ -38,6 +38,18 @@ pub mod glyph {
     pub const RESIZE: char = '\u{E740}';
     /// "Unpin": taking something off where it was put.
     pub const UNPIN: char = '\u{E77A}';
+    /// "Play": a triangle pointing right.
+    pub const PLAY: char = '\u{E768}';
+    /// "Pause": two bars.
+    pub const PAUSE: char = '\u{E769}';
+    /// "Previous": a bar and a triangle pointing left, to the track before.
+    pub const PREVIOUS: char = '\u{E892}';
+    /// "Next": a triangle pointing right and a bar, to the track after.
+    pub const NEXT: char = '\u{E893}';
+    /// "OpenInNewWindow": a window with an arrow out of it, for opening an app.
+    pub const OPEN_WINDOW: char = '\u{E8A7}';
+    /// "Stop": a square.
+    pub const STOP: char = '\u{E71A}';
 }
 
 /// The system colors of a high contrast theme that a menu and a button are drawn in.
@@ -441,9 +453,17 @@ pub fn read_theme() -> Theme {
     }
 }
 
+/// Whether the taskbar, its previews and its flyouts use the light theme
+/// (`SystemUsesLightTheme`), which is set apart from the apps' theme.
+#[cfg(windows)]
+pub fn taskbar_is_light() -> bool {
+    const PERSONALIZE: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+    registry::user_dword(PERSONALIZE, "SystemUsesLightTheme") == Some(1)
+}
+
 /// The high contrast theme's colors, while one is on.
 #[cfg(windows)]
-fn high_contrast() -> Option<HighContrast> {
+pub fn high_contrast() -> Option<HighContrast> {
     use windows_sys::Win32::Graphics::Gdi::{
         GetSysColor, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, COLOR_WINDOW,
         COLOR_WINDOWTEXT, SYS_COLOR_INDEX,

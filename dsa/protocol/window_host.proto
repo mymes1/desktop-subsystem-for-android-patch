@@ -329,6 +329,39 @@ message AppIcon {
   bytes caption_icon_png = 2;
 }
 
+// Window manager to window host: the app's media session, for the media buttons (previous,
+// play or pause, next) in the taskbar preview of each of its windows. Sent when the window
+// host attaches while the app has a session, whenever the session's playback state or allowed
+// actions change, and once with `active` false when the session ends, which hides the buttons.
+// About the app, like AppIcon.
+message AppMedia {
+  // Whether the app has an active media session.
+  bool active = 1;
+  // Whether it plays now: the middle button then pauses, otherwise it plays.
+  bool playing = 2;
+  // What the session allows now. A button it does not allow is shown disabled.
+  bool can_previous = 3;
+  bool can_play = 4;
+  bool can_pause = 5;
+  bool can_next = 6;
+}
+
+// A media button of a window's taskbar preview.
+enum MediaButton {
+  MEDIA_BUTTON_UNSPECIFIED = 0;
+  MEDIA_BUTTON_PREVIOUS = 1;
+  MEDIA_BUTTON_PLAY = 2;
+  MEDIA_BUTTON_PAUSE = 3;
+  MEDIA_BUTTON_NEXT = 4;
+}
+
+// Window host to window manager: the user clicked a media button in the taskbar preview of the
+// task's window. The window manager sends the action to the app's media session.
+message MediaButtonPressed {
+  int32 task_id = 1;
+  MediaButton button = 2;
+}
+
 // An item of a task window's system menu that the window manager carries out.
 enum MenuAction {
   MENU_ACTION_UNSPECIFIED = 0;
@@ -417,5 +450,7 @@ message Envelope {
     SetWindowMode set_window_mode = 60;
     ImeEditor ime_editor = 61;
     AppIcon app_icon = 62;
+    AppMedia app_media = 63;
+    MediaButtonPressed media_button_pressed = 64;
   }
 }
