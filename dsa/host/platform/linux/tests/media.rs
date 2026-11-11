@@ -1488,9 +1488,11 @@ fn wait_for_https(
     }
 }
 
-/// How many certificates Android's system folder holds, and whether `name` is among them.
+/// How many certificates Android's system folder holds, and whether `name` is among them: the
+/// folder under /system, which the image has every app read (the copy bound over it holds the
+/// APEX's certificates and the host's roots).
 fn guest_certificates(adb: &Adb, name: &str) -> Result<(usize, bool), String> {
-    let listed = adb.shell("ls /apex/com.android.conscrypt/cacerts")?;
+    let listed = adb.shell("ls /system/etc/security/cacerts")?;
     let names: Vec<&str> = listed.split_whitespace().collect();
     Ok((names.len(), names.contains(&name)))
 }
@@ -1585,7 +1587,15 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
         &mut attempt,
         "connected",
         "with the root added on the host",
-    )?;
+    )
+    .map_err(|why| match guest_certificates(adb, &file) {
+        Ok((count, present)) => format!(
+            "{why}; Android's folder holds {count} certificates (it had {android_count}), and \
+             {file} is {}there",
+            if present { "" } else { "not " }
+        ),
+        Err(listing) => format!("{why}; Android's folder could not be listed: {listing}"),
+    })?;
     match guest_certificates(adb, &file)? {
         (count, true) if count == android_count + 1 => {}
         (count, present) => {

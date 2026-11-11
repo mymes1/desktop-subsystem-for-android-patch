@@ -746,8 +746,11 @@ mod daemon {
             return dns_redirect();
         }
         if std::env::args().nth(1).as_deref() == Some("--cacerts-setup") {
-            use dsa_guest_channeld::cacerts::{setup, FOLDERS, ROOT};
-            let problems = setup(std::path::Path::new(ROOT), &FOLDERS);
+            use dsa_guest_channeld::cacerts::{setup, sources, APEX_CERTIFICATES, FOLDERS, ROOT};
+            let problems = setup(
+                std::path::Path::new(ROOT),
+                &sources(&FOLDERS, APEX_CERTIFICATES),
+            );
             for problem in &problems {
                 say!("Android's system certificates: {problem}");
             }

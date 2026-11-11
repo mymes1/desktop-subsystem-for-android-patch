@@ -15,6 +15,14 @@
 # label (dsa_cacerts_file, vendor_file_contexts) lets the daemon write in it and every domain
 # read it (sepolicy/cacerts.cil). Setup gives a folder its name only once the whole copy is in
 # it, so a copy that failed is not there and its bind fails, leaving Android's folder in use.
+#
+# init binds from the mount namespace it is in, and /apex is private to each namespace. On
+# Android 17 init's switch to the namespace the zygote starts in fails ("enter_default_mount_ns
+# ... Failed to switch to default mount namespace"), so the bind under /apex never reaches an
+# app; the one under /system does, because / is shared between the namespaces. So the image
+# starts every app's VM with system.certs.enabled=true (dalvik.vm.extra-opts in the system
+# build.prop), which makes Android read the folder under /system, and the setup fills that
+# copy with the APEX's certificates, which Android would trust otherwise.
 on post-fs-data
     mkdir /dev/dsa_cacerts 0755 system system
     exec_start dsa_cacerts_setup
