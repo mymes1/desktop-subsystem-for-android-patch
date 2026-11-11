@@ -1499,6 +1499,12 @@ fn guest_certificates(adb: &Adb, name: &str) -> Result<(usize, bool), String> {
 /// added, and is refused once the root is taken away or the setting is off; Android's own
 /// certificates stay as they were throughout, and a root the host did not add is not trusted.
 fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(), String> {
+    // The probe stands in for an app the user has open, but it shows no window, so DSA puts
+    // Android into Doze partway through the check, and Doze cuts an app off the network: its
+    // lookup of "localhost" then fails and the check reads as "unreachable". An app with a
+    // window keeps Android out of Doze; the probe is exempted from it instead.
+    adb.shell(&format!("cmd deviceidle whitelist +{PROBE_PACKAGE}"))
+        .map_err(|why| format!("exempting the probe from Doze: {why}"))?;
     make_test_certificates(dir)?;
     let hash = run_tool(Command::new("openssl").current_dir(dir).args([
         "x509",
@@ -1923,7 +1929,11 @@ fn boot_check(check_media: bool, check_root: bool, check_certificates: bool) {
         }
         let guest_log = adb.shell("logcat -d -b all").unwrap_or_default();
         let _ = std::fs::write(dir.join("logcat.txt"), &guest_log);
-        for line in denials(&guest_log, &["dsa_cacerts_file"]) {
+        // The copies' own type, and Android's folders init binds them over.
+        for line in denials(
+            &guest_log,
+            &["dsa_cacerts_file", "system_security_cacerts_file"],
+        ) {
             problems.push(format!("SELinux refused the host's certificates: {line}"));
         }
     }
