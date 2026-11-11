@@ -19,6 +19,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `unavailable-features.xml` | Hardware features the VM lacks, withdrawn from the system |
 | `dsa-channeld.rc` | The service that runs the control channel daemon, and the trigger that drops the guest's caches when it asks |
 | `dsa-keymint-key.rc` | Makes the tmpfs folder for KeyMint's root key and starts the daemon's mode that fetches it from the host, on init |
+| `dsa-cacerts.rc` | Binds tmpfs copies of Android's system certificate folders over the originals before the zygote starts, so the daemon can add the root certificates the host added beside Android's |
 | `dsa-memory.rc` | Turns on the zram swap and tunes the kernel for it |
 | `dsa-display.rc` | Starts SurfaceFlinger, and so every app, at the density the boot names (the user's main monitor's) |
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
@@ -339,6 +340,19 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   folder `dsa_keymint_key_file`, which only that domain writes and only KeyMint
   (`hal_keymint_server`) reads; `check-image.py` refuses an image that lets any other domain
   read it.
+- The root certificates a user or administrator added to the host (an internet filter's or a
+  company proxy's) become system certificates, beside Android's own. Android reads its system
+  certificates from `/apex/com.android.conscrypt/cacerts` and `/system/etc/security/cacerts`,
+  which are read only. `dsa-cacerts.rc` makes the tmpfs folder `/dev/dsa_cacerts` at
+  post-fs-data, has `dsa-channeld --cacerts-setup` copy both folders into it, and binds each
+  copy over the original before the zygote starts, so every app's mount namespace has them.
+  The daemon then writes each root the host sends there, named as Android names its own
+  (`<subject hash>.<n>`), and takes away those the host no longer names, or all of them when
+  the user turns the setting off. It lists what it added in `/dev/dsa_cacerts/host-added`, so
+  Android's own files are never touched. Being one tmpfs, a change shows in every app at once,
+  and the agent then has the running apps forget the trust anchors they looked up.
+  `cacerts.cil` labels the folder `dsa_cacerts_file`, which only the daemon writes and every
+  domain reads; `check-image.py` refuses an image that lets any other domain write it.
 - The published kernel modules are dropped. They belong to Google's kernel; DSA boots its
   own kernel with the drivers built in.
 - `fstab.dsa` replaces the mount table. Every partition is found by its name

@@ -342,6 +342,9 @@ extern HelloAcceptedDefaultTypeInternal _HelloAccepted_default_instance_;
 class HelloRejected;
 struct HelloRejectedDefaultTypeInternal;
 extern HelloRejectedDefaultTypeInternal _HelloRejected_default_instance_;
+class HostCertificates;
+struct HostCertificatesDefaultTypeInternal;
+extern HostCertificatesDefaultTypeInternal _HostCertificates_default_instance_;
 class HostMemory;
 struct HostMemoryDefaultTypeInternal;
 extern HostMemoryDefaultTypeInternal _HostMemory_default_instance_;
@@ -793,6 +796,7 @@ template<> ::dsa::control::v1::GuestSleepReady* Arena::CreateMaybeMessage<::dsa:
 template<> ::dsa::control::v1::Hello* Arena::CreateMaybeMessage<::dsa::control::v1::Hello>(Arena*);
 template<> ::dsa::control::v1::HelloAccepted* Arena::CreateMaybeMessage<::dsa::control::v1::HelloAccepted>(Arena*);
 template<> ::dsa::control::v1::HelloRejected* Arena::CreateMaybeMessage<::dsa::control::v1::HelloRejected>(Arena*);
+template<> ::dsa::control::v1::HostCertificates* Arena::CreateMaybeMessage<::dsa::control::v1::HostCertificates>(Arena*);
 template<> ::dsa::control::v1::HostMemory* Arena::CreateMaybeMessage<::dsa::control::v1::HostMemory>(Arena*);
 template<> ::dsa::control::v1::HostSleep* Arena::CreateMaybeMessage<::dsa::control::v1::HostSleep>(Arena*);
 template<> ::dsa::control::v1::ImeCommit* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCommit>(Arena*);
@@ -34401,6 +34405,162 @@ class BackupSetting final :
 };
 // -------------------------------------------------------------------
 
+class HostCertificates final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.HostCertificates) */ {
+ public:
+  inline HostCertificates() : HostCertificates(nullptr) {}
+  ~HostCertificates() override;
+  explicit PROTOBUF_CONSTEXPR HostCertificates(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  HostCertificates(const HostCertificates& from);
+  HostCertificates(HostCertificates&& from) noexcept
+    : HostCertificates() {
+    *this = ::std::move(from);
+  }
+
+  inline HostCertificates& operator=(const HostCertificates& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostCertificates& operator=(HostCertificates&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const HostCertificates& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HostCertificates* internal_default_instance() {
+    return reinterpret_cast<const HostCertificates*>(
+               &_HostCertificates_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    195;
+
+  friend void swap(HostCertificates& a, HostCertificates& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(HostCertificates* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostCertificates* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostCertificates* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<HostCertificates>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const HostCertificates& from);
+  void MergeFrom(const HostCertificates& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(HostCertificates* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.HostCertificates";
+  }
+  protected:
+  explicit HostCertificates(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kCertificatesFieldNumber = 2,
+    kEnabledFieldNumber = 1,
+  };
+  // repeated bytes certificates = 2;
+  int certificates_size() const;
+  private:
+  int _internal_certificates_size() const;
+  public:
+  void clear_certificates();
+  const std::string& certificates(int index) const;
+  std::string* mutable_certificates(int index);
+  void set_certificates(int index, const std::string& value);
+  void set_certificates(int index, std::string&& value);
+  void set_certificates(int index, const char* value);
+  void set_certificates(int index, const void* value, size_t size);
+  std::string* add_certificates();
+  void add_certificates(const std::string& value);
+  void add_certificates(std::string&& value);
+  void add_certificates(const char* value);
+  void add_certificates(const void* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& certificates() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_certificates();
+  private:
+  const std::string& _internal_certificates(int index) const;
+  std::string* _internal_add_certificates();
+  public:
+
+  // bool enabled = 1;
+  void clear_enabled();
+  bool enabled() const;
+  void set_enabled(bool value);
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.HostCertificates)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> certificates_;
+    bool enabled_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class PasskeyRequest final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.PasskeyRequest) */ {
  public:
@@ -34440,7 +34600,7 @@ class PasskeyRequest final :
                &_PasskeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    195;
+    196;
 
   friend void swap(PasskeyRequest& a, PasskeyRequest& b) {
     a.Swap(&b);
@@ -34687,7 +34847,7 @@ class PasskeyResponse final :
                &_PasskeyResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    196;
+    197;
 
   friend void swap(PasskeyResponse& a, PasskeyResponse& b) {
     a.Swap(&b);
@@ -34860,7 +35020,7 @@ class KeyMintRootKeyRequest final :
                &_KeyMintRootKeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    197;
+    198;
 
   friend void swap(KeyMintRootKeyRequest& a, KeyMintRootKeyRequest& b) {
     a.Swap(&b);
@@ -34977,7 +35137,7 @@ class KeyMintRootKey final :
                &_KeyMintRootKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    198;
+    199;
 
   friend void swap(KeyMintRootKey& a, KeyMintRootKey& b) {
     a.Swap(&b);
@@ -35128,7 +35288,7 @@ class ListSpeechVoices final :
                &_ListSpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    199;
+    200;
 
   friend void swap(ListSpeechVoices& a, ListSpeechVoices& b) {
     a.Swap(&b);
@@ -35245,7 +35405,7 @@ class SpeechVoice final :
                &_SpeechVoice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    200;
+    201;
 
   friend void swap(SpeechVoice& a, SpeechVoice& b) {
     a.Swap(&b);
@@ -35434,7 +35594,7 @@ class SpeechVoices final :
                &_SpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    201;
+    202;
 
   friend void swap(SpeechVoices& a, SpeechVoices& b) {
     a.Swap(&b);
@@ -35600,7 +35760,7 @@ class SpeakText final :
                &_SpeakText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    202;
+    203;
 
   friend void swap(SpeakText& a, SpeakText& b) {
     a.Swap(&b);
@@ -35800,7 +35960,7 @@ class SpeechAudio final :
                &_SpeechAudio_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    203;
+    204;
 
   friend void swap(SpeechAudio& a, SpeechAudio& b) {
     a.Swap(&b);
@@ -35968,7 +36128,7 @@ class SpeechDone final :
                &_SpeechDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    204;
+    205;
 
   friend void swap(SpeechDone& a, SpeechDone& b) {
     a.Swap(&b);
@@ -36125,7 +36285,7 @@ class StopSpeaking final :
                &_StopSpeaking_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    205;
+    206;
 
   friend void swap(StopSpeaking& a, StopSpeaking& b) {
     a.Swap(&b);
@@ -36255,7 +36415,7 @@ class StartRecognition final :
                &_StartRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    206;
+    207;
 
   friend void swap(StartRecognition& a, StartRecognition& b) {
     a.Swap(&b);
@@ -36434,7 +36594,7 @@ class StopRecognition final :
                &_StopRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    207;
+    208;
 
   friend void swap(StopRecognition& a, StopRecognition& b) {
     a.Swap(&b);
@@ -36564,7 +36724,7 @@ class CancelRecognition final :
                &_CancelRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    208;
+    209;
 
   friend void swap(CancelRecognition& a, CancelRecognition& b) {
     a.Swap(&b);
@@ -36694,7 +36854,7 @@ class RecognitionEvent final :
                &_RecognitionEvent_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    209;
+    210;
 
   friend void swap(RecognitionEvent& a, RecognitionEvent& b) {
     a.Swap(&b);
@@ -36912,7 +37072,7 @@ class CheckSpelling final :
                &_CheckSpelling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    210;
+    211;
 
   friend void swap(CheckSpelling& a, CheckSpelling& b) {
     a.Swap(&b);
@@ -37095,7 +37255,7 @@ class SpellingMistake final :
                &_SpellingMistake_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    211;
+    212;
 
   friend void swap(SpellingMistake& a, SpellingMistake& b) {
     a.Swap(&b);
@@ -37273,7 +37433,7 @@ class SpellingText final :
                &_SpellingText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    212;
+    213;
 
   friend void swap(SpellingText& a, SpellingText& b) {
     a.Swap(&b);
@@ -37412,7 +37572,7 @@ class SpellingResult final :
                &_SpellingResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    213;
+    214;
 
   friend void swap(SpellingResult& a, SpellingResult& b) {
     a.Swap(&b);
@@ -37761,6 +37921,7 @@ class Envelope final :
     kLaunchShortcut = 681,
     kPinShortcutRequest = 682,
     kPinShortcutAnswer = 683,
+    kHostCertificates = 684,
     BODY_NOT_SET = 0,
   };
 
@@ -37769,7 +37930,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    214;
+    215;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -38025,6 +38186,7 @@ class Envelope final :
     kLaunchShortcutFieldNumber = 681,
     kPinShortcutRequestFieldNumber = 682,
     kPinShortcutAnswerFieldNumber = 683,
+    kHostCertificatesFieldNumber = 684,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -41482,6 +41644,24 @@ class Envelope final :
       ::dsa::control::v1::PinShortcutAnswer* pin_shortcut_answer);
   ::dsa::control::v1::PinShortcutAnswer* unsafe_arena_release_pin_shortcut_answer();
 
+  // .dsa.control.v1.HostCertificates host_certificates = 684;
+  bool has_host_certificates() const;
+  private:
+  bool _internal_has_host_certificates() const;
+  public:
+  void clear_host_certificates();
+  const ::dsa::control::v1::HostCertificates& host_certificates() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::HostCertificates* release_host_certificates();
+  ::dsa::control::v1::HostCertificates* mutable_host_certificates();
+  void set_allocated_host_certificates(::dsa::control::v1::HostCertificates* host_certificates);
+  private:
+  const ::dsa::control::v1::HostCertificates& _internal_host_certificates() const;
+  ::dsa::control::v1::HostCertificates* _internal_mutable_host_certificates();
+  public:
+  void unsafe_arena_set_allocated_host_certificates(
+      ::dsa::control::v1::HostCertificates* host_certificates);
+  ::dsa::control::v1::HostCertificates* unsafe_arena_release_host_certificates();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -41679,6 +41859,7 @@ class Envelope final :
   void set_has_launch_shortcut();
   void set_has_pin_shortcut_request();
   void set_has_pin_shortcut_answer();
+  void set_has_host_certificates();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -41882,6 +42063,7 @@ class Envelope final :
       ::dsa::control::v1::LaunchShortcut* launch_shortcut_;
       ::dsa::control::v1::PinShortcutRequest* pin_shortcut_request_;
       ::dsa::control::v1::PinShortcutAnswer* pin_shortcut_answer_;
+      ::dsa::control::v1::HostCertificates* host_certificates_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -64382,6 +64564,105 @@ inline void BackupSetting::set_enabled(bool value) {
 
 // -------------------------------------------------------------------
 
+// HostCertificates
+
+// bool enabled = 1;
+inline void HostCertificates::clear_enabled() {
+  _impl_.enabled_ = false;
+}
+inline bool HostCertificates::_internal_enabled() const {
+  return _impl_.enabled_;
+}
+inline bool HostCertificates::enabled() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.HostCertificates.enabled)
+  return _internal_enabled();
+}
+inline void HostCertificates::_internal_set_enabled(bool value) {
+  
+  _impl_.enabled_ = value;
+}
+inline void HostCertificates::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.enabled)
+}
+
+// repeated bytes certificates = 2;
+inline int HostCertificates::_internal_certificates_size() const {
+  return _impl_.certificates_.size();
+}
+inline int HostCertificates::certificates_size() const {
+  return _internal_certificates_size();
+}
+inline void HostCertificates::clear_certificates() {
+  _impl_.certificates_.Clear();
+}
+inline std::string* HostCertificates::add_certificates() {
+  std::string* _s = _internal_add_certificates();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.HostCertificates.certificates)
+  return _s;
+}
+inline const std::string& HostCertificates::_internal_certificates(int index) const {
+  return _impl_.certificates_.Get(index);
+}
+inline const std::string& HostCertificates::certificates(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.HostCertificates.certificates)
+  return _internal_certificates(index);
+}
+inline std::string* HostCertificates::mutable_certificates(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.HostCertificates.certificates)
+  return _impl_.certificates_.Mutable(index);
+}
+inline void HostCertificates::set_certificates(int index, const std::string& value) {
+  _impl_.certificates_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, std::string&& value) {
+  _impl_.certificates_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.certificates_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, const void* value, size_t size) {
+  _impl_.certificates_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.HostCertificates.certificates)
+}
+inline std::string* HostCertificates::_internal_add_certificates() {
+  return _impl_.certificates_.Add();
+}
+inline void HostCertificates::add_certificates(const std::string& value) {
+  _impl_.certificates_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(std::string&& value) {
+  _impl_.certificates_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.certificates_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(const void* value, size_t size) {
+  _impl_.certificates_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.HostCertificates.certificates)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+HostCertificates::certificates() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.HostCertificates.certificates)
+  return _impl_.certificates_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+HostCertificates::mutable_certificates() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.HostCertificates.certificates)
+  return &_impl_.certificates_;
+}
+
+// -------------------------------------------------------------------
+
 // PasskeyRequest
 
 // uint64 request_id = 1;
@@ -80825,6 +81106,80 @@ inline ::dsa::control::v1::PinShortcutAnswer* Envelope::mutable_pin_shortcut_ans
   return _msg;
 }
 
+// .dsa.control.v1.HostCertificates host_certificates = 684;
+inline bool Envelope::_internal_has_host_certificates() const {
+  return body_case() == kHostCertificates;
+}
+inline bool Envelope::has_host_certificates() const {
+  return _internal_has_host_certificates();
+}
+inline void Envelope::set_has_host_certificates() {
+  _impl_._oneof_case_[0] = kHostCertificates;
+}
+inline void Envelope::clear_host_certificates() {
+  if (_internal_has_host_certificates()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.host_certificates_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::HostCertificates* Envelope::release_host_certificates() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.host_certificates)
+  if (_internal_has_host_certificates()) {
+    clear_has_body();
+    ::dsa::control::v1::HostCertificates* temp = _impl_.body_.host_certificates_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.host_certificates_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::HostCertificates& Envelope::_internal_host_certificates() const {
+  return _internal_has_host_certificates()
+      ? *_impl_.body_.host_certificates_
+      : reinterpret_cast< ::dsa::control::v1::HostCertificates&>(::dsa::control::v1::_HostCertificates_default_instance_);
+}
+inline const ::dsa::control::v1::HostCertificates& Envelope::host_certificates() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.host_certificates)
+  return _internal_host_certificates();
+}
+inline ::dsa::control::v1::HostCertificates* Envelope::unsafe_arena_release_host_certificates() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.host_certificates)
+  if (_internal_has_host_certificates()) {
+    clear_has_body();
+    ::dsa::control::v1::HostCertificates* temp = _impl_.body_.host_certificates_;
+    _impl_.body_.host_certificates_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_host_certificates(::dsa::control::v1::HostCertificates* host_certificates) {
+  clear_body();
+  if (host_certificates) {
+    set_has_host_certificates();
+    _impl_.body_.host_certificates_ = host_certificates;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.host_certificates)
+}
+inline ::dsa::control::v1::HostCertificates* Envelope::_internal_mutable_host_certificates() {
+  if (!_internal_has_host_certificates()) {
+    clear_body();
+    set_has_host_certificates();
+    _impl_.body_.host_certificates_ = CreateMaybeMessage< ::dsa::control::v1::HostCertificates >(GetArenaForAllocation());
+  }
+  return _impl_.body_.host_certificates_;
+}
+inline ::dsa::control::v1::HostCertificates* Envelope::mutable_host_certificates() {
+  ::dsa::control::v1::HostCertificates* _msg = _internal_mutable_host_certificates();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.host_certificates)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -80837,6 +81192,8 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

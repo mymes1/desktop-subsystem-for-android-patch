@@ -170,6 +170,14 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   service is not available. The host answers a position from administrative boundary data it
   keeps (country, province, city, district and neighbourhood, with no street or house number)
   and an address with no positions; nothing goes to a server.
+- **The host's root certificates.** The control daemon adds the root certificates a user or
+  administrator added to the host to Android's system certificates, and takes away those the
+  host no longer names, before the agent hears of it (`HostCertificates`). An app that starts
+  afterwards reads them as it reads Android's own, but a running process keeps every trust
+  anchor it has looked up, so the agent (`network/HostCertificates.kt`) sends
+  `KeyChain.ACTION_TRUST_STORE_CHANGED`. The activity manager then has every process reset its
+  network security config and TrustManager, and a root the host took away stops being trusted
+  at once. It is a protected broadcast, which the agent may send as a persistent app.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.

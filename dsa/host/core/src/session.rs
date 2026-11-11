@@ -5226,6 +5226,9 @@ impl Worker {
             self.replay_system_settings();
             self.replay_gamepads();
         }
+        // A change to the host's root certificates while the guest was frozen was not heard.
+        let body = self.shared.host_certificates_body();
+        self.send_body(body);
         true
     }
 
@@ -5619,6 +5622,11 @@ impl Worker {
             // hears that the user turned backup on.
             let body = self.shared.backup_setting_body();
             self.send_body(body);
+            // The root certificates added on the host again: a change the daemon could not
+            // hear while Android was starting reaches it now, and the new agent has the apps
+            // that started before it forget the anchors they looked up.
+            let body = self.shared.host_certificates_body();
+            self.send_body(body);
         } else {
             self.agent_lost_at = Some(now);
             // The tasks are what the agent reported, and the agent goes when Android's framework
@@ -5929,6 +5937,10 @@ impl Worker {
                             // A new boot's control daemon has no controller yet.
                             self.system_pending = false;
                             self.replay_gamepads();
+                            // A boot trusts none of the root certificates added on the host
+                            // until its daemon is told them, before any app reaches the network.
+                            let body = self.shared.host_certificates_body();
+                            self.send_body(body);
                             return;
                         }
                         Err(Refusal::NotTheGuest(why)) => {
@@ -6604,6 +6616,7 @@ impl Worker {
             | Some(Body::PasskeyResponse(_))
             | Some(Body::KeymintRootKey(_))
             | Some(Body::BackupSetting(_))
+            | Some(Body::HostCertificates(_))
             | Some(Body::SetAppVolume(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }

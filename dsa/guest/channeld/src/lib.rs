@@ -31,6 +31,7 @@ pub mod android_files;
 pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
+pub mod cacerts;
 pub mod gamepad;
 pub mod gapps;
 pub mod image_store;
