@@ -27,7 +27,12 @@ const DOMAIN_SYSTEM: u32 = 2;
 /// `errSecNoTrustSettings`: the domain holds no certificate.
 const NO_TRUST_SETTINGS: i32 = -25263;
 
-/// `kSecTrustSettingsResult` values.
+/// The key of a trust setting's result. Security.framework's header defines
+/// `kSecTrustSettingsResult` as a `CFSTR` macro of this text, not as an exported symbol, so the
+/// key is made here from the same text.
+const RESULT_KEY: &str = "kSecTrustSettingsResult";
+
+/// The result values under that key.
 const RESULT_TRUST_ROOT: i32 = 1;
 const RESULT_TRUST_AS_ROOT: i32 = 2;
 const RESULT_DENY: i32 = 3;
@@ -55,7 +60,6 @@ extern "C" {
 
 #[link(name = "Security", kind = "framework")]
 extern "C" {
-    static kSecTrustSettingsResult: CFTypeRef;
     fn SecTrustSettingsCopyCertificates(domain: u32, certificates: *mut CFTypeRef) -> i32;
     fn SecTrustSettingsCopyTrustSettings(
         certificate: CFTypeRef,
@@ -183,12 +187,13 @@ fn trusted_root(certificate: CFTypeRef, domain: u32) -> bool {
     if count == 0 {
         return true;
     }
+    let result_key = Cf::string(RESULT_KEY);
     let mut trusted = false;
     for index in 0..count {
         // SAFETY: an index within the array; the dictionary and its number are the array's.
         let result = unsafe {
             let setting = CFArrayGetValueAtIndex(settings.get(), index);
-            let number = CFDictionaryGetValue(setting, kSecTrustSettingsResult);
+            let number = CFDictionaryGetValue(setting, result_key.get());
             let mut value: i32 = RESULT_TRUST_ROOT;
             if !number.is_null() {
                 CFNumberGetValue(number, SINT32, (&mut value as *mut i32).cast());

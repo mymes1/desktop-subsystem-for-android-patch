@@ -112,6 +112,11 @@ enum Lookup {
     Failed(String),
 }
 
+/// glibc's code for a name that has addresses, but none of the family asked for. The libc
+/// crate does not export it, so its value comes from glibc's `netdb.h`.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+const EAI_ADDRFAMILY: c_int = -9;
+
 fn lookup(name: &CStr, family: c_int) -> Lookup {
     // SAFETY: an all-zero addrinfo is a valid set of hints.
     let mut hints: libc::addrinfo = unsafe { std::mem::zeroed() };
@@ -125,7 +130,9 @@ fn lookup(name: &CStr, family: c_int) -> Lookup {
         return match code {
             libc::EAI_NONAME => Lookup::NoName,
             #[cfg(target_os = "linux")]
-            libc::EAI_NODATA | libc::EAI_ADDRFAMILY => Lookup::NoData,
+            libc::EAI_NODATA => Lookup::NoData,
+            #[cfg(all(target_os = "linux", target_env = "gnu"))]
+            EAI_ADDRFAMILY => Lookup::NoData,
             other => {
                 // SAFETY: gai_strerror gives a static string for any code.
                 let why = unsafe { CStr::from_ptr(libc::gai_strerror(other)) };

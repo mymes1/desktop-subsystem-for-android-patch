@@ -7,6 +7,7 @@
 //! It needs crosvm, passt and the image (`DSA_CROSVM`, `DSA_WIDGET_TEST_IMAGE`), adb (`DSA_ADB`),
 //! and `sudo` without a password to add the hosts file entry, as CI's runners have. Without
 //! crosvm or the image it says it skipped.
+#![cfg(target_os = "linux")]
 
 mod boot_check;
 
@@ -236,7 +237,7 @@ fn fr28_android_resolves_names_through_the_host() {
     // The redirect goes on once the daemon reaches the host's DNS port, and Android's network
     // comes up by DHCP from passt; both are waited for.
     let wait = Instant::now() + Duration::from_secs(120);
-    let mut last = String::new();
+    let mut last;
     let resolved = loop {
         let switch = adb.shell("getprop vendor.dsa.dns").unwrap_or_default();
         match resolve_in_android(&adb, HOST_ONLY) {
