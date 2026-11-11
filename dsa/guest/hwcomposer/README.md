@@ -161,7 +161,11 @@ configuration, whose period the vsync clock takes from its next tick.
 
 A window cannot be larger than this display. A task's ColorBuffers follow the task's own
 size in steps (`taskBufferSize`), so a large display costs nothing per window. Only the client
-target has the display's size, and only once SurfaceFlinger composes something itself.
+target has the display's size, and only while SurfaceFlinger composes something itself (a
+video's YUV pictures). Two seconds after the last such frame the hwcomposer lets go of the
+client target's ColorBuffers and asks for a frame, on which SurfaceFlinger (with DSA's
+framework patch, `dsa/guest/framework/patches/frameworks/native`) gives its own buffers back
+too. The next frame that needs them allocates them again.
 
 ## Build and test
 

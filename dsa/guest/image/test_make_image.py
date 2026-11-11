@@ -2653,6 +2653,8 @@ class GuestMemoryTests(unittest.TestCase):
     def test_nfr1_apps_a_desktop_has_no_use_for_are_removed_and_the_ones_apps_need_are_kept(self):
         removed = ["Dialer", "messaging", "Stk", "BasicDreams", "LiveWallpapersPicker", "QuickSearchBox",
                    "Calendar", "Gallery2", "Music"]
+        # The phone process (TeleService) is a privileged system app.
+        removed_paths = {"TeleService": "SYSTEM/priv-app/TeleService/TeleService.apk"}
         kept = [
             "SYSTEM/app/webview/webview.apk",
             "SYSTEM/priv-app/ContactsProvider/ContactsProvider.apk",
@@ -2669,6 +2671,7 @@ class GuestMemoryTests(unittest.TestCase):
         for app in removed:
             self.assertIn(app, make_image.REMOVED_APPS)
         extra = {f"PRODUCT/app/{app}/{app}.apk": b"apk" for app in removed}
+        extra.update({name: b"apk" for name in removed_paths.values()})
         extra.update({name: b"apk" for name in kept})
         # Settings.apk is opened to edit its sound screen, and DocumentsUI.apk to edit its
         # list's room, so each has to be an APK.
@@ -2684,15 +2687,29 @@ class GuestMemoryTests(unittest.TestCase):
             for app in removed:
                 self.assertNotIn(f"PRODUCT/app/{app}/{app}.apk", names)
                 self.assertNotIn(f'name="{app}.apk"', certs)
+            for app, name in removed_paths.items():
+                self.assertNotIn(name, names)
+                self.assertNotIn(f'name="{app}.apk"', certs)
             for name in kept:
                 self.assertIn(name, names)
                 self.assertIn(f'name="{Path(name).name}"', certs)
         for needed in ["webview", "ContactsProvider", "PackageInstaller", "PermissionController",
                        "DocumentsUI", "PrintSpooler", "Settings", "Provision", "Telecom",
-                       "TeleService", "DeskClock", "CalendarProvider", "DownloadProvider",
-                       "MusicFX"]:
+                       "TelephonyProvider", "CarrierConfig", "DeskClock", "CalendarProvider",
+                       "DownloadProvider", "MusicFX"]:
             self.assertNotIn(needed, make_image.REMOVED_APPS)
 
+    def test_nfr1_the_phone_process_is_not_in_the_image(self):
+        # com.android.phone is persistent and does nothing without the telephony feature; the
+        # image withdraws that feature and leaves TeleService out. Telecom and the telephony
+        # provider stay.
+        self.assertIn("TeleService", make_image.REMOVED_APPS)
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/TeleService.apk"))
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/oat/x86_64/TeleService.odex"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/Telecom/Telecom.apk"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/TelephonyProvider/TelephonyProvider.apk"))
+        features = (Path(__file__).parent / "unavailable-features.xml").read_text()
+        self.assertIn('<unavailable-feature name="android.hardware.telephony" />', features)
 
 SETTINGS_NS = "http://schemas.android.com/apk/res-auto"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"

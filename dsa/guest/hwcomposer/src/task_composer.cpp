@@ -275,6 +275,18 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
 
         bool clientTargetReady = false;
         const int64_t now = steadyMs();
+        if (std::any_of(frame.layers.begin(), frame.layers.end(),
+                        [](const FrameLayer& layer) { return layer.client; })) {
+            mClientTargetUsedMs = std::max<int64_t>(now, 1);
+        }
+        const bool holdClientTarget =
+                clientTargetHeld(mClientTargetUsedMs, now, kReleaseClientTargetMs);
+        if (!holdClientTarget && mClientTargetUsedMs != 0) {
+            HWC_LOGI("SurfaceFlinger has composed nothing itself for %lld ms: let go of the "
+                     "client target",
+                     static_cast<long long>(now - mClientTargetUsedMs));
+            mClientTargetUsedMs = 0;
+        }
         for (const TaskLayers& task : layout.tasks) {
             const auto pairing = mDisplays.acquire(task.task);
             if (!pairing) {
@@ -474,7 +486,9 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
 
         // Drop this process's hold on buffers SurfaceFlinger can no longer show.
         for (auto it = mShared.begin(); it != mShared.end();) {
-            if (frame.liveBuffers.count(it->first) || it->first == frame.clientTarget.id ||
+            const bool clientTarget = it->first == frame.clientTarget.id ||
+                                      frame.clientBuffers.count(it->first) != 0;
+            if (frame.liveBuffers.count(it->first) || (holdClientTarget && clientTarget) ||
                 mUploadedAhead.count(it->first)) {
                 ++it;
             } else {
@@ -486,7 +500,13 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
         // The next frame names the buffers copied up for it among its own.
         mUploadedAhead.clear();
 
-        const std::optional<int64_t> releaseAt = releaseTasksWithoutLayersLocked(layout, now);
+        std::optional<int64_t> releaseAt = releaseTasksWithoutLayersLocked(layout, now);
+        if (holdClientTarget) {
+            // SurfaceFlinger presents nothing more once the video is gone and the rest is
+            // still, so a frame is asked for when the client target is due to go.
+            const int64_t due = mClientTargetUsedMs + kReleaseClientTargetMs;
+            releaseAt = releaseAt ? std::min(*releaseAt, due) : due;
+        }
 
         if (!mHost.connected()) {
             mDisconnected = true;
