@@ -5,7 +5,9 @@
 ; tmpfs folder vendor_file_contexts labels dsa_cacerts_file), has dsa-channeld --cacerts-setup
 ; copy Android's certificates into a folder of it for each, and binds each folder over Android's.
 ; From then on dsa-channeld adds the roots the host sends there, and takes them away, as files
-; of its own; a file or folder made there takes the folder's type.
+; of its own; a file or folder made there takes the folder's type. Apps read the folder under
+; /system (the VM runs with system.certs.enabled=true, see dsa-cacerts.rc), whose bind reaches
+; the zygote's mount namespace; the one under /apex stays in init's.
 
 (type dsa_cacerts_file)
 (roletype object_r dsa_cacerts_file)

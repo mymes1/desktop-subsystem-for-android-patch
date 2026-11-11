@@ -7367,6 +7367,19 @@ class HostCertificatesImageTests(KeyMintKeyImageTests):
             self.assertIn(make_image.CACERTS_CONTEXT,
                           archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
 
+    def test_fr28_apps_read_the_bound_certificate_folder_under_system(self):
+        # init's bind under /apex stays in init's own mount namespace, so every app's VM is
+        # told to read the folder under /system, whose bind reaches the zygote's namespace.
+        system = make_image.edit_props("ro.build.type=user\n").splitlines()
+        self.assertIn(make_image.CACERTS_PROP_LINE, system)
+        self.assertEqual(make_image.CACERTS_PROP_LINE,
+                         "dalvik.vm.extra-opts=-Dsystem.certs.enabled=true")
+        vendor = make_image.edit_props("dalvik.vm.extra-opts=-Xfoo\n", vendor=True).splitlines()
+        self.assertFalse([line for line in vendor if line.startswith("dalvik.vm.extra-opts=")],
+                         "only the system build.prop sets the VM's extra options")
+        self.assertIn("    mount none /dev/dsa_cacerts/system /system/etc/security/cacerts bind",
+                      make_image.CACERTS_SCRIPT)
+
     def test_fr28_only_the_daemon_writes_androids_system_certificates(self):
         rules = re.findall(r"\(allow\s+(\S+)\s+dsa_cacerts_file\s+\(\s*file\s+\(([^)]*)\)", self.CACERTS_POLICY)
         writers = {who for who, perms in rules if {"write", "create", "append", "unlink"} & set(perms.split())}
@@ -7386,9 +7399,11 @@ class HostCertificatesImageTests(KeyMintKeyImageTests):
         files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
             b"\n(allow untrusted_app dsa_cacerts_file (file (write open)))\n")
         files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
+        files["SYSTEM/build.prop"] = b"ro.build.type=user\n"
         problems = make_image.cacerts_problems(list(files), files.__getitem__)
         expected = [
             "dsa-cacerts.rc is missing",
+            "SYSTEM/build.prop lacks",
             "vendor_file_contexts lacks",
             "lets untrusted_app write Android's system certificates",
         ]

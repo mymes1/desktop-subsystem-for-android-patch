@@ -5,13 +5,21 @@
 //! sends the roots a user or an administrator added (`HostCertificates`), and the daemon adds
 //! each to Android's system certificate folders as a file of its own, beside Android's.
 //!
-//! Android reads its system certificates from `/apex/com.android.conscrypt/cacerts` (and, on a
-//! build that asks for it, `/system/etc/security/cacerts`). Both are read only, so at boot,
-//! before the zygote starts, init makes a folder of the same certificates in a tmpfs for each
-//! ([`setup`], `dsa-channeld --cacerts-setup`) and binds it over the original
-//! (`dsa-cacerts.rc`). Every app's mount namespace is made after that and inherits the binds,
-//! and since the folders are one tmpfs, a file the daemon adds or takes away later shows in
-//! every app at once ([`Installer`]).
+//! Android reads its system certificates from `/apex/com.android.conscrypt/cacerts`, or from
+//! `/system/etc/security/cacerts` when the VM is started with `system.certs.enabled=true`.
+//! Both are read only, so at boot, before the zygote starts, init makes a folder of the same
+//! certificates in a tmpfs for each ([`setup`], `dsa-channeld --cacerts-setup`) and binds it
+//! over the original (`dsa-cacerts.rc`). Every app's mount namespace is made after that and
+//! inherits the binds, and since the folders are one tmpfs, a file the daemon adds or takes
+//! away later shows in every app at once ([`Installer`]).
+//!
+//! Only the bind under `/system` is certain to reach the apps. init binds from the mount
+//! namespace it is in, and `/apex` is private to each namespace: on Android 17 init cannot
+//! switch to the namespace the zygote starts in ("Failed to switch to default mount
+//! namespace"), so its bind under `/apex` stays where no app looks. The image therefore starts
+//! the VM with `system.certs.enabled=true`, which makes every app read the folder under
+//! `/system`, and that folder's copy is made from the APEX's certificates ([`sources`]), so
+//! Android trusts the same certificates of its own as it would without DSA.
 //!
 //! Android looks a certificate up by the file name `<hash>.<n>`: the hash of its subject
 //! ([`subject_hash_old`], OpenSSL's `X509_NAME_hash_old`) and the lowest number not taken by
@@ -30,9 +38,12 @@ pub const ROOT: &str = "/dev/dsa_cacerts";
 /// The list of the files the daemon added, one `<folder>/<name>` a line, in [`ROOT`].
 pub const MANIFEST: &str = "host-added";
 
+/// The APEX's folder of Android's system certificates, which Android prefers to its own.
+pub const APEX_CERTIFICATES: &str = "/apex/com.android.conscrypt/cacerts";
+
 /// Each folder under [`ROOT`] and the folder of Android's it stands in for.
 pub const FOLDERS: [(&str, &str); 2] = [
-    ("conscrypt", "/apex/com.android.conscrypt/cacerts"),
+    ("conscrypt", APEX_CERTIFICATES),
     ("system", "/system/etc/security/cacerts"),
 ];
 
@@ -271,6 +282,32 @@ pub fn write_atomically(path: &Path, data: &[u8]) -> Result<(), String> {
         let _ = fs::remove_file(&partial);
         format!("{} cannot be written: {why}", path.display())
     })
+}
+
+/// What each of `folders` is copied from: Android's own certificates as an app would trust them
+/// without DSA. Android prefers the APEX's folder, `apex`, whenever it holds any certificate,
+/// and reads its own folder otherwise. Apps here read the folder under `/system` (the VM runs
+/// with `system.certs.enabled=true`), so while the APEX's folder holds certificates every copy
+/// is made from it; the folder under `/system` may be older than the APEX's.
+pub fn sources<'a>(folders: &[(&'a str, &'a str)], apex: &'a str) -> Vec<(&'a str, &'a str)> {
+    let apex_has_certificates = fs::read_dir(apex).is_ok_and(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .any(|e| e.file_type().is_ok_and(|t| t.is_file()))
+    });
+    folders
+        .iter()
+        .map(|(folder, android)| {
+            (
+                *folder,
+                if apex_has_certificates {
+                    apex
+                } else {
+                    *android
+                },
+            )
+        })
+        .collect()
 }
 
 /// Copies the certificates of each of Android's folders into its folder under `root`, keeping
