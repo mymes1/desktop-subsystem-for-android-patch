@@ -2440,8 +2440,11 @@ class GuestMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
             memory_rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
             name = 'write /sys/devices/virtual/block/zram0/recomp_algorithm "algo=zstd priority=1"'
-            self.assertIn(name, memory_rc)
-            self.assertLess(memory_rc.index(name), memory_rc.index("swapon_all"))
+            # The order of the commands, not of the words in the comments above them.
+            commands = [line.strip() for line in memory_rc.splitlines() if not line.lstrip().startswith("#")]
+            self.assertIn(name, commands)
+            swapon = next(i for i, command in enumerate(commands) if command.startswith("swapon_all "))
+            self.assertLess(commands.index(name), swapon)
             rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
             start = rc.index("on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1")
             trigger = rc[start:rc.index("on property:vendor.dsa.memory.trim=1")]
@@ -2635,6 +2638,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
             + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
+            + make_image.DNS_PROPERTY_CONTEXT + "\n"
             + "".join(context + "\n" for context in make_image.GAPPS_COMPILE_PROPERTY_CONTEXTS.values())
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
