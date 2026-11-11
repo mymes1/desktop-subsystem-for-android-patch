@@ -195,7 +195,14 @@ mod tests {
     /// A small certificate the host can read: a subject and issuer of one common name.
     fn certificate(common_name: &str) -> Vec<u8> {
         fn der(tag: u8, contents: &[u8]) -> Vec<u8> {
-            let mut out = vec![tag, contents.len() as u8];
+            // DER gives a length below 128 in one byte, and a longer one after a byte that
+            // says how many bytes it takes.
+            let mut out = vec![tag];
+            match contents.len() {
+                short @ 0..=127 => out.push(short as u8),
+                medium @ 128..=255 => out.extend_from_slice(&[0x81, medium as u8]),
+                long => out.extend_from_slice(&[0x82, (long >> 8) as u8, long as u8]),
+            }
             out.extend_from_slice(contents);
             out
         }
