@@ -1869,12 +1869,19 @@ fn lifecycle_session(
     (session, agent, launcher)
 }
 
+/// The next message for the guest, past the host's root certificates: the session sends them
+/// once the agent connects, and these tests are about what comes after.
 fn next_body(agent: &mut Box<dyn Connection>) -> Body {
-    let frame = agent.recv(Some(WAIT)).expect("a message for the guest");
-    dsa_protocol::decode(&frame)
-        .expect("a well-formed message")
-        .body
-        .expect("a message with a body")
+    loop {
+        let frame = agent.recv(Some(WAIT)).expect("a message for the guest");
+        let body = dsa_protocol::decode(&frame)
+            .expect("a well-formed message")
+            .body
+            .expect("a message with a body");
+        if !matches!(body, Body::HostCertificates(_)) {
+            return body;
+        }
+    }
 }
 
 fn screen(on: bool) -> Body {
