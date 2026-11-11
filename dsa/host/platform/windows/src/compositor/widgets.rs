@@ -9,10 +9,11 @@
 //!
 //! The window shows the widget's latest frame, a PNG image with an alpha channel, so a widget
 //! with rounded corners or a see-through background looks as it does on a phone. While the
-//! pointer is over the widget, or the window has the keyboard, a small round "More" button
-//! fades in at its top right corner, inside its rounded corners ([`more_button`]), as on the
-//! cards of the Windows 11 Widgets board; clicking it opens the widget's menu under it, as a
-//! right click opens it at the pointer ([`super::widget_menu`]).
+//! pointer is over the widget, or the window has the keyboard, a small dark "More" button
+//! fades in at its top right corner, inside its rounded corners ([`more_button`]): a rounded
+//! square with three light dots, the same in light and dark themes so it stays quiet over any
+//! widget. Clicking it opens the widget's menu under it, as a right click opens it at the
+//! pointer ([`super::widget_menu`]).
 //!
 //! A press, a move and a release inside the widget go to the widget's view in Android, so its
 //! buttons and lists work and an app it opens shows as a window. A press that moves before
@@ -66,17 +67,25 @@ const POLL: Duration = Duration::from_millis(15);
 /// The width of the edges a widget window is resized by, in device-independent pixels.
 pub const BORDER_DIP: i32 = 6;
 
-/// The diameter of a widget window's More button, in device-independent pixels.
-pub const MORE_BUTTON_DIP: u32 = 28;
+/// The side of a widget window's More button, a rounded square, in device-independent pixels:
+/// small, so it covers little of the widget.
+pub const MORE_BUTTON_DIP: u32 = 24;
+
+/// The corner radius of the More button.
+pub const MORE_BUTTON_RADIUS_DIP: u32 = 6;
 
 /// How far the More button sits from the window's top and right edges, which keeps it
-/// inside every corner radius an Android widget is drawn with (up to 41 device-independent
-/// pixels, 50 dp) and off the edges
+/// inside every corner radius an Android widget is drawn with (up to 40 dp) and off the edges
 /// that resize the window.
 pub const MORE_BUTTON_MARGIN_DIP: u32 = 8;
 
-/// The size of the More button's glyph.
-pub const MORE_GLYPH_DIP: u32 = 16;
+/// The side of the square around the More button that a press hits it in: larger than the
+/// button, so a finger finds it, and larger than the 28 device-independent pixel round
+/// button it replaced.
+pub const MORE_HIT_DIP: u32 = 32;
+
+/// The size of the More button's glyph, Segoe Fluent Icons' "More".
+pub const MORE_GLYPH_DIP: u32 = 14;
 
 /// How long the More button takes to fade in or out: WinUI's `ControlFastAnimationDuration`.
 pub const FADE: Duration = Duration::from_millis(167);
@@ -160,6 +169,7 @@ pub fn placement_of(x: i32, y: i32, width: i32, height: i32, dpi: u32) -> Placem
         y,
         width_dp: dp_of_px(width, dpi).max(1),
         height_dp: dp_of_px(height, dpi).max(1),
+        resized: false,
     }
 }
 
@@ -614,31 +624,88 @@ impl Circle {
     }
 }
 
-/// The More button of a window of `width` by `height` pixels on a monitor of `dpi`: a circle
-/// of [`MORE_BUTTON_DIP`] in its top right corner, [`MORE_BUTTON_MARGIN_DIP`] from the edges.
+/// The More button in a window's pixels: the rounded square drawn, and the larger square
+/// around it that a press hits it in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MoreButton {
+    /// The left and top of the square drawn.
+    pub x: f32,
+    pub y: f32,
+    /// The side of the square drawn.
+    pub side: f32,
+    /// The radius of its corners.
+    pub radius: f32,
+    /// How far past the square drawn, on every side, a press still hits it.
+    pub reach: f32,
+}
+
+impl MoreButton {
+    /// The middle of the button.
+    pub fn center(&self) -> (f32, f32) {
+        (self.x + self.side / 2.0, self.y + self.side / 2.0)
+    }
+
+    /// Whether the point at `x`, `y` hits the button: inside the square that takes its
+    /// presses.
+    pub fn hits(&self, x: f32, y: f32) -> bool {
+        let r = self.reach;
+        x >= self.x - r
+            && x < self.x + self.side + r
+            && y >= self.y - r
+            && y < self.y + self.side + r
+    }
+
+    /// The square of whole pixels the button is drawn in: left, top, right and bottom.
+    pub fn bounds(&self) -> (i32, i32, i32, i32) {
+        (
+            self.x.floor() as i32,
+            self.y.floor() as i32,
+            (self.x + self.side).ceil() as i32,
+            (self.y + self.side).ceil() as i32,
+        )
+    }
+
+    /// The circles that round its corners.
+    fn corners(&self) -> [Circle; 4] {
+        let (r, near, far) = (self.radius, self.radius, self.side - self.radius);
+        let at = |dx: f32, dy: f32| Circle {
+            cx: self.x + dx,
+            cy: self.y + dy,
+            radius: r,
+        };
+        [at(near, near), at(far, near), at(near, far), at(far, far)]
+    }
+}
+
+/// The More button of a window of `width` by `height` pixels on a monitor of `dpi`: a square
+/// of [`MORE_BUTTON_DIP`] with corners of [`MORE_BUTTON_RADIUS_DIP`] in its top right corner,
+/// [`MORE_BUTTON_MARGIN_DIP`] from the edges, hit in a square of [`MORE_HIT_DIP`] around it.
 /// A widget too small for it gets a smaller one that still fits.
-pub fn more_button(width: i32, height: i32, dpi: u32) -> Circle {
-    let side = width.min(height).max(1) as f32;
-    let diameter = (px_of_dip(MORE_BUTTON_DIP, dpi) as f32).min((side - 2.0).max(1.0));
-    let room = ((side - diameter) / 2.0).max(0.0);
+pub fn more_button(width: i32, height: i32, dpi: u32) -> MoreButton {
+    let room_side = width.min(height).max(1) as f32;
+    let side = (px_of_dip(MORE_BUTTON_DIP, dpi) as f32).min((room_side - 2.0).max(1.0));
+    let room = ((room_side - side) / 2.0).max(0.0);
     let margin = (px_of_dip(MORE_BUTTON_MARGIN_DIP, dpi) as f32).min(room);
-    let radius = diameter / 2.0;
-    Circle {
-        cx: width as f32 - margin - radius,
-        cy: margin + radius,
+    let radius = (px_of_dip(MORE_BUTTON_RADIUS_DIP, dpi) as f32).min(side / 2.0);
+    let hit = px_of_dip(MORE_HIT_DIP, dpi) as f32;
+    MoreButton {
+        x: width as f32 - margin - side,
+        y: margin,
+        side,
         radius,
+        reach: ((hit - side) / 2.0).max(0.0),
     }
 }
 
 /// Whether the pixel at `x`, `y` is on the More button of a window of `width` by `height`:
-/// inside its circle, not merely its square.
+/// inside the square that takes its presses.
 pub fn on_more_button(x: i32, y: i32, width: i32, height: i32, dpi: u32) -> bool {
-    more_button(width, height, dpi).contains(x as f32 + 0.5, y as f32 + 0.5)
+    more_button(width, height, dpi).hits(x as f32 + 0.5, y as f32 + 0.5)
 }
 
 /// Whether `circle` lies wholly inside a window of `width` by `height` whose corners are
 /// rounded to `radius`, as the widget's own image is.
-pub fn inside_rounded_window(circle: &Circle, width: i32, height: i32, radius: f32) -> bool {
+pub fn circle_inside_rounded_window(circle: &Circle, width: i32, height: i32, radius: f32) -> bool {
     let (w, h, rho) = (width as f32, height as f32, circle.radius);
     let edges = circle.cx - rho >= 0.0
         && circle.cy - rho >= 0.0
@@ -651,6 +718,16 @@ pub fn inside_rounded_window(circle: &Circle, width: i32, height: i32, radius: f
     let dx = (radius - circle.cx).max(circle.cx - (w - radius)).max(0.0);
     let dy = (radius - circle.cy).max(circle.cy - (h - radius)).max(0.0);
     edges && (dx * dx + dy * dy).sqrt() + rho <= radius + 0.01
+}
+
+/// Whether the More button as drawn lies wholly inside a window of `width` by `height` whose
+/// corners are rounded to `radius`: a rounded square is inside when the circles of its
+/// corners are.
+pub fn inside_rounded_window(button: &MoreButton, width: i32, height: i32, radius: f32) -> bool {
+    button
+        .corners()
+        .iter()
+        .all(|corner| circle_inside_rounded_window(corner, width, height, radius))
 }
 
 /// How much of the More button shows, from 0 (none) to 1, while it fades from `from` to `to`
@@ -896,8 +973,9 @@ fn faded(color: super::fluent::Argb, level: f32) -> super::fluent::Argb {
 }
 
 /// Draws the More button of a window of `width` by `height` pixels on a monitor of `dpi`
-/// over its premultiplied BGRA `pixels`: a subtle fill with a hairline edge, lighter or
-/// darker while the pointer is on it or presses it, and the "More" glyph.
+/// over its premultiplied BGRA `pixels`: a dark, slightly see-through rounded square with a
+/// faint hairline edge, lighter while the pointer is on it or presses it, and the light
+/// "More" glyph in its middle.
 pub fn draw_more_button(
     pixels: &mut [u8],
     width: usize,
@@ -908,16 +986,15 @@ pub fn draw_more_button(
     if look.level <= 0.0 {
         return;
     }
-    let circle = more_button(width as i32, height as i32, dpi);
+    let button = more_button(width as i32, height as i32, dpi);
     let mut canvas = super::fluent::Canvas {
         width,
         height,
         pixels,
     };
-    let (r, d) = (circle.radius, circle.radius * 2.0);
-    let (x, y) = (circle.cx - r, circle.cy - r);
+    let (x, y, side, r) = (button.x, button.y, button.side, button.radius);
     let palette = &look.palette;
-    canvas.fill_rounded(x, y, d, d, r, faded(palette.fill, look.level));
+    canvas.fill_rounded(x, y, side, side, r, faded(palette.fill, look.level));
     let state = if look.pressed {
         Some(palette.pressed)
     } else if look.hover {
@@ -926,18 +1003,27 @@ pub fn draw_more_button(
         None
     };
     if let Some(overlay) = state {
-        canvas.fill_rounded(x, y, d, d, r, faded(overlay, look.level));
+        canvas.fill_rounded(x, y, side, side, r, faded(overlay, look.level));
     }
     let hairline = px_of_dip(1, dpi).max(1) as f32;
-    canvas.stroke_rounded(x, y, d, d, r, hairline, faded(palette.border, look.level));
+    canvas.stroke_rounded(
+        x,
+        y,
+        side,
+        side,
+        r,
+        hairline,
+        faded(palette.border, look.level),
+    );
     if let Some(glyph) = look.glyph {
         let color = if look.pressed {
             palette.glyph_pressed
         } else {
             palette.glyph
         };
-        let left = (circle.cx - glyph.width as f32 / 2.0).round() as i32;
-        let top = (circle.cy - glyph.height as f32 / 2.0).round() as i32;
+        let (cx, cy) = button.center();
+        let left = (cx - glyph.width as f32 / 2.0).round() as i32;
+        let top = (cy - glyph.height as f32 / 2.0).round() as i32;
         let (w, h) = (glyph.width, glyph.height);
         canvas.draw_mask(left, top, w, h, &glyph.cover, color, look.level);
     }
@@ -945,9 +1031,9 @@ pub fn draw_more_button(
 
 /// The size of the More button's glyph box for a window of `width` by `height` on `dpi`.
 pub fn more_glyph_size(width: i32, height: i32, dpi: u32) -> usize {
-    let circle = more_button(width, height, dpi);
+    let button = more_button(width, height, dpi);
     let wanted = px_of_dip(MORE_GLYPH_DIP, dpi) as f32;
-    (wanted.min(circle.radius * 2.0 * 0.6).round() as usize).max(1)
+    (wanted.min(button.side * 0.6).round() as usize).max(1)
 }
 
 /// A rectangle in screen pixels: left, top, right and bottom.
@@ -3319,6 +3405,7 @@ mod tests {
             y: 20,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         // A dp is 0.819 of a device-independent pixel.
         assert_eq!(window_size(&placement, 96), (146, 89));
@@ -3369,48 +3456,78 @@ mod tests {
     }
 
     #[test]
-    fn fr12_the_more_button_is_a_28_px_circle_in_the_top_right_corner() {
-        // At 100%: 28 px across, 8 px from the top and right edges.
+    fn fr12_the_more_button_is_a_small_24_px_rounded_square_in_the_top_right_corner() {
+        // At 100%: 24 px a side, corners of 6, 8 px from the top and right edges.
         let at_100 = more_button(200, 120, 96);
-        assert_eq!((at_100.cx, at_100.cy, at_100.radius), (178.0, 22.0, 14.0));
-        assert_eq!(at_100.bounds(), (164, 8, 192, 36));
-        // It grows with the scale.
+        assert_eq!(
+            (at_100.x, at_100.y, at_100.side, at_100.radius),
+            (168.0, 8.0, 24.0, 6.0)
+        );
+        assert_eq!(at_100.bounds(), (168, 8, 192, 32));
+        assert_eq!(at_100.center(), (180.0, 20.0));
+        // It grows with the scale, the same in device-independent pixels at every DPI.
         let at_150 = more_button(300, 180, 144);
-        assert_eq!((at_150.cx, at_150.cy, at_150.radius), (267.0, 33.0, 21.0));
+        assert_eq!(
+            (at_150.x, at_150.y, at_150.side, at_150.radius),
+            (252.0, 12.0, 36.0, 9.0)
+        );
         let at_200 = more_button(400, 240, 192);
-        assert_eq!(at_200.radius, 28.0);
+        assert_eq!((at_200.side, at_200.radius), (48.0, 12.0));
         // A widget too small for it gets one that still fits.
         let tiny = more_button(30, 24, 96);
-        assert!(tiny.radius * 2.0 <= 22.0);
-        assert!(tiny.cx + tiny.radius <= 30.0 && tiny.cy - tiny.radius >= 0.0);
+        assert!(tiny.side <= 22.0);
+        assert!(tiny.x + tiny.side <= 30.0 && tiny.y >= 0.0);
+        assert!(tiny.radius <= tiny.side / 2.0);
         // It stays off the edges that resize the window.
         let border = BORDER_DIP as f32;
-        assert!(at_100.cx + at_100.radius <= 200.0 - border);
-        assert!(at_100.cy - at_100.radius >= border);
+        assert!(at_100.x + at_100.side <= 200.0 - border);
+        assert!(at_100.y >= border);
+        // Its glyph fits inside it.
+        assert_eq!(more_glyph_size(200, 120, 96), 14);
+        assert!(more_glyph_size(30, 24, 96) as f32 <= tiny.side);
     }
 
     #[test]
-    fn fr12_the_more_button_is_hit_inside_its_circle_only() {
+    fn fr12_the_more_button_is_hit_in_a_square_larger_than_it_is_drawn() {
         let (w, h) = (200, 120);
-        assert_eq!(hit_test(178, 22, w, h, 96, 3), Hit::More);
-        assert!(on_more_button(178, 22, w, h, 96));
-        assert!(on_more_button(166, 22, w, h, 96), "the left of the circle");
-        assert!(on_more_button(178, 34, w, h, 96), "its bottom");
-        // The corners of its square are the widget's.
-        assert!(!on_more_button(165, 9, w, h, 96));
-        assert_eq!(hit_test(165, 9, w, h, 96, 3), Hit::Client);
-        assert!(!on_more_button(191, 35, w, h, 96));
-        // Outside it, everywhere is the widget's.
+        assert_eq!(hit_test(180, 20, w, h, 96, 3), Hit::More);
+        assert!(on_more_button(180, 20, w, h, 96));
+        // A press a little outside the square drawn still hits it, for a finger.
+        assert!(
+            on_more_button(165, 20, w, h, 96),
+            "left of the square drawn"
+        );
+        assert!(on_more_button(180, 35, w, h, 96), "under it");
+        assert!(on_more_button(165, 5, w, h, 96), "its corner");
+        // Along the edges that resize the window, the edge comes first.
+        assert_eq!(hit_test(180, 5, w, h, 96, 3), Hit::Top);
+        assert_eq!(hit_test(180, 5, w, h, 96, 0), Hit::More);
+        // Outside its square, everywhere is the widget's.
+        assert!(!on_more_button(163, 20, w, h, 96));
+        assert!(!on_more_button(180, 36, w, h, 96));
         assert!(!on_more_button(150, 22, w, h, 96));
-        assert!(!on_more_button(178, 40, w, h, 96));
+        assert_eq!(hit_test(163, 20, w, h, 96, 3), Hit::Client);
         // At 200% it is twice as large.
-        assert!(on_more_button(2 * 166, 2 * 22, 2 * w, 2 * h, 192));
+        assert!(on_more_button(2 * 165, 2 * 20, 2 * w, 2 * h, 192));
+        // At every scale it takes a press at least wherever the 28 px round button it
+        // replaced did, for touch.
+        for dpi in [96, 120, 144, 192] {
+            let (w, h) = (px_of_dip(200, dpi), px_of_dip(120, dpi));
+            let button = more_button(w, h, dpi);
+            let hit = button.side + 2.0 * button.reach;
+            assert!(hit >= px_of_dip(28, dpi) as f32, "at {dpi} dpi: {hit}");
+            let (cx, cy) = button.center();
+            let r = px_of_dip(14, dpi) as f32 - 1.0;
+            for (dx, dy) in [(-r, 0.0), (r, 0.0), (0.0, -r), (0.0, r)] {
+                assert!(button.hits(cx + dx, cy + dy), "at {dpi} dpi: {dx},{dy}");
+            }
+        }
     }
 
     #[test]
     fn fr12_the_more_button_stays_inside_the_widgets_rounded_corners() {
         // Android draws widgets with corners of 16 to 28 dp; the placeholder's are 12. Every
-        // radius up to 40 dp keeps the circle inside, at every scale.
+        // radius up to 40 dp keeps the button inside, at every scale.
         for dpi in [96, 120, 144, 192] {
             let (width, height) = window_size(
                 &Placement {
@@ -3418,15 +3535,16 @@ mod tests {
                     y: 0,
                     width_dp: 180,
                     height_dp: 110,
+                    resized: false,
                 },
                 dpi,
             );
-            let circle = more_button(width, height, dpi);
+            let button = more_button(width, height, dpi);
             for radius_dp in 0..=40 {
                 // Android's dp, at the density it draws the widget at there.
                 let radius = px_of_dp(radius_dp, dpi) as f32;
                 assert!(
-                    inside_rounded_window(&circle, width, height, radius),
+                    inside_rounded_window(&button, width, height, radius),
                     "at {dpi} dpi the button leaves corners of {radius_dp} dp"
                 );
             }
@@ -3437,8 +3555,18 @@ mod tests {
             cy: 10.0,
             radius: 9.0,
         };
-        assert!(!inside_rounded_window(&corner, 200, 120, 30.0));
-        assert!(inside_rounded_window(&corner, 200, 120, 0.0));
+        assert!(!circle_inside_rounded_window(&corner, 200, 120, 30.0));
+        assert!(circle_inside_rounded_window(&corner, 200, 120, 0.0));
+        // And a square pressed into the corner.
+        let square = MoreButton {
+            x: 180.0,
+            y: 0.0,
+            side: 20.0,
+            radius: 2.0,
+            reach: 0.0,
+        };
+        assert!(!inside_rounded_window(&square, 200, 120, 30.0));
+        assert!(inside_rounded_window(&square, 200, 120, 2.0));
     }
 
     #[test]
@@ -3471,13 +3599,24 @@ mod tests {
     }
 
     #[test]
-    fn fr12_the_more_button_is_drawn_with_a_subtle_fill_a_hairline_and_its_states() {
+    fn fr12_the_more_button_is_a_quiet_dark_chip_the_same_in_light_and_dark_themes() {
         use crate::compositor::fluent::{button_palette, Theme};
-        let (width, height) = (200usize, 120usize);
-        let base = placeholder(width, height, 96);
+        // #202020 at 85%, light dots, in either theme.
         let palette = button_palette(&Theme::light());
-        let draw = |level: f32, hover: bool, pressed: bool| {
-            let mut pixels = base.clone();
+        assert_eq!(palette.fill, 0xD920_2020);
+        assert!(palette.glyph >> 24 >= 0xE0 && palette.glyph & 0xFF >= 0xE0);
+        let dark = Theme {
+            dark: true,
+            ..Theme::light()
+        };
+        assert_eq!(button_palette(&dark), palette);
+
+        let (width, height) = (200usize, 120usize);
+        // A light widget, opaque white, and the dark placeholder.
+        let white = vec![0xFFu8; width * height * 4];
+        let placeholder = placeholder(width, height, 96);
+        let draw = |base: &[u8], level: f32, hover: bool, pressed: bool| {
+            let mut pixels = base.to_vec();
             let look = ButtonLook {
                 level,
                 hover,
@@ -3497,30 +3636,46 @@ mod tests {
                 pixels[index + 3],
             ]
         };
-        // Not shown: the widget is untouched.
-        assert_eq!(draw(0.0, false, false), base);
-        let rest = draw(1.0, false, false);
-        let hover = draw(1.0, true, false);
-        let pressed = draw(1.0, false, true);
-        // The circle's middle takes the light fill over the dark placeholder.
-        assert!(at(&rest, 178, 22)[0] > at(&base, 178, 22)[0] + 0x60);
-        assert_ne!(at(&hover, 178, 22), at(&rest, 178, 22));
-        assert_ne!(at(&pressed, 178, 22), at(&hover, 178, 22));
-        // The hairline sits on the circle's edge, and the square's corner stays the widget's.
-        assert_ne!(at(&rest, 178, 8), at(&rest, 178, 12));
-        assert_eq!(at(&rest, 165, 9), at(&base, 165, 9));
-        // Elsewhere the widget is untouched.
-        assert_eq!(at(&rest, 100, 60), at(&base, 100, 60));
-        assert_eq!(at(&rest, 150, 22), at(&base, 150, 22));
-        // Half faded in, it is between the widget and the button.
-        let half = draw(0.5, false, false);
-        let blue = |pixels: &[u8]| at(pixels, 178, 22)[0];
-        let (b, h, r) = (blue(&base), blue(&half), blue(&rest));
-        assert!(h > b && h < r, "{b} < {h} < {r}");
-        // Premultiplied: no color exceeds its alpha.
-        assert!(rest
-            .chunks_exact(4)
-            .all(|p| p[..3].iter().all(|&c| c <= p[3])));
+        for base in [&white, &placeholder] {
+            // Not shown: the widget is untouched.
+            assert_eq!(draw(base, 0.0, false, false), *base);
+            let rest = draw(base, 1.0, false, false);
+            let hover = draw(base, 1.0, true, false);
+            let pressed = draw(base, 1.0, false, true);
+            // The square's middle takes the dark fill, nearly opaque, over any widget.
+            let middle = at(&rest, 180, 20);
+            assert!(middle[0] <= at(base, 180, 20)[0], "{middle:?}");
+            assert!(middle[0] < 0x50 && middle[3] >= 0xF0, "{middle:?}");
+            assert_eq!((middle[0], middle[1]), (middle[1], middle[2]), "grey");
+            // The pointer on it lightens it a little; a press, less.
+            assert!(at(&hover, 180, 20)[0] > middle[0]);
+            assert_ne!(at(&pressed, 180, 20), at(&hover, 180, 20));
+            // A faint hairline sits on its edge, and the corners of its square stay the
+            // widget's, as its corners are rounded.
+            assert_ne!(at(&rest, 180, 8), at(&rest, 180, 12));
+            assert_eq!(at(&rest, 168, 8), at(base, 168, 8));
+            assert_eq!(at(&rest, 191, 31), at(base, 191, 31));
+            // Elsewhere the widget is untouched, the room a press still hits included.
+            assert_eq!(at(&rest, 100, 60), at(base, 100, 60));
+            assert_eq!(at(&rest, 150, 22), at(base, 150, 22));
+            assert_eq!(at(&rest, 165, 20), at(base, 165, 20));
+            assert_eq!(at(&rest, 180, 34), at(base, 180, 34));
+            // Half faded in, it is between the widget and the button.
+            let half = draw(base, 0.5, false, false);
+            let alpha = |pixels: &[u8]| at(pixels, 180, 20)[3];
+            if base == &white {
+                let blue = |pixels: &[u8]| at(pixels, 180, 20)[0];
+                let (b, h, r) = (blue(base), blue(&half), blue(&rest));
+                assert!(h < b && h > r, "{b} > {h} > {r}");
+            } else {
+                let (b, h, r) = (alpha(base), alpha(&half), alpha(&rest));
+                assert!(h > b && h < r, "{b} < {h} < {r}");
+            }
+            // Premultiplied: no color exceeds its alpha.
+            assert!(rest
+                .chunks_exact(4)
+                .all(|p| p[..3].iter().all(|&c| c <= p[3])));
+        }
     }
 
     fn pressed_on_button(down: (i32, i32)) -> Gesture {
@@ -3656,6 +3811,7 @@ mod tests {
             y: 0,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         let ids = |provider: &WidgetProvider| -> Vec<u32> {
             let sizes = widget_menu::size_choices(provider);
@@ -3927,6 +4083,7 @@ mod tests {
             y: 0,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         for dark in [false, true] {
             // Transparency off: the solid fill DWM's acrylic falls back to, as a picture can
@@ -4233,6 +4390,7 @@ mod tests {
             y: 40,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         windows.command(WindowCommand::Place(Widget {
             widget_id: 4242,
