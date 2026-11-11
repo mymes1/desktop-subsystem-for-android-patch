@@ -283,6 +283,7 @@ mod tests {
             y: 0,
             width_dp,
             height_dp,
+            resized: false,
         }
     }
 
