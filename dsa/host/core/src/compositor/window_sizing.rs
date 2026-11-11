@@ -927,12 +927,18 @@ mod tests {
             assert_eq!(dp_to_px(100, density), px_100_dp, "{percent}%");
             assert_eq!(px_to_dp(px_100_dp, density), 100, "{percent}%");
             assert_eq!(min_client_size(dpi, None, None).0, px_220_dp, "{percent}%");
-            // 100 dp is 81.9 DIP, which is 81.9 x the scale in the monitor's pixels; rounding
-            // the density to an even number moves it by less than 1%.
+            // 100 dp is 81.9 DIP, which is 81.9 x the scale in the monitor's pixels. Rounding
+            // the density to an even number moves it by less than 1%, and the pixel count
+            // then rounds to a whole pixel, which at 100% is itself more than 1% of 81 pixels.
             let dip = 100.0 * 96.0 * (10.4 / 25.4) * (160.0 / 48.0) / 160.0;
             let wanted = dip * f64::from(percent) / 100.0;
+            let exact_density = wanted * 160.0 / 100.0;
             assert!(
-                (f64::from(px_100_dp) - wanted).abs() / wanted < 0.01,
+                (f64::from(density) - exact_density).abs() / exact_density < 0.01,
+                "{percent}%: density {density} for {exact_density}"
+            );
+            assert!(
+                (f64::from(px_100_dp) - wanted).abs() <= wanted * 0.01 + 0.5,
                 "{percent}%: {px_100_dp} pixels for {wanted}"
             );
             assert_eq!(dip_to_px(100, dpi), percent, "{percent}%");

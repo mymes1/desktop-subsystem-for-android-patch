@@ -2717,6 +2717,17 @@ class GuestMemoryTests(unittest.TestCase):
         features = (Path(__file__).parent / "unavailable-features.xml").read_text()
         self.assertIn('<unavailable-feature name="android.hardware.telephony" />', features)
 
+    def test_nfr1_no_persistent_app_is_left_in_the_phone_process_without_its_permissions(self):
+        # The opportunistic network service shares the phone's user ID and process and is
+        # persistent, but the network permissions it uses come from TeleService's manifest.
+        # Without TeleService it crash-looped at boot until the rescue party rebooted Android,
+        # so it leaves the image with TeleService.
+        self.assertIn("ONS", make_image.REMOVED_APPS)
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/ONS/ONS.apk"))
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/ONS/oat/x86_64/ONS.odex"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/CarrierConfig/CarrierConfig.apk"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/TelephonyProvider/TelephonyProvider.apk"))
+
 SETTINGS_NS = "http://schemas.android.com/apk/res-auto"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 MEDIA_OUTPUT = "com.android.settings.sound.MediaOutputPreferenceController"
