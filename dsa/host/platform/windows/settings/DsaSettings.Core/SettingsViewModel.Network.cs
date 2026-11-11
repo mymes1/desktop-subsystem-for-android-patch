@@ -1,7 +1,5 @@
 using System.Globalization;
 
-using System.Globalization;
-
 namespace Dsa.Settings.Core;
 
 /// <summary>The Network page: how Android reaches the network now, the advanced networking

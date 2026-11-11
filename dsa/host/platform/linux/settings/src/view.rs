@@ -1023,7 +1023,7 @@ pub fn network_dns_text(network: Option<&Network>) -> String {
         ),
         Some(DnsResolver::Network) => trf(
             "This computer's resolver does not answer, so Android asks the network's DNS servers: {0}",
-            &[&servers],
+            &[servers.as_str()],
         ),
         _ => servers,
     }
