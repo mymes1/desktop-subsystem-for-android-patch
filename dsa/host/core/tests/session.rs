@@ -1869,8 +1869,9 @@ fn lifecycle_session(
     (session, agent, launcher)
 }
 
-/// The next message for the guest, past the host's root certificates: the session sends them
-/// once the agent connects, and these tests are about what comes after.
+/// The next message for the guest, past the settings the session sends once the agent
+/// connects (the host's root certificates and whether backup is on): these tests are about
+/// what comes after.
 fn next_body(agent: &mut Box<dyn Connection>) -> Body {
     loop {
         let frame = agent.recv(Some(WAIT)).expect("a message for the guest");
@@ -1878,7 +1879,7 @@ fn next_body(agent: &mut Box<dyn Connection>) -> Body {
             .expect("a well-formed message")
             .body
             .expect("a message with a body");
-        if !matches!(body, Body::HostCertificates(_)) {
+        if !matches!(body, Body::HostCertificates(_) | Body::BackupSetting(_)) {
             return body;
         }
     }
