@@ -2288,3 +2288,66 @@ FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-1
 - 빌드 전부. 축소 트리에서 vendor Rust 바이너리를 빌드한 적이 없다. 잠금에 더한 프로젝트와 상자는 Android.bp의 의존을 정적으로 따라가 고른 것이고, AIDL Rust 백엔드, vendor 변형의 LLNDK 스텁, `TARGET_COPY_OUT_VENDOR := vendor`의 설치 경로, 축소 트리의 clippy가 통과하는지는 Framework build가 처음 보인다.
 - 17 대상 파일의 vendor에 `libssl.so`가 없는지와 그 APEX의 내용. 16 것만 풀어 보았다. `make-image.py`가 바이너리의 `DT_NEEDED`를 vendor와 LLNDK에 대조하므로 빠진 것은 이미지 빌드가 멈춘다.
 - 실기 동작: 기존 설치의 키가 모두 갱신되는지, vold의 메타데이터 키 갱신, 키가 없는 부팅에서 호스트 키로 싼 덩어리가 실패하는 모습.
+
+## R29. v0.2.1부터 창 크기 변경이 느려진 까닭: 펜스마다 매핑된 메모리 전체를 다시 읽었다 (FR-4, PR-3)
+
+**기준.** 소유자 PC(Windows 11 Pro 26300, x64, Intel Arc, 2880x2880 프리폼 디스플레이)에서 v0.1.9부터 v0.2.2까지 남은 로그를 읽었다. 호스트: `%LOCALAPPDATA%\DSA\logs\dsa-app-window.log`(`stage=app.summary`와 창을 닫을 때의 요약), `dsa-wm.log`(`stage=wm.summary`), `C:\ProgramData\DSA\logs\dsa-hostd.log`(`stage=service.forwarded`). 게스트(Android 17, v0.2.2, 부팅 뒤 약 80분, Google Play 창 하나): adb로 읽기만 했다(`logcat -d -b all`, `dumpsys gfxinfo com.android.vending [framestats]`, `getprop`). 이 조사에서 빌드하거나 실행하지 않았고, 설치된 DSA와 바탕 화면은 건드리지 않았다. 로그 시각은 UTC이고 설치 로그 파일의 시각은 KST다. 그래서 v0.2.0은 11-09 10:16 UTC, v0.2.1은 11-09 19:26 UTC, v0.2.2는 11-11 00:35 UTC에 설치됐다.
+
+### 로그로 본 크기 변경의 기다림
+
+| 시점 | 창을 닫을 때의 요약(크기 변경 수, 새 크기의 프레임까지 중앙값, 95번째, 최댓값) |
+|---|---|
+| 11-08 12:21 (v0.1.9) | 6번, 80 ms, 344 ms, 344 ms. `waited=` 54-344 ms |
+| 11-09 19:38-21:30 (v0.2.1) | 1-2번씩, 949-3172 ms |
+| 11-10 01:32-02:12 (v0.2.1) | 784-1612 ms, 최대 2416 ms |
+| 11-11 00:42 (v0.2.2) | 2284 ms(최대 7550 ms), 795 ms(최대 1126 ms) |
+
+v0.2.0이 설치돼 있던 동안(11-09 10:16-19:26 UTC)에는 크기 변경 기록이 없다. 느려진 것은 모두 v0.2.1 뒤다.
+
+### 한 번의 크기 변경을 단계로 나눈 것
+
+task 19(Google Play), 1079x1563, 2026-11-11 01:57:18 UTC. 호스트와 게스트 줄은 `utc`로 맞췄다.
+
+| 단계 | 근거 | 걸린 시간 |
+|---|---|---|
+| 호스트가 새 크기를 묻고 서비스가 넘김 | `service.forwarded took=0.1` | 0.1 ms |
+| 게스트 태스크 크기 변경(에이전트가 적용하고 경계가 바뀜) | `agent.summary applied=4.3 bounds=23.9` | 24 ms |
+| 앱의 다시 배치와 다시 그리기 | `wm_relaunch_resume_activity`, `finishDrawing of relaunch ... 303ms`. 다시 시작하지 않은 변경(01:57:09-11)은 `WindowInsets changed`에서 `reportDrawFinished`까지 170-250 ms | 170-416 ms |
+| hwcomposer가 새 크기 프레임을 기다림 | `hwc.summary since_bounds=504.9 held=493.3 late=false` | 493 ms(앱이 그 크기로 그린 프레임을 기다린 시간. `late=false`라 500 ms 정착 시한으로 보낸 것이 아니다) |
+| hwcomposer 버퍼 다시 만들기, 렌더러 ColorBuffer | `task 19's buffers are now ...` 줄은 같은 밀리초 안 | 1 ms 미만 |
+| 창 관리자 텍스처, 앱 창 표시 | `wm.summary create=0.3`, `app.summary resize_buffers=0.0 present=0.1` | 1 ms 미만 |
+| 전체 | `app.summary waited=717.6` | 718 ms |
+
+v0.1.9의 같은 줄(11-08 12:20)은 `waited=53.8-80.3`이다. 커진 단계는 앱이 새 크기로 그리는 시간 하나다. 호스트 쪽과 hwcomposer, 렌더러의 버퍼, 창 표시는 모두 1 ms 안팎으로 그대로다. 드래그 동안 호스트는 앞의 요청에 프레임이 오기 전에는 다음 크기를 덜 보내므로, 한 단계가 느리면 다음 크기의 기다림에 그만큼이 더해진다(`a task window keeps its size: no ... frame came in 2009-2197 ms`가 여러 번 있다).
+
+### 앱의 프레임이 느린 까닭
+
+`dumpsys gfxinfo com.android.vending`: 프레임 13380개 가운데 13367개가 늦었다. 중앙값 150 ms, 90번째 200 ms, GPU 시간은 모두 1 ms 이하다. "Slow issue draw commands" 13351개, "Slow UI thread" 7517개. `framestats`로 보면 프레임마다 `IssueDrawCommandsStart`에서 `SwapBuffers`까지 82-100 ms이고, `DequeueBufferDuration`은 3-8 us, `QueueBufferDuration`은 0.16-0.54 ms다. 곧 RenderThread가 GL 명령을 ANGLE과 게스트 Vulkan 드라이버로 내보내는 동안 기다린다. 크기를 바꾸면 앱은 두세 프레임(동기화로 취소된 한 번, 다시 그린 한 번, 다시 시작하는 앱이면 그 첫 프레임)을 그려야 새 크기 프레임을 내므로 300-500 ms가 된다.
+
+그 동안 드라이버가 하는 일은 guest/mesa 0005(`94262816`, v0.2.0과 v0.2.1 사이)다. 0005는 게스트가 사본을 두는 호스트 가시 메모리를 coherent로 알리고, 앱이 펜스가 신호된 것을 처음 볼 때마다(`vkGetFenceStatus`, 동기화 fd), 그리고 `vkWaitSemaphores`, `vkDeviceWaitIdle` 뒤마다 그 장치의 모든 사본을 `VK_WHOLE_SIZE`로 다시 읽는다(R26의 1). ANGLE은 제출마다 펜스를 확인하므로 프레임마다 한두 번, 앱이 매핑한 메모리 전체가 Hyper-V 소켓을 건너온 뒤 다시 해시된다. guest/mesa 0007(`d9194885`, v0.2.2)은 매핑한 할당만으로 줄였지만, Skia와 ANGLE은 유니폼, 정점, 스테이징 버퍼를 계속 매핑해 두고(수 MiB에서 수십 MiB), v0.2.2에서도 중앙값 795-2284 ms로 나아지지 않았다. 다른 후보는 시기나 단계가 맞지 않는다. 주 모니터 밀도로 시작(`9b7c92e2`)과 96 x 배율(PR #560)은 버퍼 크기와 재시작에 관한 것이고 프레임마다의 시간을 바꾸지 않는다. CPU 업로드(PR #591), 캡션 밝기 표본(PR #555), 장치 복구 확인과 기다림 상한(PR #550)은 호스트 쪽이거나 v0.2.2에만 있는데, 호스트 쪽 단계는 1 ms 안이고 느려짐은 v0.2.1부터다. hwcomposer의 프레임 붙잡기(`b883d6f9`)는 v0.1부터 있고, 위의 `held`는 앱이 그리는 시간만큼이다.
+
+### 고친 것
+
+읽어 오기가 앱이 매핑한 양이 아니라 장치가 쓴 양만큼 들게 했다. 전송 형식은 그대로다.
+
+- 호스트(patches/0020, `dsa_shadow_record.h`): 렌더러가 할당마다 4 KiB 블록별로 게스트 사본이 가진 내용의 해시를 둔다. 플러시로 받은 바이트와 읽어 오기로 보낸 바이트가 그 해시가 된다. 읽어 오기 요청의 범위마다 블록 하나라도 바뀌었거나 모르는 것이 있으면 범위 전체를, 아니면 크기 0을 보낸다. 해시는 보내기 전에 잡으므로 그 사이 장치가 쓴 블록은 다음에 다시 간다. 해제된 할당은 잊는다. 메모리는 4 KiB마다 16바이트다.
+- 게스트(guest/mesa 0010, `dsa_shadow_blocks.h`의 `receive`): 할당을 64 KiB 조각으로 나눠 묻는다. 받은 조각은 블록마다, 받은 내용이 이 사본이 마지막으로 주고받은 것과 다를 때만(장치가 바꾼 블록) 받아들인다. 그 밖의 블록은 앱이 마지막 제출 뒤에 쓴 것을 그대로 두고 다음 제출에 보낸다. 예전에는 읽어 오기 뒤 사본 전체를 호스트 것으로 표시해서, 그 사이 앱이 쓴 것이 덮이고 다시 보내지지도 않았다. 일부만 받은 블록은 다음 플러시에 통째로 간다.
+- 섞인 버전: 0020이 없는 렌더러는 모든 조각을 보내고 게스트는 그것을 맞게 받는다(예전 비용). 0010이 없는 게스트는 할당 전체를 묻고, 0020 렌더러는 바뀐 것이 없으면 0을 보낸다. 어느 쪽도 스트림이 어긋나지 않는다.
+- 추적: 입력 추적 부팅(`androidboot.hardware.dsa_input_trace=1`)에서 읽어 오기 120번마다 `input-trace stage=driver.readback reads= asked_mb_per_read= received_kb_per_read= taken_kb_per_read= ms_per_read=` 줄을 남긴다. `stage=driver.flush`와 짝이다.
+
+FR-4의 프레임 규칙(창은 앱이 그 크기로 그린 프레임과 함께만 바뀌고, 놓은 크기에 정확히 닿는다)은 hwcomposer와 호스트의 것이고 바꾸지 않았다.
+
+### 회귀를 막는 시험
+
+`dsa/graphics/tests/readback_latency_test.cpp`(Graphics test의 "Test the guest transport on the build machine"): 게스트와 호스트의 절반을 드라이버와 디코더가 하는 대로, 바이트를 세는 메모리 안 소켓으로 돌린다. 앱은 2 MiB 할당 8개(16 MiB)를 매핑하고, 프레임마다 32 KiB씩 네 번 쓰며, 펜스가 있는 제출을 두 번 한다. 비용은 센 양으로 모형화한다: 소켓 1 GiB/s, 해시 4 GiB/s. 기계에 따라 흔들리지 않게 하기 위해서다. 크기 변경 하나를 두 프레임으로 치고, 전송이 더하는 몫이 50 ms를 넘으면 실패한다. 예전의 통째 읽어 오기가 같은 모형에서 50 ms를 넘는지도 확인해서, 시험이 그 회귀를 잡을 수 있음을 보인다. 계산상 지금은 약 32 ms(거의 해시), 예전은 약 94 ms(그 가운데 소켓 약 63 ms)다. 실제 그 기계에서 잰 시간도 함께 찍는다. 이 밖에 `fr4_guest_and_host_agree_after_each_fence`, `fr4_an_app_write_before_the_fence_is_not_lost`, `fr4_a_frame_reads_back_only_what_the_device_wrote`, `shadow_record_test.cpp`, `shadow_blocks_test.cpp`의 `receive` 시험이 있다.
+
+### 기대하는 값
+
+프레임마다의 읽어 오기가 매핑한 메모리 전체(수 MiB에서 수십 MiB)에서 장치가 쓴 조각(대개 0)과 조각마다 8바이트로 준다. 남는 드라이버 비용은 v0.1에도 있던 제출마다의 플러시 해시와 렌더러의 해시다. 그래서 앱의 프레임은 v0.1 수준(수 ms에서 20 ms 안팎)으로, 크기 변경은 v0.1의 80 ms 안팎(에이전트 약 25 ms, 앱이 두세 프레임, 표시 1 ms)으로 돌아올 것으로 본다. Google Play처럼 크기 구간을 넘을 때 액티비티를 다시 만드는 앱은 그 다시 만들기 시간(로그로 161-416 ms, 지금의 느린 프레임 포함)이 더해진다. 그것은 앱의 동작이다.
+
+### 확인하지 못한 것
+
+- 고친 뒤의 실제 값 전부. 이 PC에서 빌드하거나 실행하지 않았다. 패치가 고정 리비전에 붙는지는 그 파일들의 사본에서 확인했고(guest/mesa 0001-0010, 호스트 0006, 0011, 0020), 빌드와 C++ 시험은 Graphics test가 처음 돌린다. PC에서는 같은 조건(Google Play 창 하나, 크기 변경 추적 켬)으로 `app.summary waited=`의 중앙값과 95번째, `hwc.summary held=`, `dumpsys gfxinfo`의 중앙값과 "Slow issue draw commands"를 앞뒤로 잰다. 입력 추적 부팅이면 `driver.readback`의 `received_kb_per_read`가 0 가까이인지 본다.
+- 실제로 프레임마다 몇 MiB를 다시 읽었는지. 0005 뒤의 읽어 오기에는 추적 줄이 없었다. 이제 위의 줄이 남긴다.
+- 렌더러의 해시 비용. 조각마다 호스트가 매핑을 읽어 해시하므로, 매핑이 아주 큰 앱(수백 MiB)에서는 펜스마다 수십 ms가 될 수 있다. 그때는 제출이 없었던 장치의 조각을 건너뛰는 것이 다음 단계다.
+- 다른 GPU. 읽어 오는 형식은 HOST_CACHED뿐이므로 렌더러는 캐시되는 메모리만 읽는다. 다른 메모리 형식 구성을 가진 GPU에서는 재 보지 않았다.
