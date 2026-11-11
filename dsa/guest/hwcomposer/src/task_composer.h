@@ -123,7 +123,22 @@ class TaskComposer {
         // Two ColorBuffers, so the host can show one while the next is composed.
         uint32_t targets[2] = {0, 0};
         int next = 0;
+        // Steady clock milliseconds since the task has had no layer (minimized, or its app
+        // hidden); 0 while it has one.
+        int64_t withoutLayersSinceMs = 0;
     };
+
+   public:
+    // How long a task may have no layer before its ColorBuffers are let go. The window keeps
+    // its last frame in its own buffers, so the host needs them only for the next frame, and
+    // a minimized window kept two frames of its size on the host for nothing. A layer gone
+    // for a moment (an activity being replaced) keeps them.
+    static constexpr int64_t kReleaseWithoutLayersMs = 2000;
+
+   private:
+    // Lets go of the ColorBuffers of tasks without a layer for kReleaseWithoutLayersMs, and
+    // returns when the next one is due (steady clock milliseconds), if any.
+    std::optional<int64_t> releaseTasksWithoutLayersLocked(const Layout& layout, int64_t now);
 
     // Composes and posts every task's frame, on the pipeline's thread. `presentedMs` is when
     // SurfaceFlinger handed the frame over, on the trace's clock.
