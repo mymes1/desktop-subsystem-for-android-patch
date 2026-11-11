@@ -752,10 +752,8 @@ mod tests {
         let second = text.find("[Desktop Action shortcut-1]").unwrap();
         assert!(first < second);
         assert!(text[first..second].contains("\nName=New chat\n"));
-        // The icon is the file `shortcut_icon_path` names in the icons folder. The entry
-        // carries that path as the OS spells it, so the expected line is built from the same
-        // path rather than from a literal with `/`, which holds only where `/` is the
-        // separator (the tests also run on Windows).
+        // The icon is the file `shortcut_icon_path` names in the icons folder. A literal with
+        // `/` holds only where `/` is the separator, and the tests also run on Windows.
         let icon = shortcut_icon_path(Path::new("/icons"), "com.example.chat", "new-chat");
         assert_eq!(
             icon,
@@ -764,7 +762,14 @@ mod tests {
                 shortcut_tag("new-chat")
             ))
         );
-        assert!(text[first..second].contains(&format!("\nIcon={}\n", icon.to_string_lossy())));
+        // Off Unix the entry also escapes the separator, so there the line is checked only
+        // for the file it names.
+        let icon_line = text[first..second]
+            .lines()
+            .find(|line| line.starts_with("Icon="))
+            .expect("the shortcut's action has an icon");
+        let file = icon.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(icon_line.ends_with(&file), "{icon_line} names {file}");
         #[cfg(unix)]
         assert!(text[first..second].contains(&format!(
             "\nIcon=/icons/com.example.chat.shortcut-{}.png\n",
