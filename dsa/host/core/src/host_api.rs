@@ -272,6 +272,12 @@ pub trait UserAndroid: Send + Sync {
     fn adb_auto_connect_state(&self) -> AutoConnectState {
         AutoConnectState::Off
     }
+    /// Whether this host's resolver answers this Android's DNS queries now: `Some(false)` when
+    /// Android runs but asks its network's DNS servers itself, `None` when it cannot be said
+    /// (Android is not running, or this host does not answer DNS queries at all).
+    fn dns_answered_by_host(&self) -> Option<bool> {
+        None
+    }
     /// Sends a file to this Android, which asks the user which app opens or takes it.
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
         let _ = file;
@@ -944,6 +950,9 @@ impl UserAndroid for Session {
     }
     fn adb_auto_connect_state(&self) -> AutoConnectState {
         Session::adb_auto_connect_state(self)
+    }
+    fn dns_answered_by_host(&self) -> Option<bool> {
+        Session::dns_answered_by_host(self)
     }
     fn watch_links(&self) -> Option<Receiver<String>> {
         Some(Session::watch_links(self))
@@ -1974,6 +1983,9 @@ pub struct NetworkStatus {
     pub gateway: String,
     /// Why the network is not what the settings ask for, if it is not.
     pub problem: Option<String>,
+    /// Who answers the guest's DNS queries: [`NetworkStatus::DNS_HOST`],
+    /// [`NetworkStatus::DNS_NETWORK`], or empty when nobody can say yet.
+    pub dns_resolver: String,
 }
 
 impl NetworkStatus {
@@ -1983,6 +1995,11 @@ impl NetworkStatus {
     pub const ADVANCED: &'static str = "advanced";
     /// No network, because Android is not running.
     pub const OFF: &'static str = "off";
+    /// The host's resolver answers the guest's names, so the host's hosts file, VPN and DNS
+    /// filters apply to Android's apps.
+    pub const DNS_HOST: &'static str = "host";
+    /// The host's resolver does not answer, so Android asks `dns_servers` itself.
+    pub const DNS_NETWORK: &'static str = "network";
 
     pub fn off() -> NetworkStatus {
         NetworkStatus {
@@ -1998,6 +2015,7 @@ impl NetworkStatus {
             dns_servers: self.dns_servers.clone(),
             gateway: self.gateway.clone(),
             problem: self.problem.clone().unwrap_or_default(),
+            dns_resolver: self.dns_resolver.clone(),
         }
     }
 
@@ -2008,6 +2026,7 @@ impl NetworkStatus {
             dns_servers: status.dns_servers,
             gateway: status.gateway,
             problem: Some(status.problem).filter(|p| !p.is_empty()),
+            dns_resolver: status.dns_resolver,
         }
     }
 }
@@ -6332,10 +6351,22 @@ impl HostApiService {
     }
 
     /// The caller's network as the platform reports it, or "off" when it cannot say (no
-    /// Android is running, so there is no network yet).
+    /// Android is running, so there is no network yet), with who answers its DNS queries.
     fn network_now(&self, user: &str, settings: &Settings) -> Option<types::NetworkStatus> {
         let source = self.network.as_ref()?;
-        let status = source(user, settings).unwrap_or_else(NetworkStatus::off);
+        let mut status = source(user, settings).unwrap_or_else(NetworkStatus::off);
+        if status.mode != NetworkStatus::OFF && status.dns_resolver.is_empty() {
+            let answered = self
+                .androids
+                .android(user)
+                .ok()
+                .and_then(|android| android.dns_answered_by_host());
+            status.dns_resolver = match answered {
+                Some(true) => NetworkStatus::DNS_HOST.into(),
+                Some(false) => NetworkStatus::DNS_NETWORK.into(),
+                None => String::new(),
+            };
+        }
         Some(status.to_wire())
     }
 

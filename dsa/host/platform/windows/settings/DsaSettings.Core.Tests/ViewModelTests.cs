@@ -34,6 +34,7 @@ internal sealed class KeyText : ITextSource
 {
     public string Get(string key) => key switch
     {
+        "Network_DnsFallback" => "dns fallback: {0}",
         "Memory_ReportAge" => "{0} s",
         "Memory_ProcessDetail" => "pid {0}, {1} private",
         "Memory_ZramDetail" => "{0} stored",

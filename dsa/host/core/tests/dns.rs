@@ -457,3 +457,118 @@ fn fr28_the_dns_port_answers_each_query_with_its_id() {
     stop.store(true, Ordering::SeqCst);
     host.join().unwrap();
 }
+
+/// A guest that only records the secret each boot was given.
+#[derive(Clone, Default)]
+struct SecretLauncher(Arc<Mutex<Option<dsa_protocol::auth::BootSecret>>>);
+
+impl SecretLauncher {
+    fn secret(&self) -> dsa_protocol::auth::BootSecret {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(secret) = self.0.lock().unwrap().clone() {
+                return secret;
+            }
+            assert!(Instant::now() < deadline, "the guest never started");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+}
+
+impl dsa_host_core::session::GuestLauncher for SecretLauncher {
+    fn start(&mut self, secret: &dsa_protocol::auth::BootSecret) -> Result<(), String> {
+        *self.0.lock().unwrap() = Some(secret.clone());
+        Ok(())
+    }
+    fn stop(&mut self, _timeout: Duration) -> Result<(), String> {
+        *self.0.lock().unwrap() = None;
+        Ok(())
+    }
+}
+
+fn wait_until(what: &str, done: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !done() {
+        assert!(Instant::now() < deadline, "{what} did not happen");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn fr28_the_session_says_whether_the_hosts_resolver_answers_the_guest() {
+    use dsa_host_core::handshake::ControlHandshake;
+    use dsa_host_core::session::{Session, SessionConfig, SessionState};
+    use dsa_protocol::control::Role;
+    use dsa_protocol::handshake::{guest_connect, local_hello};
+
+    let wait = Duration::from_secs(10);
+    let launcher = SecretLauncher::default();
+    let (listener, mut connector) = memory::pair();
+    let config = SessionConfig {
+        connect_timeout: wait,
+        stop_timeout: wait,
+        ..SessionConfig::default()
+    };
+    let session = Session::new(
+        launcher.clone(),
+        Box::new(listener),
+        ControlHandshake::new("dsa-host dns test", wait),
+        config,
+    );
+    // A host that does not serve the DNS port cannot say who answers.
+    assert_eq!(session.dns_answered_by_host(), None);
+    let (dns_listener, mut dns_connector) = memory::pair();
+    session.serve_dns_port(
+        Box::new(dns_listener),
+        Arc::new(FakeResolver::default()),
+        "dsa-host dns test",
+    );
+    // Android is not running.
+    assert_eq!(session.dns_answered_by_host(), None);
+
+    session.start();
+    let secret = launcher.secret();
+    let mut agent = connector.connect(wait).expect("the agent connects");
+    guest_connect(
+        agent.as_mut(),
+        &local_hello(Role::Guest, "dsa-guestd dns test"),
+        &secret,
+        wait,
+    )
+    .expect("the host accepts the agent");
+    agent
+        .send(&dsa_protocol::encode(&Envelope {
+            body: Some(Body::GuestBoot(control::GuestBoot {
+                boot_completed: true,
+                agent_connected: true,
+            })),
+        }))
+        .expect("the agent sends");
+    assert!(session.wait_for(SessionState::Active, wait));
+    // Android runs but its control daemon has not reached the DNS port: it asks its network's
+    // DNS servers.
+    assert_eq!(session.dns_answered_by_host(), Some(false));
+
+    let mut daemon = dns_connector.connect(wait).expect("the daemon connects");
+    guest_connect(
+        daemon.as_mut(),
+        &local_hello(Role::Guest, "dsa-channeld dns test"),
+        &secret,
+        wait,
+    )
+    .expect("the host accepts the daemon");
+    wait_until("the host counting the DNS connection", || {
+        session.dns_answered_by_host() == Some(true)
+    });
+
+    // The connection ends (the host is away for the guest): its names go to the network again.
+    daemon.close();
+    drop(daemon);
+    wait_until("the host noticing the DNS connection ended", || {
+        session.dns_answered_by_host() == Some(false)
+    });
+    drop(agent);
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, wait));
+    assert_eq!(session.dns_answered_by_host(), None);
+}

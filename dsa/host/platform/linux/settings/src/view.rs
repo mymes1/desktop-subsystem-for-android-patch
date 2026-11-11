@@ -7,9 +7,9 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Backup, BackupJob,
-    DpiScaling, Gapps, GappsState, GuestMemory, HostRole, ImportedCertificate, KeyProtection,
-    KeyProtectionShown, Memory, MemoryShare, Network, NetworkMode, Outcome, ProgramUpdateAnswer,
-    ProgramUpdatePhase, State, Status, ALL_FOLDERS,
+    DnsResolver, DpiScaling, Gapps, GappsState, GuestMemory, HostRole, ImportedCertificate,
+    KeyProtection, KeyProtectionShown, Memory, MemoryShare, Network, NetworkMode, Outcome,
+    ProgramUpdateAnswer, ProgramUpdatePhase, State, Status, ALL_FOLDERS,
 };
 
 /// The dsa commands the Advanced page's command line group shows, each on its own row with a
@@ -1007,6 +1007,26 @@ pub fn network_mode_text(network: Option<&Network>) -> String {
         Some(NetworkMode::Off) => "Android is not running, so it has no network yet.",
         _ => "The DSA service does not report the network. Update DSA to see it.",
     })
+}
+
+/// Who answers Android's DNS queries: this computer's resolver, or, when that does not answer,
+/// the network's DNS servers. A service that does not say shows the servers.
+pub fn network_dns_text(network: Option<&Network>) -> String {
+    let servers = list_or_none(
+        network
+            .map(|n| n.dns_servers.as_slice())
+            .unwrap_or_default(),
+    );
+    match network.map(|n| n.dns_resolver) {
+        Some(DnsResolver::Host) => tr(
+            "Answered by this computer's resolver, so its hosts file, VPN and DNS filters apply to Android apps.",
+        ),
+        Some(DnsResolver::Network) => trf(
+            "This computer's resolver does not answer, so Android asks the network's DNS servers: {0}",
+            &[&servers],
+        ),
+        _ => servers,
+    }
 }
 
 /// A list of addresses, or "None".

@@ -120,9 +120,15 @@ public final class DsaService {
         default: mode = .unknown
         }
         let problem = json.string("problem")
+        let dnsResolver: DnsResolver
+        switch json.optionalString("dns_resolver") {
+        case "host": dnsResolver = .host
+        case "network": dnsResolver = .network
+        default: dnsResolver = .unknown
+        }
         return NetworkInfo(
             mode: mode, addresses: json.strings("addresses"), dnsServers: json.strings("dns_servers"),
-            gateway: json.string("gateway"), problem: problem.isEmpty ? nil : problem)
+            gateway: json.string("gateway"), problem: problem.isEmpty ? nil : problem, dnsResolver: dnsResolver)
     }
 
     public func settings() async throws -> SettingsInfo { DsaService.readSettings(try await runJson(["settings"])) }

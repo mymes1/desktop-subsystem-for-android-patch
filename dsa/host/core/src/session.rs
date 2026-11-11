@@ -109,7 +109,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -750,6 +750,11 @@ struct Shared {
     boot_secret: Mutex<Option<BootSecret>>,
     /// Set when the session ends, so the log port's threads end with it.
     log_port_stop: Arc<AtomicBool>,
+    /// The guest's connections on the DNS port that passed the handshake and are still open:
+    /// while there is one, the host's resolver answers the guest's names.
+    dns_connections: AtomicUsize,
+    /// Whether the platform serves the DNS port, so the guest's names can be answered here.
+    dns_port_served: AtomicBool,
     /// Which of the user's host folders their Android shows, which each agent that connects
     /// is told.
     file_sharing: SharingNow,
@@ -1405,6 +1410,8 @@ impl Session {
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
             log_port_stop: Arc::new(AtomicBool::new(false)),
+            dns_connections: AtomicUsize::new(0),
+            dns_port_served: AtomicBool::new(false),
             file_sharing: Arc::new(Mutex::new(Sharing::default())),
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),

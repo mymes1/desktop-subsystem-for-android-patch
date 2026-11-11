@@ -1,5 +1,7 @@
 using System.Globalization;
 
+using System.Globalization;
+
 namespace Dsa.Settings.Core;
 
 /// <summary>The Network page: how Android reaches the network now, the advanced networking
@@ -33,7 +35,15 @@ public sealed partial class SettingsViewModel
 
     public string NetworkAddresses => JoinOrNone(Network?.Addresses);
 
-    public string NetworkDns => JoinOrNone(Network?.DnsServers);
+    /// <summary>Who answers Android's DNS queries: this PC's resolver, or, when that does not
+    /// answer, the network's DNS servers. A service that does not say shows the servers.</summary>
+    public string NetworkDns => Network?.DnsResolver switch
+    {
+        DnsResolver.Host => _text.Get("Network_DnsHost"),
+        DnsResolver.Network => string.Format(
+            CultureInfo.CurrentCulture, _text.Get("Network_DnsFallback"), JoinOrNone(Network?.DnsServers)),
+        _ => JoinOrNone(Network?.DnsServers),
+    };
 
     public string NetworkGateway => Network?.Gateway is { Length: > 0 } gateway ? gateway : _text.Get("Network_None");
 

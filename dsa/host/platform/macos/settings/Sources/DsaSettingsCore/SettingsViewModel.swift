@@ -289,7 +289,15 @@ public final class SettingsViewModel: ObservableObject {
     }
 
     public var networkAddresses: String { joinOrNone(network?.addresses) }
-    public var networkDns: String { joinOrNone(network?.dnsServers) }
+    /// Who answers Android's DNS queries: this Mac's resolver, or, when that does not answer,
+    /// the network's DNS servers. A service that does not say shows the servers.
+    public var networkDns: String {
+        switch network?.dnsResolver ?? .unknown {
+        case .host: return text.get("Network_DnsHost")
+        case .network: return text.format("Network_DnsFallback", joinOrNone(network?.dnsServers))
+        case .unknown: return joinOrNone(network?.dnsServers)
+        }
+    }
     public var networkGateway: String {
         let gateway = network?.gateway ?? ""
         return gateway.isEmpty ? text.get("Network_None") : gateway

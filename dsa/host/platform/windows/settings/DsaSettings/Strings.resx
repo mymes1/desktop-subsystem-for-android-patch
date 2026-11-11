@@ -1654,11 +1654,17 @@
   <data name="Network_None" xml:space="preserve">
     <value>None</value>
   </data>
+  <data name="Network_DnsHost" xml:space="preserve">
+    <value>Answered by this PC's resolver, so its hosts file, VPN and DNS filters apply to Android apps.</value>
+  </data>
+  <data name="Network_DnsFallback" xml:space="preserve">
+    <value>This PC's resolver does not answer, so Android asks the network's DNS servers: {0}</value>
+  </data>
   <data name="NetworkAddressLabel.Text" xml:space="preserve">
     <value>Address</value>
   </data>
   <data name="NetworkDnsLabel.Text" xml:space="preserve">
-    <value>DNS servers</value>
+    <value>DNS</value>
   </data>
   <data name="NetworkGatewayLabel.Text" xml:space="preserve">
     <value>Gateway</value>

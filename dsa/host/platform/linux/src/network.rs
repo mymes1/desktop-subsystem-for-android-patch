@@ -136,6 +136,9 @@ pub fn host_status(mode: &str, problem: Option<String>) -> NetworkStatus {
         dns_servers: nameservers(&resolv),
         gateway,
         problem,
+        // The service fills it from the session, which knows whether the guest reaches the
+        // DNS port.
+        dns_resolver: String::new(),
     }
 }
 

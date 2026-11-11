@@ -9,7 +9,7 @@ use std::time::Duration;
 use dsa_protocol::control;
 use dsa_transport::{Listener, TransportError};
 
-use super::{Session, Shared};
+use super::{Session, SessionState, Shared};
 use crate::dns::{self, DnsService, HostResolver};
 
 impl Session {
@@ -30,9 +30,47 @@ impl Session {
         let spawned = thread::Builder::new()
             .name("dsa-dns".into())
             .spawn(move || accept_dns(listener, shared, service, hello));
-        if let Err(error) = spawned {
-            eprintln!("dns: the DNS port cannot be served, so the guest asks its network's DNS servers: {error}");
+        match spawned {
+            Ok(_) => self.shared.dns_port_served.store(true, Ordering::Relaxed),
+            Err(error) => eprintln!(
+                "dns: the DNS port cannot be served, so the guest asks its network's DNS servers: {error}"
+            ),
         }
+    }
+
+    /// Whether this host's resolver answers the guest's DNS queries now: `Some(true)` while the
+    /// guest's control daemon holds a connection on the DNS port, `Some(false)` while Android
+    /// runs without one (it then asks its network's DNS servers itself), and `None` while
+    /// Android is not running or still booting, or when this host does not serve the DNS port.
+    pub fn dns_answered_by_host(&self) -> Option<bool> {
+        if !self.shared.dns_port_served.load(Ordering::Relaxed) {
+            return None;
+        }
+        match self.state() {
+            SessionState::Active
+            | SessionState::Dozing
+            | SessionState::Frozen
+            | SessionState::Stalled => {
+                Some(self.shared.dns_connections.load(Ordering::Relaxed) > 0)
+            }
+            SessionState::Stopped | SessionState::Starting | SessionState::Stopping => None,
+        }
+    }
+}
+
+/// Counts one open DNS connection for as long as it lives, a failed one included.
+struct OpenConnection<'a>(&'a Shared);
+
+impl<'a> OpenConnection<'a> {
+    fn count(shared: &'a Shared) -> OpenConnection<'a> {
+        shared.dns_connections.fetch_add(1, Ordering::Relaxed);
+        OpenConnection(shared)
+    }
+}
+
+impl Drop for OpenConnection<'_> {
+    fn drop(&mut self) {
+        self.0.dns_connections.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -81,6 +119,7 @@ fn accept_dns(
                         return;
                     }
                     eprintln!("dns: the guest's DNS queries are answered by this host's resolver");
+                    let _open = OpenConnection::count(&shared);
                     let ended =
                         dns::serve_connection(connection.as_mut(), &service, &shared.log_port_stop);
                     eprintln!("dns: the guest's DNS connection ended ({ended})");
