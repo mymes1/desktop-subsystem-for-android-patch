@@ -9,10 +9,11 @@
 //! `WM_SYSCOMMAND` Windows' menu would have posted, so Move and Size run Windows' own move and
 //! size loops and the Android items go where they always went.
 //!
-//! A single click on the icon opens the menu, as in Windows 11's own apps. A double click on
-//! the icon does nothing: in Windows it closes the window, but an Android app should never
-//! close because its icon was clicked twice, and the second click of a quick pair would
-//! otherwise land on a menu that has just closed.
+//! A single click on the icon opens the menu, as in Windows 11's own apps, and sends nothing
+//! to Android. A double click on the icon closes the window, as it does in every Win32 app:
+//! the first click has opened the menu, which takes the second press, so a second press on
+//! the icon within the double click time closes the window as Windows' own menu does
+//! ([`second_click_closes`]).
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -49,6 +50,22 @@ pub enum MenuMessage {
     Open(Opening),
     /// Takes the message and does nothing, so Windows does not act on it either.
     Swallow,
+    /// Closes the window (`SC_CLOSE`), as a double click on a window's icon does.
+    Close,
+}
+
+/// Whether the press that closed the menu a click on the icon opened is the second click of
+/// a double click on the icon, which closes the window: a press of the left button on the
+/// icon's cell (`on_icon`, `left_down`) at `press_ms` within `double_click_ms` of the press
+/// at `opened_ms` that opened the menu, both on the message clock.
+pub fn second_click_closes(
+    opened_ms: u32,
+    press_ms: u32,
+    double_click_ms: u32,
+    on_icon: bool,
+    left_down: bool,
+) -> bool {
+    on_icon && left_down && press_ms.wrapping_sub(opened_ms) <= double_click_ms
 }
 
 fn point_of(lparam: LPARAM) -> (i32, i32) {
@@ -61,8 +78,8 @@ fn point_of(lparam: LPARAM) -> (i32, i32) {
 /// What a message means for the window menu; `None` leaves it to the window's other handlers.
 /// `hit` is the window's hit test code at a point on the screen, for a right click.
 ///
-/// A press on the icon (`HTSYSMENU`) opens the menu; its double click and its release are
-/// taken, so Windows never closes the window from its icon. A right click on the title bar,
+/// A press on the icon (`HTSYSMENU`) opens the menu, and its release is taken; a double click
+/// on it closes the window, as Windows' default does. A right click on the title bar,
 /// the icon's cell or a caption button, Alt+Space, the system menu Windows would open itself
 /// (`SC_MOUSEMENU`), and the taskbar's Shift+right click open the menu. A context menu asked
 /// for from the keyboard (Shift+F10, the menu key) is the app's.
@@ -74,9 +91,8 @@ pub fn menu_message(
 ) -> Option<MenuMessage> {
     match message {
         WM_NCLBUTTONDOWN if wparam as u32 == HTSYSMENU => Some(MenuMessage::Open(Opening::Icon)),
-        WM_NCLBUTTONDBLCLK | WM_NCLBUTTONUP if wparam as u32 == HTSYSMENU => {
-            Some(MenuMessage::Swallow)
-        }
+        WM_NCLBUTTONDBLCLK if wparam as u32 == HTSYSMENU => Some(MenuMessage::Close),
+        WM_NCLBUTTONUP if wparam as u32 == HTSYSMENU => Some(MenuMessage::Swallow),
         WM_CONTEXTMENU => {
             if lparam == -1 {
                 return None;
@@ -281,19 +297,29 @@ unsafe fn anchor_point(hwnd: HWND, opening: Opening, cell_bottom_left: (i32, i32
 }
 
 /// Shows `hwnd`'s window menu for `opening` and posts the `WM_SYSCOMMAND` of the item chosen.
-/// The icon's cell ends at `cell_bottom_left` (client pixels); `resizable` says whether the
-/// user may resize the window. A window without a system menu (one that fills its monitor)
-/// shows none, as Windows shows none for it. Runs the menu's messages until it closes.
+/// `cell` is the icon's cell (left, top, width, height, client pixels), which the menu opens
+/// under; `resizable` says whether the user may resize the window. A menu a click on the icon
+/// opened and a second press on the icon closed within the double click time closes the
+/// window ([`second_click_closes`]). A window without a system menu (one that fills its
+/// monitor) shows none, as Windows shows none for it. Runs the menu's messages until it closes.
 ///
 /// # Safety
 ///
 /// `hwnd` is a live window of the calling thread, and no state of its window procedure is
 /// borrowed while the menu runs.
-pub unsafe fn show(hwnd: HWND, opening: Opening, cell_bottom_left: (i32, i32), resizable: bool) {
+pub unsafe fn show(hwnd: HWND, opening: Opening, cell: (i32, i32, u32, u32), resizable: bool) {
     use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW, IsIconic, IsZoomed, PostMessageW, GWL_STYLE, WS_SYSMENU,
+    use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        GetDoubleClickTime, GetKeyState, VK_LBUTTON,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetMessagePos, GetMessageTime, GetWindowLongPtrW, IsIconic, IsZoomed, PostMessageW,
+        GWL_STYLE, WS_SYSMENU,
+    };
+    let (cell_left, cell_top, cell_width, cell_height) = cell;
+    let cell_bottom_left = (cell_left, cell_top + cell_height as i32);
+    let opened_ms = GetMessageTime() as u32;
     let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
     if style & WS_SYSMENU == 0 {
         return;
@@ -315,7 +341,33 @@ pub unsafe fn show(hwnd: HWND, opening: Opening, cell_bottom_left: (i32, i32), r
         name: text.name,
         keyboard: opening == Opening::Keyboard,
     });
-    if let Some(command) = chosen {
+    let command = match chosen {
+        Some(command) => Some(command),
+        None if opening == Opening::Icon => {
+            // The press that closed the menu is the last message its loop took.
+            let mut press = POINT {
+                x: (GetMessagePos() & 0xffff) as u16 as i16 as i32,
+                y: ((GetMessagePos() >> 16) & 0xffff) as u16 as i16 as i32,
+            };
+            ScreenToClient(hwnd, &mut press);
+            let on_icon = press.x >= cell_left
+                && press.x < cell_left + cell_width as i32
+                && press.y >= cell_top
+                && press.y < cell_top + cell_height as i32;
+            let left_down = GetKeyState(i32::from(VK_LBUTTON)) < 0;
+            let press_ms = GetMessageTime() as u32;
+            second_click_closes(
+                opened_ms,
+                press_ms,
+                GetDoubleClickTime(),
+                on_icon,
+                left_down,
+            )
+            .then_some(SC_CLOSE)
+        }
+        None => None,
+    };
+    if let Some(command) = command {
         // Posted, as Windows' menu posts it, so the window finishes this message first.
         PostMessageW(hwnd, WM_SYSCOMMAND, command as WPARAM, 0);
     }
@@ -337,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_a_click_on_the_icon_opens_the_window_menu_and_a_double_click_never_closes() {
+    fn fr22_a_click_on_the_icon_opens_the_window_menu_and_a_double_click_closes() {
         let down = menu_message(
             WM_NCLBUTTONDOWN,
             HTSYSMENU as WPARAM,
@@ -345,11 +397,33 @@ mod tests {
             &caption_everywhere,
         );
         assert_eq!(down, Some(MenuMessage::Open(Opening::Icon)));
-        // Windows closes a window on a double click of its icon; this window takes it.
-        for message in [WM_NCLBUTTONDBLCLK, WM_NCLBUTTONUP] {
-            let taken = menu_message(message, HTSYSMENU as WPARAM, 0, &caption_everywhere);
-            assert_eq!(taken, Some(MenuMessage::Swallow));
-        }
+        // Its release is taken, so a single click does nothing more.
+        let up = menu_message(WM_NCLBUTTONUP, HTSYSMENU as WPARAM, 0, &caption_everywhere);
+        assert_eq!(up, Some(MenuMessage::Swallow));
+        // A double click on the icon closes the window, as in every Win32 app.
+        let double = menu_message(
+            WM_NCLBUTTONDBLCLK,
+            HTSYSMENU as WPARAM,
+            0,
+            &caption_everywhere,
+        );
+        assert_eq!(double, Some(MenuMessage::Close));
+        // The first click opened the menu, which takes the second press: a second press on the
+        // icon within the double click time closes the window too, and nothing else does.
+        assert!(second_click_closes(1000, 1300, 500, true, true));
+        assert!(second_click_closes(u32::MAX - 100, 200, 500, true, true));
+        assert!(
+            !second_click_closes(1000, 1600, 500, true, true),
+            "too late"
+        );
+        assert!(
+            !second_click_closes(1000, 1300, 500, false, true),
+            "a press beside the icon only closes the menu"
+        );
+        assert!(
+            !second_click_closes(1000, 1300, 500, true, false),
+            "Escape over the icon only closes the menu"
+        );
         // A press elsewhere in the band (the drag area, the back arrow) is not the menu's.
         for code in [HTCAPTION, HTHELP] {
             let other = menu_message(WM_NCLBUTTONDOWN, code as WPARAM, 0, &caption_everywhere);

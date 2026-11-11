@@ -102,7 +102,7 @@ use super::pointer::PointerWindow;
 use super::system_menu::{self, SystemMenuItem};
 use super::tsf;
 use super::window_menu::{self, MenuMessage};
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SendMessageW};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SendMessageW, SC_CLOSE};
 
 /// A task window that is open, as tests and logs see it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -634,8 +634,13 @@ unsafe extern "system" fn task_window_proc(
                 SendMessageW(hwnd, WM_NCHITTEST, 0, at) as u32
             };
             if let Some(what) = window_menu::menu_message(message, wparam, lparam, &hit) {
-                if let MenuMessage::Open(opening) = what {
-                    open_window_menu(hwnd, data, opening);
+                match what {
+                    MenuMessage::Open(opening) => open_window_menu(hwnd, data, opening),
+                    // Posted, as Windows posts it for a double click on a window's icon.
+                    MenuMessage::Close => {
+                        PostMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE as WPARAM, 0);
+                    }
+                    MenuMessage::Swallow => {}
                 }
                 return 0;
             }
@@ -1014,11 +1019,7 @@ unsafe extern "system" fn task_window_proc(
 /// follow whichever window has the foreground then.
 unsafe fn open_window_menu(hwnd: HWND, data: &WindowData, opening: window_menu::Opening) {
     let layout = data.caption.layout(hwnd);
-    let cell = layout
-        .icon_cell()
-        .map_or((0, layout.height as i32), |(left, _, _, height)| {
-            (left, height as i32)
-        });
+    let cell = layout.icon_cell().unwrap_or((0, 0, 0, layout.height));
     data.caption.set_menu_open(true);
     window_menu::show(hwnd, opening, cell, data.resizable.get());
     data.caption.set_menu_open(false);

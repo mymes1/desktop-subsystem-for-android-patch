@@ -38,7 +38,7 @@
 //! with an ellipsis before the buttons), both in the glyphs' color and fainter while the
 //! window is inactive. The icon is `HTSYSMENU`, the code of a standard caption icon; a click
 //! on it opens the window menu, the Windows 11 menu that replaces the classic system menu, and
-//! a double click does nothing rather than close the app ([`super::window_menu`]).
+//! a double click closes the window, as Windows' own icon does ([`super::window_menu`]).
 //!
 //! An icon drawn without its plate can vanish into a band of its own colour, as a white logo
 //! on a white title bar. The window measures the logo's contrast against the band each time
