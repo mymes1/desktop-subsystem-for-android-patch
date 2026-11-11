@@ -24,6 +24,7 @@ check media 18 media-check-logs "Play sound and run codecs in an app on the boot
 check media 23 root-check-logs "Approve and refuse root for an app on the booted image"
 check overlays 18 overlay-check-logs "Lay the ARM translator and Google Play over the booted system"
 check overlays 25 idle-reclaim-measurement "Measure the idle reclaim with Google Play on the booted image"
+check overlays 25 memory-measurement "Measure the memory with Google Play and one app window on the booted image"
 check graphics 28 graphics-check-results "Run the Vulkan CTS subset and the graphics test apps on the booted image"
 grep -Fq 'timeout-minutes: ${{ matrix.timeout }}' <<<"$boot"
 grep -Fq 'fail-fast: false' <<<"$boot"
