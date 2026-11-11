@@ -18,6 +18,7 @@
 //! the platform only carries it out.
 
 pub mod caption;
+pub mod caption_icon;
 pub mod early_frames;
 pub mod frame_buffers;
 pub mod frame_follow;

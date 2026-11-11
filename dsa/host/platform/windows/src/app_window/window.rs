@@ -36,7 +36,8 @@
 //! still takes the sizes Android gives it.
 //!
 //! Each window's system menu carries the Android window menu after Windows' own items
-//! ([`super::system_menu`]). Its Screenshot is taken here ([`super::screenshot`]); every other
+//! ([`super::system_menu`]), and is shown as a Windows 11 menu rather than the classic one
+//! ([`super::window_menu`]). Its Screenshot is taken here ([`super::screenshot`]); every other
 //! item is reported to the window manager, which carries it out.
 
 use std::cell::{Cell, RefCell};
@@ -100,6 +101,8 @@ use super::keys::KeyWindow;
 use super::pointer::PointerWindow;
 use super::system_menu::{self, SystemMenuItem};
 use super::tsf;
+use super::window_menu::{self, MenuMessage};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SendMessageW, SC_CLOSE};
 
 /// A task window that is open, as tests and logs see it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -625,6 +628,22 @@ unsafe extern "system" fn task_window_proc(
         // fills its monitor has none.
         let presenter = data.presenter.borrow().clone();
         if data.shown_mode.get() != WindowMode::Fullscreen {
+            // The window menu: a click on the icon, a right click on the title bar, Alt+Space.
+            let hit = |x: i32, y: i32| {
+                let at = ((y as u16 as LPARAM) << 16) | (x as u16 as LPARAM);
+                SendMessageW(hwnd, WM_NCHITTEST, 0, at) as u32
+            };
+            if let Some(what) = window_menu::menu_message(message, wparam, lparam, &hit) {
+                match what {
+                    MenuMessage::Open(opening) => open_window_menu(hwnd, data, opening),
+                    // Posted, as Windows posts it for a double click on a window's icon.
+                    MenuMessage::Close => {
+                        PostMessageW(hwnd, WM_SYSCOMMAND, SC_CLOSE as WPARAM, 0);
+                    }
+                    MenuMessage::Swallow => {}
+                }
+                return 0;
+            }
             if let Some(result) =
                 data.caption
                     .handle(hwnd, message, wparam, lparam, presenter.as_deref())
@@ -918,6 +937,13 @@ unsafe extern "system" fn task_window_proc(
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
         WM_ACTIVATE => {
+            // The window menu takes the foreground while it is open; the window stays the
+            // user's, and the app keeps its focus, as under Windows' own menu.
+            let menu_took_it = (wparam & 0xffff) as u32 == WA_INACTIVE
+                && window_data(hwnd).is_some_and(|data| data.caption.menu_open());
+            if menu_took_it {
+                return DefWindowProcW(hwnd, message, wparam, lparam);
+            }
             if let Some(data) = window_data(hwnd) {
                 if titled(data) {
                     data.caption.activated(
@@ -985,6 +1011,26 @@ unsafe extern "system" fn task_window_proc(
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
         _ => DefWindowProcW(hwnd, message, wparam, lparam),
+    }
+}
+
+/// Shows `hwnd`'s window menu for `opening` ([`window_menu::show`]), under the icon's cell
+/// for a click on the icon or Alt+Space. Once it closes, the title bar and the app's focus
+/// follow whichever window has the foreground then.
+unsafe fn open_window_menu(hwnd: HWND, data: &WindowData, opening: window_menu::Opening) {
+    let layout = data.caption.layout(hwnd);
+    let cell = layout.icon_cell().unwrap_or((0, 0, 0, layout.height));
+    data.caption.set_menu_open(true);
+    window_menu::show(hwnd, opening, cell, data.resizable.get());
+    data.caption.set_menu_open(false);
+    let active = GetForegroundWindow() == hwnd;
+    let presenter = data.presenter.borrow().clone();
+    data.caption.activated(hwnd, active, presenter.as_deref());
+    if !active {
+        (data.report)(FromHost::Focus {
+            task_id: data.task_id,
+            focused: false,
+        });
     }
 }
 

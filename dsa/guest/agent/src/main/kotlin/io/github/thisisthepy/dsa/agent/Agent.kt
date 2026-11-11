@@ -78,6 +78,7 @@ import io.github.thisisthepy.dsa.agent.settings.DeviceNameSync
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsPort
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsSync
 import io.github.thisisthepy.dsa.agent.tasks.AppInfoSource
+import io.github.thisisthepy.dsa.agent.tasks.BackStacks
 import io.github.thisisthepy.dsa.agent.tasks.InstalledAppReporter
 import io.github.thisisthepy.dsa.agent.tasks.LauncherApps
 import io.github.thisisthepy.dsa.agent.tasks.PinRequest
@@ -106,6 +107,7 @@ import io.github.thisisthepy.dsa.agent.channel.HostCalls
 import io.github.thisisthepy.dsa.agent.passkeys.HostPasskeys
 import io.github.thisisthepy.dsa.control.v1.AgentConnected
 import io.github.thisisthepy.dsa.control.v1.Envelope
+import io.github.thisisthepy.dsa.control.v1.KeyAction
 import io.github.thisisthepy.dsa.control.v1.PointerAction
 
 /**
@@ -242,6 +244,10 @@ class Agent(
     /** Where the host was last told each task is, for the input thread to read. */
     @Volatile
     private var taskBounds: Map<Int, TaskBounds> = emptyMap()
+
+    /** Whether Back in each task lands on a screen the user saw, for the title bar's back arrow. */
+    private val backStacks = BackStacks()
+    private val backClock = clock
     private val pointer = PointerInput(injector, { taskId -> taskBounds[taskId] }, log) { taskId, keyCode, down ->
         // Keys belong to the scheduler's thread.
         scheduler.post {
@@ -260,6 +266,10 @@ class Agent(
             log.warn("injecting pointer input failed", e)
         }
         inputTrace.injected(event, queuedNanos, System.nanoTime() - started)
+        // A press or a scroll is the user acting on the screen on top.
+        if (event.action == PointerAction.POINTER_ACTION_DOWN || event.action == PointerAction.POINTER_ACTION_SCROLL) {
+            backStacks.interacted(event.taskId)
+        }
         val frames = frameTrace
         if (frames != null && event.action == PointerAction.POINTER_ACTION_UP) {
             // The reporter belongs to the scheduler's thread.
@@ -811,6 +821,12 @@ class Agent(
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
+                // A key is the user acting on the screen on top; Back itself leaves it.
+                val key = envelope.keyEvent
+                // KeyEvent.KEYCODE_BACK.
+                if (key.action == KeyAction.KEY_ACTION_DOWN && key.keyCode != 4) {
+                    backStacks.interacted(key.taskId)
+                }
                 keys.handle(envelope.keyEvent)
             } catch (e: Exception) {
                 log.warn("injecting key input failed", e)
@@ -988,11 +1004,19 @@ class Agent(
      * window hears at once that its task is taking its size.
      */
     private fun refresh() {
-        val running = try {
+        val read = try {
             tasks.snapshot()
         } catch (e: Exception) {
             log.warn("reading the running tasks failed", e)
             return
+        }
+        // Every change to a task's stack is followed, connected or not, so the back arrow
+        // knows which screens below the top the user saw.
+        val now = backClock()
+        backStacks.retain(read.map { it.taskId })
+        val running = read.map { task ->
+            val stack = task.stack ?: return@map task
+            task.copy(canGoBack = backStacks.update(task.taskId, stack, now))
         }
         for (task in running) trace.boundsRead(task.taskId, task.bounds.right - task.bounds.left, task.bounds.bottom - task.bounds.top)
         // A font scale the host asked for waits while an app that would be restarted for it
