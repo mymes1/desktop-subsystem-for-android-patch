@@ -8,7 +8,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 
 | File | What it is |
 |---|---|
-| `inputs.json` | The pinned inputs: per Android version, the CI build number and the SHA-256 of its `target_files`, `otatools` and `dexpreopt_tools` |
+| `inputs.json` | The pinned inputs: per Android version, the CI build number and the SHA-256 of its `target_files`, `otatools` and `dexpreopt_tools`, and the URL and SHA-256 of `services.jar`'s ART profile at the build's own frameworks/base commit |
 | `fetch.sh` | Downloads one version's inputs for one architecture (`x86_64` by default, or `arm64`) into `.scratch/aosp-inputs/<build>-<arch>/` and checks them |
 | `make-keys.sh` | Makes a set of signing keys (CI makes a throwaway set each run) |
 | `pack-keys.sh`, `unpack-keys.sh` | Split the key set into repository secrets and put it back |
@@ -107,6 +107,19 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   again, with the filter, shared libraries and boot image the published build used.
   `check-image.py` fails an image where one of them lost a file, or has one made for another
   dex, another boot image or another filter.
+- The host window's title bar is Android's status bar. The agent gives each task status bar
+  and caption bar insets as high as the title bar, but stock Android hands a freeform window
+  only its caption bar and IME insets, so an app that pads its toolbar by its status bar inset
+  drew it under the title bar. `services.jar`'s dex is edited (`SERVICES_CODE`): the window
+  manager's `InsetsPolicy` keeps the system bars of a floating window, not only its caption
+  bar. The jar's stored dex files stay aligned, and the jar is compiled again with the
+  published build's filter, class loader context, app image and profile (`services/art-profile`
+  and `art-profile-extra` at the build's own frameworks/base commit, pinned in `inputs.json`).
+  The framework overlay below also sets Android's status bar height resources
+  (`status_bar_height`, `status_bar_height_default` and the rest) to the title bar's height at
+  each scale's density, for the apps that read those instead of their insets. `check-image.py`
+  fails an image without the edit, with `services.jar`'s dex unaligned, or with status bar
+  heights that are not the title bar's.
 - A static overlay (`/vendor/overlay/DsaFrameworkOverlay.apk`) sets the framework's tap
   timeout to 0. A view inside anything that scrolls, which includes every list row, waits that
   long before it shows that it is pressed, in case the touch becomes a scroll, so a mouse

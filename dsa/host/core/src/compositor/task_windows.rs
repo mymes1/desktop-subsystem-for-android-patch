@@ -1103,6 +1103,41 @@ mod tests {
     }
 
     #[test]
+    fn fr22_the_status_bar_inset_is_the_title_bar_in_the_tasks_own_pixels() {
+        // The title bar is Android's status bar: the task's status bar inset is the title
+        // bar's height in the task's pixels. A 200% monitor's title bar is 58 pixels.
+        let band = CaptionBand {
+            height: 58,
+            start_width: 0,
+            end_width: 0,
+        };
+        let inset = |task_id, height| {
+            vec![TaskRequest::SetCaption {
+                task_id,
+                height,
+                start_width: 0,
+                end_width: 0,
+            }]
+        };
+        // An app that takes the monitor's density (262 dpi) draws one pixel per window pixel:
+        // 58 pixels, 35.4 dp.
+        let mut windows = TaskWindows::new();
+        let mut clock = task(1, "Clock", 400, 300);
+        clock.density_dpi = 262;
+        clock.handles_density_change = true;
+        windows.apply(&TaskEvent::Updated(clock));
+        windows.window_dpi(1, 192);
+        assert_eq!(windows.scale(1), (1, 1));
+        assert_eq!(windows.window_caption(1, band), inset(1, 58));
+        // An app that keeps its density (130 dpi) is scaled by 262/130: the same band is 29 of
+        // its pixels, 35.7 dp, within one of its pixels of the title bar.
+        let (mut windows, _) = notes_at_100(false);
+        windows.window_dpi(1, 192);
+        assert_eq!(windows.scale(1), (131, 65));
+        assert_eq!(windows.window_caption(1, band), inset(1, 29));
+    }
+
+    #[test]
     fn fr6_the_cursor_of_a_tasks_editor_goes_to_its_window_unchanged() {
         let mut windows = TaskWindows::new();
         let cursor = crate::ime::ImeCursor {
