@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 use dsa_guest_channeld::cacerts::{
-    certificate_of, pem, setup, sources, subject_der, subject_hash_old, Installer, MANIFEST,
+    certificate_of, pem, setup, subject_der, subject_hash_old, Installer, MANIFEST,
 };
 use dsa_guest_channeld::router::{Delivery, Listener, Peer, Router};
 use dsa_protocol::control::envelope::Body;
@@ -222,45 +222,6 @@ fn fr28_setup_copies_androids_certificates_into_the_folders_init_binds() {
         names(&root),
         BTreeSet::from(["conscrypt".to_string()]),
         "a folder that could not be copied is not there, so init does not bind it over Android's"
-    );
-}
-
-#[test]
-fn fr28_apps_read_the_apex_certificates_from_the_system_folder_copy() {
-    // Apps read the copy under /system (the bind under /apex does not reach them), so that
-    // copy holds the APEX's certificates, which Android trusts over its older system folder.
-    let dir = scratch("sources");
-    let root = dir.join("dsa_cacerts");
-    std::fs::create_dir_all(&root).unwrap();
-    let apex = dir.join("apex-cacerts");
-    std::fs::create_dir_all(&apex).unwrap();
-    std::fs::write(apex.join("5ad8a5d6.0"), "the APEX's").unwrap();
-    let system = dir.join("system-cacerts");
-    std::fs::create_dir_all(&system).unwrap();
-    std::fs::write(system.join("0d69c7e1.0"), "the system's, older").unwrap();
-    let (apex, system) = (
-        apex.to_string_lossy().into_owned(),
-        system.to_string_lossy().into_owned(),
-    );
-    let folders = [("conscrypt", apex.as_str()), ("system", system.as_str())];
-
-    let problems = setup(&root, &sources(&folders, &apex));
-    assert!(problems.is_empty(), "{problems:?}");
-    for folder in ["conscrypt", "system"] {
-        assert_eq!(
-            names(&root.join(folder)),
-            BTreeSet::from(["5ad8a5d6.0".to_string()]),
-            "the {folder} copy holds the APEX's certificates"
-        );
-    }
-
-    // A build whose APEX holds no certificates trusts its system folder, and so does the copy.
-    let empty = dir.join("empty-apex");
-    std::fs::create_dir_all(&empty).unwrap();
-    let empty = empty.to_string_lossy().into_owned();
-    assert_eq!(
-        sources(&folders, &empty),
-        vec![("conscrypt", apex.as_str()), ("system", system.as_str())]
     );
 }
 

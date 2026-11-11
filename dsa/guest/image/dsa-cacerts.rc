@@ -16,13 +16,12 @@
 # read it (sepolicy/cacerts.cil). Setup gives a folder its name only once the whole copy is in
 # it, so a copy that failed is not there and its bind fails, leaving Android's folder in use.
 #
-# init binds from the mount namespace it is in, and /apex is private to each namespace. On
-# Android 17 init's switch to the namespace the zygote starts in fails ("enter_default_mount_ns
-# ... Failed to switch to default mount namespace"), so the bind under /apex never reaches an
-# app; the one under /system does, because / is shared between the namespaces. So the image
-# starts every app's VM with system.certs.enabled=true (dalvik.vm.extra-opts in the system
-# build.prop), which makes Android read the folder under /system, and the setup fills that
-# copy with the APEX's certificates, which Android would trust otherwise.
+# On Android 17 init logs "enter_default_mount_ns ... Failed to switch to default mount
+# namespace" at post-fs-data, and binds from the namespace it stays in. The binds still reach
+# the apps: /apex is private to each mount namespace, yet adb's shell, which init starts later
+# by the same rule as the zygote, has the bind under /apex in its mount table, so the zygote's
+# namespace is the one init binds in. Apps therefore read the copy under /apex as Android
+# chooses, and the VM needs no option to read the folder under /system instead.
 on post-fs-data
     mkdir /dev/dsa_cacerts 0755 system system
     exec_start dsa_cacerts_setup

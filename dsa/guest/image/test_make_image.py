@@ -7367,18 +7367,14 @@ class HostCertificatesImageTests(KeyMintKeyImageTests):
             self.assertIn(make_image.CACERTS_CONTEXT,
                           archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
 
-    def test_fr28_apps_read_the_bound_certificate_folder_under_system(self):
-        # init's bind under /apex stays in init's own mount namespace, so every app's VM is
-        # told to read the folder under /system, whose bind reaches the zygote's namespace.
-        system = make_image.edit_props("ro.build.type=user\n").splitlines()
-        self.assertIn(make_image.CACERTS_PROP_LINE, system)
-        self.assertEqual(make_image.CACERTS_PROP_LINE,
-                         "dalvik.vm.extra-opts=-Dsystem.certs.enabled=true")
-        vendor = make_image.edit_props("dalvik.vm.extra-opts=-Xfoo\n", vendor=True).splitlines()
-        self.assertFalse([line for line in vendor if line.startswith("dalvik.vm.extra-opts=")],
-                         "only the system build.prop sets the VM's extra options")
-        self.assertIn("    mount none /dev/dsa_cacerts/system /system/etc/security/cacerts bind",
+    def test_fr28_apps_read_the_certificate_folder_android_chooses(self):
+        # The bind under /apex reaches the zygote's mount namespace, so apps read the copy there
+        # as Android chooses, and no VM is told to read the folder under /system instead.
+        self.assertIn("    mount none /dev/dsa_cacerts/conscrypt /apex/com.android.conscrypt/cacerts bind",
                       make_image.CACERTS_SCRIPT)
+        for vendor in (False, True):
+            props = make_image.edit_props("ro.build.type=user\n", vendor=vendor)
+            self.assertNotIn("system.certs.enabled", props)
 
     def test_fr28_only_the_daemon_writes_androids_system_certificates(self):
         rules = re.findall(r"\(allow\s+(\S+)\s+dsa_cacerts_file\s+\(\s*file\s+\(([^)]*)\)", self.CACERTS_POLICY)
@@ -7399,11 +7395,9 @@ class HostCertificatesImageTests(KeyMintKeyImageTests):
         files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
             b"\n(allow untrusted_app dsa_cacerts_file (file (write open)))\n")
         files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
-        files["SYSTEM/build.prop"] = b"ro.build.type=user\n"
         problems = make_image.cacerts_problems(list(files), files.__getitem__)
         expected = [
             "dsa-cacerts.rc is missing",
-            "SYSTEM/build.prop lacks",
             "vendor_file_contexts lacks",
             "lets untrusted_app write Android's system certificates",
         ]
