@@ -108,6 +108,14 @@ class AndroidKernelConfigTests(unittest.TestCase):
                 new_left -= 1
         self.assertEqual((old_left, new_left), (0, 0), current)
 
+    def test_nfr1_zram_has_zstd_as_a_second_compressor_for_cold_pages(self):
+        # The idle reclaim compresses what stays in zram again with zstd; without
+        # multi-compression the kernel refuses the second compressor and keeps LZ4 alone.
+        config = CONFIG.read_text()
+        for option in ["CONFIG_ZRAM_BACKEND_LZ4=y", "CONFIG_ZRAM_BACKEND_ZSTD=y",
+                       "CONFIG_ZRAM_DEF_COMP_LZ4=y", "CONFIG_ZRAM_MULTI_COMP=y"]:
+            self.assertIn(option, config)
+
     def test_nfr1_reclaim_ages_pages_with_the_multi_generational_lru(self):
         # The guest's gradual trim reclaims a bounded amount of the coldest cache; without
         # MGLRU it cannot tell cold cache from the visible app's working set as well.

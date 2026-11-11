@@ -2431,6 +2431,31 @@ class GuestMemoryTests(unittest.TestCase):
             for directory in make_image.FSTAB_DIRS:
                 self.assertIn(b"zramsize=50%", archive.read(directory + "fstab.dsa"))
 
+    def test_nfr1_the_idle_reclaim_compresses_what_stays_in_zram_again_with_zstd(self):
+        # LZ4 for every swap, zstd for what stays cold: zstd must be named before swapon_all
+        # sizes the device, and the reclaim compresses again only after it swapped, in a
+        # bounded step, and compacts zram before the caches go.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
+            memory_rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
+            name = 'write /sys/devices/virtual/block/zram0/recomp_algorithm "algo=zstd priority=1"'
+            self.assertIn(name, memory_rc)
+            self.assertLess(memory_rc.index(name), memory_rc.index("swapon_all"))
+            rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
+            start = rc.index("on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1")
+            trigger = rc[start:rc.index("on property:vendor.dsa.memory.trim=1")]
+            idle = trigger.index("write /sys/devices/virtual/block/zram0/idle all")
+            again = trigger.index('write /sys/devices/virtual/block/zram0/recompress "type=idle max_pages=16384"')
+            compact = trigger.index("write /sys/devices/virtual/block/zram0/compact 1")
+            self.assertLess(trigger.rindex("cgroup/memory.reclaim"), idle)
+            self.assertLess(idle, again)
+            self.assertLess(again, compact)
+            self.assertLess(compact, trigger.index("drop_caches"))
+            # The working set trim, which runs while apps are in use, leaves zram alone.
+            trim = rc[rc.index("on property:vendor.dsa.memory.trim=1"):].split("\n\n")[0]
+            self.assertNotIn("zram0", trim)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow vendor_init sysfs_zram (file (write open getattr)))", policy)
+
     def test_nfr1_free_memory_is_compacted_sooner_so_page_reporting_hands_it_back(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
