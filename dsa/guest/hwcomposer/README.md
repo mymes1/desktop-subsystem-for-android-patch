@@ -28,6 +28,10 @@ nothing else.
    compose has finished, the hwcomposer makes the ColorBuffer the task display's current
    one (`rcSetDisplayColorBuffer`), which is when the host copies it into the window. Two
    ColorBuffers per task alternate, so the host can show one while the next is composed.
+   A task that has had no layer for 2 s (its window minimized, its app in the background)
+   lets go of both, since its window shows its own copy of the last frame; the next frame
+   makes them again. The hwcomposer asks SurfaceFlinger for a frame when they are due, as
+   nothing else changes on the display then.
 
 `presentDisplay` does not wait for the host. It hands the frame to a thread of its own,
 which composes and posts it, and waits only until the frame before has gone out. That is

@@ -138,6 +138,12 @@ bool leavesLastFrame(bool layerMissing, bool hasFrame);
 // with an earlier frame keeps that one, which its window then closes with; a first frame goes.
 bool leavesLastFrameUndrawn(const std::vector<LayerFill>& layers, bool hasFrame);
 
+// Whether a task that has had no layer since `withoutLayersSinceMs` (steady clock; 0 while it
+// has one) lets go of its host ColorBuffers at `nowMs`: once that has lasted `delayMs`. A
+// minimized window, or one whose app is in the background, has no layer, and its window shows
+// its own copy of the last frame.
+bool releaseDue(int64_t withoutLayersSinceMs, int64_t nowMs, int64_t delayMs);
+
 // Whether a task's frame goes to the host, after the task's size changed.
 //
 // When a task's bounds take a new size, its app has not redrawn yet: its surface keeps the

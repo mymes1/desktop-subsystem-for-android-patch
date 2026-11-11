@@ -486,11 +486,18 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
         // The next frame names the buffers copied up for it among its own.
         mUploadedAhead.clear();
 
+        const std::optional<int64_t> releaseAt = releaseTasksWithoutLayersLocked(layout, now);
+
         if (!mHost.connected()) {
             mDisconnected = true;
             mReconnectWake.notify_all();
         }
         refreshAt = mResizeGate.nextDeadline();
+        if (releaseAt && (!refreshAt || *releaseAt < *refreshAt)) {
+            // SurfaceFlinger presents nothing more for a minimized window, so a frame is asked
+            // for when its buffers are due to go.
+            refreshAt = releaseAt;
+        }
     }
     if (refreshAt) {
         // SurfaceFlinger presents only when something changes; a held task whose app never
@@ -500,6 +507,45 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
         mReconnectWake.notify_all();
     }
     send(outbox);
+}
+
+std::optional<int64_t> TaskComposer::releaseTasksWithoutLayersLocked(const Layout& layout,
+                                                                     int64_t now) {
+    std::set<int32_t> withLayers;
+    for (const TaskLayers& task : layout.tasks) {
+        withLayers.insert(task.task);
+    }
+    std::optional<int64_t> next;
+    for (auto& [task, output] : mOutputs) {
+        if (withLayers.count(task)) {
+            output.withoutLayersSinceMs = 0;
+            continue;
+        }
+        if (output.targets[0] == 0 && output.targets[1] == 0) {
+            continue;
+        }
+        if (output.withoutLayersSinceMs == 0) {
+            output.withoutLayersSinceMs = std::max<int64_t>(now, 1);
+        }
+        const int64_t due = output.withoutLayersSinceMs + kReleaseWithoutLayersMs;
+        if (!releaseDue(output.withoutLayersSinceMs, now, kReleaseWithoutLayersMs)) {
+            next = next ? std::min(*next, due) : due;
+            continue;
+        }
+        // The same as when a task's buffers change size: the host display keeps the last frame
+        // posted to it until the next post, and the window shows its own copy of it.
+        for (uint32_t& target : output.targets) {
+            mHost.closeColorBuffer(target);
+            target = 0;
+        }
+        HWC_LOGI("task %d has had no layer for %lld ms: let go of its %lldx%lld buffers", task,
+                 static_cast<long long>(now - output.withoutLayersSinceMs),
+                 static_cast<long long>(output.buffers.width),
+                 static_cast<long long>(output.buffers.height));
+        output.buffers = BufferSize{};
+        output.next = 0;
+    }
+    return next;
 }
 
 void TaskComposer::refreshNow() {

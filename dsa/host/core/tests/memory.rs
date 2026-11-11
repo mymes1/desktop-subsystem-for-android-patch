@@ -10,8 +10,9 @@ use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiClient, HostApiService, PerUser, UserAndroid, UserAndroids};
 use dsa_host_core::host_api_conformance::RunningService;
 use dsa_host_core::memory::{
-    held_line, snapshot_from_wire, snapshot_to_wire, summary_lines, GuestMemory, GuestMemoryReport,
-    HeldMemory, HostMemory, HostProcessMemory, HostRole, IdleTrim, MemorySnapshot,
+    held_line, snapshot_from_wire, snapshot_to_wire, summary_lines, GooglePlayMemory, GuestMemory,
+    GuestMemoryReport, HeldMemory, HostMemory, HostProcessMemory, HostRole, IdleTrim,
+    MemorySnapshot, ProcessMemory,
 };
 
 fn pressure(total_mb: u64, available_mb: u64, stall: f64) -> memory_pressure::GuestPressure {
@@ -598,6 +599,60 @@ fn nfr2_a_guest_that_cannot_measure_zram_says_so_instead_of_counting_full_size()
         "{text}"
     );
     assert!(text.contains("Google Play services: not running"), "{text}");
+}
+
+#[test]
+fn nfr2_a_swap_total_larger_than_the_pss_does_not_make_every_total_zero_resident() {
+    // The owner's PC on v0.2.2: the agent summed each process's count of every page it had
+    // swapped out, 781 MiB against 577 MiB of PSS, and `dsa memory` printed "0 resident" for
+    // every total while the Play Store alone had 38 MiB resident.
+    let process = |pid, name: &str, pss_kb, swap_pss_kb, google_play| ProcessMemory {
+        pid,
+        name: name.into(),
+        pss_kb,
+        swap_pss_kb,
+        google_play,
+    };
+    let guest = GuestMemory {
+        zram_original_kb: 432 * MIB,
+        zram_used_kb: 146 * MIB,
+        total_pss_kb: 577_420,
+        swap_pss_kb: 781_252,
+        top_processes: vec![
+            process(5225, "com.android.vending", 169_087, 129_844, true),
+            process(806, "system", 123_747, 96_488, false),
+            process(3712, "com.google.android.gms", 109_468, 93_932, true),
+            process(1347, "android.ext.services", 35_395, 61_008, false),
+        ],
+        google_play: Some(GooglePlayMemory {
+            processes: 2,
+            pss_kb: 278_555,
+            swap_pss_kb: 322_556,
+        }),
+        ..GuestMemory::default()
+    };
+    let apps = guest.apps();
+    assert_eq!(apps.swapped_out_kb, 129_844 + 96_488 + 93_932 + 35_395);
+    assert_eq!(apps.resident_kb, 577_420 - apps.swapped_out_kb);
+    assert!(apps.resident_kb > 0);
+    let play = guest.google_play_share().unwrap();
+    assert_eq!(play.swapped_out_kb, 129_844 + 93_932);
+    assert_eq!(play.resident_kb, 278_555 - 129_844 - 93_932);
+    // A consistent total is taken as the agent sends it.
+    let consistent = GuestMemory {
+        swap_pss_kb: 300_000,
+        ..guest.clone()
+    };
+    assert_eq!(consistent.apps().swapped_out_kb, 300_000);
+    let snapshot = MemorySnapshot {
+        guest: Some(GuestMemoryReport {
+            memory: guest,
+            age: Duration::from_secs(1),
+        }),
+        host: Vec::new(),
+    };
+    let text = snapshot.to_string();
+    assert!(!text.contains("(0 resident"), "{text}");
 }
 
 #[test]

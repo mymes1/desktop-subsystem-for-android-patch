@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Debug
 import io.github.thisisthepy.dsa.agent.memory.GooglePlayPackages
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
 import io.github.thisisthepy.dsa.agent.memory.ProcessPss
@@ -71,8 +72,7 @@ class AndroidMemorySource(context: Context) : MemorySource {
                 pid = running[i].pid,
                 name = running[i].processName,
                 pssKb = memory.totalPss.toLong(),
-                // "summary.total-swap" is the swapped-out PSS in KiB, as dumpsys meminfo shows it.
-                swapPssKb = memory.getMemoryStat("summary.total-swap")?.toLongOrNull() ?: 0,
+                swapPssKb = swappedOutPssKb(memory),
                 // A process runs the code of each package in its list; the Google apps share
                 // their processes (gms, gsf), so any one of them makes it Google Play's.
                 googlePlay = running[i].pkgList.orEmpty().any(::isGooglePlay),
@@ -83,5 +83,26 @@ class AndroidMemorySource(context: Context) : MemorySource {
     private companion object {
         /** Where init mounts the Google apps image before laying it over the system. */
         const val GAPPS_IMAGE = "/mnt/dsa-gapps"
+
+        /**
+         * The framework's own getter of the swapped-out PSS, the "TOTAL SWAP PSS" dumpsys
+         * meminfo shows. It is hidden; the agent is a platform app, so it may call it.
+         */
+        val SWAP_PSS = runCatching {
+            Debug.MemoryInfo::class.java.getMethod("getSummaryTotalSwapPss")
+        }.getOrNull()
+
+        /**
+         * The part of a process's PSS swapped out to zram, in KiB. The public
+         * "summary.total-swap" is not it: it counts every page the process has swapped out,
+         * shared ones whole, and was larger than the PSS itself for most processes. It is only
+         * the fallback, and the report never counts more than the PSS.
+         */
+        fun swappedOutPssKb(memory: Debug.MemoryInfo): Long {
+            SWAP_PSS?.let { getter ->
+                runCatching { (getter.invoke(memory) as Int).toLong() }.getOrNull()?.let { return it }
+            }
+            return memory.getMemoryStat("summary.total-swap")?.toLongOrNull() ?: 0
+        }
     }
 }

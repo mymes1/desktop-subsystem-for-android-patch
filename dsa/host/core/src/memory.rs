@@ -39,6 +39,13 @@ pub struct ProcessMemory {
     pub google_play: bool,
 }
 
+impl ProcessMemory {
+    /// Its swapped-out part, never more than its PSS, which it is part of.
+    pub fn swapped_out_kb(&self) -> u64 {
+        self.swap_pss_kb.min(self.pss_kb)
+    }
+}
+
 /// Every process of Google Play services together, as the guest counts them, in KiB.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct GooglePlayMemory {
@@ -241,19 +248,40 @@ impl GuestMemory {
     /// What the processes the report counts (the apps and the system server) cost together.
     /// A report from an agent that does not send the total swapped out counts the largest
     /// processes' instead, which is less than all.
+    ///
+    /// The agent of DSA 0.2.2 and before sent each process's count of every page it had swapped out,
+    /// shared pages whole, instead of its swapped-out PSS. That count was larger than the PSS
+    /// for most processes, so a total of it exceeded the total PSS, and every total read
+    /// "0 resident". Such a total is not used: the largest processes' parts, each no more
+    /// than its PSS, stand for it.
     pub fn apps(&self) -> MemoryShare {
-        let swapped_out = if self.swap_pss_kb > 0 {
+        let swapped_out = if self.swap_pss_kb > 0 && self.swap_pss_kb <= self.total_pss_kb {
             self.swap_pss_kb
         } else {
-            self.top_processes.iter().map(|p| p.swap_pss_kb).sum()
+            self.top_processes
+                .iter()
+                .map(ProcessMemory::swapped_out_kb)
+                .sum()
         };
         self.share(self.total_pss_kb, swapped_out)
     }
 
-    /// What Google Play services costs, `None` when none of its processes runs.
+    /// What Google Play services costs, `None` when none of its processes runs. A swapped-out
+    /// total larger than its PSS is replaced as in [`GuestMemory::apps`], by its processes
+    /// among the largest.
     pub fn google_play_share(&self) -> Option<MemoryShare> {
-        self.google_play
-            .map(|play| self.share(play.pss_kb, play.swap_pss_kb))
+        self.google_play.map(|play| {
+            let swapped_out = if play.swap_pss_kb <= play.pss_kb {
+                play.swap_pss_kb
+            } else {
+                self.top_processes
+                    .iter()
+                    .filter(|p| p.google_play)
+                    .map(ProcessMemory::swapped_out_kb)
+                    .sum()
+            };
+            self.share(play.pss_kb, swapped_out)
+        })
     }
 
     /// What one of the largest processes costs.
