@@ -172,7 +172,7 @@ impl NetworkAdapter {
 ///   KFENCE; nobody reads its reports in a user's VM.
 /// - `dhash_entries`, `ihash_entries`, `thash_entries`, `uhash_entries`: the dentry, inode,
 ///   TCP and UDP hash tables sized for a desktop guest's few files and connections, not
-///   scaled to its memory (about 8 MiB for 3 GiB, down to under 1 MiB).
+///   scaled to its memory (about 5 MiB for 2 GiB, down to under 1 MiB).
 pub const BOOT_MEMORY_CMDLINE: &str = "swiotlb=2048 kfence.sample_interval=0 \
      dhash_entries=65536 ihash_entries=32768 thash_entries=16384 uhash_entries=1024";
 
