@@ -226,6 +226,33 @@ class LockTests(unittest.TestCase):
                            ("frameworks/base", "libs/hwui")]:
                 self.assertIn(wanted, changed, android)
 
+    def test_nfr1_both_versions_free_the_client_target_when_nothing_is_composed_into_it(self):
+        # The client target is the display's size (63 MiB at 2880x2880). FramebufferSurface
+        # gives its buffers back after a while without client composition, and RenderSurface
+        # drops its textures of them, or the memory would stay held.
+        for android in ("android16", "android17"):
+            added = {}
+            for project, patch in framework_lock.patch_files(android):
+                if project != "frameworks/native":
+                    continue
+                path = None
+                for line in patch.read_text().splitlines():
+                    if line.startswith("+++ b/"):
+                        path = line[len("+++ b/"):]
+                    elif line.startswith("+") and path:
+                        added.setdefault(path, []).append(line[1:])
+            def adds(path, text):
+                return any(text in line for line in added.get(path, []))
+            fbs = "services/surfaceflinger/DisplayHardware/FramebufferSurface.cpp"
+            self.assertTrue(adds("services/surfaceflinger/CompositionEngine/include/compositionengine/"
+                                 "DisplaySurface.h", "virtual bool takeBuffersReleased()"), android)
+            self.assertTrue(adds("services/surfaceflinger/CompositionEngine/src/RenderSurface.cpp",
+                                 "mTextureCache.clear();"), android)
+            self.assertTrue(adds(fbs, "discardFreeBuffers("), android)
+            self.assertTrue(adds(fbs, "kReleaseIdleBuffersAfter"), android)
+            self.assertTrue(adds("services/surfaceflinger/DisplayHardware/FramebufferSurface.h",
+                                 "kReleaseIdleBuffersAfter = 1'000'000'000"), android)
+
     def test_nfr5_each_patch_adds_the_tested_recovery_policy_unchanged(self):
         # The policy the renderers follow is the one test_device_loss_recovery.cpp tests.
         canonical = (HERE / "recovery/DeviceLossRecovery.h").read_text()
