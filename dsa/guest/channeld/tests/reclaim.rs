@@ -211,6 +211,63 @@ fn nfr1_quiet_refaults_let_the_target_fall_back_but_never_below_its_floor() {
 }
 
 #[test]
+fn nfr1_a_trim_whose_cache_comes_back_slowly_is_not_taken_again() {
+    // The owner's PC on v0.2.2, only the Play Store shown: each trim took about 100 MiB, it came
+    // back at 8 MiB a look (under the limit of one look), and the next trim took it again every
+    // 10 to 30 s.
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.refaults(0);
+    assert_eq!(
+        reclaimer.decide_under(secs(60), 1, &memory(2600, 356), false),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.trim_mib(), 100);
+    // A look's worth of it comes back: not yet a quarter.
+    reclaimer.refaults(8 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+    // Three looks: 24 MiB, still under a quarter of 100.
+    reclaimer.refaults(16 * MIB);
+    reclaimer.refaults(24 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+    // The fourth brings back 32 MiB: the trim took cache in use, so the working set is what it
+    // left plus what came back, and the cache refilled to it is not trimmed again.
+    reclaimer.refaults(32 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), (256 + 32) * MIB);
+    assert_eq!(
+        reclaimer.decide_under(secs(80), 1, &memory(2600, 340), false),
+        None
+    );
+    // Quiet looks do not take the target below what was learnt.
+    for look in 1..=10 {
+        reclaimer.refaults((32 + look) * MIB / 2 + 16 * MIB);
+    }
+    assert_eq!(reclaimer.working_set_target_kb(), (256 + 32) * MIB);
+    // Files read once go back above it, in one trim.
+    assert_eq!(
+        reclaimer.decide_under(secs(140), 1, &memory(2600, 288 + 90), false),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.trim_mib(), 90);
+    // That trim is not read back: the next one may try below what was learnt, one step lower.
+    reclaimer.refaults(40 * MIB);
+    reclaimer.refaults(40 * MIB);
+    assert_eq!(
+        reclaimer.decide_under(secs(200), 1, &memory(2600, 288 + 70), false),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.working_set_target_kb(), (256 + 32) * MIB);
+    reclaimer.refaults(40 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+    // An app closing forgets what was learnt for it.
+    reclaimer.refaults(40 * MIB);
+    assert_eq!(
+        reclaimer.decide_under(secs(260), 0, &memory(3000, 300), false),
+        Some(Reason::Idle)
+    );
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+}
+
+#[test]
 fn nfr1_vmstat_file_refaults_are_read_in_kib() {
     use dsa_guest_channeld::reclaim::file_refaults_kb;
     let vmstat = "nr_free_pages 1000\nworkingset_refault_anon 7\nworkingset_refault_file 2560\n";
