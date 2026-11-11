@@ -136,6 +136,56 @@ REMOVED_APEXES = [
     "com.android.hardware.threadnetwork",
     "com.google.cf.nfc",
     "com.google.cf.rild",
+] + [
+    # Cuttlefish's example HALs for devices a desktop VM does not have. Each ran as a process
+    # of its own from boot (about 1 MiB of PSS, plus its page tables, kernel stacks and binder
+    # threads in the guest's kernel) and answered with fixed values or nothing. Each is
+    # optional to the framework, which runs without it as a device without that hardware does:
+    # - authsecret and rebootescrow: secrets for a secure element and for resuming an update
+    #   after a reboot; the user's credential and the host's image updates do without them.
+    # - cas: conditional access for broadcast television tuners.
+    # - contexthub: a phone's sensor hub; its feature goes too (unavailable-features.xml).
+    # - input.processor: a model that classifies touch input; input then goes unclassified,
+    #   as on every device without one.
+    # - ir (com.google.cf.ir): an infrared blaster; its feature goes too, because the
+    #   consumer IR service refuses to start with the feature but no HAL.
+    # - memtrack: per-process GPU memory for dumpsys; the example reported none anyway.
+    # - net.nlinterceptor and tetheroffload: a modem's netlink filter and tethering offloaded
+    #   to a modem.
+    # - neuralnetworks: three sample NNAPI drivers on the CPU; the NNAPI runtime falls back to
+    #   its own CPU path, which they only imitated.
+    # - secure_element: the HAL behind the SecureElement app, which is removed above.
+    # - usb: a phone's USB-C port roles; USB devices the host lends need no port HAL.
+    # - vibrator: a phone's vibration motor; Android then reports no vibrator.
+    "com.android.hardware.authsecret",
+    "com.android.hardware.rebootescrow",
+    "com.android.hardware.cas",
+    "com.android.hardware.contexthub",
+    "com.android.hardware.input.processor",
+    "com.google.cf.ir",
+    "com.android.hardware.memtrack",
+    "com.android.hardware.net.nlinterceptor",
+    "com.android.hardware.tetheroffload",
+    "com.android.hardware.neuralnetworks",
+    "com.android.hardware.secure_element",
+    "com.android.hardware.usb",
+    "com.android.hardware.vibrator",
+]
+
+# The virtual face and fingerprint HALs, installed as plain vendor files. They fake a sensor
+# no PC has, so Settings offered face and fingerprint unlock that nothing could complete,
+# and system_server started both HALs for it. With them go the features that make
+# system_server start the biometric services (unavailable-features.xml as well, in case
+# another permissions file declares them).
+REMOVED_VENDOR_FILES = [
+    "VENDOR/bin/hw/android.hardware.biometrics.face-service.default",
+    "VENDOR/bin/hw/android.hardware.biometrics.fingerprint-service.default",
+    "VENDOR/etc/init/face-default.rc",
+    "VENDOR/etc/init/fingerprint-default.rc",
+    "VENDOR/etc/vintf/manifest/face-default.xml",
+    "VENDOR/etc/vintf/manifest/fingerprint-default.xml",
+    "VENDOR/etc/permissions/android.hardware.biometrics.face.xml",
+    "VENDOR/etc/permissions/android.hardware.fingerprint.xml",
 ]
 
 # Settings controllers that crash without the Bluetooth service. With the Bluetooth features
@@ -698,6 +748,7 @@ def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False, came
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
+        or name in REMOVED_VENDOR_FILES
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")
