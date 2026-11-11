@@ -1,5 +1,7 @@
 //! Session start and stop, through the session's public API, over the in-memory transport.
 
+mod common;
+
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -271,42 +273,7 @@ fn connect_daemon(connector: &mut MemoryConnector, launcher: &FakeLauncher) -> B
         WAIT,
     )
     .expect("the host accepts the agent");
-    Box::new(PastConnectSettings(agent))
-}
-
-/// The guest's side of the control channel, past the settings the session sends each time the
-/// guest connects: the host's root certificates and whether backup is on. Their own tests read
-/// them; these tests are about everything else, and would otherwise meet them first.
-struct PastConnectSettings(Box<dyn Connection>);
-
-impl Connection for PastConnectSettings {
-    fn send(&mut self, frame: &[u8]) -> Result<(), TransportError> {
-        self.0.send(frame)
-    }
-
-    fn recv(&mut self, timeout: Option<Duration>) -> Result<Vec<u8>, TransportError> {
-        let deadline = timeout.map(|timeout| std::time::Instant::now() + timeout);
-        loop {
-            let left = deadline
-                .map(|deadline| deadline.saturating_duration_since(std::time::Instant::now()));
-            let frame = self.0.recv(left)?;
-            let setting = matches!(
-                dsa_protocol::decode(&frame).map(|envelope| envelope.body),
-                Ok(Some(Body::HostCertificates(_) | Body::BackupSetting(_)))
-            );
-            if !setting {
-                return Ok(frame);
-            }
-        }
-    }
-
-    fn close(&mut self) {
-        self.0.close()
-    }
-
-    fn try_clone_sender(&self) -> Option<Box<dyn dsa_transport::FrameSender>> {
-        self.0.try_clone_sender()
-    }
+    Box::new(common::PastConnectSettings(agent))
 }
 
 #[test]
@@ -1854,7 +1821,7 @@ fn fr5_pointer_input_does_not_wait_for_the_session_to_stop_reading_the_channel()
         WAIT,
     )
     .expect("the host accepts the agent");
-    let mut agent: Box<dyn Connection> = Box::new(PastConnectSettings(agent));
+    let mut agent: Box<dyn Connection> = Box::new(common::PastConnectSettings(agent));
     report_boot(&mut agent, true, true);
     assert!(session.wait_for(SessionState::Active, WAIT));
 
