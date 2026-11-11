@@ -752,6 +752,20 @@ mod tests {
         let second = text.find("[Desktop Action shortcut-1]").unwrap();
         assert!(first < second);
         assert!(text[first..second].contains("\nName=New chat\n"));
+        // The icon is the file `shortcut_icon_path` names in the icons folder. The entry
+        // carries that path as the OS spells it, so the expected line is built from the same
+        // path rather than from a literal with `/`, which holds only where `/` is the
+        // separator (the tests also run on Windows).
+        let icon = shortcut_icon_path(Path::new("/icons"), "com.example.chat", "new-chat");
+        assert_eq!(
+            icon,
+            Path::new("/icons").join(format!(
+                "com.example.chat.shortcut-{}.png",
+                shortcut_tag("new-chat")
+            ))
+        );
+        assert!(text[first..second].contains(&format!("\nIcon={}\n", icon.to_string_lossy())));
+        #[cfg(unix)]
         assert!(text[first..second].contains(&format!(
             "\nIcon=/icons/com.example.chat.shortcut-{}.png\n",
             shortcut_tag("new-chat")
