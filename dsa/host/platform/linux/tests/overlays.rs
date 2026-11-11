@@ -2760,8 +2760,8 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
     if let Err(why) = adb.run(&["push", &sampler.to_string_lossy(), SAMPLER_GUEST]) {
         fail(
             format!("putting the sampler in the guest: {why}"),
-            &service,
-            &log,
+            service,
+            log,
         );
     }
     eprintln!(
@@ -2775,7 +2775,7 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
     );
     let raw = match adb.run_for(&["shell", &command], IDLE_WINDOW + Duration::from_secs(120)) {
         Ok(out) => String::from_utf8_lossy(&out).into_owned(),
-        Err(why) => fail(format!("the idle sampler: {why}"), &service, &log),
+        Err(why) => fail(format!("the idle sampler: {why}"), service, log),
     };
     let _ = std::fs::write(dir.join("idle-reclaim-samples.txt"), &raw);
     let guest_log = adb
@@ -2805,16 +2805,16 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
                 record.looks.len(),
                 IDLE_WINDOW.as_secs()
             ),
-            &service,
-            &log,
+            service,
+            log,
         );
     }
     // The one boot with a Play services that runs: none of its alarms, nor any other, may
     // retry as Play services' flag sync did while it could not write DeviceConfig.
     let mut storms = Vec::new();
-    alarm_storm_problems(&adb, &dir.join("idle-reclaim-alarms.txt"), &mut storms);
+    alarm_storm_problems(adb, &dir.join("idle-reclaim-alarms.txt"), &mut storms);
     if !storms.is_empty() {
-        fail(storms.join("\n"), &service, &log);
+        fail(storms.join("\n"), service, log);
     }
 }
 
