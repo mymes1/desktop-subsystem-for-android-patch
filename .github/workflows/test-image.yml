@@ -43,6 +43,7 @@ on:
       - "dsa/host/platform/linux/tests/overlays.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
       - "dsa/host/platform/linux/tests/idle_reclaim/**"
+      - "dsa/host/platform/linux/tests/memory_check/**"
       - ".github/scripts/linux-vm/**"
       - ".github/scripts/cache/prune.sh"
       - ".github/workflows/test-image.yml"
@@ -1162,8 +1163,8 @@ jobs:
             timeout: 18
             keep: Keep the overlay check's logs
             artifact: overlay-check-logs
-            # The idle reclaim measurement boots on a runner of its own, below.
-            filter: --skip nfr3_the_idle_reclaim_with_google_apps_is_measured
+            # The idle reclaim and memory measurements boot on runners of their own, below.
+            filter: --skip nfr3_the_idle_reclaim_with_google_apps_is_measured --skip nfr1_the_memory_with_google_play_and_one_app_window_is_measured
             logs: |
               /tmp/overlays-test-*/*.log
               /tmp/overlays-test-*/*.txt
@@ -1177,6 +1178,20 @@ jobs:
             logs: |
               /tmp/overlays-test-*/*.log
               /tmp/overlays-test-*/idle-reclaim*
+              /tmp/overlays-test-*/google-play-mounts.txt
+          # Every release shows its memory with Google Play and one app window; the check fails
+          # only on a large regression against the recorded baseline.
+          - check: Measure the memory with Google Play and one app window on the booted image
+            test: overlays
+            timeout: 25
+            keep: Keep the memory measurement
+            artifact: memory-measurement
+            filter: nfr1_the_memory_with_google_play_and_one_app_window_is_measured
+            summary: /tmp/overlays-test-*/memory.md
+            logs: |
+              /tmp/overlays-test-*/*.log
+              /tmp/overlays-test-*/memory*
+              /tmp/overlays-test-*/google-play-mounts.txt
     steps:
       - uses: actions/checkout@v4
 

@@ -28,6 +28,10 @@ nothing else.
    compose has finished, the hwcomposer makes the ColorBuffer the task display's current
    one (`rcSetDisplayColorBuffer`), which is when the host copies it into the window. Two
    ColorBuffers per task alternate, so the host can show one while the next is composed.
+   A task that has had no layer for 2 s (its window minimized, its app in the background)
+   lets go of both, since its window shows its own copy of the last frame; the next frame
+   makes them again. The hwcomposer asks SurfaceFlinger for a frame when they are due, as
+   nothing else changes on the display then.
 
 `presentDisplay` does not wait for the host. It hands the frame to a thread of its own,
 which composes and posts it, and waits only until the frame before has gone out. That is
@@ -137,14 +141,14 @@ The guest Vulkan driver does the same in the other processes that sample such a 
 The display's size and density come from the kernel command line. `make-image.py` writes
 these defaults into `image.json`, and the host replaces the width and height with a square as
 long as the user's longest monitor when it starts the VM, and the density with the density of
-a window on the user's main monitor (144 at a scale of 150%). SurfaceFlinger, and so every
+a window on the user's main monitor (196 at a scale of 150%). SurfaceFlinger, and so every
 app, starts at that same density (`androidboot.lcd_density`, which the host sets beside it):
 
 | Property | Default |
 |---|---|
 | `androidboot.dsa.display_width` | 1920 |
 | `androidboot.dsa.display_height` | 1080 |
-| `androidboot.dsa.display_dpi` | 96 |
+| `androidboot.dsa.display_dpi` | 130 |
 | `androidboot.dsa.display_refresh_rate` | 60 |
 
 The display offers one configuration per refresh rate (60, 75, 90, 100, 120, 144, 165 and
@@ -157,7 +161,11 @@ configuration, whose period the vsync clock takes from its next tick.
 
 A window cannot be larger than this display. A task's ColorBuffers follow the task's own
 size in steps (`taskBufferSize`), so a large display costs nothing per window. Only the client
-target has the display's size, and only once SurfaceFlinger composes something itself.
+target has the display's size, and only while SurfaceFlinger composes something itself (a
+video's YUV pictures). Two seconds after the last such frame the hwcomposer lets go of the
+client target's ColorBuffers and asks for a frame, on which SurfaceFlinger (with DSA's
+framework patch, `dsa/guest/framework/patches/frameworks/native`) gives its own buffers back
+too. The next frame that needs them allocates them again.
 
 ## Build and test
 

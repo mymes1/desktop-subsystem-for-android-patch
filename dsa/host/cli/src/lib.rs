@@ -59,7 +59,7 @@
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
 //! app's windows cannot be resized or maximized, and an app with a start size opens its windows
-//! at that size, in Android's dp (1/160 inch, 0.6 of a pixel at a scale of 100%).
+//! at that size, in Android's desktop dp (1/117.23 inch, 0.819 of a pixel at a scale of 100%).
 //! `--dpi-scaling` says how the app follows its window to a monitor of another scale: `app`
 //! gives it the new monitor's density and it
 //! redraws (Android recreates the screen of an app that does not say it handles a change of
@@ -3528,7 +3528,7 @@ fn host_density() -> u32 {
     dsa_host_windows::monitors::system_density()
 }
 
-/// Apps draw at a 100% monitor's density (96) where the screen's is not known here.
+/// Apps draw at a 100% monitor's density (130) where the screen's is not known here.
 #[cfg(not(windows))]
 fn host_density() -> u32 {
     dsa_host_core::compositor::window_sizing::DENSITY_AT_BASE_DPI

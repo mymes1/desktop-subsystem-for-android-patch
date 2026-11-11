@@ -75,11 +75,11 @@ SHELL_APPS = ["Launcher3QuickStep", "SystemUI", "LatinIME"]
 # Kept on purpose, because apps rely on them: WebView, every content provider (contacts,
 # calendar, media, downloads, settings, telephony's database), PackageInstaller,
 # PermissionController, DocumentsUI, the print spooler, the sound picker, Settings, Provision
-# (it marks the device set up), Telecom and TeleService (system_server binds them at boot),
-# CarrierConfig, the browser, the camera and the clock. The browser stays although web links
-# go to the host's browser by default (the agent holds the browser role then): an app may
-# start it by name, the user can choose to keep links in Android, which gives the role back
-# to it, and a link that cannot reach the host opens in it.
+# (it marks the device set up), Telecom (system_server binds it at boot, and calling apps place
+# their own calls through it), CarrierConfig, the browser, the camera and the clock. The browser
+# stays although web links go to the host's browser by default (the agent holds the browser
+# role then): an app may start it by name, the user can choose to keep links in Android, which
+# gives the role back to it, and a link that cannot reach the host opens in it.
 UNNEEDED_APPS = [
     # Telephony without a modem (the radio HAL is removed): calls, SMS, the SIM toolkit, MMS,
     # emergency information, IMS entitlement and the carrier's captive portal app.
@@ -90,6 +90,14 @@ UNNEEDED_APPS = [
     "EmergencyInfo",
     "ImsServiceEntitlement",
     "CarrierDefaultApp",
+    # TeleService, the com.android.phone process: persistent, so the activity manager starts it
+    # at boot and again whenever it ends, and it held about 8.5 MiB. Without the telephony
+    # feature (unavailable-features.xml) it sets nothing up (PhoneGlobals returns at once), so
+    # it publishes none of the phone, subscription or carrier config services and system_server
+    # already runs without them, as an Android TV build, which has no TeleService, does.
+    # Telecom stays for apps that place their own calls. The telephony provider, which runs
+    # under the same name, stays and starts only when an app asks it something.
+    "TeleService",
     # Screen savers and wallpapers: the host draws the desktop, and the guest's display is
     # never seen, so there is no screen to save or wallpaper to show (SystemUI, which draws
     # it, is removed above).
@@ -136,6 +144,56 @@ REMOVED_APEXES = [
     "com.android.hardware.threadnetwork",
     "com.google.cf.nfc",
     "com.google.cf.rild",
+] + [
+    # Cuttlefish's example HALs for devices a desktop VM does not have. Each ran as a process
+    # of its own from boot (about 1 MiB of PSS, plus its page tables, kernel stacks and binder
+    # threads in the guest's kernel) and answered with fixed values or nothing. Each is
+    # optional to the framework, which runs without it as a device without that hardware does:
+    # - authsecret and rebootescrow: secrets for a secure element and for resuming an update
+    #   after a reboot; the user's credential and the host's image updates do without them.
+    # - cas: conditional access for broadcast television tuners.
+    # - contexthub: a phone's sensor hub; its feature goes too (unavailable-features.xml).
+    # - input.processor: a model that classifies touch input; input then goes unclassified,
+    #   as on every device without one.
+    # - ir (com.google.cf.ir): an infrared blaster; its feature goes too, because the
+    #   consumer IR service refuses to start with the feature but no HAL.
+    # - memtrack: per-process GPU memory for dumpsys; the example reported none anyway.
+    # - net.nlinterceptor and tetheroffload: a modem's netlink filter and tethering offloaded
+    #   to a modem.
+    # - neuralnetworks: three sample NNAPI drivers on the CPU; the NNAPI runtime falls back to
+    #   its own CPU path, which they only imitated.
+    # - secure_element: the HAL behind the SecureElement app, which is removed above.
+    # - usb: a phone's USB-C port roles; USB devices the host lends need no port HAL.
+    # - vibrator: a phone's vibration motor; Android then reports no vibrator.
+    "com.android.hardware.authsecret",
+    "com.android.hardware.rebootescrow",
+    "com.android.hardware.cas",
+    "com.android.hardware.contexthub",
+    "com.android.hardware.input.processor",
+    "com.google.cf.ir",
+    "com.android.hardware.memtrack",
+    "com.android.hardware.net.nlinterceptor",
+    "com.android.hardware.tetheroffload",
+    "com.android.hardware.neuralnetworks",
+    "com.android.hardware.secure_element",
+    "com.android.hardware.usb",
+    "com.android.hardware.vibrator",
+]
+
+# The virtual face and fingerprint HALs, installed as plain vendor files. They fake a sensor
+# no PC has, so Settings offered face and fingerprint unlock that nothing could complete,
+# and system_server started both HALs for it. With them go the features that make
+# system_server start the biometric services (unavailable-features.xml as well, in case
+# another permissions file declares them).
+REMOVED_VENDOR_FILES = [
+    "VENDOR/bin/hw/android.hardware.biometrics.face-service.default",
+    "VENDOR/bin/hw/android.hardware.biometrics.fingerprint-service.default",
+    "VENDOR/etc/init/face-default.rc",
+    "VENDOR/etc/init/fingerprint-default.rc",
+    "VENDOR/etc/vintf/manifest/face-default.xml",
+    "VENDOR/etc/vintf/manifest/fingerprint-default.xml",
+    "VENDOR/etc/permissions/android.hardware.biometrics.face.xml",
+    "VENDOR/etc/permissions/android.hardware.fingerprint.xml",
 ]
 
 # Settings controllers that crash without the Bluetooth service. With the Bluetooth features
@@ -460,8 +518,9 @@ MEMORY_PROPS = {
 
 # The density of the freeform display every task window lives on, by default: a 100% monitor's.
 # The host replaces it on the kernel command line at each boot with the density of the user's
-# main monitor (144 at 150%: a dp is 1/160 inch and a host pixel at 100% 1/96 inch), the
-# density a task window there asks its task to draw at. The
+# main monitor (196 at 150%: Android's desktop dp is 1/117.23 inch and a host pixel at 100%
+# 1/96 inch, so the density is 131 times the scale, rounded to an even number), the density a
+# task window there asks its task to draw at. The
 # hwcomposer reports it (ro.boot.dsa.display_dpi) and SurfaceFlinger takes it from
 # ro.sf.lcd_density alone, which dsa-display.rc sets from androidboot.lcd_density. Without
 # ro.sf.lcd_density SurfaceFlinger falls back to 213 dpi ("ro.sf.lcd_density must be defined as
@@ -470,7 +529,7 @@ MEMORY_PROPS = {
 # was destroyed before its first window that way and crashed in its own clean-up. No build.prop
 # may set it: init reads them before any script, and the first value of a read-only property
 # stays, so a build.prop value would hold every boot at this default.
-DISPLAY_DPI = 96
+DISPLAY_DPI = 130
 
 # The OpenGL ES version Android reports to apps and to app stores: 3.2 (0x30002), which ANGLE
 # provides on the host GPU's Vulkan for every app. PackageManager reports it as reqGlEsVersion,
@@ -698,6 +757,7 @@ def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False, came
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
+        or name in REMOVED_VENDOR_FILES
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")

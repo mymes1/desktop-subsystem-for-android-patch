@@ -11,7 +11,7 @@
 //! maximised, until the next start of Android.
 //!
 //! The display's density is the main monitor's, as a task's window gives it
-//! ([`density_for_dpi`]): 96 dpi at a scale of 100%, 144 at 150%. Every app starts at the
+//! ([`density_for_dpi`]): 130 dpi at a scale of 100%, 196 at 150%. Every app starts at the
 //! display's density. Android relaunches an activity whose density changes unless the app
 //! says it handles that itself, so an app that started at another density than its monitor's
 //! would be relaunched the moment its window asked for the right one. Starting at the main
@@ -19,13 +19,12 @@
 //! the density from `ro.sf.lcd_density`, which the guest sets from `androidboot.lcd_density`,
 //! and the hwcomposer reports `androidboot.dsa.display_dpi`; both carry the same number.
 //!
-//! A dp is 1/160 inch and a host DIP 1/96 inch, so at that density a dp is 0.6 DIP. Android
-//! scales text separately from everything else, by its font scale, and the guest's font
-//! scale keeps text the size of the host's ([`font_scale`]).
+//! A dp is Android's desktop dp, 1/117.23 inch, and a host DIP 1/96 inch, so at that density
+//! a dp is 0.819 DIP. Android scales text separately from everything else, by its font scale.
+//! Text follows the same ratio as everything else, so the guest's font scale is the host's
+//! text size alone ([`font_scale`]).
 
-use crate::compositor::window_sizing::{
-    density_for_dpi, BASE_DENSITY, BASE_DPI, DENSITY_AT_BASE_DPI,
-};
+use crate::compositor::window_sizing::{density_for_dpi, BASE_DPI};
 
 /// The smallest and the largest text size a host may ask for, in percent of its default.
 /// Windows' text size setting goes from 100 to 225; a Linux desktop's text scaling factor may
@@ -34,15 +33,16 @@ pub const MIN_TEXT_SCALE_PERCENT: u32 = 50;
 pub const MAX_TEXT_SCALE_PERCENT: u32 = 300;
 
 /// The guest's font scale for a host text size of `text_scale_percent` (0 is unknown and
-/// counts as 100): 160/96 times the text size, so text in an Android app is the size of the
-/// host's text although a dp is 0.6 DIP. About 1.667 at 100%, 2.5 at 150%, 3.75 at 225%.
+/// counts as 100): the text size itself, 1 at 100%, 1.5 at 150%, 2.25 at 225%. Text scales
+/// with a dp like everything else, so Android's body text of 16 sp is about 13 DIP, near the
+/// host's own body text. Scaling text alone would overflow the rows an app sizes in dp.
 pub fn font_scale(text_scale_percent: u32) -> f32 {
     let percent = if text_scale_percent == 0 {
         100
     } else {
         text_scale_percent.clamp(MIN_TEXT_SCALE_PERCENT, MAX_TEXT_SCALE_PERCENT)
     };
-    (f64::from(BASE_DENSITY) * f64::from(percent) / (f64::from(DENSITY_AT_BASE_DPI) * 100.0)) as f32
+    (f64::from(percent) / 100.0) as f32
 }
 
 /// The shortest side the display has, whatever the monitors.
@@ -205,11 +205,11 @@ mod tests {
     #[test]
     fn fr4_the_chosen_size_replaces_the_images_because_the_first_value_wins() {
         let cmdline = "init=/init androidboot.dsa.display_width=1920 \
-                       androidboot.dsa.display_height=1080 androidboot.dsa.display_dpi=96";
+                       androidboot.dsa.display_height=1080 androidboot.dsa.display_dpi=130";
         let out = with_display_size(cmdline, (2880, 2880));
         assert_eq!(
             out,
-            "init=/init androidboot.dsa.display_dpi=96 \
+            "init=/init androidboot.dsa.display_dpi=130 \
              androidboot.dsa.display_width=2880 androidboot.dsa.display_height=2880"
         );
     }
@@ -222,26 +222,28 @@ mod tests {
 
     #[test]
     fn fr4_android_starts_at_the_main_monitors_density() {
-        // A dp is 1/160 inch and a DIP 1/96 inch: Android draws at 96 x the scale.
-        assert_eq!(boot_density(Some(96)), 96);
-        assert_eq!(boot_density(Some(120)), 120);
-        assert_eq!(boot_density(Some(144)), 144);
-        assert_eq!(boot_density(Some(192)), 192);
-        assert_eq!(boot_density(Some(240)), 240);
-        assert_eq!(boot_density(None), 96, "an unknown main monitor is 100%");
+        // Android's desktop dp is 1/117.23 inch and a DIP 1/96 inch: Android draws at 131 x
+        // the scale, rounded to an even density.
+        assert_eq!(boot_density(Some(96)), 130);
+        assert_eq!(boot_density(Some(120)), 164);
+        assert_eq!(boot_density(Some(144)), 196);
+        assert_eq!(boot_density(Some(168)), 228);
+        assert_eq!(boot_density(Some(192)), 262);
+        assert_eq!(boot_density(Some(240)), 328);
+        assert_eq!(boot_density(None), 130, "an unknown main monitor is 100%");
         assert_eq!(boot_density(Some(1)), MIN_DENSITY);
         assert_eq!(boot_density(Some(2000)), MAX_DENSITY);
-        // Text keeps the host's size: at a text size of 100% the font scale is 160/96.
-        assert!((font_scale(100) - 160.0 / 96.0).abs() < 1e-6);
-        assert!((font_scale(0) - 160.0 / 96.0).abs() < 1e-6);
-        // The image's 96 is replaced, for the hwcomposer and for SurfaceFlinger both, so the
+        // Text follows the same ratio: at a text size of 100% the font scale is 1.
+        assert!((font_scale(100) - 1.0).abs() < 1e-6);
+        assert!((font_scale(0) - 1.0).abs() < 1e-6);
+        // The image's 130 is replaced, for the hwcomposer and for SurfaceFlinger both, so the
         // first value init reads is the main monitor's.
-        let cmdline = "init=/init androidboot.dsa.display_dpi=96 androidboot.lcd_density=96 \
+        let cmdline = "init=/init androidboot.dsa.display_dpi=130 androidboot.lcd_density=130 \
                        androidboot.dsa.display_dpi_x=1";
         assert_eq!(
             with_display_density(cmdline, boot_density(Some(144))),
-            "init=/init androidboot.dsa.display_dpi_x=1 androidboot.dsa.display_dpi=144 \
-             androidboot.lcd_density=144"
+            "init=/init androidboot.dsa.display_dpi_x=1 androidboot.dsa.display_dpi=196 \
+             androidboot.lcd_density=196"
         );
         // A record of the main monitor reads back, and nothing else counts as one.
         assert_eq!(parse_density_record(&density_record_text(144)), Some(144));
@@ -251,14 +253,8 @@ mod tests {
     }
 
     #[test]
-    fn fr4_the_font_scale_is_160_over_96_times_the_text_size() {
-        for (percent, scale) in [
-            (100, 1.666_666_7),
-            (125, 2.083_333_3),
-            (150, 2.5),
-            (200, 3.333_333_3),
-            (225, 3.75),
-        ] {
+    fn fr4_the_font_scale_is_the_text_size() {
+        for (percent, scale) in [(100, 1.0), (125, 1.25), (150, 1.5), (200, 2.0), (225, 2.25)] {
             assert!(
                 (font_scale(percent) - scale).abs() < 1e-5,
                 "{percent}%: {}",

@@ -107,7 +107,14 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   the guest's display, so it goes on while the screen is off. A clock is drawn again at each
   minute (or second) even when nothing asks. A size from the host (`ResizeWidget`) redraws
   the widget at that size and tells its app the size in dp
-  (`AppWidgetHostView.updateAppWidgetSize`). Pointer input (`WidgetPointer`) goes to the
+  (`AppWidgetHostView.updateAppWidgetSize`, which also sets `OPTION_APPWIDGET_SIZES`). A
+  widget is described with a default size in whole launcher cells, as a launcher places it:
+  the cells its app asks for (`targetCellWidth`/`Height`), else the fewest that hold its
+  minimum (n cells hold 70n - 30 dp), each 74 dp with 16 dp between them, at most 5. When a
+  widget's views still reach past its size, as when its text is larger than its app planned
+  for, the agent never sends an image that cuts them off: it draws the widget shrunk just
+  enough to show whole, and describes it again with a default that holds its content (kept
+  across restarts, and only ever grown), so a window the user has not sized grows to it. Pointer input (`WidgetPointer`) goes to the
   widget's view; a click opens its app on the guest's display. The widget IDs outlive the
   agent and the guest, and the size each was drawn at is kept in the agent's preferences.
   Each connection hears of every placed widget (`WidgetUpdated`, then `WidgetList`).
@@ -265,15 +272,18 @@ change.
 
 The host shows each task 1:1 in its window, so a window's client size in host pixels is the
 task's size in guest pixels, and the task's density keeps the app the size it should be on
-the window's monitor (96 dpi at 100%, 192 at 200%: a dp is 1/160 inch and a host pixel at
-100% 1/96 inch). Android starts at the density of the user's main monitor, so a window that
+the window's monitor (130 dpi at 100%, 262 at 200%: Android's desktop dp is 48 dp for
+10.4 mm, 1/117.23 inch, and a host pixel at 100% 1/96 inch, so the density is 131 times the
+monitor's scale, rounded to an even number). Android starts at the density of the user's main monitor, so a window that
 opens there asks for nothing. A task whose top activity does not say it handles a change of
 density is never asked for another one: its window shows it scaled instead, and its client
 size is the task's size at that scale.
 
-Text keeps the size of the host's text. Android scales text by its font scale, apart from
-everything else, so the host's `SystemSettings` carries a font scale of 160/96 times the
-host's text size setting, which the agent writes to `Settings.System.FONT_SCALE`. A change of
+Text follows the same ratio as everything else, so body text of 16 sp is about 13 host
+pixels at 100%, near the host's own body text. Android scales text by its font scale, apart
+from everything else, and the host's `SystemSettings` carries a font scale of the host's text
+size setting alone (1 at 100%, 1.5 at 150%), which the agent writes to
+`Settings.System.FONT_SCALE`. A change of
 font scale makes Android restart every activity that does not say it handles one (its
 `configChanges` include `fontScale`), so while an app task is open whose top or root activity
 does not, the agent holds the new scale, logs which apps it waits for, and applies it as soon

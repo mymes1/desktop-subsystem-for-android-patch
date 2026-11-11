@@ -39,12 +39,14 @@ import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.AnalogClock
 import android.widget.FrameLayout
 import android.widget.RemoteViews
 import android.widget.TextClock
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.widgets.FrameGate
+import io.github.thisisthepy.dsa.agent.widgets.WidgetFit
 import io.github.thisisthepy.dsa.agent.widgets.WidgetInfo
 import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
@@ -104,7 +106,14 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
     private var onFailed: (Int) -> Unit = {}
 
     @Volatile
+    private var onNeeds: (Int, Int, Int) -> Unit = { _, _, _ -> }
+
+    @Volatile
     private var dozing = false
+
+    override fun fitting(needs: (widgetId: Int, widthDp: Int, heightDp: Int) -> Unit) {
+        onNeeds = needs
+    }
 
     override fun start(frame: (Int, Int, Int, ByteArray) -> Unit, changed: () -> Unit, failed: (Int) -> Unit) {
         onFrame = frame
@@ -226,6 +235,27 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
     }
 
     /**
+     * Draws the widget of [renderer] shrunk to [scale], so its views, which reach past its
+     * size, show whole: its views are laid out in a room larger by as much. Runs on the main
+     * thread; a renderer replaced in the meantime is left alone.
+     */
+    private fun refit(renderer: Renderer, scale: Float) {
+        val id = renderer.id
+        if (renderers[id] !== renderer) return
+        val view = views[id]?.second ?: return
+        try {
+            renderers.remove(id)
+            renderer.close()
+            (view.parent as? ViewGroup)?.removeView(view)
+            renderers[id] = Renderer(id, renderer.size, view, scale)
+        } catch (e: Exception) {
+            renderers.remove(id)?.close()
+            log.warn("drawing widget $id shrunk to fit failed; trying again", e)
+            onFailed(id)
+        }
+    }
+
+    /**
      * The widget's view, made and registered with the framework when it has none at
      * [densityDpi]. Making it again replaces the framework's listener for the widget ID.
      */
@@ -265,9 +295,10 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         val dp = { px: Int -> ceil(px / density).toInt().coerceAtLeast(0) }
         val minWidth = dp(if (info.minResizeWidth > 0) minOf(info.minResizeWidth, info.minWidth) else info.minWidth)
         val minHeight = dp(if (info.minResizeHeight > 0) minOf(info.minResizeHeight, info.minHeight) else info.minHeight)
-        // A launcher cell is about 74 dp with 16 dp between cells.
-        val defaultWidth = if (info.targetCellWidth > 0) info.targetCellWidth * CELL_DP - GAP_DP else dp(info.minWidth)
-        val defaultHeight = if (info.targetCellHeight > 0) info.targetCellHeight * CELL_DP - GAP_DP else dp(info.minHeight)
+        // Placed as a launcher places it: in whole cells that hold its minimum, not at the
+        // bare minimum, which leaves its text no room to spare.
+        val defaultWidth = WidgetInfo.launcherSide(dp(info.minWidth), info.targetCellWidth, dp(info.maxResizeWidth))
+        val defaultHeight = WidgetInfo.launcherSide(dp(info.minHeight), info.targetCellHeight, dp(info.maxResizeHeight))
         return WidgetInfo(
             provider = info.provider.flattenToString(),
             packageName = info.provider.packageName,
@@ -383,17 +414,20 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         }
     }
 
-    /** Opens [root] in a window of [size]; null, with the reason logged, when it cannot be. */
-    private fun openWindow(id: Int, size: WidgetSize, root: View): WidgetWindow? {
+    /**
+     * Opens [root] in a window of [width] by [height] pixels at [densityDpi]; null, with the
+     * reason logged, when it cannot be.
+     */
+    private fun openWindow(id: Int, width: Int, height: Int, densityDpi: Int, root: View): WidgetWindow? {
         var reader: ImageReader? = null
         var display: VirtualDisplay? = null
         var presentation: Presentation? = null
         return try {
-            reader = ImageReader.newInstance(size.width, size.height, PixelFormat.RGBA_8888, 2).also {
+            reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2).also {
                 // The window's own drawing is not used; its buffers are given straight back.
                 it.setOnImageAvailableListener({ r -> r.acquireLatestImage()?.close() }, main)
             }
-            display = displays.createVirtualDisplay("dsa-widget-$id", size.width, size.height, size.densityDpi, reader.surface, 0)
+            display = displays.createVirtualDisplay("dsa-widget-$id", width, height, densityDpi, reader.surface, 0)
                 ?: error("Android made no display for the widget")
             presentation = Presentation(context, display.display)
             presentation.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -418,11 +452,22 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
      * One widget's drawing, of the [view] already registered for it. Lives on the main thread.
      * The view runs in a window of its own when one opens; without one it is drawn in
      * software, again each time its app sends new views, and a clock at each tick.
+     *
+     * The view is laid out in [layoutWidth] by [layoutHeight] pixels and drawn shrunk by
+     * [scale] into the widget's image: the widget's own size at a scale of 1, and a larger room
+     * when its views reach past its size, so none of them is cut off ([WidgetFit]).
      */
-    private inner class Renderer(val id: Int, val size: WidgetSize, private val view: AppWidgetHostView) {
+    private inner class Renderer(
+        val id: Int,
+        val size: WidgetSize,
+        private val view: AppWidgetHostView,
+        private val scale: Float = 1f,
+    ) {
         val gate = FrameGate().also { it.dozing = dozing }
         private val width = size.width
         private val height = size.height
+        private val layoutWidth = WidgetFit.layoutSide(width, scale)
+        private val layoutHeight = WidgetFit.layoutSide(height, scale)
         private val root = CaptureRoot(densityContext(size.densityDpi)) { requestCapture() }.also {
             it.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
@@ -443,7 +488,10 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         }
 
         // Opened last, so nothing after it can fail and leave the window open.
-        private val window: WidgetWindow? = openWindow(id, size, root)
+        private val window: WidgetWindow? = openWindow(id, layoutWidth, layoutHeight, size.densityDpi, root)
+
+        /** Whether this renderer asked to be replaced by one that shrinks the widget further. */
+        private var refitting = false
 
         /**
          * Whether this widget is drawn without the GPU: set when the GPU's image of it came
@@ -548,19 +596,26 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         }
 
         private fun capture() {
-            if (closed) return
+            if (closed || refitting) return
             gate.taken(SystemClock.uptimeMillis())
-            if (software) {
+            val whole = try {
                 layOut()
+                fits()
+            } catch (e: Exception) {
+                log.warn("laying widget $id out failed", e)
+                return
+            }
+            if (!whole) return
+            if (software) {
                 captureInSoftware()
                 scheduleTick()
                 return
             }
             try {
-                layOut()
                 val canvas = node.beginRecording(width, height)
                 try {
                     canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                    if (scale < 1f) canvas.scale(scale, scale)
                     root.draw(canvas)
                 } finally {
                     node.endRecording()
@@ -574,13 +629,44 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         }
 
         private fun layOut() {
-            if (root.isLayoutRequested || root.width != width || root.height != height) {
+            if (root.isLayoutRequested || root.width != layoutWidth || root.height != layoutHeight) {
                 root.measure(
-                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(layoutWidth, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(layoutHeight, View.MeasureSpec.EXACTLY),
                 )
-                root.layout(0, 0, width, height)
+                root.layout(0, 0, layoutWidth, layoutHeight)
             }
+        }
+
+        /**
+         * Whether the widget's views, as laid out, show whole. When one reaches past the room
+         * they are laid out in, the host is told the size the content needs, and unless the
+         * widget is shrunk as far as it goes, it is drawn again shrunk to fit, by a renderer
+         * that takes this one's place: this image, which would cut it off, is never sent.
+         */
+        private fun fits(): Boolean {
+            val reach = IntArray(2)
+            for (i in 0 until root.childCount) {
+                val child = root.getChildAt(i)
+                reachOf(child, child.left, child.top, reach)
+            }
+            if (reach[0] <= layoutWidth && reach[1] <= layoutHeight) return true
+            // The need along a side the views fit is the widget's own size there, in the dp
+            // the host gave, so a side that fits never creeps up by its rounding.
+            val density = size.densityDpi
+            val needWidth = if (reach[0] > layoutWidth) WidgetFit.dpOf(reach[0], density) else size.widthDp
+            val needHeight = if (reach[1] > layoutHeight) WidgetFit.dpOf(reach[1], density) else size.heightDp
+            onNeeds(id, needWidth, needHeight)
+            val wanted = scale * WidgetFit.scale(layoutWidth, layoutHeight, reach[0], reach[1])
+            if (wanted >= scale - 0.001f || scale <= WidgetFit.MIN_SCALE) return true
+            val next = wanted.coerceAtLeast(WidgetFit.MIN_SCALE)
+            log.info(
+                "widget $id: its views reach ${reach[0]}x${reach[1]} pixels, past its ${layoutWidth}x$layoutHeight; " +
+                    "drawing it shrunk to ${"%.2f".format(next)} until its window holds it",
+            )
+            refitting = true
+            main.post { refit(this, next) }
+            return false
         }
 
         /** Draws the widget without the GPU, for a view the hardware renderer cannot take. */
@@ -602,7 +688,9 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             bitmap.setHasAlpha(true)
             bitmap.eraseColor(Color.TRANSPARENT)
-            root.draw(Canvas(bitmap))
+            val canvas = Canvas(bitmap)
+            if (scale < 1f) canvas.scale(scale, scale)
+            root.draw(canvas)
             bitmap
         } catch (e: Exception) {
             log.warn("drawing widget $id failed", e)
@@ -636,7 +724,9 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
                 PointerAction.POINTER_ACTION_CANCEL -> MotionEvent.ACTION_CANCEL
                 else -> return
             }
-            val event = MotionEvent.obtain(downTime, now, motion, x, y, 0)
+            // The widget is drawn shrunk by its scale, so a point in its image is that much
+            // further from the corner of the room its views are laid out in.
+            val event = MotionEvent.obtain(downTime, now, motion, x / scale, y / scale, 0)
             event.source = InputDevice.SOURCE_TOUCHSCREEN
             try {
                 root.dispatchTouchEvent(event)
@@ -664,6 +754,23 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
 
     private fun encode(bitmap: Bitmap): ByteArray =
         ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+
+    /**
+     * Grows [reach] to how far right and down [view] and the views in it reach, in pixels from
+     * the corner of the widget's root, [view] being at [left], [top] from it. Views that do
+     * not show take no room. A list is not looked into: it lays out only the rows that show,
+     * and the last of them is meant to be cut off by the list's own edge.
+     */
+    private fun reachOf(view: View, left: Int, top: Int, reach: IntArray) {
+        if (view.visibility != View.VISIBLE || view.width <= 0 || view.height <= 0) return
+        reach[0] = maxOf(reach[0], left + view.width)
+        reach[1] = maxOf(reach[1], top + view.height)
+        if (view !is ViewGroup || view is AdapterView<*>) return
+        for (i in 0 until view.childCount) {
+            val child = view.getChildAt(i)
+            reachOf(child, left + child.left - view.scrollX, top + child.top - view.scrollY, reach)
+        }
+    }
 
     private fun collectClocks(view: View, into: MutableList<View>) {
         if (view is TextClock || view is AnalogClock) into += view
@@ -730,8 +837,6 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
 
     private companion object {
         const val HOST_ID = WIDGET_HOST_ID
-        const val CELL_DP = 74
-        const val GAP_DP = 16
     }
 }
 
@@ -757,5 +862,20 @@ class AndroidWidgetStore(context: Context) : WidgetStore {
 
     override fun remove(widgetId: Int) {
         preferences.edit().remove(widgetId.toString()).apply()
+        needed.edit().remove(widgetId.toString()).apply()
+    }
+
+    /** What each widget's content needs, apart from the sizes, which keep their own format. */
+    private val needed = context.getSharedPreferences("widget-needs", Context.MODE_PRIVATE)
+
+    override fun needs(): Map<Int, Pair<Int, Int>> = needed.all.mapNotNull { (key, value) ->
+        val id = key.toIntOrNull() ?: return@mapNotNull null
+        val parts = (value as? String)?.split(',')?.mapNotNull(String::toIntOrNull) ?: return@mapNotNull null
+        if (parts.size != 2) return@mapNotNull null
+        id to (parts[0] to parts[1])
+    }.toMap()
+
+    override fun saveNeed(widgetId: Int, widthDp: Int, heightDp: Int) {
+        needed.edit().putString(widgetId.toString(), "$widthDp,$heightDp").apply()
     }
 }

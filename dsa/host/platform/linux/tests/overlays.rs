@@ -88,6 +88,14 @@
 //! with the raw samples and the guest log beside them. It fails when it cannot measure, and
 //! when an alarm fired as a storm in that boot, the one with a Play services that runs.
 //!
+//! A third boot check measures the memory with Google Play installed the same way and one app
+//! window (Settings) open, so every release shows the number: it leaves the window untouched
+//! for a minute and reads the memory six times, ten seconds apart, as `dsa memory` reads it
+//! (the host's processes, the service's own, and the guest's report), plus the guest's PSS by
+//! process from `dumpsys meminfo`. The medians go to `memory.md` and `memory.json`
+//! (`memory_check`), with every reading beside them. It fails only on a large regression
+//! against the baseline recorded in `memory_check/baseline.json`.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test (made with a
 //! default ARM translation package), `DSA_ARM_PROBE` the ARM probe APK
@@ -100,6 +108,7 @@
 
 mod boot_check;
 mod idle_reclaim;
+mod memory_check;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -2485,14 +2494,46 @@ fn mirror_litegapps(mirror: &Path, arch: &str, sdk: u32) -> Result<String, Strin
     Ok(build.file)
 }
 
-#[test]
-fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
+/// Android booted twice by a measurement: first to install Google Play from the mirror, then
+/// with it in place, with developer mode on so adb reaches the guest.
+struct GooglePlayBoot {
+    service: Service,
+    _compositor: Service,
+    api: HostApiClient,
+    adb: Adb,
+    log: Arc<Mutex<Vec<String>>>,
+    dir: PathBuf,
+    started: Instant,
+    /// Which Google apps build was installed, and the image mounted from it, for the report.
+    gapps: String,
+    mounted: String,
+}
+
+impl GooglePlayBoot {
+    /// Fails the measurement with what the service and the guest said.
+    fn fail(&self, why: String) -> ! {
+        fail(why, &self.service, &self.log)
+    }
+}
+
+/// Boots the image with Google Play for a measurement: installs LiteGapps' own newest build
+/// for the guest (the check's small stand-in build when LiteGapps cannot be reached, which the
+/// returned description says), starts Android again with it and checks that its image is
+/// mounted. The VM has `memory_mb` of memory and `processors` processors. The second boot
+/// leaves `after` of the time to `deadline` for the measurement itself. `None` when CI named
+/// no crosvm and image, so there is nothing to boot.
+fn boot_with_google_play(
+    deadline: Instant,
+    after: Duration,
+    memory_mb: u64,
+    processors: u64,
+) -> Option<GooglePlayBoot> {
     let (Some(crosvm), Some(image)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
         std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
     ) else {
         eprintln!("skipped: DSA_CROSVM and DSA_WIDGET_TEST_IMAGE name no crosvm and image");
-        return;
+        return None;
     };
     let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
     let adb_program = std::env::var_os("DSA_ADB")
@@ -2505,8 +2546,6 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
     let arch = manifest["arch"].as_str().unwrap_or("x86_64").to_string();
 
     let started = Instant::now();
-    let deadline = started + IDLE_BUDGET;
-    let _watchdog = Watchdog::start("the idle reclaim measurement", IDLE_BUDGET + OVERRUN);
     let dir = scratch();
     let mirror = dir.join("mirror");
     write_mirror(&mirror, &arch).unwrap();
@@ -2519,8 +2558,8 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
         "socket": socket,
         "machine_dir": dir.join("machine"),
         "network": false,
-        "memory_mb": IDLE_MEMORY_MB,
-        "processors": IDLE_PROCESSORS,
+        "memory_mb": memory_mb,
+        "processors": processors,
         "data_disk_size_gb": 8,
         "gapps_project": format!("file://{}", mirror.display()),
     });
@@ -2531,7 +2570,7 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
             .arg(&config),
         dir.join("hostd.log"),
     );
-    let _compositor = Service::spawn(
+    let compositor = Service::spawn(
         Command::new(env!("CARGO_BIN_EXE_dsa-compositor")).env("DSA_SOCKET", &socket),
         dir.join("compositor.log"),
     );
@@ -2582,7 +2621,7 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
         Ok(file) => format!("LiteGapps' {file}"),
         Err(why) => {
             println!(
-                "::warning::the idle reclaim is measured with the check's small stand-in Google apps build, not LiteGapps' own: {why}"
+                "::warning::the measurement runs with the check's small stand-in Google apps build, not LiteGapps' own: {why}"
             );
             format!(
                 "the check's small stand-in build, because LiteGapps' own could not be had ({why}); \
@@ -2646,7 +2685,7 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
     }
     let boot = deadline
         .saturating_duration_since(Instant::now())
-        .saturating_sub(IDLE_WINDOW + Duration::from_secs(180));
+        .saturating_sub(after);
     if let Err(why) = api.ensure_running(boot, Duration::from_secs(2), |state| {
         eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
     }) {
@@ -2665,7 +2704,7 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
         );
     }
     let table = adb.shell("cat /proc/self/mountinfo").unwrap_or_default();
-    let _ = std::fs::write(dir.join("idle-reclaim-mounts.txt"), &table);
+    let _ = std::fs::write(dir.join("google-play-mounts.txt"), &table);
     let Some(mounted) = mounts(&table)
         .iter()
         .find(|m| m.point == GAPPS_POINT && m.kind == "erofs")
@@ -2679,6 +2718,41 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
             &log,
         );
     };
+    Some(GooglePlayBoot {
+        service,
+        _compositor: compositor,
+        api,
+        adb,
+        log,
+        dir,
+        started,
+        gapps,
+        mounted,
+    })
+}
+
+#[test]
+fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
+    let deadline = Instant::now() + IDLE_BUDGET;
+    let _watchdog = Watchdog::start("the idle reclaim measurement", IDLE_BUDGET + OVERRUN);
+    let Some(boot) = boot_with_google_play(
+        deadline,
+        IDLE_WINDOW + Duration::from_secs(180),
+        IDLE_MEMORY_MB,
+        IDLE_PROCESSORS,
+    ) else {
+        return;
+    };
+    let GooglePlayBoot {
+        service,
+        adb,
+        log,
+        dir,
+        started,
+        gapps,
+        mounted,
+        ..
+    } = &boot;
 
     // Five minutes with no app window open, sampled from inside the guest.
     let sampler = dir.join("idle-sampler.sh");
@@ -2741,5 +2815,165 @@ fn nfr3_the_idle_reclaim_with_google_apps_is_measured_on_the_booted_image() {
     alarm_storm_problems(&adb, &dir.join("idle-reclaim-alarms.txt"), &mut storms);
     if !storms.is_empty() {
         fail(storms.join("\n"), &service, &log);
+    }
+}
+
+/// The memory measurement, both boots and LiteGapps' download included, stays under twenty-two
+/// minutes.
+const MEMORY_BUDGET: Duration = Duration::from_secs(1320);
+/// The app whose window is open while the memory is read: the simple app the one-window target
+/// is set for.
+const MEMORY_APP: &str = "com.android.settings";
+/// How long its task may take to appear.
+const MEMORY_APP_WAIT: Duration = Duration::from_secs(90);
+/// How long the window stays untouched before the first reading.
+const MEMORY_SETTLE: Duration = Duration::from_secs(60);
+/// How many readings are taken, and how far apart.
+const MEMORY_READINGS: u32 = 6;
+const MEMORY_EVERY: Duration = Duration::from_secs(10);
+
+/// The service's own process (`dsa-linux-hostd`), which the host's snapshot does not list.
+fn service_memory() -> memory_check::ServiceMemory {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return memory_check::ServiceMemory::default();
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let named = std::fs::read_to_string(path.join("comm"))
+            .is_ok_and(|name| name.trim() == "dsa-linux-hostd");
+        if !named {
+            continue;
+        }
+        let status = std::fs::read_to_string(path.join("status")).unwrap_or_default();
+        let resident_kb = dsa_host_linux::memory::resident_kb(&status).unwrap_or(0);
+        let private_kb = std::fs::read_to_string(path.join("smaps_rollup"))
+            .ok()
+            .and_then(|text| dsa_host_linux::memory::private_kb(&text))
+            .unwrap_or(resident_kb);
+        return memory_check::ServiceMemory {
+            resident_kb,
+            private_kb,
+        };
+    }
+    memory_check::ServiceMemory::default()
+}
+
+/// The runner the measurement ran on: its kernel, processor and memory.
+fn runner_environment() -> String {
+    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default();
+    let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+    let processor = cpuinfo
+        .lines()
+        .find_map(|line| line.strip_prefix("model name"))
+        .and_then(|rest| rest.split_once(':'))
+        .map_or("an unknown processor", |(_, name)| name.trim());
+    let threads = cpuinfo
+        .lines()
+        .filter(|line| line.starts_with("processor"))
+        .count();
+    let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    let memory_mib = meminfo
+        .lines()
+        .find_map(|line| line.strip_prefix("MemTotal:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|kb| kb.parse::<u64>().ok())
+        .map_or(0, memory_check::mib);
+    format!(
+        "Linux {}, {processor} ({threads} threads), {memory_mib} MiB, crosvm over KVM",
+        kernel.trim()
+    )
+}
+
+#[test]
+fn nfr1_the_memory_with_google_play_and_one_app_window_is_measured_on_the_booted_image() {
+    let deadline = Instant::now() + MEMORY_BUDGET;
+    let _watchdog = Watchdog::start("the memory measurement", MEMORY_BUDGET + OVERRUN);
+    let after =
+        MEMORY_APP_WAIT + MEMORY_SETTLE + MEMORY_EVERY * MEMORY_READINGS + Duration::from_secs(180);
+    let Some(mut boot) = boot_with_google_play(deadline, after, IDLE_MEMORY_MB, IDLE_PROCESSORS)
+    else {
+        return;
+    };
+
+    // One app window, as a user opens it.
+    eprintln!(
+        "{} s: opening {MEMORY_APP}",
+        boot.started.elapsed().as_secs()
+    );
+    if let Err(why) = boot.api.launch_app(MEMORY_APP) {
+        boot.fail(format!("opening {MEMORY_APP}: {why}"));
+    }
+    let until = Instant::now() + MEMORY_APP_WAIT;
+    loop {
+        match boot.api.tasks() {
+            Ok(list) if list.tasks.iter().any(|t| t.package_name == MEMORY_APP) => break,
+            Ok(_) if Instant::now() < until => std::thread::sleep(Duration::from_secs(1)),
+            Ok(list) => {
+                let open: Vec<String> = list.tasks.into_iter().map(|t| t.package_name).collect();
+                boot.fail(format!(
+                    "{MEMORY_APP}'s task did not appear within {} s; the tasks are {open:?}",
+                    MEMORY_APP_WAIT.as_secs()
+                ))
+            }
+            Err(why) => boot.fail(format!("listing the tasks: {why}")),
+        }
+    }
+
+    // A minute untouched, then the readings, as `dsa memory` reads them.
+    std::thread::sleep(MEMORY_SETTLE);
+    let mut readings = Vec::new();
+    let mut raw = Vec::new();
+    for index in 0..MEMORY_READINGS {
+        if index > 0 {
+            std::thread::sleep(MEMORY_EVERY);
+        }
+        let snapshot = match boot.api.memory() {
+            Ok(snapshot) => snapshot,
+            Err(why) => boot.fail(format!("reading the memory: {why}")),
+        };
+        raw.push(snapshot.to_string());
+        if let Some(reading) = memory_check::reading(&snapshot, service_memory()) {
+            readings.push(reading);
+        }
+    }
+    let _ = std::fs::write(boot.dir.join("memory-readings.txt"), raw.join("\n---\n"));
+    let dumpsys = boot.adb.shell("dumpsys meminfo").unwrap_or_default();
+    let _ = std::fs::write(boot.dir.join("memory-dumpsys.txt"), &dumpsys);
+    let pss = memory_check::pss_by_process(&dumpsys);
+
+    let baseline: serde_json::Value =
+        serde_json::from_str(memory_check::BASELINE).expect("the memory baseline is JSON");
+    let google_play = format!("{}, its image mounted from {}", boot.gapps, boot.mounted);
+    let environment = runner_environment();
+    let setting = memory_check::Setting {
+        google_play: &google_play,
+        app: "Settings",
+        memory_mb: IDLE_MEMORY_MB,
+        processors: IDLE_PROCESSORS,
+        environment: &environment,
+    };
+    let Some(report) = memory_check::report(&readings, &pss, &baseline, &setting) else {
+        boot.fail(format!(
+            "none of the {MEMORY_READINGS} readings had both the guest's report and the VM's \
+             process, so nothing was measured; they are in memory-readings.txt"
+        ));
+    };
+    let _ = std::fs::write(boot.dir.join("memory.md"), &report.markdown);
+    let _ = std::fs::write(
+        boot.dir.join("memory.json"),
+        serde_json::to_string_pretty(&report.json).unwrap_or_default(),
+    );
+    println!("{}", report.markdown);
+    let missing = memory_check::unrecorded(&baseline);
+    if !missing.is_empty() {
+        println!(
+            "::warning::the memory baseline records no value for {}, so they are reported and not compared",
+            missing.join(", ")
+        );
+    }
+    let problems: Vec<String> =
+        serde_json::from_value(report.json["regressions"].clone()).unwrap_or_default();
+    if !problems.is_empty() {
+        boot.fail(problems.join("\n"));
     }
 }

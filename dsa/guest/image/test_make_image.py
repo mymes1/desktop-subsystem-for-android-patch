@@ -807,6 +807,59 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("VENDOR/apex/com.android.hardware.boot.apex", names)
             self.assertIn('name="com.android.hardware.boot.apex"', keys)
 
+    def test_nfr1_example_hals_for_hardware_a_pc_lacks_are_not_in_the_image(self):
+        # Each ran as a process of its own from boot and answered nothing; the framework runs
+        # without each of them. The HALs the guest uses stay.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            removed = [
+                "com.android.hardware.authsecret", "com.android.hardware.rebootescrow",
+                "com.android.hardware.cas", "com.android.hardware.contexthub",
+                "com.android.hardware.input.processor", "com.google.cf.ir",
+                "com.android.hardware.memtrack", "com.android.hardware.net.nlinterceptor",
+                "com.android.hardware.tetheroffload", "com.android.hardware.neuralnetworks",
+                "com.android.hardware.secure_element", "com.android.hardware.usb",
+                "com.android.hardware.vibrator",
+            ]
+            kept = ["com.android.hardware.boot", "com.android.hardware.wifi", "com.android.hardware.thermal",
+                    "com.android.hardware.security.secretkeeper", "com.android.hardware.drm.clearkey"]
+            with zipfile.ZipFile(source, "w") as archive:
+                for apex in removed + kept:
+                    archive.writestr(f"VENDOR/apex/{apex}.apex", b"apex")
+                archive.writestr("META/apexkeys.txt", "".join(
+                    f'name="{apex}.apex" public_key="k.avbpubkey" private_key="k.pem" container_certificate="c.x509.pem" container_private_key="c.pk8" partition="vendor"\n'
+                    for apex in removed + kept
+                ))
+                for name in make_image.REMOVED_VENDOR_FILES:
+                    archive.writestr(name, b"file")
+                archive.writestr("VENDOR/etc/init/motioncontext-service-default.rc", b"service")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                xml = archive.read("VENDOR/etc/permissions/dsa-unavailable-features.xml").decode()
+            for apex in removed:
+                self.assertNotIn(f"VENDOR/apex/{apex}.apex", names)
+            for apex in kept:
+                self.assertIn(f"VENDOR/apex/{apex}.apex", names)
+            for name in make_image.REMOVED_VENDOR_FILES:
+                self.assertNotIn(name, names)
+            self.assertIn("VENDOR/etc/init/motioncontext-service-default.rc", names)
+            # Without these, system_server does not start the services that would wait for the
+            # removed HALs, and the consumer IR service does not refuse to start.
+            for feature in ["android.hardware.biometrics.face", "android.hardware.fingerprint",
+                            "android.hardware.consumerir", "android.hardware.context_hub"]:
+                self.assertIn(f'<unavailable-feature name="{feature}" />', xml)
+
+    def test_nfr1_the_biometric_hals_go_with_their_init_scripts_manifests_and_features(self):
+        for name in ["VENDOR/bin/hw/android.hardware.biometrics.fingerprint-service.default",
+                     "VENDOR/etc/init/face-default.rc",
+                     "VENDOR/etc/vintf/manifest/fingerprint-default.xml",
+                     "VENDOR/etc/permissions/android.hardware.fingerprint.xml"]:
+            self.assertTrue(make_image.removed(name), name)
+        self.assertFalse(make_image.removed("VENDOR/etc/permissions/android.hardware.wifi.xml"))
+
     def test_fr1_bluetooth_is_not_advertised_without_a_controller(self):
         # With the feature declared, system_server starts the Bluetooth stack, which aborts
         # in a loop because no HCI HAL exists.
@@ -1035,7 +1088,7 @@ class ImageLayoutTests(unittest.TestCase):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
         self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
-        self.assertIn("androidboot.lcd_density=96", make_image.kernel_cmdline("", hwcomposer=False))
+        self.assertIn("androidboot.lcd_density=130", make_image.kernel_cmdline("", hwcomposer=False))
         # No build.prop sets it, the input's included: init reads them before any script, and
         # the first value would hold every boot at the image's density.
         for vendor in (False, True):
@@ -2092,7 +2145,7 @@ class ImageLayoutTests(unittest.TestCase):
         # The one freeform display every task window lives on.
         self.assertIn("androidboot.dsa.display_width=1920", cmdline)
         self.assertIn("androidboot.dsa.display_height=1080", cmdline)
-        self.assertIn("androidboot.dsa.display_dpi=96", cmdline)
+        self.assertIn("androidboot.dsa.display_dpi=130", cmdline)
         self.assertIn(
             "androidboot.vendor.apex.com.android.hardware.gatekeeper=com.android.hardware.gatekeeper.nonsecure",
             cmdline,
@@ -2351,7 +2404,7 @@ class GuestMemoryTests(unittest.TestCase):
 
     def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
         rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
-        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-96}\n", rc)
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-130}\n", rc)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
             self.assertIn(
@@ -2377,6 +2430,31 @@ class GuestMemoryTests(unittest.TestCase):
             )
             for directory in make_image.FSTAB_DIRS:
                 self.assertIn(b"zramsize=50%", archive.read(directory + "fstab.dsa"))
+
+    def test_nfr1_the_idle_reclaim_compresses_what_stays_in_zram_again_with_zstd(self):
+        # LZ4 for every swap, zstd for what stays cold: zstd must be named before swapon_all
+        # sizes the device, and the reclaim compresses again only after it swapped, in a
+        # bounded step, and compacts zram before the caches go.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
+            memory_rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
+            name = 'write /sys/devices/virtual/block/zram0/recomp_algorithm "algo=zstd priority=1"'
+            self.assertIn(name, memory_rc)
+            self.assertLess(memory_rc.index(name), memory_rc.index("swapon_all"))
+            rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
+            start = rc.index("on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1")
+            trigger = rc[start:rc.index("on property:vendor.dsa.memory.trim=1")]
+            idle = trigger.index("write /sys/devices/virtual/block/zram0/idle all")
+            again = trigger.index('write /sys/devices/virtual/block/zram0/recompress "type=idle max_pages=16384"')
+            compact = trigger.index("write /sys/devices/virtual/block/zram0/compact 1")
+            self.assertLess(trigger.rindex("cgroup/memory.reclaim"), idle)
+            self.assertLess(idle, again)
+            self.assertLess(again, compact)
+            self.assertLess(compact, trigger.index("drop_caches"))
+            # The working set trim, which runs while apps are in use, leaves zram alone.
+            trim = rc[rc.index("on property:vendor.dsa.memory.trim=1"):].split("\n\n")[0]
+            self.assertNotIn("zram0", trim)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow vendor_init sysfs_zram (file (write open getattr)))", policy)
 
     def test_nfr1_free_memory_is_compacted_sooner_so_page_reporting_hands_it_back(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
@@ -2575,6 +2653,8 @@ class GuestMemoryTests(unittest.TestCase):
     def test_nfr1_apps_a_desktop_has_no_use_for_are_removed_and_the_ones_apps_need_are_kept(self):
         removed = ["Dialer", "messaging", "Stk", "BasicDreams", "LiveWallpapersPicker", "QuickSearchBox",
                    "Calendar", "Gallery2", "Music"]
+        # The phone process (TeleService) is a privileged system app.
+        removed_paths = {"TeleService": "SYSTEM/priv-app/TeleService/TeleService.apk"}
         kept = [
             "SYSTEM/app/webview/webview.apk",
             "SYSTEM/priv-app/ContactsProvider/ContactsProvider.apk",
@@ -2591,6 +2671,7 @@ class GuestMemoryTests(unittest.TestCase):
         for app in removed:
             self.assertIn(app, make_image.REMOVED_APPS)
         extra = {f"PRODUCT/app/{app}/{app}.apk": b"apk" for app in removed}
+        extra.update({name: b"apk" for name in removed_paths.values()})
         extra.update({name: b"apk" for name in kept})
         # Settings.apk is opened to edit its sound screen, and DocumentsUI.apk to edit its
         # list's room, so each has to be an APK.
@@ -2606,15 +2687,29 @@ class GuestMemoryTests(unittest.TestCase):
             for app in removed:
                 self.assertNotIn(f"PRODUCT/app/{app}/{app}.apk", names)
                 self.assertNotIn(f'name="{app}.apk"', certs)
+            for app, name in removed_paths.items():
+                self.assertNotIn(name, names)
+                self.assertNotIn(f'name="{app}.apk"', certs)
             for name in kept:
                 self.assertIn(name, names)
                 self.assertIn(f'name="{Path(name).name}"', certs)
         for needed in ["webview", "ContactsProvider", "PackageInstaller", "PermissionController",
                        "DocumentsUI", "PrintSpooler", "Settings", "Provision", "Telecom",
-                       "TeleService", "DeskClock", "CalendarProvider", "DownloadProvider",
-                       "MusicFX"]:
+                       "TelephonyProvider", "CarrierConfig", "DeskClock", "CalendarProvider",
+                       "DownloadProvider", "MusicFX"]:
             self.assertNotIn(needed, make_image.REMOVED_APPS)
 
+    def test_nfr1_the_phone_process_is_not_in_the_image(self):
+        # com.android.phone is persistent and does nothing without the telephony feature; the
+        # image withdraws that feature and leaves TeleService out. Telecom and the telephony
+        # provider stay.
+        self.assertIn("TeleService", make_image.REMOVED_APPS)
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/TeleService.apk"))
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/oat/x86_64/TeleService.odex"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/Telecom/Telecom.apk"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/TelephonyProvider/TelephonyProvider.apk"))
+        features = (Path(__file__).parent / "unavailable-features.xml").read_text()
+        self.assertIn('<unavailable-feature name="android.hardware.telephony" />', features)
 
 SETTINGS_NS = "http://schemas.android.com/apk/res-auto"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"

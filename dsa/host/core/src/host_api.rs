@@ -3843,7 +3843,9 @@ impl HostApiService {
         })
     }
 
-    /// The widget with its placement: the one kept for it, else a new one, which is kept.
+    /// The widget with its placement: the one kept for it, brought up to date with what the
+    /// widget allows and needs now ([`widgets::refreshed_placement`]), else a new one. Either
+    /// is kept.
     fn placed(
         &self,
         user: &str,
@@ -3852,7 +3854,25 @@ impl HostApiService {
         kept: &mut std::collections::BTreeMap<i32, Placement>,
     ) -> Widget {
         let placement = match kept.get(&widget_id) {
-            Some(placement) => *placement,
+            Some(placement) => {
+                let refreshed = widgets::refreshed_placement(&provider, *placement);
+                if refreshed != *placement {
+                    eprintln!(
+                        "widgets: widget {widget_id} ({}) goes from {}x{} dp to {}x{} dp, as \
+                         it allows and needs now",
+                        provider.provider,
+                        placement.width_dp,
+                        placement.height_dp,
+                        refreshed.width_dp,
+                        refreshed.height_dp
+                    );
+                    if let Err(why) = self.placements.set(user, widget_id, refreshed) {
+                        eprintln!("widgets: the size of widget {widget_id} is not kept: {why}");
+                    }
+                    kept.insert(widget_id, refreshed);
+                }
+                refreshed
+            }
             None => {
                 let others: Vec<Placement> = kept.values().copied().collect();
                 let placement = widgets::default_placement(&provider, &others);
@@ -4426,12 +4446,20 @@ impl HostApiService {
         };
         let asked = place.placement.unwrap_or_default();
         let (width_dp, height_dp) = widgets::clamp_size(&provider, asked.width_dp, asked.height_dp);
-        let placement = Placement {
-            x: asked.x,
-            y: asked.y,
-            width_dp,
-            height_dp,
-        };
+        let kept = self
+            .placements_of(&peer.user)
+            .get(&place.widget_id)
+            .copied();
+        let placement = widgets::reported_placement(
+            kept,
+            Placement {
+                x: asked.x,
+                y: asked.y,
+                width_dp,
+                height_dp,
+                resized: false,
+            },
+        );
         if let Err(why) = self.placements.set(&peer.user, place.widget_id, placement) {
             eprintln!(
                 "widgets: the place of widget {} is not kept: {why}",
@@ -8867,6 +8895,7 @@ fn widget_from_wire(widget: types::Widget) -> Widget {
             y: placement.y,
             width_dp: placement.width_dp,
             height_dp: placement.height_dp,
+            resized: false,
         },
     }
 }
