@@ -86,7 +86,10 @@ class WindowBufferPatchTests(unittest.TestCase):
 
     def test_nfr1_the_patch_comes_after_the_ones_it_builds_on(self):
         names = sorted(p.name for p in PATCH_DIR.glob("*.patch"))
-        self.assertEqual(names[-1], PATCH.name)
+        # After every patch numbered before it; later ones (0010 reads memory back in
+        # pieces) build on other code.
+        self.assertGreater(names.index(PATCH.name),
+                           names.index(next(n for n in names if n.startswith("0008-"))))
         script = (HERE / "fetch.sh").read_text(encoding="utf-8")
         self.assertIn('for patch in "$patch_dir"/guest/mesa/*.patch; do', script)
 
