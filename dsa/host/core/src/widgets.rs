@@ -8,10 +8,11 @@
 //! the sizes in dp a window's pixels come to ([`dp_of`]), and where each user's widget
 //! windows are ([`WidgetPlacements`]).
 //!
-//! A dp (density-independent pixel) is one pixel at Android's density of 160 dots per inch:
-//! 1/160 inch. A host device-independent pixel is 1/96 inch, and Android draws at 96 dpi at a
-//! scale of 100%, so a widget's size in dp is 0.6 of its window's size in the host's
-//! device-independent pixels, and the same physical size on a monitor of any scale.
+//! A dp (density-independent pixel) is one pixel at a density of 160 dots per inch. A host
+//! device-independent pixel is 1/96 inch, and Android draws at 131 dpi at a scale of 100%
+//! (rounded to 130), so a dp is Android's desktop dp of 1/117.23 inch, a widget's size in dp
+//! is 1.22 times its window's size in the host's device-independent pixels, and the same
+//! physical size on a monitor of any scale.
 //!
 //! ```text
 //! <dir>/users/<user>.widgets.json   {"12": {"x": 64, "y": 64, "width_dp": 180, "height_dp": 110}}
@@ -51,9 +52,9 @@ pub const MAX_FRAME_BYTES: usize = 512 * 1024;
 pub const MAX_SIDE: u32 = 4096;
 
 /// The smallest side of a widget window, in dp, whatever its widget asks for: a window this
-/// small (40 of the host's device-independent pixels, as a dp is 0.6 of one) can still be
-/// grabbed and resized.
-pub const MIN_SIDE_DP: u32 = 67;
+/// small (40 of the host's device-independent pixels, as a dp is 0.819 of one, so 40 / 0.819
+/// dp) can still be grabbed and resized.
+pub const MIN_SIDE_DP: u32 = 49;
 
 /// The density at which a dp is one pixel: a dp is 1/160 inch.
 pub const BASE_DPI: u32 = 160;
@@ -161,7 +162,7 @@ pub struct WidgetSize {
 
 impl WidgetSize {
     /// The size of a window of `width` by `height` pixels on a monitor of `density_dpi`
-    /// (0 is taken as the density at 100%, 96), with each side kept between 1 and
+    /// (0 is taken as the density at 100%, 130), with each side kept between 1 and
     /// [`MAX_SIDE`].
     pub fn of_pixels(width: u32, height: u32, density_dpi: u32) -> WidgetSize {
         let density_dpi = if density_dpi == 0 {
@@ -550,7 +551,7 @@ mod tests {
         assert_eq!(dp_of(360, 240), 240);
         assert_eq!(dp_of(220, 240), 147);
         assert_eq!(dp_of(180, 160), 180);
-        assert_eq!(dp_of(180, 0), 300, "0 is the density at 100%, 96");
+        assert_eq!(dp_of(180, 0), 222, "0 is the density at 100%, 130");
         assert_eq!(dp_of(1, 640), 1);
         assert_eq!(dp_of(0, 240), 0);
         assert_eq!(px_of(180, 240), 270);
@@ -559,7 +560,7 @@ mod tests {
         let size = WidgetSize::of_pixels(0, 99_999, 0);
         assert_eq!(
             (size.width, size.height, size.density_dpi),
-            (1, MAX_SIDE, 96)
+            (1, MAX_SIDE, 130)
         );
     }
 

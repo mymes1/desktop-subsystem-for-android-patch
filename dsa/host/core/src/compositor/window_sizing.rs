@@ -3,7 +3,7 @@
 //! One guest pixel is one pixel of the window. A task's frames are shown 1:1, so they are as
 //! sharp on a monitor at 200% as at 100%. What keeps an app the same size to the eye across
 //! monitors is its density: the task draws at [`density_for_dpi`] of its window's monitor,
-//! so a task that moves from a 100% to a 200% monitor draws at 192 dpi into twice the
+//! so a task that moves from a 100% to a 200% monitor draws at 262 dpi into about twice the
 //! pixels, and its text stays sharp instead of being scaled up.
 //!
 //! The guest has one display, but density is set per task, so two windows on monitors of
@@ -12,9 +12,9 @@
 //! That is the app way ([`ScalingMode::App`]). Android relaunches an activity whose density
 //! changes unless the app says it handles that itself, and no app may be restarted for a
 //! move, so a task whose app does not say so keeps its density, and its window shows its
-//! frames scaled to the new monitor instead ([`ScalingMode::System`]): a task at 96 dpi on a
-//! 200% monitor is shown at two window pixels per task pixel, the same size to the eye. The
-//! window's client area is then in window pixels and the task's size in task pixels, and
+//! frames scaled to the new monitor instead ([`ScalingMode::System`]): a task at 130 dpi on a
+//! 200% monitor is shown at 262 window pixels per 130 task pixels, the size a task drawn there
+//! at 262 dpi would be. The window's client area is then in window pixels and the task's size in task pixels, and
 //! [`WindowSizing::scale`] turns one into the other. A window opens at 1:1, and takes a scale
 //! from the first monitor scale it reports.
 //!
@@ -99,17 +99,25 @@ pub fn to_window_rect(rect: Bounds, (numerator, denominator): Scale) -> Bounds {
 /// 1/96 inch.
 pub const BASE_DPI: u32 = 96;
 
-/// The density at which an app draws one pixel per density-independent pixel: Android's dp
-/// is 1/160 inch.
+/// The density at which an app draws one pixel per density-independent pixel (Android's
+/// `DENSITY_DEFAULT`): a length in dp is `dp x density / 160` pixels.
 pub const BASE_DENSITY: u32 = 160;
 
-/// Android's density on a monitor at a scale of 100%. A dp (1/160 inch) and a host DIP
-/// (1/96 inch) are converted by what they are, so a dp is 0.6 DIP, and an app's buttons,
-/// icons and margins are the physical size of the same parts of a host app. Android's
-/// controls are sized for a finger and come out smaller than on a phone; its text, which
-/// Android scales separately, is kept at the host's size by the guest's font scale
+/// Android's density per unit of monitor scale, before rounding: 131 dpi at 100%.
+///
+/// Android sizes a desktop monitor's touch target at 48 dp for 10.4 mm, so its desktop dp is
+/// 10.4 / 48 mm, or 1/117.23 inch (the default density of Android 16's external displays). A
+/// host DIP is 1/96 inch at a scale of 100% and 1/96 inch times the scale `s` at `s`. A dp is
+/// then `density / 160` pixels of a monitor of `96 x s` pixels per inch when
+/// `density = 96 x s x (10.4 / 25.4) x (160 / 48) = 131.0 x s`, and 1 dp = 0.819 DIP. An app's
+/// buttons, icons and margins come out at the size of a host app's: the phone's dp (1/160
+/// inch) makes them too small, and one dp per DIP (WSA) leaves them at their touch size.
+/// Text follows the same ratio, so the guest's font scale is the host's text size alone
 /// ([`crate::guest_display::font_scale`]).
-pub const DENSITY_AT_BASE_DPI: u32 = 96;
+pub const DENSITY_PER_SCALE: u32 = 131;
+
+/// Android's density on a monitor at a scale of 100%: [`density_for_dpi`] of [`BASE_DPI`].
+pub const DENSITY_AT_BASE_DPI: u32 = 130;
 
 /// How long the guest has to take a size the host asked for before the window follows the
 /// size the guest did take instead. The agent reports the size it is giving a task as soon
@@ -118,13 +126,15 @@ pub const DENSITY_AT_BASE_DPI: u32 = 96;
 pub const SETTLE: Duration = Duration::from_secs(2);
 
 /// The density a task draws at on a monitor of `dpi`, so it looks the size it would at 100%:
-/// 96 at 96 dpi (100%), 120 at 120 dpi (125%), 144 at 144 dpi (150%), 192 at 192 dpi
-/// (200%), 240 at 240 dpi (250%). A monitor that reports no DPI counts as 100%.
+/// [`DENSITY_PER_SCALE`] times the monitor's scale, rounded to the nearest dpi and then down
+/// to an even number: 130 at 96 dpi (100%), 164 at 120
+/// (125%), 196 at 144 (150%), 228 at 168 (175%), 262 at 192 (200%), 328 at 240 (250%). A
+/// monitor that reports no DPI counts as 100%.
 pub fn density_for_dpi(dpi: u32) -> u32 {
     let dpi = if dpi == 0 { BASE_DPI } else { dpi };
-    let density = (u64::from(dpi) * u64::from(DENSITY_AT_BASE_DPI) + u64::from(BASE_DPI) / 2)
+    let density = (u64::from(dpi) * u64::from(DENSITY_PER_SCALE) + u64::from(BASE_DPI) / 2)
         / u64::from(BASE_DPI);
-    density.min(u64::from(u32::MAX)) as u32
+    (density & !1).min(u64::from(u32::MAX - 1)) as u32
 }
 
 /// `dp` density-independent pixels of an app drawn at `density`, in pixels, rounded to the
@@ -630,21 +640,21 @@ mod tests {
 
     #[test]
     fn fr4_sizes_asked_while_dragging_are_live_and_the_drag_end_reconfigures_once() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         assert_eq!(sizing.dragging(true, now), None);
         assert_eq!(sizing.view_resized((500, 300), now), live_resize(500, 300));
         assert_eq!(sizing.view_resized((600, 300), now), live_resize(600, 300));
         // The guest takes each live size and reports it as it would any other.
-        assert_eq!(sizing.guest_updated(&task(500, 300, 96)), None);
-        assert_eq!(sizing.guest_updated(&task(600, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(500, 300, 130)), None);
+        assert_eq!(sizing.guest_updated(&task(600, 300, 130)), None);
         assert!(!sizing.waiting());
         // The task has the size already; the end of the drag asks for it again, not live,
         // which is what reconfigures it, and waits for nothing.
         assert_eq!(sizing.dragging(false, now), resize(600, 300));
         assert!(!sizing.waiting());
         // The guest's report of it carries the same bounds and changes nothing.
-        assert_eq!(sizing.guest_updated(&task(600, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(600, 300, 130)), None);
         assert_eq!(sizing.tick(now + SETTLE * 2), None);
         // A change of size outside a drag (a maximise, a snap) is live too.
         assert_eq!(sizing.view_resized((900, 700), now), live_resize(900, 700));
@@ -749,7 +759,7 @@ mod tests {
 
     #[test]
     fn fr4_the_drag_end_asks_for_a_size_the_guest_has_not_reported_yet() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let start = Instant::now();
         sizing.dragging(true, start);
         assert_eq!(
@@ -760,14 +770,14 @@ mod tests {
         assert_eq!(sizing.dragging(false, end), resize(700, 300));
         assert!(sizing.waiting());
         // The answer to either request clears the wait.
-        assert_eq!(sizing.guest_updated(&task(700, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(700, 300, 130)), None);
         assert!(!sizing.waiting());
         assert_eq!(sizing.tick(end + SETTLE * 2), None);
     }
 
     #[test]
     fn fr4_the_drag_end_asks_for_no_more_than_the_guest_can_draw() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         sizing.dragging(true, now);
         assert_eq!(
@@ -779,7 +789,7 @@ mod tests {
 
     #[test]
     fn fr4_a_drag_that_does_not_resize_the_task_asks_nothing_at_its_end() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         // The user only moves the window.
         assert_eq!(sizing.dragging(true, now), None);
@@ -797,7 +807,7 @@ mod tests {
 
     #[test]
     fn fr4_a_start_the_window_reports_twice_does_not_forget_the_live_sizes() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         sizing.dragging(true, now);
         sizing.view_resized((500, 300), now);
@@ -807,24 +817,25 @@ mod tests {
 
     #[test]
     fn fr4_a_window_stays_at_least_the_smallest_task_size_on_its_monitor() {
-        assert_eq!(min_client_size(96, None, None), (132, 132));
-        assert_eq!(min_client_size(144, None, None), (198, 198));
-        assert_eq!(min_client_size(192, Some((1920, 1080)), None), (264, 264));
+        // 220 dp at 130, 196 and 262 dpi.
+        assert_eq!(min_client_size(96, None, None), (179, 179));
+        assert_eq!(min_client_size(144, None, None), (270, 270));
+        assert_eq!(min_client_size(192, Some((1920, 1080)), None), (360, 360));
         assert_eq!(
             min_client_size(0, None, None),
-            (132, 132),
+            (179, 179),
             "no DPI counts as 100%"
         );
         // A guest that draws less than that decides.
-        assert_eq!(min_client_size(192, Some((200, 1080)), None), (200, 264));
+        assert_eq!(min_client_size(192, Some((200, 1080)), None), (200, 360));
     }
 
     #[test]
     fn fr4_a_window_respects_a_minimum_its_app_declares_above_the_default() {
         assert_eq!(min_client_size(96, None, Some((700, 500))), (700, 500));
         // Each direction on its own: the default still holds where the app asks for less.
-        assert_eq!(min_client_size(96, None, Some((700, 100))), (700, 132));
-        assert_eq!(min_client_size(192, None, Some((200, 500))), (264, 500));
+        assert_eq!(min_client_size(96, None, Some((700, 100))), (700, 179));
+        assert_eq!(min_client_size(192, None, Some((200, 500))), (360, 500));
         // Never more than the guest can draw.
         assert_eq!(
             min_client_size(96, Some((600, 1080)), Some((700, 500))),
@@ -834,7 +845,7 @@ mod tests {
 
     #[test]
     fn fr4_the_window_hears_its_tasks_minimum_and_any_change_to_it() {
-        let mut declared = task(400, 300, 96);
+        let mut declared = task(400, 300, 130);
         declared.min_width = 700;
         declared.min_height = 500;
         let mut sizing = WindowSizing::new(&declared);
@@ -847,71 +858,84 @@ mod tests {
 
     #[test]
     fn fr4_a_task_that_keeps_its_density_is_shown_at_the_same_physical_size() {
-        assert_eq!(scale_between(192, 96), (2, 1));
-        assert_eq!(scale_between(144, 96), (3, 2));
+        assert_eq!(scale_between(262, 130), (131, 65));
+        assert_eq!(scale_between(196, 130), (98, 65));
         assert_eq!(scale_between(160, 240), (2, 3));
-        assert_eq!(scale_between(0, 96), (1, 1));
+        assert_eq!(scale_between(0, 130), (1, 1));
         assert_eq!(to_window_size((400, 300), (3, 2)), (600, 450));
         assert_eq!(to_task_size((600, 450), (3, 2)), (400, 300));
-        let mut sizing = WindowSizing::with_mode(&task(400, 300, 96), ScalingMode::System);
-        // It opens on a 150% monitor: the same size to the eye, and no density asked for.
-        assert_eq!(sizing.dpi_reported(144), (Some((600, 450)), None));
-        assert_eq!(sizing.scale(), (3, 2));
-        assert_eq!(sizing.max_client_size(), Some((2880, 1620)));
+        let mut sizing = WindowSizing::with_mode(&task(400, 300, 130), ScalingMode::System);
+        // It opens on a 150% monitor: the same size to the eye as a task drawn there at 196
+        // dpi, and no density asked for.
+        assert_eq!(sizing.dpi_reported(144), (Some((603, 452)), None));
+        assert_eq!(sizing.scale(), (98, 65));
+        assert_eq!(sizing.max_client_size(), Some((2895, 1628)));
         assert_eq!(
             sizing.task_size(),
-            ((400, 300), Some((2880, 1620)), None),
+            ((400, 300), Some((2895, 1628)), None),
             "the task keeps its size; the limits are the window's"
         );
         let now = Instant::now();
-        assert_eq!(sizing.view_resized((600, 450), now), None);
+        assert_eq!(sizing.view_resized((603, 452), now), None);
         // A move to a 200% monitor asks nothing either.
         assert_eq!(sizing.dpi_changed(192), None);
-        assert_eq!(sizing.scale(), (2, 1));
-        assert_eq!(sizing.view_resized((800, 600), now), None);
+        assert_eq!(sizing.scale(), (131, 65));
+        assert_eq!(sizing.view_resized((806, 605), now), None);
         // The guest resizing the task on its own resizes the window at the scale.
-        assert_eq!(sizing.guest_updated(&task(500, 300, 96)), Some((1000, 600)));
+        assert_eq!(
+            sizing.guest_updated(&task(500, 300, 130)),
+            Some((1008, 605))
+        );
     }
 
     #[test]
     fn fr4_density_follows_the_monitor_scale() {
-        assert_eq!(density_for_dpi(96), 96);
-        assert_eq!(density_for_dpi(120), 120);
-        assert_eq!(density_for_dpi(144), 144);
-        assert_eq!(density_for_dpi(168), 168);
-        assert_eq!(density_for_dpi(192), 192);
-        assert_eq!(density_for_dpi(240), 240);
-        assert_eq!(density_for_dpi(288), 288);
+        assert_eq!(density_for_dpi(96), 130);
+        assert_eq!(density_for_dpi(120), 164);
+        assert_eq!(density_for_dpi(144), 196);
+        assert_eq!(density_for_dpi(168), 228);
+        assert_eq!(density_for_dpi(192), 262);
+        assert_eq!(density_for_dpi(240), 328);
+        assert_eq!(density_for_dpi(288), 392);
+        assert_eq!(density_for_dpi(96), DENSITY_AT_BASE_DPI);
         assert_eq!(
             density_for_dpi(0),
-            96,
+            130,
             "a monitor that reports nothing is 100%"
         );
+        for dpi in 1..=960 {
+            assert_eq!(density_for_dpi(dpi) % 2, 0, "{dpi} dpi: densities are even");
+        }
     }
 
     #[test]
     fn fr4_dp_and_dip_convert_by_their_definitions_at_each_scale() {
-        // (scale in percent, the monitor's DPI, Android's density there)
+        // Android's desktop dp is 10.4 / 48 mm (1/117.23 inch) and a DIP 1/96 inch at 100%, so
+        // a dp is 0.819 DIP and Android draws at 131 x the scale, rounded to an even density.
+        // (scale in percent, the monitor's DPI, Android's density there, 100 dp in pixels, the
+        // smallest task Android allows, 220 dp, in pixels)
         let scales = [
-            (100, 96, 96),
-            (125, 120, 120),
-            (150, 144, 144),
-            (200, 192, 192),
-            (250, 240, 240),
+            (100, 96, 130, 81, 179),
+            (125, 120, 164, 103, 226),
+            (150, 144, 196, 123, 270),
+            (175, 168, 228, 143, 314),
+            (200, 192, 262, 164, 360),
+            (250, 240, 328, 205, 451),
         ];
-        for (percent, dpi, density) in scales {
+        for (percent, dpi, density, px_100_dp, px_220_dp) in scales {
             assert_eq!(density_for_dpi(dpi), density, "{percent}%");
-            // A dp is 1/160 inch and a DIP 1/96 inch: 100 dp is 60 DIP, which is 60 x the
-            // scale in the monitor's pixels.
-            assert_eq!(dp_to_px(100, density), 60 * percent / 100, "{percent}%");
-            assert_eq!(px_to_dp(60 * percent / 100, density), 100, "{percent}%");
-            assert_eq!(dip_to_px(60, dpi), 60 * percent / 100, "{percent}%");
-            // The smallest task Android allows, 220 dp, is 132 DIP.
-            assert_eq!(
-                min_client_size(dpi, None, None).0,
-                132 * percent / 100,
-                "{percent}%"
+            assert_eq!(dp_to_px(100, density), px_100_dp, "{percent}%");
+            assert_eq!(px_to_dp(px_100_dp, density), 100, "{percent}%");
+            assert_eq!(min_client_size(dpi, None, None).0, px_220_dp, "{percent}%");
+            // 100 dp is 81.9 DIP, which is 81.9 x the scale in the monitor's pixels; rounding
+            // the density to an even number moves it by less than 1%.
+            let dip = 100.0 * 96.0 * (10.4 / 25.4) * (160.0 / 48.0) / 160.0;
+            let wanted = dip * f64::from(percent) / 100.0;
+            assert!(
+                (f64::from(px_100_dp) - wanted).abs() / wanted < 0.01,
+                "{percent}%: {px_100_dp} pixels for {wanted}"
             );
+            assert_eq!(dip_to_px(100, dpi), percent, "{percent}%");
         }
     }
 
@@ -930,12 +954,12 @@ mod tests {
 
     #[test]
     fn fr4_resizing_the_window_asks_the_guest_for_its_client_size() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         assert_eq!(sizing.view_resized((640, 480), now), live_resize(640, 480));
         // The same size again, or the size the task already has, asks nothing.
         assert_eq!(sizing.view_resized((640, 480), now), None);
-        let mut fresh = WindowSizing::new(&task(400, 300, 96));
+        let mut fresh = WindowSizing::new(&task(400, 300, 130));
         assert_eq!(fresh.view_resized((400, 300), now), None);
         assert_eq!(
             fresh.view_resized((0, 300), now),
@@ -946,7 +970,7 @@ mod tests {
 
     #[test]
     fn fr4_the_guest_is_never_asked_for_more_than_it_can_draw() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         assert_eq!(sizing.max_client_size(), Some((1920, 1080)));
         assert_eq!(
             sizing.view_resized((2560, 900), Instant::now()),
@@ -956,15 +980,15 @@ mod tests {
 
     #[test]
     fn fr4_the_window_does_not_jump_while_the_guest_catches_up() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let now = Instant::now();
         sizing.dragging(true, now);
         sizing.view_resized((500, 300), now);
         sizing.view_resized((600, 300), now);
         // The guest reports the sizes on the way; the window keeps the user's size.
-        assert_eq!(sizing.guest_updated(&task(500, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(500, 300, 130)), None);
         assert!(sizing.waiting());
-        assert_eq!(sizing.guest_updated(&task(600, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(600, 300, 130)), None);
         assert!(!sizing.waiting());
         assert_eq!(sizing.dragging(false, now), resize(600, 300));
         assert_eq!(sizing.tick(now + SETTLE * 2), None);
@@ -972,11 +996,11 @@ mod tests {
 
     #[test]
     fn fr4_a_size_the_guest_does_not_take_is_not_left_stretched() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let start = Instant::now();
         sizing.view_resized((700, 300), start);
         // The guest gives the task another size than the one asked for.
-        assert_eq!(sizing.guest_updated(&task(650, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(650, 300, 130)), None);
         assert_eq!(sizing.tick(start + SETTLE / 2), None, "it may still come");
         assert_eq!(sizing.tick(start + SETTLE), Some((650, 300)));
         // Once the window has taken it, nothing more is asked.
@@ -986,11 +1010,11 @@ mod tests {
 
     #[test]
     fn fr4_the_window_never_resizes_itself_under_a_drag() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
         let start = Instant::now();
         sizing.dragging(true, start);
         sizing.view_resized((700, 300), start);
-        assert_eq!(sizing.guest_updated(&task(650, 300, 96)), None);
+        assert_eq!(sizing.guest_updated(&task(650, 300, 130)), None);
         assert_eq!(sizing.tick(start + SETTLE * 5), None);
         // The guest has SETTLE from the end of the drag.
         let end = start + SETTLE * 5;
@@ -1001,12 +1025,12 @@ mod tests {
 
     #[test]
     fn fr4_a_task_the_guest_resizes_on_its_own_resizes_its_window() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
-        assert_eq!(sizing.guest_updated(&task(800, 600, 96)), Some((800, 600)));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
+        assert_eq!(sizing.guest_updated(&task(800, 600, 130)), Some((800, 600)));
         // The window reporting that size asks nothing back.
         assert_eq!(sizing.view_resized((800, 600), Instant::now()), None);
         // A task that only moves leaves its window alone.
-        let mut moved = task(800, 600, 96);
+        let mut moved = task(800, 600, 130);
         moved.bounds.left += 100;
         moved.bounds.right += 100;
         assert_eq!(sizing.guest_updated(&moved), None);
@@ -1014,10 +1038,10 @@ mod tests {
 
     #[test]
     fn fr4_moving_to_a_monitor_of_another_scale_asks_for_its_density_first() {
-        let mut sizing = WindowSizing::new(&task(548, 974, 96));
+        let mut sizing = WindowSizing::new(&task(548, 974, 130));
         let now = Instant::now();
         assert_eq!(sizing.dpi_changed(96), None, "already right at 100%");
-        assert_eq!(sizing.dpi_changed(192), density(192));
+        assert_eq!(sizing.dpi_changed(192), density(262));
         assert_eq!(sizing.dpi_changed(192), None, "asked once");
         // The window manager doubles the window; the size follows the density.
         assert_eq!(
@@ -1025,35 +1049,35 @@ mod tests {
             live_resize(1096, 1080)
         );
         // And back.
-        assert_eq!(sizing.dpi_changed(96), density(96));
+        assert_eq!(sizing.dpi_changed(96), density(130));
     }
 
     #[test]
     fn fr4_the_first_scale_a_window_reports_is_where_it_opened() {
-        let mut sizing = WindowSizing::new(&task(400, 300, 96));
-        assert_eq!(sizing.dpi_reported(192), (Some((800, 600)), density(192)));
+        let mut sizing = WindowSizing::new(&task(400, 300, 130));
+        assert_eq!(sizing.dpi_reported(192), (Some((806, 605)), density(262)));
         // The window reports its new size; the task is asked for it.
         assert_eq!(
-            sizing.view_resized((800, 600), Instant::now()),
-            live_resize(800, 600)
+            sizing.view_resized((806, 605), Instant::now()),
+            live_resize(806, 605)
         );
         // A later report is a move.
-        assert_eq!(sizing.dpi_reported(96), (None, density(96)));
-        let mut at_100 = WindowSizing::new(&task(400, 300, 96));
+        assert_eq!(sizing.dpi_reported(96), (None, density(130)));
+        let mut at_100 = WindowSizing::new(&task(400, 300, 130));
         assert_eq!(at_100.dpi_reported(96), (None, None));
         assert_eq!(at_100.task_size(), ((400, 300), Some((1920, 1080)), None));
     }
 
     #[test]
     fn fr4_a_window_opens_at_its_monitors_scale() {
-        let mut on_200 = WindowSizing::new(&task(548, 974, 96));
-        assert_eq!(on_200.opened(192), ((608, 1080), density(192)));
-        let mut on_100 = WindowSizing::new(&task(548, 974, 96));
+        let mut on_200 = WindowSizing::new(&task(548, 974, 130));
+        assert_eq!(on_200.opened(192), ((607, 1080), density(262)));
+        let mut on_100 = WindowSizing::new(&task(548, 974, 130));
         assert_eq!(on_100.opened(96), ((548, 974), None));
-        let mut on_150 = WindowSizing::new(&task(400, 300, 96));
-        assert_eq!(on_150.opened(144), ((600, 450), density(144)));
+        let mut on_150 = WindowSizing::new(&task(400, 300, 130));
+        assert_eq!(on_150.opened(144), ((603, 452), density(196)));
         // A task whose density the agent could not read keeps its size.
         let mut unknown = WindowSizing::new(&task(400, 300, 0));
-        assert_eq!(unknown.opened(192), ((400, 300), density(192)));
+        assert_eq!(unknown.opened(192), ((400, 300), density(262)));
     }
 }

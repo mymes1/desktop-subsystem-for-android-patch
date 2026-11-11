@@ -32,18 +32,18 @@ fn fr4_android_starts_at_the_main_monitors_density() {
     use dsa_host_windows::monitors::{recorded_density, write_density_record};
     let dir = empty_dir("density");
     // No record: a 100% monitor's.
-    assert_eq!(recorded_density(&dir), 96);
+    assert_eq!(recorded_density(&dir), 130);
     // The user's session recorded a main monitor at 150%.
     write_density_record(&dir, 144).unwrap();
     let density = recorded_density(&dir);
-    assert_eq!(density, 144);
+    assert_eq!(density, 196);
     // What the VM then boots with, for the hwcomposer and SurfaceFlinger alike.
     assert_eq!(
         with_display_density(
-            "androidboot.dsa.display_dpi=96 androidboot.lcd_density=96",
+            "androidboot.dsa.display_dpi=130 androidboot.lcd_density=130",
             density
         ),
-        "androidboot.dsa.display_dpi=144 androidboot.lcd_density=144"
+        "androidboot.dsa.display_dpi=196 androidboot.lcd_density=196"
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }

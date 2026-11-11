@@ -70,7 +70,8 @@ pub const BORDER_DIP: i32 = 6;
 pub const MORE_BUTTON_DIP: u32 = 28;
 
 /// How far the More button sits from the window's top and right edges, which keeps it
-/// inside every corner radius an Android widget is drawn with (up to 41 dp) and off the edges
+/// inside every corner radius an Android widget is drawn with (up to 41 device-independent
+/// pixels, 50 dp) and off the edges
 /// that resize the window.
 pub const MORE_BUTTON_MARGIN_DIP: u32 = 8;
 
@@ -127,13 +128,13 @@ pub fn dip_of_px(px: i32, dpi: u32) -> u32 {
     ((px * u64::from(HOST_BASE_DPI) + u64::from(dpi) / 2) / u64::from(dpi)) as u32
 }
 
-/// Android's density for a monitor of `dpi`: 96 at a scale of 100%, as a dp is 1/160 inch and
-/// a device-independent pixel 1/96 inch.
+/// Android's density for a monitor of `dpi`: 130 at a scale of 100%, as Android's desktop dp
+/// is 1/117.23 inch and a device-independent pixel 1/96 inch.
 pub fn android_density(dpi: u32) -> u32 {
     dsa_host_core::compositor::window_sizing::density_for_dpi(dpi)
 }
 
-/// `dp` of Android's at a monitor of `dpi`, in pixels, rounded to the nearest: 0.6 of a
+/// `dp` of Android's at a monitor of `dpi`, in pixels, rounded to the nearest: 0.819 of a
 /// device-independent pixel each.
 pub fn px_of_dp(dp: u32, dpi: u32) -> i32 {
     widgets::px_of(dp, android_density(dpi)).min(i32::MAX as u32) as i32
@@ -3319,15 +3320,17 @@ mod tests {
             width_dp: 180,
             height_dp: 110,
         };
-        // A dp is 0.6 of a device-independent pixel.
-        assert_eq!(window_size(&placement, 96), (108, 66));
-        assert_eq!(window_size(&placement, 144), (162, 99));
-        assert_eq!(placement_of(10, 20, 162, 99, 144), placement);
-        assert_eq!(android_density(96), 96);
-        assert_eq!(android_density(144), 144);
-        assert_eq!(android_density(120), 120);
+        // A dp is 0.819 of a device-independent pixel.
+        assert_eq!(window_size(&placement, 96), (146, 89));
+        assert_eq!(window_size(&placement, 144), (221, 135));
+        assert_eq!(placement_of(10, 20, 221, 135, 144), placement);
+        assert_eq!(android_density(96), 130);
+        assert_eq!(android_density(144), 196);
+        assert_eq!(android_density(120), 164);
         assert_eq!(dip_of_px(361, 240), 144);
-        assert_eq!(min_window_size(&clock(), 192), (132, 80));
+        // 110 dp wide, and the smallest side a widget window has, 49 dp, which is 40
+        // device-independent pixels.
+        assert_eq!(min_window_size(&clock(), 192), (180, 80));
     }
 
     #[test]
@@ -3862,20 +3865,20 @@ mod tests {
 
     #[test]
     fn fr12_a_widget_window_is_resized_within_what_the_widget_allows() {
-        assert_eq!(min_window_size(&clock(), 96), (66, 40));
-        assert_eq!(max_window_size(&clock(), 96), (2458, 2458));
+        assert_eq!(min_window_size(&clock(), 96), (89, 40));
+        assert_eq!(max_window_size(&clock(), 96), (3328, 3328));
         let capped = WidgetProvider {
             max_width_dp: 200,
             max_height_dp: 120,
             ..clock()
         };
-        assert_eq!(max_window_size(&capped, 96), (120, 72));
+        assert_eq!(max_window_size(&capped, 96), (163, 98));
         let fixed = WidgetProvider {
             resize_mode: 0,
             ..clock()
         };
-        assert_eq!(min_window_size(&fixed, 96), (108, 66));
-        assert_eq!(max_window_size(&fixed, 96), (108, 66));
+        assert_eq!(min_window_size(&fixed, 96), (146, 89));
+        assert_eq!(max_window_size(&fixed, 96), (146, 89));
     }
 
     #[test]
