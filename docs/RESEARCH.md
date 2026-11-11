@@ -2400,3 +2400,30 @@ FR-4의 프레임 규칙(창은 앱이 그 크기로 그린 프레임과 함께�
 - 실제로 프레임마다 몇 MiB를 다시 읽었는지. 0005 뒤의 읽어 오기에는 추적 줄이 없었다. 이제 위의 줄이 남긴다.
 - 렌더러의 해시 비용. 조각마다 호스트가 매핑을 읽어 해시하므로, 매핑이 아주 큰 앱(수백 MiB)에서는 펜스마다 수십 ms가 될 수 있다. 그때는 제출이 없었던 장치의 조각을 건너뛰는 것이 다음 단계다.
 - 다른 GPU. 읽어 오는 형식은 HOST_CACHED뿐이므로 렌더러는 캐시되는 메모리만 읽는다. 다른 메모리 형식 구성을 가진 GPU에서는 재 보지 않았다.
+
+## R30. 앱의 툴바가 창 제목 표시줄 아래에 그려진 까닭: 프리폼 창은 상태 표시줄 인셋을 받지 못한다 (FR-22)
+
+**기준.** 소유자 PC(Windows 11, 200% 모니터, v0.2.2, Android 17 `16373615`)에서 FLO(`skplanet.musicmate`, MainActivity 플레이어 화면)의 메뉴와 캐스트 아이콘이 캡션의 앱 아이콘과 이름에 겹치고, 접기 버튼이 닫기 버튼 아래에 놓였다(`.scratch/widget/flo-app.png`). 폰에서는 바르게 보인다. adb로 읽기만 했다(`dumpsys window`, `dumpsys activity top`, `getprop`). 프레임워크 소스는 이미지가 만들어진 커밋(Android 17 `94b4c163`, Android 16 `45034f06`)의 것을 읽었고, Android 16 `services.jar`의 dex는 `.scratch/aosp-inputs`의 target_files에서 꺼내 읽었다.
+
+### 본 것
+
+- 태스크에는 에이전트가 준 인셋 소스 둘이 있다: `type=statusBars frame=[-1048576,507][1048576,565]`, `type=captionBar` 같은 프레임(58 px). 창은 `EDGE_TO_EDGE_ENFORCED`, `fitTypes`가 비어 있다.
+- 그런데 앱 프로세스의 `InsetsController` 상태(`dumpsys activity top`)에는 `captionBar` 소스 하나뿐이다. 상태 표시줄 소스가 앱에 닿지 않는다.
+- 원인은 `InsetsPolicy.enforceInsetsPolicyForTarget`이다. 떠 있는 창 모드(프리폼, PIP)이면 `WindowInsets.Type.captionBar()`와 IME만 남기고 나머지 소스를 버린다(Android 16과 17 같음). DSA의 태스크는 모두 프리폼이다. 그래서 `getInsets(statusBars())`로 툴바를 미는 앱(FLO와 대부분의 edge-to-edge 앱)은 0을 받아 툴바를 창 맨 위, 캡션 아래에 그린다. `systemBars()`나 `captionBar()`를 쓰는 앱, 그리고 `fitsSystemWindows`로 맞추는 앱은 캡션 바 인셋이 `systemBars()`에 들어가므로 이미 바르다.
+- `mForcedConsumingTypes=statusBars navigationBars`, `mForciblyShowingTypes`는 프리폼 창이 있을 때 `InsetsPolicy.updateSystemBars`가 정하는 값이고, 전역 소스 제공자(시스템 UI의 막대)에만 `FLAG_FORCE_CONSUMING`을 붙인다. 태스크의 로컬 소스는 `flags=`가 비어 있어 강제로 소비되지 않는다. 그래서 레거시 `SYSTEM_UI_FLAG`를 쓰는 앱도 폰과 같이 인셋을 받는다(DecorView의 `consumingStatusBar`는 앱이 `LAYOUT_FULLSCREEN` 없이 맞출 때만).
+- 높이: 200%(192 DPI)에서 표준 창의 캡션과 위 테두리는 58 px(`AdjustWindowRectExForDpi`)이고, 인셋도 58 px다. 맞다. 131 x 배율 규칙에서 Android는 262 dpi로 그리고 58 px은 35.4 dp다. 배율에 따라 31 px@130 dpi(38.2 dp)에서 139 px@654 dpi(34.0 dp)까지로, dp가 배율마다 조금 다르다(Windows가 캡션 높이를 정수 픽셀로 반올림한다).
+- 상태 표시줄 리소스: `status_bar_height_default`와 `status_bar_height_portrait`는 24 dp이고(`status_bar_height`, `_landscape`는 그것을 가리킨다), 큰 화면용으로 `sw1500dp`/`sw1900dp`와 저밀도가 함께 붙은 구성에서 36 dp, 48 dp다. 리소스를 직접 읽는 앱(`getIdentifier("status_bar_height", ...)`)은 24 dp를 받아 캡션보다 11 dp 짧게 민다.
+- 앱이 edge-to-edge가 아니면 DecorView가 상태 표시줄 색 뷰를 `systemBars()` 인셋 높이(캡션 바 포함)로 위에 그리므로, 캡션 아래에는 앱의 상태 표시줄 색이 이미 그려진다. 앱이 색을 정하지 않으면 그 자리에 창 배경이 보인다.
+
+### 고친 것
+
+- 이미지(`make-image.py`, `SERVICES_CODE`): `services.jar`의 `enforceInsetsPolicyForTarget`에서 `isFloating` 다음의 `captionBar()` 호출 하나를 `systemBars()`로 바꾼다. 같은 크기의 명령에서 메서드 번호만 바뀐다. 게스트에는 내비게이션 막대도 시스템 UI도 없으니 시스템 막대 소스는 에이전트가 주는 것뿐이다. 바뀐 jar는 저장된 dex를 4바이트에 맞추고(맞지 않으면 system_server가 20 MiB를 메모리로 복사한다), 공개 빌드의 필터(speed-profile), 클래스 로더 문맥, 앱 이미지, 프로필(`services/art-profile`과 `art-profile-extra`, 빌드의 frameworks/base 커밋, `inputs.json`에 고정)로 다시 컴파일한다. Android 16 jar로 바꾸기를 확인했다(`classes3.dex`, 다시 적용하면 바뀌는 것 없음, 정렬 유지).
+- 프레임워크 오버레이: `status_bar_height`, `_default`, `_portrait`, `_landscape`를 배율마다의 밀도(130, 164, 196, 228, 262, 294, 328, 360, 392, 458, 524, 590, 654 dpi)에서 그 배율의 제목 표시줄 높이로, 밀도 없는 값은 가장 큰 값(100%의 38.2 dp)으로 둔다. `getDimensionPixelSize`가 그 밀도에서 제목 표시줄의 픽셀과 같게 반올림한다.
+- `check-image.py`는 바꾸기가 없거나, dex가 정렬되지 않았거나, 오버레이의 높이가 제목 표시줄과 다른 이미지를 거부한다.
+
+### 확인하지 못한 것
+
+- 실기. 이미지를 빌드하거나 PC에서 실행하지 않았다. Image test가 처음으로 jar를 바꾸고 다시 컴파일한다. PC에서는 FLO 플레이어 화면의 툴바가 캡션 아래에 오는지, `dumpsys activity top`의 앱 `InsetsController`에 `statusBars` 소스가 있는지, `dumpsys window`의 `services.odex`가 쓰이는지(부팅 로그에 `services.jar` dex2oat나 `odex` 거부가 없는지) 본다.
+- Android 17 `services.jar`. Android 17의 소스는 같은 꼴이지만, 그 빌드의 dex는 읽어 보지 않았다. 다른 꼴이면 바꾸기가 이미지 빌드를 멈춘다.
+- 오버레이 값이 앱에 닿는지. 큰 화면 구성(`sw1500dp` 이상과 저밀도)에서는 프레임워크의 더 구체적인 값(36, 48 dp)이 이길 수 있다. 그때 앱은 캡션보다 더 아래로 민다(가리지는 않는다). 밀도를 지키는 앱은 가장 가까운 밀도의 값을 받아 1-2 px 다를 수 있다.
+- 리눅스와 macOS 호스트. 오버레이의 높이는 Windows 제목 표시줄의 것이다. 다른 호스트의 제목 표시줄 높이가 다르면 리소스를 읽는 앱만 몇 px 어긋난다. 인셋은 어느 호스트에서나 그 호스트가 알린 높이다.
