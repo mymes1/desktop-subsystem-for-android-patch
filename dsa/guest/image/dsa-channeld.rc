@@ -28,7 +28,13 @@ on property:sys.boot_completed=1
 # a time because init does nothing else during a command. Writing to the root cgroup covers
 # every process, and "swappiness=200" prefers anonymous pages. vendor.dsa.memory.reclaim_step
 # says how many MiB each quarter takes: together half the anonymous memory, the coldest, so the
-# pages of the processes still running are not swapped out only to come straight back. Then the
+# pages of the processes still running are not swapped out only to come straight back. What
+# zram holds is then compressed again with zstd (dsa-memory.rc names it), which takes about a
+# fifth less than LZ4: every page in zram is marked idle, and up to 64 MiB of them (16384
+# pages) is compressed again each time, so one reclaim keeps init busy for a fraction of a
+# second and the rest follows in the next ones. A page already compressed again is skipped,
+# and one swapped back in leaves zram, so only what stays cold is ever recompressed. zram's
+# own compaction then frees the memory the old copies left in its pages. Then the
 # clean page cache and the reclaimable kernel caches are dropped, and compaction leaves whole
 # blocks free, which free page reporting hands back to Hyper-V. Nothing is lost: what left is read back when needed.
 # It waits for boot to finish, so a boot still under way does not swap out what it is using;
@@ -38,6 +44,9 @@ on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
+    write /sys/devices/virtual/block/zram0/idle all
+    write /sys/devices/virtual/block/zram0/recompress "type=idle max_pages=16384"
+    write /sys/devices/virtual/block/zram0/compact 1
     write /proc/sys/vm/drop_caches 3
     write /proc/sys/vm/compact_memory 1
     setprop vendor.dsa.memory.reclaim 0
