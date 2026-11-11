@@ -282,6 +282,32 @@ fn eventually(mut done: impl FnMut() -> bool) -> bool {
     true
 }
 
+/// Starts the service's loop on a thread of its own, as the service does.
+fn run_in_background(
+    updates: &Arc<ProgramUpdates>,
+    stop: &Arc<AtomicBool>,
+    timing: Timing,
+) -> thread::JoinHandle<()> {
+    let (updates, stop) = (Arc::clone(updates), Arc::clone(stop));
+    thread::spawn(move || updates.run(&stop, timing))
+}
+
+/// Joins the service's loop, and fails the test with `what` if it has not ended within
+/// ten seconds of being stopped, instead of leaving the whole test run waiting for it.
+fn join_within(worker: thread::JoinHandle<()>, what: &str) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !worker.is_finished() {
+        assert!(
+            Instant::now() < deadline,
+            "the update loop did not end within 10 seconds of being stopped: {what}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    if let Err(panic) = worker.join() {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 fn fresh_dir() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
@@ -515,15 +541,28 @@ fn fr15_turned_off_the_program_list_is_never_fetched() {
     assert_eq!(updates.install_when_idle().unwrap(), None);
     let why = updates.install_now().unwrap_err();
     assert!(why.to_string().contains("turned off"), "{why}");
-    let stop = AtomicBool::new(false);
-    let timing = Timing {
-        first_check: Duration::ZERO,
-        check_interval: Duration::from_millis(10),
-        retry: Duration::from_millis(10),
-    };
-    // Returns at once: there is nothing to do while updates are off.
-    updates.run(&stop, timing);
+    // Turned off, the loop still runs, to notice program files that a setup run by hand
+    // replaced under the service; it fetches nothing (`NeverFetch` would panic the loop)
+    // and runs no setup, and it ends when the service stops it.
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker = run_in_background(
+        &updates,
+        &stop,
+        Timing {
+            first_check: Duration::ZERO,
+            check_interval: Duration::from_millis(10),
+            retry: Duration::from_millis(10),
+        },
+    );
+    thread::sleep(Duration::from_millis(100));
+    assert!(
+        !worker.is_finished(),
+        "the loop keeps looking for replaced program files while updates are off"
+    );
+    stop.store(true, Ordering::Relaxed);
+    join_within(worker, "program updates turned off in the configuration");
     assert_eq!(installer.runs(), 0);
+    assert_eq!(installer.restarts(), 0);
 }
 
 #[test]
@@ -570,7 +609,7 @@ fn fr17_turned_off_in_the_settings_the_program_list_is_not_fetched_until_turned_
         "the loop waits for the settings to turn updates on"
     );
     stop.store(true, Ordering::Relaxed);
-    worker.join().unwrap();
+    join_within(worker, "program updates turned off in the settings");
     assert_eq!(installer.runs(), 0);
 }
 
@@ -632,7 +671,7 @@ fn fr15_an_update_waits_while_an_android_runs_and_installs_when_all_stop() {
         thread::sleep(Duration::from_millis(20));
     }
     stop.store(true, Ordering::Relaxed);
-    runner.join().unwrap();
+    join_within(runner, "an update waiting for every Android to stop");
     assert_eq!(
         h.installer.runs(),
         1,
@@ -967,7 +1006,7 @@ fn fr15_program_files_newer_than_the_service_restart_it_into_them_once() {
     assert!(eventually(|| h.installer.restarts() == 1));
     thread::sleep(Duration::from_millis(200));
     stop.store(true, Ordering::Relaxed);
-    runner.join().unwrap();
+    join_within(runner, "a service whose program files were replaced");
     assert_eq!(h.installer.restarts(), 1, "asked once");
 }
 
@@ -1073,7 +1112,7 @@ fn fr15_a_setup_file_still_in_use_after_the_update_is_removed_later() {
         thread::sleep(Duration::from_millis(20));
     }
     stop.store(true, Ordering::Relaxed);
-    runner.join().unwrap();
+    join_within(runner, "removing a leftover setup file");
     assert!(!leftover.exists(), "the leftover setup file is removed");
 }
 
