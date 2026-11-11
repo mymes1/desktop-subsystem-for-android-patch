@@ -510,8 +510,9 @@ MEMORY_PROPS = {
 
 # The density of the freeform display every task window lives on, by default: a 100% monitor's.
 # The host replaces it on the kernel command line at each boot with the density of the user's
-# main monitor (144 at 150%: a dp is 1/160 inch and a host pixel at 100% 1/96 inch), the
-# density a task window there asks its task to draw at. The
+# main monitor (196 at 150%: Android's desktop dp is 1/117.23 inch and a host pixel at 100%
+# 1/96 inch, so the density is 131 times the scale, rounded to an even number), the density a
+# task window there asks its task to draw at. The
 # hwcomposer reports it (ro.boot.dsa.display_dpi) and SurfaceFlinger takes it from
 # ro.sf.lcd_density alone, which dsa-display.rc sets from androidboot.lcd_density. Without
 # ro.sf.lcd_density SurfaceFlinger falls back to 213 dpi ("ro.sf.lcd_density must be defined as
@@ -520,7 +521,7 @@ MEMORY_PROPS = {
 # was destroyed before its first window that way and crashed in its own clean-up. No build.prop
 # may set it: init reads them before any script, and the first value of a read-only property
 # stays, so a build.prop value would hold every boot at this default.
-DISPLAY_DPI = 96
+DISPLAY_DPI = 130
 
 # The OpenGL ES version Android reports to apps and to app stores: 3.2 (0x30002), which ANGLE
 # provides on the host GPU's Vulkan for every app. PackageManager reports it as reqGlEsVersion,

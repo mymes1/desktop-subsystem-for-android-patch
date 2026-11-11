@@ -5,7 +5,7 @@ package io.github.thisisthepy.dsa.agent.splash
  * is drawn from pixels at least as fine as the ones it lands on.
  *
  * A task window shows the task's frames one guest pixel to one screen pixel, and the task
- * draws at the density of its window's monitor (320 dpi at 200%). An icon loaded at a lower
+ * draws at the density of its window's monitor (262 dpi at 200%). An icon loaded at a lower
  * density, or at the size an app ships for a phone, has fewer pixels than the square it is
  * drawn into and would be scaled up, which blurs it. So an icon is loaded first at the task's
  * density, and when its bitmap is still smaller than where it is drawn, again at the density

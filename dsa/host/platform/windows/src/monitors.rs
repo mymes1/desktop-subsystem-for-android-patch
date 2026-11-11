@@ -165,7 +165,7 @@ mod session {
     }
 
     /// The density apps draw at on this session's main monitor, as a task's window gives it:
-    /// 96 at a scale of 100%, 144 at 150%. Android starts at it, and a split-APK bundle's
+    /// 130 at a scale of 100%, 196 at 150%. Android starts at it, and a split-APK bundle's
     /// density split is chosen for it.
     pub fn system_density() -> u32 {
         dsa_host_core::guest_display::boot_density(Some(main_monitor_dpi()))

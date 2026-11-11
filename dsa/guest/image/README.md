@@ -296,11 +296,11 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   each task's frames rather than one picture of the whole display. The kernel command line
   sets its display (`androidboot.dsa.display_width`, `_height`, `_dpi`) and drops the
   settings only Cuttlefish's composer read.
-- Every app starts at the density of the user's main monitor (96 dpi at a scale of 100%, 144
-  at 150%). The image's kernel command line names 96 (`androidboot.dsa.display_dpi` for the
+- Every app starts at the density of the user's main monitor (130 dpi at a scale of 100%,
+  196 at 150%). The image's kernel command line names 130 (`androidboot.dsa.display_dpi` for the
   hwcomposer, `androidboot.lcd_density` for SurfaceFlinger), and the host replaces both at each
   boot. `dsa-display.rc` sets `ro.sf.lcd_density` from it, and no `build.prop` sets that
-  property, since a `build.prop` value would come first and hold every boot at 96. An app
+  property, since a `build.prop` value would come first and hold every boot at 130. An app
   that started at another density than its window's monitor would be relaunched as soon as
   the window asked for the right one.
 - DSA's primary audio module (`/vendor/bin/hw/dsa-audio`, from `dsa/guest/audio/`) is added when
