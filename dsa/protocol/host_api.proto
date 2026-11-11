@@ -1869,6 +1869,11 @@ message NetworkStatus {
   // Why advanced networking is not in use although it is on, or another problem with the
   // network. Empty when there is none.
   string problem = 5;
+  // Who answers the guest's DNS queries: "host" while this host's resolver answers them (so
+  // the host's hosts file, VPN and DNS filters apply to Android's apps), "network" while the
+  // host's resolver does not answer and Android asks `dns_servers` itself. Empty while Android
+  // is not running or still booting, and from a service that cannot say.
+  string dns_resolver = 6;
 }
 
 // Erases the caller's Android data: the apps they installed, their accounts and every app's

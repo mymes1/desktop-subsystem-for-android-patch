@@ -61,6 +61,7 @@ import io.github.thisisthepy.dsa.agent.memory.ClosedApps
 import io.github.thisisthepy.dsa.agent.memory.MemoryReporter
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
 import io.github.thisisthepy.dsa.agent.network.NetworkSetup
+import io.github.thisisthepy.dsa.agent.network.PrivateDnsPort
 import io.github.thisisthepy.dsa.agent.network.WifiPort
 import io.github.thisisthepy.dsa.agent.background.AppStopper
 import io.github.thisisthepy.dsa.agent.background.BackgroundApps
@@ -214,6 +215,7 @@ class Agent(
     systemSettings: SystemSettingsPort = SystemSettingsPort.NONE,
     deviceName: DeviceNamePort = DeviceNamePort.NONE,
     wifi: WifiPort = WifiPort.NONE,
+    privateDns: PrivateDnsPort = PrivateDnsPort.NONE,
     dragCatcher: DragCatcher = DragCatcher.NONE,
     dragRunner: ((Runnable) -> Unit)? = null,
     private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
@@ -227,7 +229,7 @@ class Agent(
     appAudio: AppAudioPort = AppAudioPort.NONE,
     appVolumes: AppVolumeStore = AppVolumeStore.memory(),
 ) {
-    private val network = NetworkSetup(wifi, log)
+    private val network = NetworkSetup(wifi, log, privateDns)
     private val channel = ChannelClient(
         locator = locator,
         scheduler = scheduler,

@@ -164,15 +164,28 @@ public enum NetworkMode
     Off,
 }
 
+/// <summary>Who answers Android's DNS queries.</summary>
+public enum DnsResolver
+{
+    /// <summary>The service did not say: Android is still starting, or the service is older.</summary>
+    Unknown,
+    /// <summary>This PC's resolver, so its hosts file, VPN and DNS filters apply.</summary>
+    Host,
+    /// <summary>This PC's resolver does not answer, so Android asks the network's DNS servers
+    /// itself.</summary>
+    Network,
+}
+
 /// <summary>Android's network as the service reports it: the mode, the addresses (IPv4
-/// first), the DNS servers, the gateway, and a problem when the network is not what the
-/// setting asks for.</summary>
+/// first), the DNS servers, the gateway, a problem when the network is not what the
+/// setting asks for, and who answers Android's DNS queries.</summary>
 public sealed record NetworkInfo(
     NetworkMode Mode,
     IReadOnlyList<string> Addresses,
     IReadOnlyList<string> DnsServers,
     string Gateway,
-    string? Problem);
+    string? Problem,
+    DnsResolver DnsResolver = DnsResolver.Unknown);
 
 /// <summary>A root certificate a user or an administrator added to this computer, as the service
 /// found it: who it is for and who signed it (distinguished names), the store it was found in

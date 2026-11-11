@@ -135,6 +135,26 @@ on property:vendor.dsa.root_elevation=1
 on property:vendor.dsa.root_elevation=0
     stop dsa_su
 
+# The guest's DNS, answered by the host's resolver. dsa-channeld listens on the loopback
+# addresses (port 5553, UDP and TCP) and hands each query to the host on the DNS port; it sets
+# vendor.dsa.dns to "on" while the host answers and to "off" when the host stays unreachable.
+# dsa-channeld --dns-redirect then makes the packet filter send every DNS query a program sends
+# to port 53 to that port, or stop doing so, in a nat chain of its own (dsa_dns), so the
+# guest's queries reach the host's resolver rather than the network's DNS servers. It runs as
+# root, which changing the packet filter needs, in a domain of its own (channeld.cil), and once
+# netd runs, because netd sets up the packet filter's tables at its start.
+service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect
+    user root
+    group root
+    capabilities NET_ADMIN NET_RAW
+    seclabel u:r:dsa_dns_redirect:s0
+    oneshot
+    disabled
+    stdio_to_kmsg
+
+on property:vendor.dsa.dns=* && property:init.svc.netd=running
+    start dsa_dns_redirect
+
 # KeyMint's root key, which the host keeps sealed by the user's credential store and gives
 # once each boot. dsa-channeld --keymint-key asks for it on the host's KeyMint port and writes
 # it to /dev/dsa_keymint/root_key, a tmpfs file only KeyMint's domain may read

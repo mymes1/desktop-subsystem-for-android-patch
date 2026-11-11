@@ -939,8 +939,14 @@ msgstr "연결"
 msgid "Address"
 msgstr "주소"
 
-msgid "DNS servers"
-msgstr "DNS 서버"
+msgid "DNS"
+msgstr "DNS"
+
+msgid "Answered by this computer's resolver, so its hosts file, VPN and DNS filters apply to Android apps."
+msgstr "이 컴퓨터의 해석기가 응답합니다. 이 컴퓨터의 hosts 파일, VPN, DNS 필터가 Android 앱에도 적용됩니다."
+
+msgid "This computer's resolver does not answer, so Android asks the network's DNS servers: {0}"
+msgstr "이 컴퓨터의 해석기가 응답하지 않아 Android가 네트워크의 DNS 서버에 직접 묻습니다: {0}"
 
 msgid "Gateway"
 msgstr "게이트웨이"

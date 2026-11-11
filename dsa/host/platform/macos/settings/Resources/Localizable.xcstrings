@@ -7402,6 +7402,40 @@
         }
       }
     },
+    "Network_DnsFallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac's resolver does not answer, so Android asks the network's DNS servers: {0}"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 Mac의 해석기가 응답하지 않아 Android가 네트워크의 DNS 서버에 직접 묻습니다: {0}"
+          }
+        }
+      }
+    },
+    "Network_DnsHost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered by this Mac's resolver, so its hosts file, VPN and DNS filters apply to Android apps."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 Mac의 해석기가 응답합니다. 이 Mac의 hosts 파일, VPN, DNS 필터가 Android 앱에도 적용됩니다."
+          }
+        }
+      }
+    },
     "Network_ModeAdvanced": {
       "extractionState": "manual",
       "localizations": {
@@ -7527,13 +7561,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "DNS servers"
+            "value": "DNS"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "DNS 서버"
+            "value": "DNS"
           }
         }
       }

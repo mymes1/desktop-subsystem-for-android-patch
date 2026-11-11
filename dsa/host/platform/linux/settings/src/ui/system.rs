@@ -345,7 +345,7 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
         (row, label)
     };
     let (_, dns) = {
-        let (row, label) = value_row(&tr("DNS servers"), "");
+        let (row, label) = value_row(&tr("DNS"), "");
         status.add(&row);
         (row, label)
     };
@@ -399,11 +399,7 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
             address.set_label(&view::list_or_none(
                 network.map(|n| n.addresses.as_slice()).unwrap_or_default(),
             ));
-            dns.set_label(&view::list_or_none(
-                network
-                    .map(|n| n.dns_servers.as_slice())
-                    .unwrap_or_default(),
-            ));
+            dns.set_label(&view::network_dns_text(network));
             gateway.set_label(&network.map(|n| n.gateway.clone()).unwrap_or_default());
             let why = network.and_then(|n| n.problem.clone());
             problem.set_visible(why.is_some());

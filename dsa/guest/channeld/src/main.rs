@@ -3,6 +3,7 @@
 //!     dsa-channeld [--port <port>] [--log-port <port>] [--bootconfig <path>] [--cid <cid>]
 //!     dsa-channeld --keymint-key
 //!     dsa-channeld --cacerts-setup
+//!     dsa-channeld --dns-redirect
 //!
 //! It reads the boot's secret from the kernel's bootconfig, connects to the host over
 //! vsock, and keeps the connection, connecting again whenever it is lost. While the host
@@ -11,7 +12,9 @@
 //! when it cannot work at all: no secret, or a host that refuses this guest for good.
 //! With `--keymint-key` it only fetches KeyMint's root key from the host and exits. With
 //! `--cacerts-setup` it only copies Android's system certificates into the folders init binds
-//! over them, so the host's roots can be added beside them later, and exits.
+//! over them, so the host's roots can be added beside them later, and exits. With
+//! `--dns-redirect` (as root) it only makes the packet filter rules that send the guest's DNS
+//! queries to its DNS stub match `vendor.dsa.dns`, and exits.
 //! Messages go to standard error, which init sends to the kernel log.
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -632,6 +635,91 @@ mod daemon {
         )
     }
 
+    /// Switches the packet filter rules that send the guest's DNS queries to the stub: init
+    /// runs `dsa-channeld --dns-redirect` when the property changes (`dsa-channeld.rc`).
+    #[cfg(target_os = "android")]
+    fn switch_dns(on: bool) {
+        use dsa_guest_channeld::dns_stub::PROPERTY;
+        if let Err(why) = set_property(PROPERTY, if on { "on" } else { "off" }) {
+            say!("could not switch the guest's DNS to the host's resolver: {why}");
+        }
+    }
+
+    /// Off Android there is no init to set the packet filter.
+    #[cfg(not(target_os = "android"))]
+    fn switch_dns(_on: bool) {}
+
+    /// The guest's DNS, answered by the host's resolver: the stub on the loopback addresses,
+    /// and the connection to the host's DNS port it hands each query to, past the same
+    /// handshake as the control channel. The redirect to the stub is on only while the host
+    /// answers, so the guest keeps its network's DNS servers otherwise.
+    fn serve_dns(credentials: &Credentials, cid: u32) {
+        use dsa_guest_channeld::dns_stub::{self, Stub, Tunnel};
+        let stub = match Stub::bind(dns_stub::STUB_PORT) {
+            Ok(stub) => stub,
+            Err(why) => {
+                say!(
+                    "the DNS stub cannot listen ({why}); the guest asks its network's DNS \
+                     servers"
+                );
+                switch_dns(false);
+                return;
+            }
+        };
+        let credentials = credentials.clone();
+        let connect: Box<dns_stub::DnsConnector> = Box::new(move || {
+            let mut connection = VsockConnector {
+                cid,
+                port: dns_stub::PORT,
+            }
+            .connect(std::time::Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
+            guest_connect(
+                connection.as_mut(),
+                &credentials.hello,
+                &credentials.secret,
+                std::time::Duration::from_secs(10),
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(connection)
+        });
+        let tunnel = Arc::new(Tunnel::new(connect, Box::new(switch_dns)));
+        stub.serve(Arc::clone(&tunnel), Arc::new(|line: &str| say!("{line}")));
+        let spawned = thread::Builder::new()
+            .name("dsa-dns-host".into())
+            .spawn(move || {
+                let stop = AtomicBool::new(false);
+                tunnel.run(&stop, &|line| say!("{line}"));
+            });
+        if let Err(why) = spawned {
+            say!(
+                "the guest's DNS cannot reach the host ({why}); it asks its network's DNS servers"
+            );
+            switch_dns(false);
+        }
+    }
+
+    /// `--dns-redirect`: makes the packet filter send the guest's DNS queries to the stub, or
+    /// stop sending them, as `vendor.dsa.dns` says. init runs it as root.
+    fn dns_redirect() -> i32 {
+        let run = |program: &str, args: &[String]| -> Result<(), String> {
+            let output = std::process::Command::new(program)
+                .args(args)
+                .output()
+                .map_err(|e| e.to_string())?;
+            if output.status.success() {
+                return Ok(());
+            }
+            let said = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Err(if said.is_empty() {
+                format!("it ended with {}", output.status)
+            } else {
+                said
+            })
+        };
+        dsa_guest_channeld::dns_redirect::run(&read_property, &run, &|line| say!("{line}"))
+    }
+
     pub fn run() -> i32 {
         // The two jobs init runs this program for besides the daemon: mounting the host's
         // folders (as root), and serving the shared storage to the host (as media_rw).
@@ -653,6 +741,9 @@ mod daemon {
         }
         if std::env::args().nth(1).as_deref() == Some("--keymint-key") {
             return keymint_key();
+        }
+        if std::env::args().nth(1).as_deref() == Some("--dns-redirect") {
+            return dns_redirect();
         }
         if std::env::args().nth(1).as_deref() == Some("--cacerts-setup") {
             use dsa_guest_channeld::cacerts::{setup, FOLDERS, ROOT};
@@ -775,6 +866,7 @@ mod daemon {
             });
         }
         serve_clients(&router);
+        serve_dns(&credentials, options.cid);
         {
             let router = Arc::clone(&router);
             thread::spawn(move || reclaim_idle_memory(router));

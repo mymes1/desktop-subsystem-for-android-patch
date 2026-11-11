@@ -5,7 +5,7 @@ use dsa_host_core::input::PointerEvent;
 use dsa_host_core::keys::KeyEvent;
 use dsa_host_core::tasks::TaskRequestError;
 use std::process::{Command, Output};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use dsa_cli::{parse, Command as Cmd};
@@ -2288,18 +2288,23 @@ fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_d
         Cmd::Network
     );
     let ((listener, _, _), endpoint) = local_pair();
-    let network: NetworkSource = Arc::new(|_: &str, settings: &Settings| {
-        Some(NetworkStatus {
-            mode: if settings.advanced_networking {
-                NetworkStatus::ADVANCED.into()
-            } else {
-                NetworkStatus::NAT.into()
-            },
-            addresses: vec!["172.28.16.2".into(), "fd5a:d5a:0:1::2".into()],
-            dns_servers: vec!["172.28.16.1".into()],
-            gateway: "172.28.16.1".into(),
-            problem: None,
-        })
+    let resolver = Arc::new(Mutex::new(String::new()));
+    let network: NetworkSource = Arc::new({
+        let resolver = Arc::clone(&resolver);
+        move |_: &str, settings: &Settings| {
+            Some(NetworkStatus {
+                mode: if settings.advanced_networking {
+                    NetworkStatus::ADVANCED.into()
+                } else {
+                    NetworkStatus::NAT.into()
+                },
+                addresses: vec!["172.28.16.2".into(), "fd5a:d5a:0:1::2".into()],
+                dns_servers: vec!["172.28.16.1".into()],
+                gateway: "172.28.16.1".into(),
+                problem: None,
+                dns_resolver: resolver.lock().unwrap().clone(),
+            })
+        }
     });
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
@@ -2321,6 +2326,25 @@ fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_d
         "{text}"
     );
     assert!(text.contains("DNS servers: 172.28.16.1"), "{text}");
+
+    // Who answers Android's names: this computer's resolver, or the network's DNS servers
+    // when that does not answer.
+    *resolver.lock().unwrap() = NetworkStatus::DNS_HOST.into();
+    let status = json_of(&dsa(&endpoint, "network --json"));
+    assert_eq!(status["dns_resolver"], "host");
+    let text = stdout(&dsa(&endpoint, "network"));
+    assert!(
+        text.contains("DNS: answered by this computer's resolver"),
+        "{text}"
+    );
+    *resolver.lock().unwrap() = NetworkStatus::DNS_NETWORK.into();
+    let status = json_of(&dsa(&endpoint, "network --json"));
+    assert_eq!(status["dns_resolver"], "network");
+    let text = stdout(&dsa(&endpoint, "network"));
+    assert!(
+        text.contains("DNS: this computer's resolver does not answer, so Android asks 172.28.16.1"),
+        "{text}"
+    );
 
     let changed = json_of(&dsa(
         &endpoint,

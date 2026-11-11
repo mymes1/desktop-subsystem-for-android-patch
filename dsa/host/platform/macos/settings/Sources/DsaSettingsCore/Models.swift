@@ -105,6 +105,16 @@ public enum NetworkMode: Equatable, Sendable {
     case off
 }
 
+/// Who answers Android's DNS queries.
+public enum DnsResolver: Equatable, Sendable {
+    /// The service did not say: Android is still starting, or the service is older.
+    case unknown
+    /// This Mac's resolver, so its hosts file, VPN and DNS filters apply.
+    case host
+    /// This Mac's resolver does not answer, so Android asks the network's DNS servers itself.
+    case network
+}
+
 /// Android's network as the service reports it.
 public struct NetworkInfo: Equatable, Sendable {
     public var mode: NetworkMode
@@ -112,13 +122,16 @@ public struct NetworkInfo: Equatable, Sendable {
     public var dnsServers: [String]
     public var gateway: String
     public var problem: String?
+    public var dnsResolver: DnsResolver
 
-    public init(mode: NetworkMode, addresses: [String] = [], dnsServers: [String] = [], gateway: String = "", problem: String? = nil) {
+    public init(mode: NetworkMode, addresses: [String] = [], dnsServers: [String] = [], gateway: String = "", problem: String? = nil,
+                dnsResolver: DnsResolver = .unknown) {
         self.mode = mode
         self.addresses = addresses
         self.dnsServers = dnsServers
         self.gateway = gateway
         self.problem = problem
+        self.dnsResolver = dnsResolver
     }
 }
 

@@ -331,6 +331,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         problems += make_image.keymint_key_problems(names, z.read)
         # The host's root certificates among Android's system certificates.
         problems += make_image.cacerts_problems(names, z.read)
+        # The guest's DNS, answered by the host's resolver through the daemon's stub.
+        problems += make_image.dns_problems(names, z.read)
 
     # The binder service the agent and the hwcomposer reach the daemon through.
     # servicemanager refuses it unless the vendor manifest declares it, and checks who may

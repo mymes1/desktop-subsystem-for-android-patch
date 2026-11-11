@@ -210,6 +210,18 @@ pub enum NetworkMode {
     Off,
 }
 
+/// Who answers Android's DNS queries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DnsResolver {
+    /// The service did not say: Android is still starting, or the service is older.
+    Unknown,
+    /// This computer's resolver, so its hosts file, VPN and DNS filters apply.
+    Host,
+    /// This computer's resolver does not answer, so Android asks the network's DNS servers
+    /// itself.
+    Network,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Network {
     pub mode: NetworkMode,
@@ -217,6 +229,7 @@ pub struct Network {
     pub dns_servers: Vec<String>,
     pub gateway: String,
     pub problem: Option<String>,
+    pub dns_resolver: DnsResolver,
 }
 
 impl Network {
@@ -232,6 +245,11 @@ impl Network {
             dns_servers: texts(json, "dns_servers"),
             gateway: text(json, "gateway"),
             problem: optional_text(json, "problem"),
+            dns_resolver: match json["dns_resolver"].as_str() {
+                Some("host") => DnsResolver::Host,
+                Some("network") => DnsResolver::Network,
+                _ => DnsResolver::Unknown,
+            },
         }
     }
 }

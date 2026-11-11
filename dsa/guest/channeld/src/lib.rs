@@ -21,6 +21,8 @@
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
 //! the guest's diagnostics; [`logd`] reads logd for it.
 //! [`keymint_key`] fetches KeyMint's root key from the host once each boot, for KeyMint alone.
+//! [`dns_stub`] answers the guest's DNS queries with the host's resolver, and
+//! [`dns_redirect`] sets the packet filter rules that send those queries to it.
 //!
 //! The daemon answers the host's clock probes itself ([`clock_answer`]), from the thread that
 //! reads the connection, so the answer carries the guest's clock as close to the probe's
@@ -32,6 +34,8 @@ pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
 pub mod cacerts;
+pub mod dns_redirect;
+pub mod dns_stub;
 pub mod gamepad;
 pub mod gapps;
 pub mod image_store;
