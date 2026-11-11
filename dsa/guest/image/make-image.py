@@ -99,6 +99,13 @@ UNNEEDED_APPS = [
     # Telecom stays for apps that place their own calls. The telephony provider, which runs
     # under the same name, stays and starts only when an app asks it something.
     "TeleService",
+    # The opportunistic network service (com.android.ons) chooses between the SIMs of a
+    # modem, which this VM does not have. It goes with TeleService: it shares the phone's
+    # user ID and process, is persistent and starts at boot, and the network permissions it
+    # uses are declared only by TeleService. Left alone it crashes on its first network
+    # callback, the activity manager restarts it at once, and after a few crashes the rescue
+    # party reboots Android within a minute of every boot.
+    "ONS",
     # Screen savers and wallpapers: the host draws the desktop, and the guest's display is
     # never seen, so there is no screen to save or wallpaper to show (SystemUI, which draws
     # it, is removed above).
