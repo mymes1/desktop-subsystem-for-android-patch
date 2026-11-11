@@ -188,6 +188,10 @@ bool leavesLastFrameUndrawn(const std::vector<LayerFill>& layers, bool hasFrame)
     return true;
 }
 
+bool releaseDue(int64_t withoutLayersSinceMs, int64_t nowMs, int64_t delayMs) {
+    return withoutLayersSinceMs > 0 && nowMs - withoutLayersSinceMs >= delayMs;
+}
+
 ResizeGate::Decision ResizeGate::decide(int32_t task, int64_t postedWidth, int64_t postedHeight,
                                         const Rect& bounds, bool drawn, int64_t nowMs,
                                         uint64_t geometry) {

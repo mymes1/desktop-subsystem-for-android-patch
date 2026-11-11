@@ -202,6 +202,26 @@ Hugepagesize:       2048 kB
     }
 
     @Test
+    fun nfr2_no_process_counts_more_swapped_out_than_its_pss() {
+        // The owner's PC on v0.2.2: android.ext.services had 35 MiB of PSS and a swap figure
+        // of 61 MiB (every page swapped out, other processes' shares included), and the
+        // totals of every process read 0 resident.
+        val processes = listOf(
+            ProcessPss(5225, "com.android.vending", 169_087, 129_844, googlePlay = true),
+            ProcessPss(5294, "com.google.android.gms.unstable", 20_645, 47_804, googlePlay = true),
+            ProcessPss(1347, "android.ext.services", 35_395, 61_008),
+        )
+        val report = guestMemory(MemInfo.parse(MEMINFO), null, processes)
+
+        assertEquals(129_844L + 20_645L + 35_395L, report.swapPssKb)
+        assertTrue(report.swapPssKb < report.totalPssKb)
+        assertEquals(129_844L + 20_645L, report.googlePlaySwapPssKb)
+        assertTrue(report.googlePlaySwapPssKb < report.googlePlayPssKb)
+        assertEquals(35_395L, report.topProcessesList.single { it.pid == 1347 }.swapPssKb)
+        assertEquals(129_844L, report.topProcessesList.single { it.pid == 5225 }.swapPssKb)
+    }
+
+    @Test
     fun nfr2_google_play_services_are_the_google_apps_not_a_google_app_the_user_installed() {
         assertTrue(GooglePlayPackages.isGooglePlay("com.google.android.gms", system = true, fromImage = true))
         assertTrue(GooglePlayPackages.isGooglePlay("com.android.vending", system = true, fromImage = false))

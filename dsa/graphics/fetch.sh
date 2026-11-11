@@ -77,7 +77,8 @@ fi
 # the device extensions its vkCreateDevice takes, host-visible memory the guest keeps
 # in step with the host both ways is reported coherent, only memory the app has mapped
 # is kept in step (the rest is never sent, read back or touched), and what a CPU wrote into
-# a buffer the GPU samples is copied up to the host before the GPU is given work.
+# a buffer the GPU samples is copied up to the host before the GPU is given work, and a
+# window buffer's host ColorBuffer is closed when the last image made on it is destroyed.
 for patch in "$patch_dir"/guest/mesa/*.patch; do
     git -C "$mesa_dir" apply --recount --check "$patch"
     git -C "$mesa_dir" apply --recount "$patch"

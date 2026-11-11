@@ -2164,6 +2164,47 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 부가 기능 디스크에서 Google 앱 이미지를 붙이는 다음 부팅의 값. 그때는 `directio`가 실제로 걸려 이미지의 두 번째 캐시가 없어질 것으로 기대한다(재지 않았다).
 - v0.2.1 줄의 게스트 보고가 왜 1-3분 묵었는지. 에이전트의 5분 주기와 호스트의 요청 경로는 두 판이 같다.
 
+### v0.2.2에서 창 하나를 보이면 약 390 MiB가 느는 까닭 (2026-11-11)
+
+**보고.** v0.2.2(Windows 11, 노트북 2880x1800 250%와 125% 외부 모니터, 렌더러는 Intel Arc 내장 GPU, Android 17, Google Play 설치)에서 Play 스토어 창 하나만 열고, 최소화하면 작업 관리자의 DSA가 약 600 MB, 복원하면 약 1.3 GB였다. 같은 분의 `dsa memory`: 최소화 host 873 MiB(vm 812, 렌더러 38 상주/563 private, 앱 창 6, 창 관리자 17), 게스트 페이지 캐시 359, 익명 154, 커널 410(zram 133). 보일 때 host 1265 MiB(vm 990, 렌더러 224, 앱 창 33), 페이지 캐시 507, zram 157. 창 크기는 963x1501 px이다.
+
+**방법.** 빌드하거나 실행하지 않았고 바탕 화면과 설치된 DSA는 건드리지 않았다. 읽은 것: `dsa-wm.log`의 렌더러 메모리 줄(같은 부팅, 렌더러 pid 11040과 전날 pid 89524), 사용자별 안드로이드 로그, 읽기만 하는 adb로 `dumpsys SurfaceFlinger`, `dumpsys window windows`, `dumpsys gfxinfo`, `dumpsys meminfo`, `/proc/vmstat`(10초 간격 두 번), `logcat -d`의 `dsa-channeld` 줄, 그리고 고정된 Mesa(`224e91e3`)의 gfxstream 게스트 코드에 이 저장소의 패치를 차례로 적용한 사본.
+
+**찾은 것.**
+
+1. 렌더러의 GPU 할당이 줄지 않고 는다(내장 GPU라 이것이 호스트 RAM이다). pid 11040: 00:44 GPU-only 148 MiB/11개, 00:53 208/13, 237/19, 00:54 291/29, 01:36 403/44, 01:39 475/47. 전날 pid 89524는 1731 MiB/248개까지 갔고, 앱 프로세스가 끝날 때만 줄었다(vending이 끝나자 1091에서 867로). 곧 할당은 게스트 프로세스에 묶여 있고 그 프로세스가 살아 있는 동안 풀리지 않는다. 원인: 게스트 Vulkan 드라이버(`GrallocMinigbm`)는 gralloc 버퍼마다 호스트 ColorBuffer를 한 번 열고 그 참조를 `release(AHardwareBuffer*)`에서만 닫는다. 그 경로는 기기 메모리로 들여온 버퍼(`VkImportAndroidHardwareBufferInfoANDROID`)뿐이다. 창의 버퍼는 Android의 스왑체인이 버퍼마다 `VkNativeBufferANDROID`로 VkImage를 만드는 경로로 오고(hwui는 `Skia (OpenGL)`, GLES는 ANGLE, ANGLE의 창 표면이 그 스왑체인이다), 그 이미지를 없애도 아무것도 닫지 않았다. 그래서 창이 가졌던 버퍼(크기를 바꿀 때마다, 최소화 뒤 복원할 때마다 새로 만든다)가 모두 앱 프로세스가 끝날 때까지 호스트에 남았다.
+2. 에이전트의 홈 액티비티(`HomeActivity`, 보이지 않는 홈)가 화면 크기 창을 가졌다. SurfaceFlinger의 버퍼 목록에 `VRI[HomeActivity]` 2880x2880 버퍼 두 개(각 32411 KiB)가 있고, DEVICE 층으로 매 프레임 넘어간다(hwcomposer는 어느 태스크에도 들지 않아 호스트로 보내지 않는다). 게스트 gralloc 63 MiB와 호스트 ColorBuffer 63 MiB가 아무도 보지 않는 투명한 창에 쓰였다.
+3. SurfaceFlinger의 클라이언트 타깃(`LegacyFramebufferSurface`) 2880x2880 두 개(63 MiB)가 있다. 화면 크기라 줄일 수 없고, 한 번 클라이언트 합성을 하면 SurfaceFlinger가 끝날 때까지 남는다. 지금은 `usesClientComposition=false`다. 이것은 고치지 않았다(아래).
+4. 최소화한 태스크도 hwcomposer가 합성 대상 ColorBuffer 두 개(태스크 버퍼 크기, 이 창은 1024x1536으로 각 6 MiB)를 계속 쥐었다. 창은 자기 스왑체인에 마지막 프레임을 갖고 있으므로 호스트에는 다음 프레임 때만 필요하다.
+5. 페이지 캐시: 창이 보이는 동안 작업 집합 다듬기가 10-30초마다 72-147 MiB를 내려놓고(목표 256 MiB), 캐시가 곧 다시 찬다(365, 331, 328, 365, 431, 403, 428 MiB). 10초 동안 `pgpgin` +26 MiB, `workingset_refault_file` +16 MiB, 주 폴트 +63이었다. 곧 다듬기가 가져간 것의 약 60%가 20초 안에 `read()`로 되읽혔다. 한 번 보기(5초)에 되읽힘이 8 MiB라 한계 16 MiB에 못 미쳐 목표가 오르지 않았고, 같은 페이지를 되풀이해 내려놓고 읽었다. 부팅 뒤 약 1시간에 `pgpgin`이 41 GiB, 되읽힘이 6.7 GiB였다. 호스트가 "short"라 60초마다 전체 회수(`drop_caches`)도 돌았다. +148 MiB는 이 톱니의 위쪽을 잰 값이다. 무엇이 1 MiB/s로 새로 읽는지는 shell 권한으로 `/proc/<pid>/io`를 읽을 수 없어 가리지 못했다.
+6. 앱 창 프로그램 +27 MiB: 스왑체인 버퍼는 공유 텍스처 크기(1024x1536, 6 MiB)로 그리는 동안 3개, 2초 조용하면 2개(`wanted_swapchain_buffers`), 숨기면 놓는다. 3개 18 MiB에 D3D와 DirectComposition 기본 몫을 더하면 맞는다. 바꿀 것을 찾지 못했다.
+7. `dsa memory`의 "processes:"와 Google Play 줄이 늘 "0 resident"였다. 에이전트가 프로세스별 스왑을 `getMemoryStat("summary.total-swap")`로 읽었는데, 그것은 `getSummaryTotalSwap()`, 곧 공유 페이지까지 통째로 센 스왑 아웃 양이지 SwapPss가 아니다. 합이 781 MiB로 PSS 합 577 MiB보다 커서 상주분이 0이 되었다(`android.ext.services`는 PSS 35 MiB에 스왑 61 MiB, dumpsys의 TOTAL SWAP PSS는 25.8 MiB).
+
+**바꾼 것.**
+
+1. `dsa/graphics/patches/guest/mesa/0009-*.patch`: 프로세스의 ColorBuffer 참조에 보유자 수를 둔다. 버퍼를 들여온 기기 메모리와 창 버퍼 위에 만들거나 묶은 VkImage가 각각 보유자이고, 마지막 보유자가 사라질 때 `rcCloseColorBuffer`한다. 두 스레드가 같은 버퍼를 동시에 열면 남는 참조 하나를 닫는다. 시험: `dsa/graphics/test_window_buffer_patch.py`(`nfr1_`).
+2. `HomeActivity`가 창을 1x1로 둔다(드래그 캐처 창과 같다). 입력 포커스를 받는 일은 그대로다.
+3. hwcomposer: 2초 동안 층이 없는 태스크(최소화, 앱이 뒤로 감)는 합성 ColorBuffer 두 개를 놓고, 다음 프레임이 다시 만든다. 그때가 되면 SurfaceFlinger에 프레임을 청한다. 시험: `nfr1_a_task_without_layers_lets_go_of_its_buffers_only_after_a_while`.
+4. 작업 집합 다듬기: 다듬기마다 그 뒤 되읽힌 양을 센다. 그것이 다듬은 양의 4분의 1에 이르면 다듬기가 작업 집합을 가져간 것이므로, 바닥을 "남긴 목표 + 되읽힌 양"으로 올린다. 바닥은 아무도 되읽지 않은 다듬기가 한 번 지나갈 때마다 64 MiB씩 내려가고, 앱이 닫히면 256 MiB로 돌아간다. 한 번만 읽힌 파일은 목표 위로 쌓이는 대로 다음 다듬기에 나간다. 시험: `nfr1_a_trim_whose_cache_comes_back_slowly_is_not_taken_again`.
+5. 에이전트가 프레임워크의 숨은 `getSummaryTotalSwapPss()`(dumpsys의 TOTAL SWAP PSS)를 부르고, 어떤 프로세스도 PSS보다 많이 스왑 아웃했다고 세지 않는다. 호스트는 옛 에이전트가 보낸 합이 PSS 합보다 크면 그 합 대신 가장 큰 프로세스들의 몫(각각 PSS 이하)을 쓴다. 시험: `nfr2_no_process_counts_more_swapped_out_than_its_pss`(에이전트), `nfr2_a_swap_total_larger_than_the_pss_does_not_make_every_total_zero_resident`(호스트).
+
+**설계상 기대치 (재지 않았다).**
+
+| 항목 | 전 | 후 |
+|---|---|---|
+| 렌더러 GPU 할당, 창 하나로 1시간 | 148/11에서 475/47로 계속 늚 | 살아 있는 버퍼만큼에서 멈춤: 클라이언트 타깃 63, Play 창 버퍼 4개 23, 합성 타깃 12, ANGLE 내부 몫 |
+| 홈 액티비티 버퍼 | 게스트 63 + 호스트 63 MiB | 1x1 두 개 |
+| 최소화한 창의 합성 타깃 | 12 MiB | 2초 뒤 0 |
+| 보이는 동안 다듬기 | 10-30초마다 72-147 MiB, 그 60% 되읽힘 | 되읽힌 것은 다시 다듬지 않고, 새로 읽힌 것만 나감 |
+| `dsa memory` processes 줄 | 0 resident | 상주분이 보임 |
+
+**확인하지 못한 것.**
+
+- 위 모든 수치. 바뀐 게스트 드라이버, 에이전트, hwcomposer, channeld가 담긴 이미지로, 같은 조건(Play 스토어 창 하나, 최소화와 복원, 크기 바꾸기를 여러 번)에서 `dsa-wm.log`의 렌더러 줄이 늘지 않는지, `dumpsys SurfaceFlinger`의 `HomeActivity` 버퍼가 1x1인지, 안드로이드 로그의 `trimming` 줄 간격과 `workingset_refault_file` 증가가 줄었는지를 재야 한다. 렌더러의 할당 수를 자동으로 재는 시험은 실제 GPU와 안드로이드가 있어야 해서 이 변경에 없다.
+- 창 버퍼의 참조를 VkImage가 사라질 때 닫는 것과 호스트가 그 이미지의 `vkDestroyImage`를 처리하는 순서. 둘은 다른 스트림이라 닫기가 먼저 닿을 수 있다. 그러면 호스트 이미지가 풀린 메모리에 묶인 채 곧 없어지는데, Vulkan에서는 쓰지 않는 한 허용된다. 다른 프로세스(SurfaceFlinger, hwcomposer)가 아직 쥔 버퍼는 그 참조로 남는다.
+- 클라이언트 타깃 63 MiB. 줄이려면 SurfaceFlinger의 `FramebufferSurface`가 클라이언트 합성이 없을 때 버퍼를 놓게 하는 프레임워크 패치가 필요하다. 이 변경에 넣지 않았다.
+- 1 MiB/s로 파일을 새로 읽는 프로세스. root 셸이나 `/proc/<pid>/io`를 읽을 권한으로 가려야 한다.
+
 ## R27. 호스트 주소 변환: 행정 경계 데이터 고르기 (FR-36)
 
 FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-11-10에 조사했다. 처음에는 공개 서버(Nominatim, `CLGeocoder`)를 썼으나, 소유자가 같은 날 FR-36을 바꿨다(PR #579). Google Play가 없을 때만 DSA가 답하고, 호스트에 둔 행정 경계 데이터로 좌표를 시, 구, 동 수준의 주소로 바꾸며, 서버와 키 없이 위치가 밖으로 나가지 않아야 한다. 아래는 그 조건으로 다시 고른 결과다.

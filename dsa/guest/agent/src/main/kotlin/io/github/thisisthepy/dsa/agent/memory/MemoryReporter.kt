@@ -17,7 +17,14 @@ data class ProcessPss(
     val pssKb: Long,
     val swapPssKb: Long = 0,
     val googlePlay: Boolean = false,
-)
+) {
+    /**
+     * [swapPssKb], never more than [pssKb]: the part swapped out is part of the PSS. A larger
+     * figure is a count of every page swapped out, its share in other processes included, and
+     * it made every total read "0 resident".
+     */
+    val swappedOutKb: Long get() = swapPssKb.coerceIn(0, pssKb.coerceAtLeast(0))
+}
 
 /**
  * Which packages the memory report counts as Google Play services, so the user sees what the
@@ -144,7 +151,7 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
         .setZramOriginalKb(zram?.originalKb ?: 0)
         .setZramUsedKb(zram?.usedKb ?: 0)
         .setTotalPssKb(processes.sumOf { it.pssKb })
-        .setSwapPssKb(processes.sumOf { it.swapPssKb })
+        .setSwapPssKb(processes.sumOf { it.swappedOutKb })
         .setSlabUnreclaimableKb(meminfo.slabUnreclaimableKb)
         .setKernelStackKb(meminfo.kernelStackKb)
         .setPageTablesKb(meminfo.pageTablesKb)
@@ -159,7 +166,7 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
     builder
         .setGooglePlayProcesses(googlePlay.size)
         .setGooglePlayPssKb(googlePlay.sumOf { it.pssKb })
-        .setGooglePlaySwapPssKb(googlePlay.sumOf { it.swapPssKb })
+        .setGooglePlaySwapPssKb(googlePlay.sumOf { it.swappedOutKb })
     processes
         .sortedWith(compareByDescending<ProcessPss> { it.pssKb }.thenBy { it.pid })
         .take(MemoryReporter.TOP_PROCESSES)
@@ -169,7 +176,7 @@ fun guestMemory(meminfo: MemInfo, zram: ZramStat?, processes: List<ProcessPss>, 
                     .setPid(it.pid)
                     .setName(it.name)
                     .setPssKb(it.pssKb)
-                    .setSwapPssKb(it.swapPssKb)
+                    .setSwapPssKb(it.swappedOutKb)
                     .setGooglePlay(it.googlePlay),
             )
         }
