@@ -87,6 +87,8 @@ pub mod data_reset;
 #[cfg(windows)]
 pub mod desktop_shortcuts;
 #[cfg(windows)]
+pub mod dns_resolver;
+#[cfg(windows)]
 pub mod file_share;
 pub mod gpt;
 #[cfg(windows)]
