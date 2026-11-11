@@ -4845,6 +4845,8 @@ CACERTS_RULES = {
         "apps cannot look a certificate up in the bound folders",
     "(allow init dsa_cacerts_file (dir (create search getattr setattr open read write add_name relabelto mounton)))":
         "init cannot make the folder or bind it",
+    "(allow init system_security_cacerts_file (dir (mounton)))":
+        "init cannot bind the copies over Android's certificate folders",
 }
 
 
