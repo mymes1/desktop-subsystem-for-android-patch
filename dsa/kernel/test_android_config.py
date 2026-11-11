@@ -115,6 +115,25 @@ class AndroidKernelConfigTests(unittest.TestCase):
                 new_left -= 1
         self.assertEqual((old_left, new_left), (0, 0), current)
 
+    def test_nfr1_built_in_parts_the_guest_never_uses_are_left_out(self):
+        # The kernel image stays resident for the VM's life. config-wsl builds these in for a
+        # WSL distribution; the guest's disks, file systems and initramfs need none of them.
+        lines = fragment_lines(CONFIG)
+        for option in ["XFS_FS", "SQUASHFS", "ISO9660_FS", "UDF_FS", "EXT2_FS", "BLK_DEV_NVME",
+                       "BLK_DEV_RAM", "KSM", "KALLSYMS_ALL"]:
+            self.assertIn(f"# CONFIG_{option} is not set", lines)
+        # What Android's storage does use stays built in.
+        for option in ["CONFIG_EROFS_FS=y", "CONFIG_F2FS_FS=y"]:
+            self.assertIn(option, lines)
+
+    def test_nfr1_zram_has_zstd_as_a_second_compressor_for_cold_pages(self):
+        # The idle reclaim compresses what stays in zram again with zstd; without
+        # multi-compression the kernel refuses the second compressor and keeps LZ4 alone.
+        config = CONFIG.read_text()
+        for option in ["CONFIG_ZRAM_BACKEND_LZ4=y", "CONFIG_ZRAM_BACKEND_ZSTD=y",
+                       "CONFIG_ZRAM_DEF_COMP_LZ4=y", "CONFIG_ZRAM_MULTI_COMP=y"]:
+            self.assertIn(option, config)
+
     def test_nfr1_reclaim_ages_pages_with_the_multi_generational_lru(self):
         # The guest's gradual trim reclaims a bounded amount of the coldest cache; without
         # MGLRU it cannot tell cold cache from the visible app's working set as well.

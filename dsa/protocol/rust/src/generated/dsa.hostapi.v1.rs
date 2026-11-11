@@ -135,7 +135,7 @@ pub struct ResizeTask {
     pub live: bool,
 }
 /// A task's window moved to a monitor of another scale: asks the caller's Android to draw
-/// the task at `density_dpi` (96 at a scale of 100%, where a dp is 0.6 of a host pixel).
+/// the task at `density_dpi` (130 at a scale of 100%, where a dp is 0.819 of a host pixel).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskDensity {
     #[prost(int32, tag = "1")]
@@ -970,8 +970,8 @@ pub struct PlaceWidget {
     pub widget_id: i32,
     #[prost(message, optional, tag = "2")]
     pub placement: ::core::option::Option<WidgetPlacement>,
-    /// The window's size in its monitor's pixels, and Android's density for it (96 at a scale of
-    /// 100%).
+    /// The window's size in its monitor's pixels, and Android's density for it (130 at a scale
+    /// of 100%).
     #[prost(uint32, tag = "3")]
     pub width: u32,
     #[prost(uint32, tag = "4")]
@@ -1271,7 +1271,7 @@ pub struct Task {
     /// Whether the task has input focus in Android.
     #[prost(bool, tag = "5")]
     pub focused: bool,
-    /// The density the task's app draws at, in dots per inch (96 at a scale of 100%). 0 when
+    /// The density the task's app draws at, in dots per inch (130 at a scale of 100%). 0 when
     /// unknown.
     #[prost(uint32, tag = "6")]
     pub density_dpi: u32,
@@ -1828,14 +1828,14 @@ pub struct GetSettings {}
 /// an update setting, which applies to every user, needs a caller acting as an administrator
 /// (on Windows, an elevated process); otherwise nothing changes and the answer is
 /// ERROR_CODE_NOT_ALLOWED.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SetSettings {
     #[prost(message, optional, tag = "1")]
     pub settings: ::core::option::Option<Settings>,
 }
 /// The settings of the caller's DSA. `render_gpu`, `freeze`, `clipboard` and `links_in_android` are
 /// the caller's own; the update and trace settings are the machine's, shared by every user of it.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Settings {
     /// The GPU the caller's window manager renders on: "display" (the GPU that drives the
     /// primary monitor, the default), "integrated", "discrete", or part of a GPU's name. The
@@ -1988,6 +1988,42 @@ pub struct Settings {
     /// next time the user starts Android.
     #[prost(bool, tag = "39")]
     pub image_auto_restart: bool,
+    /// Whether the caller's Android trusts, as system certificates, the root certificates a user
+    /// or an administrator added to this computer (imported_certificates). On unless the user
+    /// turned it off; a client sends back the value it read. It applies at once, without
+    /// restarting Android.
+    #[prost(bool, tag = "40")]
+    pub host_certificates: bool,
+    /// The root certificates the service found added to this computer's trust stores for the
+    /// caller, whether or not host_certificates is on. Those the operating system ships are left
+    /// out. A client cannot change it.
+    #[prost(message, repeated, tag = "41")]
+    pub imported_certificates: ::prost::alloc::vec::Vec<ImportedCertificate>,
+}
+/// One root certificate the service found added to the computer's trust stores.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImportedCertificate {
+    /// Who the certificate is for and who signed it, as distinguished names ("CN=Example Root,
+    /// O=Example").
+    #[prost(string, tag = "1")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub issuer: ::prost::alloc::string::String,
+    /// Where it was found: "machine" (the computer's trusted root store), "machine_group_policy",
+    /// "machine_enterprise", "user" (the caller's own trusted root store), "user_group_policy",
+    /// "admin" (the computer's administrator trust settings) or "system" (a certificate added to
+    /// the system's certificate store).
+    #[prost(string, tag = "3")]
+    pub source: ::prost::alloc::string::String,
+    /// The store or file it was found in, as the operating system names it.
+    #[prost(string, tag = "4")]
+    pub location: ::prost::alloc::string::String,
+    /// The SHA-256 fingerprint of the certificate, in lower-case hexadecimal.
+    #[prost(string, tag = "5")]
+    pub sha256: ::prost::alloc::string::String,
+    /// When it stops being valid, in seconds since the Unix epoch; 0 when unknown.
+    #[prost(int64, tag = "6")]
+    pub not_after: i64,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

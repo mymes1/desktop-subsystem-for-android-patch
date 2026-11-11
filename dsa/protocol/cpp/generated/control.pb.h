@@ -252,12 +252,6 @@ extern DiagnosticsFileDefaultTypeInternal _DiagnosticsFile_default_instance_;
 class DisplayRefresh;
 struct DisplayRefreshDefaultTypeInternal;
 extern DisplayRefreshDefaultTypeInternal _DisplayRefresh_default_instance_;
-class DnsAnswer;
-struct DnsAnswerDefaultTypeInternal;
-extern DnsAnswerDefaultTypeInternal _DnsAnswer_default_instance_;
-class DnsQuery;
-struct DnsQueryDefaultTypeInternal;
-extern DnsQueryDefaultTypeInternal _DnsQuery_default_instance_;
 class DragData;
 struct DragDataDefaultTypeInternal;
 extern DragDataDefaultTypeInternal _DragData_default_instance_;
@@ -348,6 +342,9 @@ extern HelloAcceptedDefaultTypeInternal _HelloAccepted_default_instance_;
 class HelloRejected;
 struct HelloRejectedDefaultTypeInternal;
 extern HelloRejectedDefaultTypeInternal _HelloRejected_default_instance_;
+class HostCertificates;
+struct HostCertificatesDefaultTypeInternal;
+extern HostCertificatesDefaultTypeInternal _HostCertificates_default_instance_;
 class HostMemory;
 struct HostMemoryDefaultTypeInternal;
 extern HostMemoryDefaultTypeInternal _HostMemory_default_instance_;
@@ -769,8 +766,6 @@ template<> ::dsa::control::v1::DeviceName* Arena::CreateMaybeMessage<::dsa::cont
 template<> ::dsa::control::v1::DiagnosticsDone* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsDone>(Arena*);
 template<> ::dsa::control::v1::DiagnosticsFile* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsFile>(Arena*);
 template<> ::dsa::control::v1::DisplayRefresh* Arena::CreateMaybeMessage<::dsa::control::v1::DisplayRefresh>(Arena*);
-template<> ::dsa::control::v1::DnsAnswer* Arena::CreateMaybeMessage<::dsa::control::v1::DnsAnswer>(Arena*);
-template<> ::dsa::control::v1::DnsQuery* Arena::CreateMaybeMessage<::dsa::control::v1::DnsQuery>(Arena*);
 template<> ::dsa::control::v1::DragData* Arena::CreateMaybeMessage<::dsa::control::v1::DragData>(Arena*);
 template<> ::dsa::control::v1::DragEnd* Arena::CreateMaybeMessage<::dsa::control::v1::DragEnd>(Arena*);
 template<> ::dsa::control::v1::DragItem* Arena::CreateMaybeMessage<::dsa::control::v1::DragItem>(Arena*);
@@ -801,6 +796,7 @@ template<> ::dsa::control::v1::GuestSleepReady* Arena::CreateMaybeMessage<::dsa:
 template<> ::dsa::control::v1::Hello* Arena::CreateMaybeMessage<::dsa::control::v1::Hello>(Arena*);
 template<> ::dsa::control::v1::HelloAccepted* Arena::CreateMaybeMessage<::dsa::control::v1::HelloAccepted>(Arena*);
 template<> ::dsa::control::v1::HelloRejected* Arena::CreateMaybeMessage<::dsa::control::v1::HelloRejected>(Arena*);
+template<> ::dsa::control::v1::HostCertificates* Arena::CreateMaybeMessage<::dsa::control::v1::HostCertificates>(Arena*);
 template<> ::dsa::control::v1::HostMemory* Arena::CreateMaybeMessage<::dsa::control::v1::HostMemory>(Arena*);
 template<> ::dsa::control::v1::HostSleep* Arena::CreateMaybeMessage<::dsa::control::v1::HostSleep>(Arena*);
 template<> ::dsa::control::v1::ImeCommit* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCommit>(Arena*);
@@ -34409,6 +34405,162 @@ class BackupSetting final :
 };
 // -------------------------------------------------------------------
 
+class HostCertificates final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.HostCertificates) */ {
+ public:
+  inline HostCertificates() : HostCertificates(nullptr) {}
+  ~HostCertificates() override;
+  explicit PROTOBUF_CONSTEXPR HostCertificates(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  HostCertificates(const HostCertificates& from);
+  HostCertificates(HostCertificates&& from) noexcept
+    : HostCertificates() {
+    *this = ::std::move(from);
+  }
+
+  inline HostCertificates& operator=(const HostCertificates& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostCertificates& operator=(HostCertificates&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const HostCertificates& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HostCertificates* internal_default_instance() {
+    return reinterpret_cast<const HostCertificates*>(
+               &_HostCertificates_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    195;
+
+  friend void swap(HostCertificates& a, HostCertificates& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(HostCertificates* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostCertificates* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostCertificates* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<HostCertificates>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const HostCertificates& from);
+  void MergeFrom(const HostCertificates& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(HostCertificates* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.HostCertificates";
+  }
+  protected:
+  explicit HostCertificates(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kCertificatesFieldNumber = 2,
+    kEnabledFieldNumber = 1,
+  };
+  // repeated bytes certificates = 2;
+  int certificates_size() const;
+  private:
+  int _internal_certificates_size() const;
+  public:
+  void clear_certificates();
+  const std::string& certificates(int index) const;
+  std::string* mutable_certificates(int index);
+  void set_certificates(int index, const std::string& value);
+  void set_certificates(int index, std::string&& value);
+  void set_certificates(int index, const char* value);
+  void set_certificates(int index, const void* value, size_t size);
+  std::string* add_certificates();
+  void add_certificates(const std::string& value);
+  void add_certificates(std::string&& value);
+  void add_certificates(const char* value);
+  void add_certificates(const void* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& certificates() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_certificates();
+  private:
+  const std::string& _internal_certificates(int index) const;
+  std::string* _internal_add_certificates();
+  public:
+
+  // bool enabled = 1;
+  void clear_enabled();
+  bool enabled() const;
+  void set_enabled(bool value);
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.HostCertificates)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> certificates_;
+    bool enabled_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class PasskeyRequest final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.PasskeyRequest) */ {
  public:
@@ -34448,7 +34600,7 @@ class PasskeyRequest final :
                &_PasskeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    195;
+    196;
 
   friend void swap(PasskeyRequest& a, PasskeyRequest& b) {
     a.Swap(&b);
@@ -34695,7 +34847,7 @@ class PasskeyResponse final :
                &_PasskeyResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    196;
+    197;
 
   friend void swap(PasskeyResponse& a, PasskeyResponse& b) {
     a.Swap(&b);
@@ -34868,7 +35020,7 @@ class KeyMintRootKeyRequest final :
                &_KeyMintRootKeyRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    197;
+    198;
 
   friend void swap(KeyMintRootKeyRequest& a, KeyMintRootKeyRequest& b) {
     a.Swap(&b);
@@ -34985,7 +35137,7 @@ class KeyMintRootKey final :
                &_KeyMintRootKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    198;
+    199;
 
   friend void swap(KeyMintRootKey& a, KeyMintRootKey& b) {
     a.Swap(&b);
@@ -35097,309 +35249,6 @@ class KeyMintRootKey final :
 };
 // -------------------------------------------------------------------
 
-class DnsQuery final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DnsQuery) */ {
- public:
-  inline DnsQuery() : DnsQuery(nullptr) {}
-  ~DnsQuery() override;
-  explicit PROTOBUF_CONSTEXPR DnsQuery(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  DnsQuery(const DnsQuery& from);
-  DnsQuery(DnsQuery&& from) noexcept
-    : DnsQuery() {
-    *this = ::std::move(from);
-  }
-
-  inline DnsQuery& operator=(const DnsQuery& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline DnsQuery& operator=(DnsQuery&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const DnsQuery& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const DnsQuery* internal_default_instance() {
-    return reinterpret_cast<const DnsQuery*>(
-               &_DnsQuery_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    199;
-
-  friend void swap(DnsQuery& a, DnsQuery& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(DnsQuery* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(DnsQuery* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  DnsQuery* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<DnsQuery>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const DnsQuery& from);
-  void MergeFrom(const DnsQuery& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(DnsQuery* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.DnsQuery";
-  }
-  protected:
-  explicit DnsQuery(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kMessageFieldNumber = 2,
-    kIdFieldNumber = 1,
-    kTcpFieldNumber = 3,
-  };
-  // bytes message = 2;
-  void clear_message();
-  const std::string& message() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_message(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_message();
-  PROTOBUF_NODISCARD std::string* release_message();
-  void set_allocated_message(std::string* message);
-  private:
-  const std::string& _internal_message() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
-  std::string* _internal_mutable_message();
-  public:
-
-  // uint32 id = 1;
-  void clear_id();
-  uint32_t id() const;
-  void set_id(uint32_t value);
-  private:
-  uint32_t _internal_id() const;
-  void _internal_set_id(uint32_t value);
-  public:
-
-  // bool tcp = 3;
-  void clear_tcp();
-  bool tcp() const;
-  void set_tcp(bool value);
-  private:
-  bool _internal_tcp() const;
-  void _internal_set_tcp(bool value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.DnsQuery)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
-    uint32_t id_;
-    bool tcp_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class DnsAnswer final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DnsAnswer) */ {
- public:
-  inline DnsAnswer() : DnsAnswer(nullptr) {}
-  ~DnsAnswer() override;
-  explicit PROTOBUF_CONSTEXPR DnsAnswer(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  DnsAnswer(const DnsAnswer& from);
-  DnsAnswer(DnsAnswer&& from) noexcept
-    : DnsAnswer() {
-    *this = ::std::move(from);
-  }
-
-  inline DnsAnswer& operator=(const DnsAnswer& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline DnsAnswer& operator=(DnsAnswer&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const DnsAnswer& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const DnsAnswer* internal_default_instance() {
-    return reinterpret_cast<const DnsAnswer*>(
-               &_DnsAnswer_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    200;
-
-  friend void swap(DnsAnswer& a, DnsAnswer& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(DnsAnswer* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(DnsAnswer* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  DnsAnswer* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<DnsAnswer>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const DnsAnswer& from);
-  void MergeFrom(const DnsAnswer& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(DnsAnswer* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.DnsAnswer";
-  }
-  protected:
-  explicit DnsAnswer(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kMessageFieldNumber = 2,
-    kIdFieldNumber = 1,
-  };
-  // bytes message = 2;
-  void clear_message();
-  const std::string& message() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_message(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_message();
-  PROTOBUF_NODISCARD std::string* release_message();
-  void set_allocated_message(std::string* message);
-  private:
-  const std::string& _internal_message() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_message(const std::string& value);
-  std::string* _internal_mutable_message();
-  public:
-
-  // uint32 id = 1;
-  void clear_id();
-  uint32_t id() const;
-  void set_id(uint32_t value);
-  private:
-  uint32_t _internal_id() const;
-  void _internal_set_id(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.DnsAnswer)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr message_;
-    uint32_t id_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
 class ListSpeechVoices final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ListSpeechVoices) */ {
  public:
@@ -35439,7 +35288,7 @@ class ListSpeechVoices final :
                &_ListSpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    201;
+    200;
 
   friend void swap(ListSpeechVoices& a, ListSpeechVoices& b) {
     a.Swap(&b);
@@ -35556,7 +35405,7 @@ class SpeechVoice final :
                &_SpeechVoice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    202;
+    201;
 
   friend void swap(SpeechVoice& a, SpeechVoice& b) {
     a.Swap(&b);
@@ -35745,7 +35594,7 @@ class SpeechVoices final :
                &_SpeechVoices_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    203;
+    202;
 
   friend void swap(SpeechVoices& a, SpeechVoices& b) {
     a.Swap(&b);
@@ -35911,7 +35760,7 @@ class SpeakText final :
                &_SpeakText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    204;
+    203;
 
   friend void swap(SpeakText& a, SpeakText& b) {
     a.Swap(&b);
@@ -36111,7 +35960,7 @@ class SpeechAudio final :
                &_SpeechAudio_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    205;
+    204;
 
   friend void swap(SpeechAudio& a, SpeechAudio& b) {
     a.Swap(&b);
@@ -36279,7 +36128,7 @@ class SpeechDone final :
                &_SpeechDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    206;
+    205;
 
   friend void swap(SpeechDone& a, SpeechDone& b) {
     a.Swap(&b);
@@ -36436,7 +36285,7 @@ class StopSpeaking final :
                &_StopSpeaking_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    207;
+    206;
 
   friend void swap(StopSpeaking& a, StopSpeaking& b) {
     a.Swap(&b);
@@ -36566,7 +36415,7 @@ class StartRecognition final :
                &_StartRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    208;
+    207;
 
   friend void swap(StartRecognition& a, StartRecognition& b) {
     a.Swap(&b);
@@ -36745,7 +36594,7 @@ class StopRecognition final :
                &_StopRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    209;
+    208;
 
   friend void swap(StopRecognition& a, StopRecognition& b) {
     a.Swap(&b);
@@ -36875,7 +36724,7 @@ class CancelRecognition final :
                &_CancelRecognition_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    210;
+    209;
 
   friend void swap(CancelRecognition& a, CancelRecognition& b) {
     a.Swap(&b);
@@ -37005,7 +36854,7 @@ class RecognitionEvent final :
                &_RecognitionEvent_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    211;
+    210;
 
   friend void swap(RecognitionEvent& a, RecognitionEvent& b) {
     a.Swap(&b);
@@ -37223,7 +37072,7 @@ class CheckSpelling final :
                &_CheckSpelling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    212;
+    211;
 
   friend void swap(CheckSpelling& a, CheckSpelling& b) {
     a.Swap(&b);
@@ -37406,7 +37255,7 @@ class SpellingMistake final :
                &_SpellingMistake_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    213;
+    212;
 
   friend void swap(SpellingMistake& a, SpellingMistake& b) {
     a.Swap(&b);
@@ -37584,7 +37433,7 @@ class SpellingText final :
                &_SpellingText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    214;
+    213;
 
   friend void swap(SpellingText& a, SpellingText& b) {
     a.Swap(&b);
@@ -37723,7 +37572,7 @@ class SpellingResult final :
                &_SpellingResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    215;
+    214;
 
   friend void swap(SpellingResult& a, SpellingResult& b) {
     a.Swap(&b);
@@ -38072,8 +37921,7 @@ class Envelope final :
     kLaunchShortcut = 681,
     kPinShortcutRequest = 682,
     kPinShortcutAnswer = 683,
-    kDnsQuery = 690,
-    kDnsAnswer = 691,
+    kHostCertificates = 684,
     BODY_NOT_SET = 0,
   };
 
@@ -38082,7 +37930,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    216;
+    215;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -38338,8 +38186,7 @@ class Envelope final :
     kLaunchShortcutFieldNumber = 681,
     kPinShortcutRequestFieldNumber = 682,
     kPinShortcutAnswerFieldNumber = 683,
-    kDnsQueryFieldNumber = 690,
-    kDnsAnswerFieldNumber = 691,
+    kHostCertificatesFieldNumber = 684,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -41797,41 +41644,23 @@ class Envelope final :
       ::dsa::control::v1::PinShortcutAnswer* pin_shortcut_answer);
   ::dsa::control::v1::PinShortcutAnswer* unsafe_arena_release_pin_shortcut_answer();
 
-  // .dsa.control.v1.DnsQuery dns_query = 690;
-  bool has_dns_query() const;
+  // .dsa.control.v1.HostCertificates host_certificates = 684;
+  bool has_host_certificates() const;
   private:
-  bool _internal_has_dns_query() const;
+  bool _internal_has_host_certificates() const;
   public:
-  void clear_dns_query();
-  const ::dsa::control::v1::DnsQuery& dns_query() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::DnsQuery* release_dns_query();
-  ::dsa::control::v1::DnsQuery* mutable_dns_query();
-  void set_allocated_dns_query(::dsa::control::v1::DnsQuery* dns_query);
+  void clear_host_certificates();
+  const ::dsa::control::v1::HostCertificates& host_certificates() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::HostCertificates* release_host_certificates();
+  ::dsa::control::v1::HostCertificates* mutable_host_certificates();
+  void set_allocated_host_certificates(::dsa::control::v1::HostCertificates* host_certificates);
   private:
-  const ::dsa::control::v1::DnsQuery& _internal_dns_query() const;
-  ::dsa::control::v1::DnsQuery* _internal_mutable_dns_query();
+  const ::dsa::control::v1::HostCertificates& _internal_host_certificates() const;
+  ::dsa::control::v1::HostCertificates* _internal_mutable_host_certificates();
   public:
-  void unsafe_arena_set_allocated_dns_query(
-      ::dsa::control::v1::DnsQuery* dns_query);
-  ::dsa::control::v1::DnsQuery* unsafe_arena_release_dns_query();
-
-  // .dsa.control.v1.DnsAnswer dns_answer = 691;
-  bool has_dns_answer() const;
-  private:
-  bool _internal_has_dns_answer() const;
-  public:
-  void clear_dns_answer();
-  const ::dsa::control::v1::DnsAnswer& dns_answer() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::DnsAnswer* release_dns_answer();
-  ::dsa::control::v1::DnsAnswer* mutable_dns_answer();
-  void set_allocated_dns_answer(::dsa::control::v1::DnsAnswer* dns_answer);
-  private:
-  const ::dsa::control::v1::DnsAnswer& _internal_dns_answer() const;
-  ::dsa::control::v1::DnsAnswer* _internal_mutable_dns_answer();
-  public:
-  void unsafe_arena_set_allocated_dns_answer(
-      ::dsa::control::v1::DnsAnswer* dns_answer);
-  ::dsa::control::v1::DnsAnswer* unsafe_arena_release_dns_answer();
+  void unsafe_arena_set_allocated_host_certificates(
+      ::dsa::control::v1::HostCertificates* host_certificates);
+  ::dsa::control::v1::HostCertificates* unsafe_arena_release_host_certificates();
 
   void clear_body();
   BodyCase body_case() const;
@@ -42030,8 +41859,7 @@ class Envelope final :
   void set_has_launch_shortcut();
   void set_has_pin_shortcut_request();
   void set_has_pin_shortcut_answer();
-  void set_has_dns_query();
-  void set_has_dns_answer();
+  void set_has_host_certificates();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -42235,8 +42063,7 @@ class Envelope final :
       ::dsa::control::v1::LaunchShortcut* launch_shortcut_;
       ::dsa::control::v1::PinShortcutRequest* pin_shortcut_request_;
       ::dsa::control::v1::PinShortcutAnswer* pin_shortcut_answer_;
-      ::dsa::control::v1::DnsQuery* dns_query_;
-      ::dsa::control::v1::DnsAnswer* dns_answer_;
+      ::dsa::control::v1::HostCertificates* host_certificates_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -64737,6 +64564,105 @@ inline void BackupSetting::set_enabled(bool value) {
 
 // -------------------------------------------------------------------
 
+// HostCertificates
+
+// bool enabled = 1;
+inline void HostCertificates::clear_enabled() {
+  _impl_.enabled_ = false;
+}
+inline bool HostCertificates::_internal_enabled() const {
+  return _impl_.enabled_;
+}
+inline bool HostCertificates::enabled() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.HostCertificates.enabled)
+  return _internal_enabled();
+}
+inline void HostCertificates::_internal_set_enabled(bool value) {
+  
+  _impl_.enabled_ = value;
+}
+inline void HostCertificates::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.enabled)
+}
+
+// repeated bytes certificates = 2;
+inline int HostCertificates::_internal_certificates_size() const {
+  return _impl_.certificates_.size();
+}
+inline int HostCertificates::certificates_size() const {
+  return _internal_certificates_size();
+}
+inline void HostCertificates::clear_certificates() {
+  _impl_.certificates_.Clear();
+}
+inline std::string* HostCertificates::add_certificates() {
+  std::string* _s = _internal_add_certificates();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.HostCertificates.certificates)
+  return _s;
+}
+inline const std::string& HostCertificates::_internal_certificates(int index) const {
+  return _impl_.certificates_.Get(index);
+}
+inline const std::string& HostCertificates::certificates(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.HostCertificates.certificates)
+  return _internal_certificates(index);
+}
+inline std::string* HostCertificates::mutable_certificates(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.HostCertificates.certificates)
+  return _impl_.certificates_.Mutable(index);
+}
+inline void HostCertificates::set_certificates(int index, const std::string& value) {
+  _impl_.certificates_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, std::string&& value) {
+  _impl_.certificates_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.certificates_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::set_certificates(int index, const void* value, size_t size) {
+  _impl_.certificates_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.HostCertificates.certificates)
+}
+inline std::string* HostCertificates::_internal_add_certificates() {
+  return _impl_.certificates_.Add();
+}
+inline void HostCertificates::add_certificates(const std::string& value) {
+  _impl_.certificates_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(std::string&& value) {
+  _impl_.certificates_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.certificates_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.HostCertificates.certificates)
+}
+inline void HostCertificates::add_certificates(const void* value, size_t size) {
+  _impl_.certificates_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.HostCertificates.certificates)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+HostCertificates::certificates() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.HostCertificates.certificates)
+  return _impl_.certificates_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+HostCertificates::mutable_certificates() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.HostCertificates.certificates)
+  return &_impl_.certificates_;
+}
+
+// -------------------------------------------------------------------
+
 // PasskeyRequest
 
 // uint64 request_id = 1;
@@ -65354,174 +65280,6 @@ inline void KeyMintRootKey::set_allocated_message(std::string* message) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.KeyMintRootKey.message)
-}
-
-// -------------------------------------------------------------------
-
-// DnsQuery
-
-// uint32 id = 1;
-inline void DnsQuery::clear_id() {
-  _impl_.id_ = 0u;
-}
-inline uint32_t DnsQuery::_internal_id() const {
-  return _impl_.id_;
-}
-inline uint32_t DnsQuery::id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.DnsQuery.id)
-  return _internal_id();
-}
-inline void DnsQuery::_internal_set_id(uint32_t value) {
-  
-  _impl_.id_ = value;
-}
-inline void DnsQuery::set_id(uint32_t value) {
-  _internal_set_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.DnsQuery.id)
-}
-
-// bytes message = 2;
-inline void DnsQuery::clear_message() {
-  _impl_.message_.ClearToEmpty();
-}
-inline const std::string& DnsQuery::message() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.DnsQuery.message)
-  return _internal_message();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void DnsQuery::set_message(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.message_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.DnsQuery.message)
-}
-inline std::string* DnsQuery::mutable_message() {
-  std::string* _s = _internal_mutable_message();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DnsQuery.message)
-  return _s;
-}
-inline const std::string& DnsQuery::_internal_message() const {
-  return _impl_.message_.Get();
-}
-inline void DnsQuery::_internal_set_message(const std::string& value) {
-  
-  _impl_.message_.Set(value, GetArenaForAllocation());
-}
-inline std::string* DnsQuery::_internal_mutable_message() {
-  
-  return _impl_.message_.Mutable(GetArenaForAllocation());
-}
-inline std::string* DnsQuery::release_message() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.DnsQuery.message)
-  return _impl_.message_.Release();
-}
-inline void DnsQuery::set_allocated_message(std::string* message) {
-  if (message != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.message_.IsDefault()) {
-    _impl_.message_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DnsQuery.message)
-}
-
-// bool tcp = 3;
-inline void DnsQuery::clear_tcp() {
-  _impl_.tcp_ = false;
-}
-inline bool DnsQuery::_internal_tcp() const {
-  return _impl_.tcp_;
-}
-inline bool DnsQuery::tcp() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.DnsQuery.tcp)
-  return _internal_tcp();
-}
-inline void DnsQuery::_internal_set_tcp(bool value) {
-  
-  _impl_.tcp_ = value;
-}
-inline void DnsQuery::set_tcp(bool value) {
-  _internal_set_tcp(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.DnsQuery.tcp)
-}
-
-// -------------------------------------------------------------------
-
-// DnsAnswer
-
-// uint32 id = 1;
-inline void DnsAnswer::clear_id() {
-  _impl_.id_ = 0u;
-}
-inline uint32_t DnsAnswer::_internal_id() const {
-  return _impl_.id_;
-}
-inline uint32_t DnsAnswer::id() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.DnsAnswer.id)
-  return _internal_id();
-}
-inline void DnsAnswer::_internal_set_id(uint32_t value) {
-  
-  _impl_.id_ = value;
-}
-inline void DnsAnswer::set_id(uint32_t value) {
-  _internal_set_id(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.DnsAnswer.id)
-}
-
-// bytes message = 2;
-inline void DnsAnswer::clear_message() {
-  _impl_.message_.ClearToEmpty();
-}
-inline const std::string& DnsAnswer::message() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.DnsAnswer.message)
-  return _internal_message();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void DnsAnswer::set_message(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.message_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.DnsAnswer.message)
-}
-inline std::string* DnsAnswer::mutable_message() {
-  std::string* _s = _internal_mutable_message();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DnsAnswer.message)
-  return _s;
-}
-inline const std::string& DnsAnswer::_internal_message() const {
-  return _impl_.message_.Get();
-}
-inline void DnsAnswer::_internal_set_message(const std::string& value) {
-  
-  _impl_.message_.Set(value, GetArenaForAllocation());
-}
-inline std::string* DnsAnswer::_internal_mutable_message() {
-  
-  return _impl_.message_.Mutable(GetArenaForAllocation());
-}
-inline std::string* DnsAnswer::release_message() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.DnsAnswer.message)
-  return _impl_.message_.Release();
-}
-inline void DnsAnswer::set_allocated_message(std::string* message) {
-  if (message != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.message_.SetAllocated(message, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.message_.IsDefault()) {
-    _impl_.message_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DnsAnswer.message)
 }
 
 // -------------------------------------------------------------------
@@ -81348,151 +81106,77 @@ inline ::dsa::control::v1::PinShortcutAnswer* Envelope::mutable_pin_shortcut_ans
   return _msg;
 }
 
-// .dsa.control.v1.DnsQuery dns_query = 690;
-inline bool Envelope::_internal_has_dns_query() const {
-  return body_case() == kDnsQuery;
+// .dsa.control.v1.HostCertificates host_certificates = 684;
+inline bool Envelope::_internal_has_host_certificates() const {
+  return body_case() == kHostCertificates;
 }
-inline bool Envelope::has_dns_query() const {
-  return _internal_has_dns_query();
+inline bool Envelope::has_host_certificates() const {
+  return _internal_has_host_certificates();
 }
-inline void Envelope::set_has_dns_query() {
-  _impl_._oneof_case_[0] = kDnsQuery;
+inline void Envelope::set_has_host_certificates() {
+  _impl_._oneof_case_[0] = kHostCertificates;
 }
-inline void Envelope::clear_dns_query() {
-  if (_internal_has_dns_query()) {
+inline void Envelope::clear_host_certificates() {
+  if (_internal_has_host_certificates()) {
     if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.dns_query_;
+      delete _impl_.body_.host_certificates_;
     }
     clear_has_body();
   }
 }
-inline ::dsa::control::v1::DnsQuery* Envelope::release_dns_query() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.dns_query)
-  if (_internal_has_dns_query()) {
+inline ::dsa::control::v1::HostCertificates* Envelope::release_host_certificates() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.host_certificates)
+  if (_internal_has_host_certificates()) {
     clear_has_body();
-    ::dsa::control::v1::DnsQuery* temp = _impl_.body_.dns_query_;
+    ::dsa::control::v1::HostCertificates* temp = _impl_.body_.host_certificates_;
     if (GetArenaForAllocation() != nullptr) {
       temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.body_.dns_query_ = nullptr;
+    _impl_.body_.host_certificates_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::dsa::control::v1::DnsQuery& Envelope::_internal_dns_query() const {
-  return _internal_has_dns_query()
-      ? *_impl_.body_.dns_query_
-      : reinterpret_cast< ::dsa::control::v1::DnsQuery&>(::dsa::control::v1::_DnsQuery_default_instance_);
+inline const ::dsa::control::v1::HostCertificates& Envelope::_internal_host_certificates() const {
+  return _internal_has_host_certificates()
+      ? *_impl_.body_.host_certificates_
+      : reinterpret_cast< ::dsa::control::v1::HostCertificates&>(::dsa::control::v1::_HostCertificates_default_instance_);
 }
-inline const ::dsa::control::v1::DnsQuery& Envelope::dns_query() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.dns_query)
-  return _internal_dns_query();
+inline const ::dsa::control::v1::HostCertificates& Envelope::host_certificates() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.host_certificates)
+  return _internal_host_certificates();
 }
-inline ::dsa::control::v1::DnsQuery* Envelope::unsafe_arena_release_dns_query() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.dns_query)
-  if (_internal_has_dns_query()) {
+inline ::dsa::control::v1::HostCertificates* Envelope::unsafe_arena_release_host_certificates() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.host_certificates)
+  if (_internal_has_host_certificates()) {
     clear_has_body();
-    ::dsa::control::v1::DnsQuery* temp = _impl_.body_.dns_query_;
-    _impl_.body_.dns_query_ = nullptr;
+    ::dsa::control::v1::HostCertificates* temp = _impl_.body_.host_certificates_;
+    _impl_.body_.host_certificates_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void Envelope::unsafe_arena_set_allocated_dns_query(::dsa::control::v1::DnsQuery* dns_query) {
+inline void Envelope::unsafe_arena_set_allocated_host_certificates(::dsa::control::v1::HostCertificates* host_certificates) {
   clear_body();
-  if (dns_query) {
-    set_has_dns_query();
-    _impl_.body_.dns_query_ = dns_query;
+  if (host_certificates) {
+    set_has_host_certificates();
+    _impl_.body_.host_certificates_ = host_certificates;
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.dns_query)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.host_certificates)
 }
-inline ::dsa::control::v1::DnsQuery* Envelope::_internal_mutable_dns_query() {
-  if (!_internal_has_dns_query()) {
+inline ::dsa::control::v1::HostCertificates* Envelope::_internal_mutable_host_certificates() {
+  if (!_internal_has_host_certificates()) {
     clear_body();
-    set_has_dns_query();
-    _impl_.body_.dns_query_ = CreateMaybeMessage< ::dsa::control::v1::DnsQuery >(GetArenaForAllocation());
+    set_has_host_certificates();
+    _impl_.body_.host_certificates_ = CreateMaybeMessage< ::dsa::control::v1::HostCertificates >(GetArenaForAllocation());
   }
-  return _impl_.body_.dns_query_;
+  return _impl_.body_.host_certificates_;
 }
-inline ::dsa::control::v1::DnsQuery* Envelope::mutable_dns_query() {
-  ::dsa::control::v1::DnsQuery* _msg = _internal_mutable_dns_query();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.dns_query)
-  return _msg;
-}
-
-// .dsa.control.v1.DnsAnswer dns_answer = 691;
-inline bool Envelope::_internal_has_dns_answer() const {
-  return body_case() == kDnsAnswer;
-}
-inline bool Envelope::has_dns_answer() const {
-  return _internal_has_dns_answer();
-}
-inline void Envelope::set_has_dns_answer() {
-  _impl_._oneof_case_[0] = kDnsAnswer;
-}
-inline void Envelope::clear_dns_answer() {
-  if (_internal_has_dns_answer()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.dns_answer_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::DnsAnswer* Envelope::release_dns_answer() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.dns_answer)
-  if (_internal_has_dns_answer()) {
-    clear_has_body();
-    ::dsa::control::v1::DnsAnswer* temp = _impl_.body_.dns_answer_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.dns_answer_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::DnsAnswer& Envelope::_internal_dns_answer() const {
-  return _internal_has_dns_answer()
-      ? *_impl_.body_.dns_answer_
-      : reinterpret_cast< ::dsa::control::v1::DnsAnswer&>(::dsa::control::v1::_DnsAnswer_default_instance_);
-}
-inline const ::dsa::control::v1::DnsAnswer& Envelope::dns_answer() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.dns_answer)
-  return _internal_dns_answer();
-}
-inline ::dsa::control::v1::DnsAnswer* Envelope::unsafe_arena_release_dns_answer() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.dns_answer)
-  if (_internal_has_dns_answer()) {
-    clear_has_body();
-    ::dsa::control::v1::DnsAnswer* temp = _impl_.body_.dns_answer_;
-    _impl_.body_.dns_answer_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_dns_answer(::dsa::control::v1::DnsAnswer* dns_answer) {
-  clear_body();
-  if (dns_answer) {
-    set_has_dns_answer();
-    _impl_.body_.dns_answer_ = dns_answer;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.dns_answer)
-}
-inline ::dsa::control::v1::DnsAnswer* Envelope::_internal_mutable_dns_answer() {
-  if (!_internal_has_dns_answer()) {
-    clear_body();
-    set_has_dns_answer();
-    _impl_.body_.dns_answer_ = CreateMaybeMessage< ::dsa::control::v1::DnsAnswer >(GetArenaForAllocation());
-  }
-  return _impl_.body_.dns_answer_;
-}
-inline ::dsa::control::v1::DnsAnswer* Envelope::mutable_dns_answer() {
-  ::dsa::control::v1::DnsAnswer* _msg = _internal_mutable_dns_answer();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.dns_answer)
+inline ::dsa::control::v1::HostCertificates* Envelope::mutable_host_certificates() {
+  ::dsa::control::v1::HostCertificates* _msg = _internal_mutable_host_certificates();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.host_certificates)
   return _msg;
 }
 
@@ -81508,8 +81192,6 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
-// -------------------------------------------------------------------
-
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

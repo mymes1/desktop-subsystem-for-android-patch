@@ -83,6 +83,9 @@ pub fn serve(
         .with_switch(switch);
     session.serve_backup(Arc::new(backup));
 
+    // The root certificates the administrator's and the user's trust settings added.
+    session.serve_host_certificates(Arc::new(crate::host_certificates::MacRootStore));
+
     let enclave = Arc::new(SecureEnclaveSealer);
     let sealers = HardwareOrStore::new(
         enclave,

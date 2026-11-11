@@ -4980,7 +4980,8 @@ pub fn added_widget_is_placed_and_kept(make: MakeLocal<'_>) {
             x: 64,
             y: 64,
             width_dp: 180,
-            height_dp: 110
+            height_dp: 110,
+            resized: false,
         }
     );
     let second = client
@@ -5051,6 +5052,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
         y: 20,
         width_dp: 240,
         height_dp: 147,
+        resized: false,
     };
     client
         .place_widget(widget.widget_id, moved, 360, 220, 240)
@@ -5077,7 +5079,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
     );
     assert_eq!(client.widgets().unwrap().0[0].placement, moved);
     // A size the widget does not allow is kept within its limits, and no side gets smaller
-    // than a widget window can be: 40 of the host's device-independent pixels, 67 dp.
+    // than a widget window can be: 40 of the host's device-independent pixels, 49 dp.
     client
         .place_widget(
             widget.widget_id,
@@ -5092,7 +5094,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
         )
         .unwrap();
     let kept = client.widgets().unwrap().0[0].placement;
-    assert_eq!((kept.width_dp, kept.height_dp), (110, 67));
+    assert_eq!((kept.width_dp, kept.height_dp), (110, 49));
 }
 
 pub fn widget_pointer_reaches_the_caller(make: MakeLocal<'_>) {

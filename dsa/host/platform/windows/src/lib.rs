@@ -16,6 +16,8 @@
 //! - [`gpt`]: finding and copying the partitions of a user's Android disk.
 //! - [`guid`]: the VM and service IDs those sockets are addressed by.
 //! - [`vm_listener`]: a control channel listener that follows the VM's ID across restarts.
+//! - [`host_certificates`]: the root certificates a user or an administrator added to Windows,
+//!   which the user's Android trusts beside its own.
 //! - [`host_config`]: the configuration file `dsa-hostd` reads.
 //! - [`paths`]: where every file DSA makes at run time goes, in the machine's and each user's
 //!   DSA folder, and moving files from where earlier releases kept them.
@@ -99,6 +101,8 @@ pub mod guid;
 pub mod hcn;
 #[cfg(windows)]
 pub mod hcs;
+#[cfg(windows)]
+pub mod host_certificates;
 pub mod host_config;
 pub mod host_memory;
 #[cfg(windows)]

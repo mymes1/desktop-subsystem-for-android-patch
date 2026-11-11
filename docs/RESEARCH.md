@@ -2128,6 +2128,143 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 플랫폼 정책에는 `sys_ptrace`를 소수 도메인에만 허용하는 neverallow가 있다. 이미지는 `secilc -N`으로 정책을 컴파일하므로 부팅은 막히지 않지만, 호환성 시험(VTS)에서는 걸릴 수 있다.
 - Google Play 서비스가 DeviceConfig `activity_manager`를 실제로 바꾸는지, 바꾼다면 얼마나 자주인지.
 
+### v0.2.2로 올린 뒤 유휴 VM 상주가 늘었다는 보고 (2026-11-11)
+
+**보고.** v0.2.1에서 v0.2.2로 올린 뒤(Windows 11 Pro 26300, x64, 32 GiB, Android 17 이미지 -13, Google Play 설치), 창이 없고 안드로이드가 Doze일 때 서비스 로그의 `memory: host` 줄이 v0.2.1은 host 473-562, vm 432-518(게스트 사용 659-756), v0.2.2는 host 806-967, vm 728-893(게스트 사용 647-802)이었다. 게스트가 쓰는 양은 같은데 VM의 호스트 상주(vmmem의 작업 집합)가 게스트 사용 아래로 내려가지 않는다는 것이었다.
+
+**방법.** 빌드하거나 실행하지 않았고, 바탕 화면과 설치된 DSA는 건드리지 않았다. 읽은 것: `C:\ProgramData\DSA\logs\dsa-hostd.log`(두 판의 줄이 함께 있다), 사용자별 안드로이드 로그(v0.2.1의 마지막 부팅 2026-11-09T19:54:12Z, v0.2.2의 부팅 2026-11-11T00:40:20Z), `v0.2.1..v0.2.2`의 코드 차이, 그리고 실행 중인 v0.2.2에서 `dsa memory`, `Get-Process vmmem*`, 성능 카운터, adb로 `/proc/meminfo`, `/proc/vmstat`, `/proc/diskstats`, `dumpsys deviceidle`.
+
+**찾은 것.**
+
+1. 코드에서 vmmem을 다루는 것은 두 판이 같다. VM 문서의 메모리 설정(`AllowOvercommit`, `EnableDeferredCommit`, `EnableColdDiscardHint`, `EnableColdHint`, 작은 백킹 페이지와 64 KiB 폴트 클러스터, `HostingProcessNameSuffix`)과 커널 명령줄(`page_reporting.page_reporting_order=0`, `swiotlb=2048` 등)은 바뀌지 않았다(커널 명령줄은 두 부팅의 줄을 비교했고, 다른 것은 밀도와 `opengles.version`뿐이다). DSA는 어느 판에서도 vmmem의 작업 집합을 직접 줄이지 않는다(`EmptyWorkingSet`은 창 관리자와 렌더러가 자기 자신에게만 부른다). vmmem이 게스트 사용보다 작아지는 것은 Windows가 호스트 메모리가 모자랄 때 차가운 페이지를 작업 집합에서 내리는 것이고(같은 순간 `vmmemWSL`은 private 1737 MiB 중 182 MiB만 상주했다), 그 동작은 두 판에서 다르지 않다.
+2. VM 크기 조절(#562, #564)은 이 비교와 관계가 없다. v0.2.2 로그에는 `Android's memory grows`도 `could not be set`도 없고, 게스트의 MemTotal은 처음부터 2975 MiB 그대로다. 부가 기능 디스크(#578)는 읽기 전용 VHD로 붙을 뿐이고, 이 부팅에서는 Google 앱 이미지를 아직 `/data`에서 붙였다(`sdc1` 읽기 0번). 디스크로 옮긴 이미지는 다음 시작부터 쓰인다. GPU CPU 업로드(#591)는 hvsocket으로 복사하므로 게스트 메모리를 호스트에 고정하지 않는다. 깨어난 뒤의 회수(#572)는 상주 익명 메모리를 줄인다(이 부팅 48번, 한 번에 수 MiB에서 57 MiB).
+3. 보고한 v0.2.2의 두 값은 첫 부팅 뒤 5-11분, v0.2.1의 값은 같은 VM이 약 29시간(잠자기 여섯 번 포함) 지난 뒤의 것이다. 첫 부팅에는 이미지 갱신, 앱 이미지 없는 GMS 재컴파일, 부가 기능 디스크 준비가 겹쳤다. 같은 단계끼리 견주면 차이가 없다. v0.2.1의 마지막 부팅에서 YouTube 창을 닫은 뒤 처음 일곱 줄(부팅 뒤 약 27-60분)은 vm 508-932, 게스트 607-975, vm에서 게스트 사용을 뺀 값이 -124에서 +35, 평균 약 -45 MiB였다.
+4. 로그 한 줄의 vm과 게스트 수치는 같은 순간의 것이 아니다. v0.2.1 줄의 게스트 보고는 64-215초 전 것이 대부분이고(가장 흔한 값 65 s, 212 s), v0.2.2 줄은 1-3초 전 것이다. 게스트 사용은 회수 주기(캐시가 다시 차고 내려놓기를 10-60초마다 되풀이)에 따라 30초 사이에도 100-190 MiB 오르내린다(아래 표). 그래서 v0.2.1의 "vm이 게스트 사용보다 훨씬 작다"는 일부가 오래된 게스트 수치와 지금의 vm을 견준 것이다.
+5. 로그의 "working set"과 "trim" 줄은 게스트 쪽 기록이라 서비스 로그가 아니라 사용자별 안드로이드 로그(`android-<SID>.log`)에 있다(`dsa-channeld: trimming N MiB of cold page cache (working set target N MiB)`). 두 판의 서비스 로그 어디에도 그런 줄은 없고, v0.2.2의 안드로이드 로그에는 이 부팅에서만 23번 있다. 부팅 뒤 처음 20분의 게스트 회수 횟수도 비슷하다(v0.2.1 마지막 부팅 compact 79, reclaim 79, trim 56; v0.2.2 compact 56, reclaim 57, trim 23, pageout 48).
+
+**v0.2.2에서 같은 순간에 잰 값 (부팅 뒤 약 32-35분, Play 스토어 창 1개, `dsa memory`는 게스트에 새 보고를 받는다).**
+
+| 시각 (KST) | vm 상주 | vm private | 게스트 사용 | vm - 게스트 |
+|---|---|---|---|---|
+| 10:12:20 | 651 | 938 | 694 | -43 |
+| 10:13:20 | 815 | 946 | 857 | -42 |
+| 10:13:50 | 746 | 880 | 787 | -41 |
+| 10:14:21 | 625 | 933 | 671 | -46 |
+| 10:14:51 | 782 | 920 | 830 | -48 |
+| 10:15:21 | 637 | 945 | 680 | -43 |
+| 10:15:51 | 655 | 938 | 707 | -52 |
+
+창이 하나 열린 채로도 vm은 같은 순간의 게스트 사용보다 41-52 MiB 작고, private(커밋)보다 130-310 MiB 작다. 곧 Windows는 v0.2.2의 vmmem도 다듬고 있고, 빈 페이지 보고도 돈다(`dsa memory`: "the VM holds 0 MiB beyond what Android uses"). 부팅 뒤 5-11분의 두 줄(vm - 게스트 +91, +81)은 게스트가 아직 부팅의 일을 하고 Windows가 아직 vmmem을 다듬기 전의 값이다. 이 PC의 호스트 가용 메모리는 그동안 2.4-3.9 GiB였다.
+
+**결론.** v0.2.1과 v0.2.2 사이에 호스트가 VM 메모리를 돌려받거나 다듬는 것을 막은 변경은 찾지 못했다. 보고된 차이는 부팅 뒤 경과 시간이 다른 값을 견준 것과, v0.2.1 줄의 게스트 수치가 몇 분 묵은 것에서 온다. 그래서 고칠 코드를 정하지 않았고 코드는 바꾸지 않았다. 고칠 회귀가 없는데 `nfr2_` 시험을 지어 붙이면 아무것도 지키지 않는다.
+
+**확인하지 못한 것.**
+
+- 창을 모두 닫은 v0.2.2를 몇 시간 둔 뒤의 값. v0.2.1의 432-518 MiB와 견줄 수 있는 것은 그 값뿐이다. 창을 닫는 일은 바탕 화면을 건드리는 것이라 이 조사에서 하지 않았다. 같은 조건(창 없음, Doze, 부팅 뒤 수 시간)에서 `dsa memory`를 30초 간격으로 몇 번 읽어 위 표와 같은 꼴로 남겨야 한다.
+- 부가 기능 디스크에서 Google 앱 이미지를 붙이는 다음 부팅의 값. 그때는 `directio`가 실제로 걸려 이미지의 두 번째 캐시가 없어질 것으로 기대한다(재지 않았다).
+- v0.2.1 줄의 게스트 보고가 왜 1-3분 묵었는지. 에이전트의 5분 주기와 호스트의 요청 경로는 두 판이 같다.
+
+### v0.2.2에서 창 하나를 보이면 약 390 MiB가 느는 까닭 (2026-11-11)
+
+**보고.** v0.2.2(Windows 11, 노트북 2880x1800 250%와 125% 외부 모니터, 렌더러는 Intel Arc 내장 GPU, Android 17, Google Play 설치)에서 Play 스토어 창 하나만 열고, 최소화하면 작업 관리자의 DSA가 약 600 MB, 복원하면 약 1.3 GB였다. 같은 분의 `dsa memory`: 최소화 host 873 MiB(vm 812, 렌더러 38 상주/563 private, 앱 창 6, 창 관리자 17), 게스트 페이지 캐시 359, 익명 154, 커널 410(zram 133). 보일 때 host 1265 MiB(vm 990, 렌더러 224, 앱 창 33), 페이지 캐시 507, zram 157. 창 크기는 963x1501 px이다.
+
+**방법.** 빌드하거나 실행하지 않았고 바탕 화면과 설치된 DSA는 건드리지 않았다. 읽은 것: `dsa-wm.log`의 렌더러 메모리 줄(같은 부팅, 렌더러 pid 11040과 전날 pid 89524), 사용자별 안드로이드 로그, 읽기만 하는 adb로 `dumpsys SurfaceFlinger`, `dumpsys window windows`, `dumpsys gfxinfo`, `dumpsys meminfo`, `/proc/vmstat`(10초 간격 두 번), `logcat -d`의 `dsa-channeld` 줄, 그리고 고정된 Mesa(`224e91e3`)의 gfxstream 게스트 코드에 이 저장소의 패치를 차례로 적용한 사본.
+
+**찾은 것.**
+
+1. 렌더러의 GPU 할당이 줄지 않고 는다(내장 GPU라 이것이 호스트 RAM이다). pid 11040: 00:44 GPU-only 148 MiB/11개, 00:53 208/13, 237/19, 00:54 291/29, 01:36 403/44, 01:39 475/47. 전날 pid 89524는 1731 MiB/248개까지 갔고, 앱 프로세스가 끝날 때만 줄었다(vending이 끝나자 1091에서 867로). 곧 할당은 게스트 프로세스에 묶여 있고 그 프로세스가 살아 있는 동안 풀리지 않는다. 원인: 게스트 Vulkan 드라이버(`GrallocMinigbm`)는 gralloc 버퍼마다 호스트 ColorBuffer를 한 번 열고 그 참조를 `release(AHardwareBuffer*)`에서만 닫는다. 그 경로는 기기 메모리로 들여온 버퍼(`VkImportAndroidHardwareBufferInfoANDROID`)뿐이다. 창의 버퍼는 Android의 스왑체인이 버퍼마다 `VkNativeBufferANDROID`로 VkImage를 만드는 경로로 오고(hwui는 `Skia (OpenGL)`, GLES는 ANGLE, ANGLE의 창 표면이 그 스왑체인이다), 그 이미지를 없애도 아무것도 닫지 않았다. 그래서 창이 가졌던 버퍼(크기를 바꿀 때마다, 최소화 뒤 복원할 때마다 새로 만든다)가 모두 앱 프로세스가 끝날 때까지 호스트에 남았다.
+2. 에이전트의 홈 액티비티(`HomeActivity`, 보이지 않는 홈)가 화면 크기 창을 가졌다. SurfaceFlinger의 버퍼 목록에 `VRI[HomeActivity]` 2880x2880 버퍼 두 개(각 32411 KiB)가 있고, DEVICE 층으로 매 프레임 넘어간다(hwcomposer는 어느 태스크에도 들지 않아 호스트로 보내지 않는다). 게스트 gralloc 63 MiB와 호스트 ColorBuffer 63 MiB가 아무도 보지 않는 투명한 창에 쓰였다.
+3. SurfaceFlinger의 클라이언트 타깃(`LegacyFramebufferSurface`) 2880x2880 두 개(63 MiB)가 있다. 화면 크기라 줄일 수 없고, 한 번 클라이언트 합성을 하면 SurfaceFlinger가 끝날 때까지 남는다. 지금은 `usesClientComposition=false`다. 이것은 고치지 않았다(아래).
+4. 최소화한 태스크도 hwcomposer가 합성 대상 ColorBuffer 두 개(태스크 버퍼 크기, 이 창은 1024x1536으로 각 6 MiB)를 계속 쥐었다. 창은 자기 스왑체인에 마지막 프레임을 갖고 있으므로 호스트에는 다음 프레임 때만 필요하다.
+5. 페이지 캐시: 창이 보이는 동안 작업 집합 다듬기가 10-30초마다 72-147 MiB를 내려놓고(목표 256 MiB), 캐시가 곧 다시 찬다(365, 331, 328, 365, 431, 403, 428 MiB). 10초 동안 `pgpgin` +26 MiB, `workingset_refault_file` +16 MiB, 주 폴트 +63이었다. 곧 다듬기가 가져간 것의 약 60%가 20초 안에 `read()`로 되읽혔다. 한 번 보기(5초)에 되읽힘이 8 MiB라 한계 16 MiB에 못 미쳐 목표가 오르지 않았고, 같은 페이지를 되풀이해 내려놓고 읽었다. 부팅 뒤 약 1시간에 `pgpgin`이 41 GiB, 되읽힘이 6.7 GiB였다. 호스트가 "short"라 60초마다 전체 회수(`drop_caches`)도 돌았다. +148 MiB는 이 톱니의 위쪽을 잰 값이다. 무엇이 1 MiB/s로 새로 읽는지는 shell 권한으로 `/proc/<pid>/io`를 읽을 수 없어 가리지 못했다.
+6. 앱 창 프로그램 +27 MiB: 스왑체인 버퍼는 공유 텍스처 크기(1024x1536, 6 MiB)로 그리는 동안 3개, 2초 조용하면 2개(`wanted_swapchain_buffers`), 숨기면 놓는다. 3개 18 MiB에 D3D와 DirectComposition 기본 몫을 더하면 맞는다. 바꿀 것을 찾지 못했다.
+7. `dsa memory`의 "processes:"와 Google Play 줄이 늘 "0 resident"였다. 에이전트가 프로세스별 스왑을 `getMemoryStat("summary.total-swap")`로 읽었는데, 그것은 `getSummaryTotalSwap()`, 곧 공유 페이지까지 통째로 센 스왑 아웃 양이지 SwapPss가 아니다. 합이 781 MiB로 PSS 합 577 MiB보다 커서 상주분이 0이 되었다(`android.ext.services`는 PSS 35 MiB에 스왑 61 MiB, dumpsys의 TOTAL SWAP PSS는 25.8 MiB).
+
+**바꾼 것.**
+
+1. `dsa/graphics/patches/guest/mesa/0009-*.patch`: 프로세스의 ColorBuffer 참조에 보유자 수를 둔다. 버퍼를 들여온 기기 메모리와 창 버퍼 위에 만들거나 묶은 VkImage가 각각 보유자이고, 마지막 보유자가 사라질 때 `rcCloseColorBuffer`한다. 두 스레드가 같은 버퍼를 동시에 열면 남는 참조 하나를 닫는다. 시험: `dsa/graphics/test_window_buffer_patch.py`(`nfr1_`).
+2. `HomeActivity`가 창을 1x1로 둔다(드래그 캐처 창과 같다). 입력 포커스를 받는 일은 그대로다.
+3. hwcomposer: 2초 동안 층이 없는 태스크(최소화, 앱이 뒤로 감)는 합성 ColorBuffer 두 개를 놓고, 다음 프레임이 다시 만든다. 그때가 되면 SurfaceFlinger에 프레임을 청한다. 시험: `nfr1_a_task_without_layers_lets_go_of_its_buffers_only_after_a_while`.
+4. 작업 집합 다듬기: 다듬기마다 그 뒤 되읽힌 양을 센다. 그것이 다듬은 양의 4분의 1에 이르면 다듬기가 작업 집합을 가져간 것이므로, 바닥을 "남긴 목표 + 되읽힌 양"으로 올린다. 바닥은 아무도 되읽지 않은 다듬기가 한 번 지나갈 때마다 64 MiB씩 내려가고, 앱이 닫히면 256 MiB로 돌아간다. 한 번만 읽힌 파일은 목표 위로 쌓이는 대로 다음 다듬기에 나간다. 시험: `nfr1_a_trim_whose_cache_comes_back_slowly_is_not_taken_again`.
+5. 에이전트가 프레임워크의 숨은 `getSummaryTotalSwapPss()`(dumpsys의 TOTAL SWAP PSS)를 부르고, 어떤 프로세스도 PSS보다 많이 스왑 아웃했다고 세지 않는다. 호스트는 옛 에이전트가 보낸 합이 PSS 합보다 크면 그 합 대신 가장 큰 프로세스들의 몫(각각 PSS 이하)을 쓴다. 시험: `nfr2_no_process_counts_more_swapped_out_than_its_pss`(에이전트), `nfr2_a_swap_total_larger_than_the_pss_does_not_make_every_total_zero_resident`(호스트).
+
+**설계상 기대치 (재지 않았다).**
+
+| 항목 | 전 | 후 |
+|---|---|---|
+| 렌더러 GPU 할당, 창 하나로 1시간 | 148/11에서 475/47로 계속 늚 | 살아 있는 버퍼만큼에서 멈춤: 클라이언트 타깃 63, Play 창 버퍼 4개 23, 합성 타깃 12, ANGLE 내부 몫 |
+| 홈 액티비티 버퍼 | 게스트 63 + 호스트 63 MiB | 1x1 두 개 |
+| 최소화한 창의 합성 타깃 | 12 MiB | 2초 뒤 0 |
+| 보이는 동안 다듬기 | 10-30초마다 72-147 MiB, 그 60% 되읽힘 | 되읽힌 것은 다시 다듬지 않고, 새로 읽힌 것만 나감 |
+| `dsa memory` processes 줄 | 0 resident | 상주분이 보임 |
+
+**확인하지 못한 것.**
+
+- 위 모든 수치. 바뀐 게스트 드라이버, 에이전트, hwcomposer, channeld가 담긴 이미지로, 같은 조건(Play 스토어 창 하나, 최소화와 복원, 크기 바꾸기를 여러 번)에서 `dsa-wm.log`의 렌더러 줄이 늘지 않는지, `dumpsys SurfaceFlinger`의 `HomeActivity` 버퍼가 1x1인지, 안드로이드 로그의 `trimming` 줄 간격과 `workingset_refault_file` 증가가 줄었는지를 재야 한다. 렌더러의 할당 수를 자동으로 재는 시험은 실제 GPU와 안드로이드가 있어야 해서 이 변경에 없다.
+- 창 버퍼의 참조를 VkImage가 사라질 때 닫는 것과 호스트가 그 이미지의 `vkDestroyImage`를 처리하는 순서. 둘은 다른 스트림이라 닫기가 먼저 닿을 수 있다. 그러면 호스트 이미지가 풀린 메모리에 묶인 채 곧 없어지는데, Vulkan에서는 쓰지 않는 한 허용된다. 다른 프로세스(SurfaceFlinger, hwcomposer)가 아직 쥔 버퍼는 그 참조로 남는다.
+- 클라이언트 타깃 63 MiB. 줄이려면 SurfaceFlinger의 `FramebufferSurface`가 클라이언트 합성이 없을 때 버퍼를 놓게 하는 프레임워크 패치가 필요하다. 이 변경에 넣지 않았다.
+- 1 MiB/s로 파일을 새로 읽는 프로세스. root 셸이나 `/proc/<pid>/io`를 읽을 권한으로 가려야 한다.
+
+### 유휴 기준선: 커널과 상주 서비스가 잡는 것, 줄인 것 (2026-11-11)
+
+**기준.** 소유자 PC(Windows 11 Pro 26300, x64, 32 GiB), v0.2.2, Android 17 x86_64 이미지(`CP2A.260605.016`, 증분 `16373615.dsa79c0f759bacb`), Google Play 설치, 부팅 뒤 1시간 16분, VM 3072 MiB와 프로세서 4개. 잴 때 Play 스토어 창 하나가 열려 있었고 다른 앱 하나(`skplanet.musicmate`)가 캐시로 남아 있었다. 빌드하거나 실행하지 않았고 바탕 화면은 건드리지 않았다. 읽은 것: `dsa memory`, adb의 shell 사용자로 `dumpsys meminfo`, `/proc/meminfo`, 모든 프로세스의 `/proc/<pid>/status`, `/proc/mounts`, `logcat -d -b kernel`(부팅 때의 커널 메시지), `getprop`, `pm list features`, 이미지의 init 스크립트. user 빌드의 shell은 `/proc/vmallocinfo`, zram의 sysfs 파일, `/sys/kernel/slab/*`의 속성을 읽지 못하고, 이 커널에는 `/proc/slabinfo`가 없다. 그래서 slab과 vmalloc은 합계만 알고 캐시별 내역은 모른다. 이미지의 `su`는 쓰지 않았다(호스트가 바탕 화면에 승인 창을 띄운다).
+
+**잰 것.**
+
+| 항목 | 값 | 출처 |
+|---|---|---|
+| 호스트 합 | 1074 MiB: vm 상주 749(private 942), 창 관리자 29, 렌더러 260, 앱 창 36 | `dsa memory` |
+| 게스트 사용 | 823 / 2975 MiB: 페이지 캐시 214, 앱(익명) 127, 커널과 나머지 456 | `dsa memory` |
+| 커널과 나머지 456의 내역 | 회수 못 하는 slab 100, 커널 스택 21, 페이지 테이블 40, vmalloc 60, per-CPU 6, zram 저장소 164, 이름 없는 것 64 | `dsa memory` |
+| zram | 압축 전 478 MiB를 164 MiB에 보관(2.91배, LZ4), 크기 1488 MiB | `dsa memory` |
+| 부팅 때 커널이 떼어 둔 것 | 97 MiB. 커널 이미지 41 MiB(code 20873K, rwdata 2958K, rodata 14904K, bss 2732K), 3 GiB의 페이지 구조체 48 MiB(786079 페이지 × 64 B), swiotlb 4 MiB, ftrace 레코드 0.9 MiB(59032개, 232 페이지) | 커널 부팅 메시지 `Memory:`, `ftrace:` |
+| 스레드 | 1347개(커널 스택 16 KiB씩 = 21 MiB). 커널 스레드 230개: ext4-rsv-conversion 구조 스레드 75개(APEX의 ext4 마운트마다 하나), kverityd 고우선 워커 약 40개, kdmflush 17개. 사용자 스레드 1117개: system_server 252, Play 스토어 113, Play 서비스 86, musicmate 67, Play 스토어 배경 63, 에이전트 39 | `/proc/*/status` |
+| 페이지 테이블 | 사용자 프로세스 98개의 VmPTE 합 39.3 MiB. system_server 2.4, Play 서비스 2.0, Play 스토어 2.0. HAL과 네이티브 서비스 32개는 평균 0.19 MiB(스레드 평균 1.7개) | `/proc/*/status` |
+| 마운트 | ext4 170개(APEX 약 75개가 loop와 dm-verity 위의 ext4, 각각 두 번), erofs 18개, overlay 14개 | `/proc/mounts` |
+| DMA-BUF | 230 MiB(거의 모두 매핑되지 않음), Play 스토어 창이 열린 동안 | `dumpsys meminfo` |
+
+PSS(`dumpsys meminfo`, zram에 있는 몫을 압축 전 크기로 센다): Play 스토어 178(창이 열림), system_server 131, Play 서비스 73, musicmate 47, 에이전트 32, android.ext.services 30, Play 스토어 배경 28, Play 서비스 unstable 18, MediaProvider 15, SurfaceFlinger 14, NetworkStack 12, 설정 11, partnersetup 10, phone 8.5, audioserver 7.0, webview_zygote 6.9, media.swcodec 6.4, zygote64 6.0 MiB. 그 밖의 네이티브 서비스와 HAL 약 70개가 각각 0.6-4 MiB다. `dsa memory`가 세는 실제 비용(상주와 zram 몫)으로는 system_server 76(상주 39, zram 37), Play 서비스 27, 에이전트 12 MiB다.
+
+**HAL 프로세스 하나의 비용.** PSS 0.77-1.4 MiB(잰 값), 페이지 테이블 약 0.19 MiB, 스레드 1-3개의 커널 스택 16-48 KiB, 그리고 task, mm, VMA, binder 객체의 slab(재지 못했다, 수백 KiB로 본다). 하나에 약 1.2-1.8 MiB다.
+
+**바꾼 것과 기대하는 절감.**
+
+1. 하드웨어가 없는 예제 HAL 13개(APEX: authsecret, rebootescrow, cas, contexthub, input.processor, ir, memtrack, net.nlinterceptor, tetheroffload, neuralnetworks의 샘플 드라이버 셋, secure_element, usb, vibrator)와 가짜 얼굴·지문 HAL 둘(평범한 vendor 파일)을 이미지에서 뺐다. 얼굴, 지문, 적외선, 컨텍스트 허브 기능도 `unavailable-features.xml`로 거뒀다. 기능이 남아 있으면 system_server가 생체 인증 서비스와 컨텍스트 허브 서비스를 시작해 HAL을 기다리고, 적외선 서비스는 기능이 있는데 HAL이 없으면 시작을 거부해 system_server가 죽는다. 이 17개 프로세스의 PSS 합은 16.3 MiB였다(얼굴 1.2, 지문 0.85, NNAPI 샘플 셋 4.0, 나머지 0.77-1.13씩). 페이지 테이블 약 3.3 MiB, 커널 스택 약 0.5 MiB, slab 약 2-4 MiB를 더해 게스트에서 약 20-24 MiB를 기대한다. PSS의 일부는 이미 zram에 압축되어 있으므로 호스트가 실제로 아끼는 것은 약 15-20 MiB로 본다(재지 않았다). 남긴 것: thermal(게임의 열 여유 API), drm.clearkey(ClearKey 콘텐츠), identity, light, wifi, boot, 보안 HAL들, motioncontext(무엇에 쓰는지 확인하지 못해 남겼다). 커밋 `89590e3a`.
+2. zram에 두 번째 압축기로 zstd를 두었다(`CONFIG_ZRAM_MULTI_COMP`, `recomp_algorithm`을 `swapon_all` 전에). 유휴 회수가 차가운 페이지를 zram으로 보낸 뒤 zram의 페이지를 모두 idle로 표시하고, 회수마다 최대 64 MiB(16384 페이지)를 zstd로 다시 압축하고, zram을 압축 정리한다. 스왑마다 쓰는 압축기는 LZ4 그대로라서 앱을 쓰는 동안의 스왑 속도는 바뀌지 않는다. 이미 다시 압축한 페이지는 건너뛰고, 다시 읽힌 페이지는 zram을 떠나므로 차갑게 남는 것만 zstd가 된다. 안드로이드 익명 메모리에서 zstd는 LZ4보다 약 20-30% 더 작게 압축한다고 보고, 164 MiB가 약 125-135 MiB가 되어 약 30-40 MiB를 기대한다(재지 않았다). 비용: zstd의 압축 스트림(프로세서마다, 합쳐 1-2 MiB로 본다), 회수 한 번에 init이 0.3초 안팎 바쁜 것, zstd로 압축된 페이지를 다시 읽을 때 LZ4보다 몇 배 느린 해제(페이지당 수 마이크로초). 커밋 `f2f6b4ac`.
+3. config-wsl이 WSL 배포판을 위해 내장하는 것 가운데 게스트가 쓰지 않는 것을 뺐다: XFS, squashfs, ISO 9660, UDF, ext2(ext4가 대신 붙인다), NVMe, RAM 디스크, KSM, kallsyms의 변수 이름(`KALLSYMS_ALL`, 라이브 패치가 함께 빠진다). 커널 이미지는 VM이 도는 내내 상주하므로 그만큼이 모든 게스트에서 준다. 약 3 MiB로 본다(대부분 XFS, 재지 않았다). 남긴 것: BTF(netbpfload가 맵을 BTF와 함께 만든다, 부팅 로그 `btf:1`), ftrace(perfetto와 atrace), vfat, f2fs, erofs. 커밋 `88480b1a`.
+4. CI가 릴리스마다 수치를 남긴다. Image test에 boot check를 하나 더 두었다("Measure the memory with Google Play and one app window on the booted image"): LiteGapps의 빌드로 Google Play를 설치하고 다시 부팅한 뒤 설정 창 하나를 열고, 1분 손대지 않은 뒤 `dsa memory`와 같은 방법으로 10초 간격 여섯 번 읽는다. crosvm 프로세스의 상주·private, 창 관리자, 렌더러, 앱 창, 서비스, 게스트의 사용, 커널 항목, zram, 프로세스 비용(상주와 zram 몫), Google Play 서비스의 몫, `dumpsys meminfo`의 프로세스별 PSS를 중앙값으로 job summary와 `memory.json`(artifact `memory-measurement`)에 적는다. 기준선(`dsa/host/platform/linux/tests/memory_check/baseline.json`)보다 4분의 1과 100 MiB를 모두 넘게 늘었을 때만 실패한다. 기준선은 아직 비어 있다: 첫 develop 실행의 `memory.json`의 `baseline` 값을 그 실행과 이미지와 함께 옮겨 적어야 비교가 시작된다. 이 수치는 Linux 러너(KVM 위 crosvm, 렌더러는 lavapipe)의 것이라 Windows의 `vmmem`과 같지 않다. 같은 이미지끼리의 회귀를 잡는 용도다.
+
+**바꾸지 않은 것과 그 이유.**
+
+- VM 시작 크기 3072 MiB. 페이지 구조체가 48 MiB이고 VM이 도는 내내 상주한다. 2048 MiB로 시작하면 16 MiB가 준다. SPEC NFR-2가 시작 크기를 3 GiB로 정하고 있어서 바꾸지 않았다. 소유자에게 제안한다: 비용은 Google Play가 있는 부팅 직후(게스트 사용 1.4-1.8 GiB, 위 R26의 표)에 핫애드가 한두 번 일어나는 것이고, 핫애드된 메모리의 페이지 구조체는 그 메모리 안에 놓이므로(`MHP_MEMMAP_ON_MEMORY`) 시작 크기 밖의 비용은 늘지 않는다.
+- zram 크기(메모리의 절반, 1488 MiB). zram의 슬롯 표가 슬롯마다 16 B, 약 6 MiB의 vmalloc이다. 절반으로 줄이면 3 MiB가 주지만 압축해 둘 수 있는 양도 준다.
+- zram writeback(디스크로 내보내기). 뒷받침 장치가 있어야 하고, 쓰기는 사용자의 디스크를 닳게 한다. Android 17의 mmd가 writeback과 재압축을 하지만 이 빌드에서는 aconfig 플래그가 꺼져 있어(`mmd.enabled_aconfig`가 없다) `mmd_setup`이 아무것도 하지 않는다. aconfig 플래그를 켜려면 이미지의 플래그 저장소를 바꿔야 한다. 재압축은 위 2로 대신했다.
+- ART 힙. 이미 1 GiB 휴대전화의 값이다(`heaptargetutilization` 0.75, `heapminfree` 512k, `heapmaxfree` 8m). 더 낮추면 GC가 잦아지는 데 비해 줄어드는 몫은 프로세스마다 수 MiB 이하다.
+- zygote 프리로드. zygote64는 PSS 6 MiB(RSS 19 MiB)이고 그 페이지를 모든 앱이 나눠 쓴다. 프리로드를 줄이면 그 비용이 앱마다 따로 생긴다. Google Play 서비스의 프로세스 다섯과 시스템 앱이 늘 있으므로 지금이 낫다.
+- webview_zygote(PSS 6.9 MiB). WebViewUpdateService가 부팅 때 바로 시작한다. 늦게 시작하게 하려면 프레임워크를 고쳐 빌드해야 하고, 그것은 소유자에게 먼저 물어야 한다.
+- com.android.phone(PSS 8.5 MiB, 그중 대부분 zram). 영구 프로세스라 system_server가 바로 다시 띄운다. 전화 기능은 이미 거뒀다. 없애려면 프레임워크 변경이 필요하다.
+- ext4-rsv-conversion 구조 스레드 75개(약 2 MiB). 읽기 전용 ext4 마운트에도 하나씩 생긴다. 읽기 전용일 때 만들지 않게 하는 커널 패치는 다시 쓰기로 붙일 때를 함께 다뤄야 해서 이번에 하지 않았다.
+- swiotlb(4 MiB), KFENCE 풀(끔), dentry·inode·TCP·UDP 해시 표: 이미 커널 명령줄로 줄여 두었다.
+- 렌더러의 GPU 메모리, 창을 보일 때 늘어나는 페이지 캐시, 앱 창 프로그램의 버퍼, `dsa memory`의 프로세스 줄은 다른 작업이 맡았다. 위 DMA-BUF 230 MiB도 창이 열린 동안의 버퍼라 그쪽에 속한다.
+
+**확인하지 못한 것.**
+
+- 위 1-3의 절감은 모두 기대값이다. 이 PC에서 빌드하거나 부팅하지 않았다. Image test와 Kernel test가 develop에서 이미지와 커널을 만들고 부팅한다. 특히 SELinux가 enforcing일 때 `vendor_init`이 zram의 sysfs 파일(`recomp_algorithm`, `idle`, `recompress`, `compact`)에 쓸 수 있는지는 부팅 로그의 거부 줄로 확인해야 한다.
+- slab 100 MiB와 vmalloc 60 MiB의 캐시별 내역. root로 `/sys/kernel/slab`과 `/proc/vmallocinfo`를 읽어야 한다. VMA(`vm_area_struct`, `maple_node`), SELinux 정책(`avtab_node`), dm-bufio(파티션과 APEX의 dm-verity 해시 블록), binder를 의심한다.
+- CI의 첫 측정값과 기준선. 기준선을 적기 전에는 비교하지 않는다.
+- 뺀 HAL을 앱이 찾는 경우(진동, NNAPI 가속, IR)에 앱이 하드웨어가 없는 기기처럼 동작하는지. 실기에서 확인해야 한다.
+
+### 소유자가 승인한 네 항목 (2026-11-11)
+
+**기준.** 위 유휴 기준선과 같은 PC와 이미지에서 잰 값을 출발점으로 삼았다. 이 변경에서 빌드하거나 실행하지 않았고, 아래 절감은 모두 기대값이다. 프레임워크 원본은 framework-lock.json이 고정한 커밋(frameworks/native `fcbde2bc`(16), `ae266dcb`(17), frameworks/base `94b4c163`(17), packages/services/Telephony `4a3830d9`(17))에서 읽었다.
+
+1. SurfaceFlinger의 클라이언트 타깃. HWC3에는 클라이언트 타깃 크기를 정하는 API가 없다(`ClientTargetProperty`는 픽셀 형식과 데이터 공간뿐이다). `ro.surface_flinger.max_graphics_width/height`로 줄이면 SurfaceFlinger가 줄인 버퍼에 그리므로, 클라이언트로 합성되는 YUV 영상의 해상도가 떨어진다. 그래서 크기는 그대로 두고 쓰지 않을 때 놓게 했다. frameworks/native 0004(16, 17): 클라이언트 합성이 없는 프레임이 마지막 클라이언트 합성 프레임보다 1초 뒤이면, 그 프레임이 표시된 뒤 `FramebufferSurface`가 현재 버퍼를 큐에 돌려주고 `discardFreeBuffers`로 큐의 버퍼를 모두 해제한다(생산자 쪽 `Surface`도 `onBuffersDiscarded`로 놓는다). `RenderSurface`는 그 버퍼들의 텍스처 캐시를 비운다. 다음 클라이언트 합성 프레임이 새 버퍼를 할당하고 HWC에 통째로 보낸다. hwcomposer는 마지막 클라이언트 합성 2초 뒤 클라이언트 타깃 ColorBuffer의 호스트 참조를 닫고, 그때 SurfaceFlinger에 프레임을 청한다. 그 프레임에서 SurfaceFlinger도 버퍼를 놓는다. 스크린샷과 screencap은 자기 버퍼에 그리므로 영향이 없다. 기대: 클라이언트 합성이 없는 동안 렌더러 GPU 메모리 약 63 MiB(2880x2880 RGBA 두 개). 비용: 영상이 다시 나올 때 첫 프레임에 버퍼 두 개를 할당하는 수 ms. 시험: `nfr1_the_client_target_is_let_go_after_a_while_without_client_composition`(hwcomposer), `test_nfr1_both_versions_free_the_client_target_when_nothing_is_composed_into_it`(패치). 패치는 Framework build를 거쳐야 이미지에 들어간다. 이 변경에서는 두 패치가 고정 커밋의 원본에 그대로 적용되는지(`apply --check`)까지만 확인했다.
+2. VM 시작 크기 3072에서 2048 MiB로(`DEFAULT_MEMORY_MB`, Windows, Linux, macOS 공통). 늘리는 규칙은 그대로이고(한 번에 현재 크기의 절반, 최소 1 GiB), 2 GiB에서 처음 늘면 3 GiB가 된다. 기대: 부팅 메모리의 페이지 구조체가 48에서 32 MiB로, 16 MiB 준다. 비용: Google Play가 있으면 부팅 직후 핫애드가 한두 번 일어난다. 시험: `nfr2_the_vm_boots_at_two_gib_and_grows_from_there`, 그리고 Linux와 macOS의 기존 `nfr2_` 시험을 2048에 맞췄다.
+3. com.android.phone. TeleService의 `PhoneGlobals.onCreate`는 `FEATURE_TELEPHONY`가 없으면 바로 돌아가고, `TelecomAccountRegistry`도 만들어지지 않는다. 그래서 phone, isub, 통신사 설정 서비스는 지금도 게시되지 않고, system_server는 이미 그것 없이 돈다. TeleService가 없는 Android TV 빌드와 같다. 이미지에서 TeleService를 뺐다(`UNNEEDED_APPS`). Telecom(VoIP 앱이 쓰는 ConnectionService)과 telephony provider(같은 프로세스 이름으로, 앱이 물을 때만 뜬다)는 남긴다. 기대: PSS 8.5 MiB(그중 대부분 zram), 호스트에서 약 3-5 MiB. 시험: `test_nfr1_the_phone_process_is_not_in_the_image`. Framework build는 필요 없다.
+4. webview_zygote를 처음 쓸 때 시작하기. 하지 못했다. `WebViewUpdateServiceImpl2`가 provider를 준비한 뒤 `SystemImpl.ensureZygoteStarted()`로 `WebViewZygote.getProcess()`를 바로 부르고, 이를 막는 설정, 시스템 속성, aconfig 플래그가 없다. 부팅 뒤 webview_zygote를 끝내면 system_server가 죽은 소켓을 쥔 채 남아 다음 렌더러 시작이 실패하고, 재부팅 전까지 WebView가 열리지 않는다. 그래서 services.jar를 고쳐야 한다(`ensureZygoteStarted`가 아무것도 하지 않으면, 첫 렌더러 시작 때 `ProcessList`가 zygote를 띄우고 그 뒤로 남는다). 지금 Framework build는 SurfaceFlinger, libhwui, libEGL, KeyMint만 만들고 frameworks/base의 일부만 받으므로 services.jar를 만들지 못한다. 방법은 둘이다. (가) Framework build가 services.jar를 만들고, 이미지가 그것을 시스템 서버 클래스 경로에 맞게 다시 컴파일한다. 받을 트리와 빌드 시간이 크게 는다. (나) make-image.py가 앱의 dex를 고치는 방식(`edit_dex`)으로 services.jar의 그 호출 하나를 지우고 services.jar를 다시 컴파일한다. 시스템 서버 jar를 다시 컴파일하는 경로는 아직 없다. 어느 쪽이든 system_server의 코드를 바꾸므로 소유자가 고른 뒤 한다. 기대: webview_zygote PSS 6.9 MiB(WebView를 쓰기 전까지). 비용: 첫 WebView가 zygote 시작(수백 ms)을 기다린다.
+
+**확인하지 못한 것.** 위 수치 모두. 1은 Framework build로 만든 SurfaceFlinger가 담긴 이미지에서 영상을 틀었다 끄고 2초 넘게 지난 뒤, `dumpsys SurfaceFlinger`의 FramebufferSurface 슬롯이 비고, hwcomposer 로그에 "let go of the client target" 줄이 남고, `dsa-wm.log`의 렌더러 메모리가 약 63 MiB 주는지 봐야 한다. 영상을 다시 틀 때 첫 프레임이 깨지지 않는지도 봐야 한다. 2는 2 GiB 부팅과 Google Play 첫 부팅의 핫애드를 Image test와 실기에서 봐야 한다. 3은 TeleService 없이 부팅해 system_server가 telephony 때문에 죽지 않는지, 설정의 휴대전화 정보 화면이 열리는지를 Image test의 로그로 봐야 한다.
+
 ## R27. 호스트 주소 변환: 행정 경계 데이터 고르기 (FR-36)
 
 FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-11-10에 조사했다. 처음에는 공개 서버(Nominatim, `CLGeocoder`)를 썼으나, 소유자가 같은 날 FR-36을 바꿨다(PR #579). Google Play가 없을 때만 DSA가 답하고, 호스트에 둔 행정 경계 데이터로 좌표를 시, 구, 동 수준의 주소로 바꾸며, 서버와 키 없이 위치가 밖으로 나가지 않아야 한다. 아래는 그 조건으로 다시 고른 결과다.
@@ -2211,3 +2348,93 @@ FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-1
 - 빌드 전부. 축소 트리에서 vendor Rust 바이너리를 빌드한 적이 없다. 잠금에 더한 프로젝트와 상자는 Android.bp의 의존을 정적으로 따라가 고른 것이고, AIDL Rust 백엔드, vendor 변형의 LLNDK 스텁, `TARGET_COPY_OUT_VENDOR := vendor`의 설치 경로, 축소 트리의 clippy가 통과하는지는 Framework build가 처음 보인다.
 - 17 대상 파일의 vendor에 `libssl.so`가 없는지와 그 APEX의 내용. 16 것만 풀어 보았다. `make-image.py`가 바이너리의 `DT_NEEDED`를 vendor와 LLNDK에 대조하므로 빠진 것은 이미지 빌드가 멈춘다.
 - 실기 동작: 기존 설치의 키가 모두 갱신되는지, vold의 메타데이터 키 갱신, 키가 없는 부팅에서 호스트 키로 싼 덩어리가 실패하는 모습.
+
+## R29. v0.2.1부터 창 크기 변경이 느려진 까닭: 펜스마다 매핑된 메모리 전체를 다시 읽었다 (FR-4, PR-3)
+
+**기준.** 소유자 PC(Windows 11 Pro 26300, x64, Intel Arc, 2880x2880 프리폼 디스플레이)에서 v0.1.9부터 v0.2.2까지 남은 로그를 읽었다. 호스트: `%LOCALAPPDATA%\DSA\logs\dsa-app-window.log`(`stage=app.summary`와 창을 닫을 때의 요약), `dsa-wm.log`(`stage=wm.summary`), `C:\ProgramData\DSA\logs\dsa-hostd.log`(`stage=service.forwarded`). 게스트(Android 17, v0.2.2, 부팅 뒤 약 80분, Google Play 창 하나): adb로 읽기만 했다(`logcat -d -b all`, `dumpsys gfxinfo com.android.vending [framestats]`, `getprop`). 이 조사에서 빌드하거나 실행하지 않았고, 설치된 DSA와 바탕 화면은 건드리지 않았다. 로그 시각은 UTC이고 설치 로그 파일의 시각은 KST다. 그래서 v0.2.0은 11-09 10:16 UTC, v0.2.1은 11-09 19:26 UTC, v0.2.2는 11-11 00:35 UTC에 설치됐다.
+
+### 로그로 본 크기 변경의 기다림
+
+| 시점 | 창을 닫을 때의 요약(크기 변경 수, 새 크기의 프레임까지 중앙값, 95번째, 최댓값) |
+|---|---|
+| 11-08 12:21 (v0.1.9) | 6번, 80 ms, 344 ms, 344 ms. `waited=` 54-344 ms |
+| 11-09 19:38-21:30 (v0.2.1) | 1-2번씩, 949-3172 ms |
+| 11-10 01:32-02:12 (v0.2.1) | 784-1612 ms, 최대 2416 ms |
+| 11-11 00:42 (v0.2.2) | 2284 ms(최대 7550 ms), 795 ms(최대 1126 ms) |
+
+v0.2.0이 설치돼 있던 동안(11-09 10:16-19:26 UTC)에는 크기 변경 기록이 없다. 느려진 것은 모두 v0.2.1 뒤다.
+
+### 한 번의 크기 변경을 단계로 나눈 것
+
+task 19(Google Play), 1079x1563, 2026-11-11 01:57:18 UTC. 호스트와 게스트 줄은 `utc`로 맞췄다.
+
+| 단계 | 근거 | 걸린 시간 |
+|---|---|---|
+| 호스트가 새 크기를 묻고 서비스가 넘김 | `service.forwarded took=0.1` | 0.1 ms |
+| 게스트 태스크 크기 변경(에이전트가 적용하고 경계가 바뀜) | `agent.summary applied=4.3 bounds=23.9` | 24 ms |
+| 앱의 다시 배치와 다시 그리기 | `wm_relaunch_resume_activity`, `finishDrawing of relaunch ... 303ms`. 다시 시작하지 않은 변경(01:57:09-11)은 `WindowInsets changed`에서 `reportDrawFinished`까지 170-250 ms | 170-416 ms |
+| hwcomposer가 새 크기 프레임을 기다림 | `hwc.summary since_bounds=504.9 held=493.3 late=false` | 493 ms(앱이 그 크기로 그린 프레임을 기다린 시간. `late=false`라 500 ms 정착 시한으로 보낸 것이 아니다) |
+| hwcomposer 버퍼 다시 만들기, 렌더러 ColorBuffer | `task 19's buffers are now ...` 줄은 같은 밀리초 안 | 1 ms 미만 |
+| 창 관리자 텍스처, 앱 창 표시 | `wm.summary create=0.3`, `app.summary resize_buffers=0.0 present=0.1` | 1 ms 미만 |
+| 전체 | `app.summary waited=717.6` | 718 ms |
+
+v0.1.9의 같은 줄(11-08 12:20)은 `waited=53.8-80.3`이다. 커진 단계는 앱이 새 크기로 그리는 시간 하나다. 호스트 쪽과 hwcomposer, 렌더러의 버퍼, 창 표시는 모두 1 ms 안팎으로 그대로다. 드래그 동안 호스트는 앞의 요청에 프레임이 오기 전에는 다음 크기를 덜 보내므로, 한 단계가 느리면 다음 크기의 기다림에 그만큼이 더해진다(`a task window keeps its size: no ... frame came in 2009-2197 ms`가 여러 번 있다).
+
+### 앱의 프레임이 느린 까닭
+
+`dumpsys gfxinfo com.android.vending`: 프레임 13380개 가운데 13367개가 늦었다. 중앙값 150 ms, 90번째 200 ms, GPU 시간은 모두 1 ms 이하다. "Slow issue draw commands" 13351개, "Slow UI thread" 7517개. `framestats`로 보면 프레임마다 `IssueDrawCommandsStart`에서 `SwapBuffers`까지 82-100 ms이고, `DequeueBufferDuration`은 3-8 us, `QueueBufferDuration`은 0.16-0.54 ms다. 곧 RenderThread가 GL 명령을 ANGLE과 게스트 Vulkan 드라이버로 내보내는 동안 기다린다. 크기를 바꾸면 앱은 두세 프레임(동기화로 취소된 한 번, 다시 그린 한 번, 다시 시작하는 앱이면 그 첫 프레임)을 그려야 새 크기 프레임을 내므로 300-500 ms가 된다.
+
+그 동안 드라이버가 하는 일은 guest/mesa 0005(`94262816`, v0.2.0과 v0.2.1 사이)다. 0005는 게스트가 사본을 두는 호스트 가시 메모리를 coherent로 알리고, 앱이 펜스가 신호된 것을 처음 볼 때마다(`vkGetFenceStatus`, 동기화 fd), 그리고 `vkWaitSemaphores`, `vkDeviceWaitIdle` 뒤마다 그 장치의 모든 사본을 `VK_WHOLE_SIZE`로 다시 읽는다(R26의 1). ANGLE은 제출마다 펜스를 확인하므로 프레임마다 한두 번, 앱이 매핑한 메모리 전체가 Hyper-V 소켓을 건너온 뒤 다시 해시된다. guest/mesa 0007(`d9194885`, v0.2.2)은 매핑한 할당만으로 줄였지만, Skia와 ANGLE은 유니폼, 정점, 스테이징 버퍼를 계속 매핑해 두고(수 MiB에서 수십 MiB), v0.2.2에서도 중앙값 795-2284 ms로 나아지지 않았다. 다른 후보는 시기나 단계가 맞지 않는다. 주 모니터 밀도로 시작(`9b7c92e2`)과 96 x 배율(PR #560)은 버퍼 크기와 재시작에 관한 것이고 프레임마다의 시간을 바꾸지 않는다. CPU 업로드(PR #591), 캡션 밝기 표본(PR #555), 장치 복구 확인과 기다림 상한(PR #550)은 호스트 쪽이거나 v0.2.2에만 있는데, 호스트 쪽 단계는 1 ms 안이고 느려짐은 v0.2.1부터다. hwcomposer의 프레임 붙잡기(`b883d6f9`)는 v0.1부터 있고, 위의 `held`는 앱이 그리는 시간만큼이다.
+
+### 고친 것
+
+읽어 오기가 앱이 매핑한 양이 아니라 장치가 쓴 양만큼 들게 했다. 전송 형식은 그대로다.
+
+- 호스트(patches/0020, `dsa_shadow_record.h`): 렌더러가 할당마다 4 KiB 블록별로 게스트 사본이 가진 내용의 해시를 둔다. 플러시로 받은 바이트와 읽어 오기로 보낸 바이트가 그 해시가 된다. 읽어 오기 요청의 범위마다 블록 하나라도 바뀌었거나 모르는 것이 있으면 범위 전체를, 아니면 크기 0을 보낸다. 해시는 보내기 전에 잡으므로 그 사이 장치가 쓴 블록은 다음에 다시 간다. 해제된 할당은 잊는다. 메모리는 4 KiB마다 16바이트다.
+- 게스트(guest/mesa 0010, `dsa_shadow_blocks.h`의 `receive`): 할당을 64 KiB 조각으로 나눠 묻는다. 받은 조각은 블록마다, 받은 내용이 이 사본이 마지막으로 주고받은 것과 다를 때만(장치가 바꾼 블록) 받아들인다. 그 밖의 블록은 앱이 마지막 제출 뒤에 쓴 것을 그대로 두고 다음 제출에 보낸다. 예전에는 읽어 오기 뒤 사본 전체를 호스트 것으로 표시해서, 그 사이 앱이 쓴 것이 덮이고 다시 보내지지도 않았다. 일부만 받은 블록은 다음 플러시에 통째로 간다.
+- 섞인 버전: 0020이 없는 렌더러는 모든 조각을 보내고 게스트는 그것을 맞게 받는다(예전 비용). 0010이 없는 게스트는 할당 전체를 묻고, 0020 렌더러는 바뀐 것이 없으면 0을 보낸다. 어느 쪽도 스트림이 어긋나지 않는다.
+- 추적: 입력 추적 부팅(`androidboot.hardware.dsa_input_trace=1`)에서 읽어 오기 120번마다 `input-trace stage=driver.readback reads= asked_mb_per_read= received_kb_per_read= taken_kb_per_read= ms_per_read=` 줄을 남긴다. `stage=driver.flush`와 짝이다.
+
+FR-4의 프레임 규칙(창은 앱이 그 크기로 그린 프레임과 함께만 바뀌고, 놓은 크기에 정확히 닿는다)은 hwcomposer와 호스트의 것이고 바꾸지 않았다.
+
+### 회귀를 막는 시험
+
+`dsa/graphics/tests/readback_latency_test.cpp`(Graphics test의 "Test the guest transport on the build machine"): 게스트와 호스트의 절반을 드라이버와 디코더가 하는 대로, 바이트를 세는 메모리 안 소켓으로 돌린다. 앱은 2 MiB 할당 8개(16 MiB)를 매핑하고, 프레임마다 32 KiB씩 네 번 쓰며, 펜스가 있는 제출을 두 번 한다. 비용은 센 양으로 모형화한다: 소켓 1 GiB/s, 해시 4 GiB/s. 기계에 따라 흔들리지 않게 하기 위해서다. 크기 변경 하나를 두 프레임으로 치고, 전송이 더하는 몫이 50 ms를 넘으면 실패한다. 예전의 통째 읽어 오기가 같은 모형에서 50 ms를 넘는지도 확인해서, 시험이 그 회귀를 잡을 수 있음을 보인다. 계산상 지금은 약 32 ms(거의 해시), 예전은 약 94 ms(그 가운데 소켓 약 63 ms)다. 실제 그 기계에서 잰 시간도 함께 찍는다. 이 밖에 `fr4_guest_and_host_agree_after_each_fence`, `fr4_an_app_write_before_the_fence_is_not_lost`, `fr4_a_frame_reads_back_only_what_the_device_wrote`, `shadow_record_test.cpp`, `shadow_blocks_test.cpp`의 `receive` 시험이 있다.
+
+### 기대하는 값
+
+프레임마다의 읽어 오기가 매핑한 메모리 전체(수 MiB에서 수십 MiB)에서 장치가 쓴 조각(대개 0)과 조각마다 8바이트로 준다. 남는 드라이버 비용은 v0.1에도 있던 제출마다의 플러시 해시와 렌더러의 해시다. 그래서 앱의 프레임은 v0.1 수준(수 ms에서 20 ms 안팎)으로, 크기 변경은 v0.1의 80 ms 안팎(에이전트 약 25 ms, 앱이 두세 프레임, 표시 1 ms)으로 돌아올 것으로 본다. Google Play처럼 크기 구간을 넘을 때 액티비티를 다시 만드는 앱은 그 다시 만들기 시간(로그로 161-416 ms, 지금의 느린 프레임 포함)이 더해진다. 그것은 앱의 동작이다.
+
+### 확인하지 못한 것
+
+- 고친 뒤의 실제 값 전부. 이 PC에서 빌드하거나 실행하지 않았다. 패치가 고정 리비전에 붙는지는 그 파일들의 사본에서 확인했고(guest/mesa 0001-0010, 호스트 0006, 0011, 0020), 빌드와 C++ 시험은 Graphics test가 처음 돌린다. PC에서는 같은 조건(Google Play 창 하나, 크기 변경 추적 켬)으로 `app.summary waited=`의 중앙값과 95번째, `hwc.summary held=`, `dumpsys gfxinfo`의 중앙값과 "Slow issue draw commands"를 앞뒤로 잰다. 입력 추적 부팅이면 `driver.readback`의 `received_kb_per_read`가 0 가까이인지 본다.
+- 실제로 프레임마다 몇 MiB를 다시 읽었는지. 0005 뒤의 읽어 오기에는 추적 줄이 없었다. 이제 위의 줄이 남긴다.
+- 렌더러의 해시 비용. 조각마다 호스트가 매핑을 읽어 해시하므로, 매핑이 아주 큰 앱(수백 MiB)에서는 펜스마다 수십 ms가 될 수 있다. 그때는 제출이 없었던 장치의 조각을 건너뛰는 것이 다음 단계다.
+- 다른 GPU. 읽어 오는 형식은 HOST_CACHED뿐이므로 렌더러는 캐시되는 메모리만 읽는다. 다른 메모리 형식 구성을 가진 GPU에서는 재 보지 않았다.
+
+## R30. 앱의 툴바가 창 제목 표시줄 아래에 그려진 까닭: 프리폼 창은 상태 표시줄 인셋을 받지 못한다 (FR-22)
+
+**기준.** 소유자 PC(Windows 11, 200% 모니터, v0.2.2, Android 17 `16373615`)에서 FLO(`skplanet.musicmate`, MainActivity 플레이어 화면)의 메뉴와 캐스트 아이콘이 캡션의 앱 아이콘과 이름에 겹치고, 접기 버튼이 닫기 버튼 아래에 놓였다(`.scratch/widget/flo-app.png`). 폰에서는 바르게 보인다. adb로 읽기만 했다(`dumpsys window`, `dumpsys activity top`, `getprop`). 프레임워크 소스는 이미지가 만들어진 커밋(Android 17 `94b4c163`, Android 16 `45034f06`)의 것을 읽었고, Android 16 `services.jar`의 dex는 `.scratch/aosp-inputs`의 target_files에서 꺼내 읽었다.
+
+### 본 것
+
+- 태스크에는 에이전트가 준 인셋 소스 둘이 있다: `type=statusBars frame=[-1048576,507][1048576,565]`, `type=captionBar` 같은 프레임(58 px). 창은 `EDGE_TO_EDGE_ENFORCED`, `fitTypes`가 비어 있다.
+- 그런데 앱 프로세스의 `InsetsController` 상태(`dumpsys activity top`)에는 `captionBar` 소스 하나뿐이다. 상태 표시줄 소스가 앱에 닿지 않는다.
+- 원인은 `InsetsPolicy.enforceInsetsPolicyForTarget`이다. 떠 있는 창 모드(프리폼, PIP)이면 `WindowInsets.Type.captionBar()`와 IME만 남기고 나머지 소스를 버린다(Android 16과 17 같음). DSA의 태스크는 모두 프리폼이다. 그래서 `getInsets(statusBars())`로 툴바를 미는 앱(FLO와 대부분의 edge-to-edge 앱)은 0을 받아 툴바를 창 맨 위, 캡션 아래에 그린다. `systemBars()`나 `captionBar()`를 쓰는 앱, 그리고 `fitsSystemWindows`로 맞추는 앱은 캡션 바 인셋이 `systemBars()`에 들어가므로 이미 바르다.
+- `mForcedConsumingTypes=statusBars navigationBars`, `mForciblyShowingTypes`는 프리폼 창이 있을 때 `InsetsPolicy.updateSystemBars`가 정하는 값이고, 전역 소스 제공자(시스템 UI의 막대)에만 `FLAG_FORCE_CONSUMING`을 붙인다. 태스크의 로컬 소스는 `flags=`가 비어 있어 강제로 소비되지 않는다. 그래서 레거시 `SYSTEM_UI_FLAG`를 쓰는 앱도 폰과 같이 인셋을 받는다(DecorView의 `consumingStatusBar`는 앱이 `LAYOUT_FULLSCREEN` 없이 맞출 때만).
+- 높이: 200%(192 DPI)에서 표준 창의 캡션과 위 테두리는 58 px(`AdjustWindowRectExForDpi`)이고, 인셋도 58 px다. 맞다. 131 x 배율 규칙에서 Android는 262 dpi로 그리고 58 px은 35.4 dp다. 배율에 따라 31 px@130 dpi(38.2 dp)에서 139 px@654 dpi(34.0 dp)까지로, dp가 배율마다 조금 다르다(Windows가 캡션 높이를 정수 픽셀로 반올림한다).
+- 상태 표시줄 리소스: `status_bar_height_default`와 `status_bar_height_portrait`는 24 dp이고(`status_bar_height`, `_landscape`는 그것을 가리킨다), 큰 화면용으로 `sw1500dp`/`sw1900dp`와 저밀도가 함께 붙은 구성에서 36 dp, 48 dp다. 리소스를 직접 읽는 앱(`getIdentifier("status_bar_height", ...)`)은 24 dp를 받아 캡션보다 11 dp 짧게 민다.
+- 앱이 edge-to-edge가 아니면 DecorView가 상태 표시줄 색 뷰를 `systemBars()` 인셋 높이(캡션 바 포함)로 위에 그리므로, 캡션 아래에는 앱의 상태 표시줄 색이 이미 그려진다. 앱이 색을 정하지 않으면 그 자리에 창 배경이 보인다.
+
+### 고친 것
+
+- 이미지(`make-image.py`, `SERVICES_CODE`): `services.jar`의 `enforceInsetsPolicyForTarget`에서 `isFloating` 다음의 `captionBar()` 호출 하나를 `systemBars()`로 바꾼다. 같은 크기의 명령에서 메서드 번호만 바뀐다. 게스트에는 내비게이션 막대도 시스템 UI도 없으니 시스템 막대 소스는 에이전트가 주는 것뿐이다. 바뀐 jar는 저장된 dex를 4바이트에 맞추고(맞지 않으면 system_server가 20 MiB를 메모리로 복사한다), 공개 빌드의 필터(speed-profile), 클래스 로더 문맥, 앱 이미지, 프로필(`services/art-profile`과 `art-profile-extra`, 빌드의 frameworks/base 커밋, `inputs.json`에 고정)로 다시 컴파일한다. Android 16 jar로 바꾸기를 확인했다(`classes3.dex`, 다시 적용하면 바뀌는 것 없음, 정렬 유지).
+- 프레임워크 오버레이: `status_bar_height`, `_default`, `_portrait`, `_landscape`를 배율마다의 밀도(130, 164, 196, 228, 262, 294, 328, 360, 392, 458, 524, 590, 654 dpi)에서 그 배율의 제목 표시줄 높이로, 밀도 없는 값은 가장 큰 값(100%의 38.2 dp)으로 둔다. `getDimensionPixelSize`가 그 밀도에서 제목 표시줄의 픽셀과 같게 반올림한다.
+- `check-image.py`는 바꾸기가 없거나, dex가 정렬되지 않았거나, 오버레이의 높이가 제목 표시줄과 다른 이미지를 거부한다.
+
+### 확인하지 못한 것
+
+- 실기. 이미지를 빌드하거나 PC에서 실행하지 않았다. Image test가 처음으로 jar를 바꾸고 다시 컴파일한다. PC에서는 FLO 플레이어 화면의 툴바가 캡션 아래에 오는지, `dumpsys activity top`의 앱 `InsetsController`에 `statusBars` 소스가 있는지, `dumpsys window`의 `services.odex`가 쓰이는지(부팅 로그에 `services.jar` dex2oat나 `odex` 거부가 없는지) 본다.
+- Android 17 `services.jar`. Android 17의 소스는 같은 꼴이지만, 그 빌드의 dex는 읽어 보지 않았다. 다른 꼴이면 바꾸기가 이미지 빌드를 멈춘다.
+- 오버레이 값이 앱에 닿는지. 큰 화면 구성(`sw1500dp` 이상과 저밀도)에서는 프레임워크의 더 구체적인 값(36, 48 dp)이 이길 수 있다. 그때 앱은 캡션보다 더 아래로 민다(가리지는 않는다). 밀도를 지키는 앱은 가장 가까운 밀도의 값을 받아 1-2 px 다를 수 있다.
+- 리눅스와 macOS 호스트. 오버레이의 높이는 Windows 제목 표시줄의 것이다. 다른 호스트의 제목 표시줄 높이가 다르면 리소스를 읽는 앱만 몇 px 어긋난다. 인셋은 어느 호스트에서나 그 호스트가 알린 높이다.

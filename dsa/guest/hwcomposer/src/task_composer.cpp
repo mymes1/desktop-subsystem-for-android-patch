@@ -275,6 +275,18 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
 
         bool clientTargetReady = false;
         const int64_t now = steadyMs();
+        if (std::any_of(frame.layers.begin(), frame.layers.end(),
+                        [](const FrameLayer& layer) { return layer.client; })) {
+            mClientTargetUsedMs = std::max<int64_t>(now, 1);
+        }
+        const bool holdClientTarget =
+                clientTargetHeld(mClientTargetUsedMs, now, kReleaseClientTargetMs);
+        if (!holdClientTarget && mClientTargetUsedMs != 0) {
+            HWC_LOGI("SurfaceFlinger has composed nothing itself for %lld ms: let go of the "
+                     "client target",
+                     static_cast<long long>(now - mClientTargetUsedMs));
+            mClientTargetUsedMs = 0;
+        }
         for (const TaskLayers& task : layout.tasks) {
             const auto pairing = mDisplays.acquire(task.task);
             if (!pairing) {
@@ -474,7 +486,9 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
 
         // Drop this process's hold on buffers SurfaceFlinger can no longer show.
         for (auto it = mShared.begin(); it != mShared.end();) {
-            if (frame.liveBuffers.count(it->first) || it->first == frame.clientTarget.id ||
+            const bool clientTarget = it->first == frame.clientTarget.id ||
+                                      frame.clientBuffers.count(it->first) != 0;
+            if (frame.liveBuffers.count(it->first) || (holdClientTarget && clientTarget) ||
                 mUploadedAhead.count(it->first)) {
                 ++it;
             } else {
@@ -486,11 +500,24 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
         // The next frame names the buffers copied up for it among its own.
         mUploadedAhead.clear();
 
+        std::optional<int64_t> releaseAt = releaseTasksWithoutLayersLocked(layout, now);
+        if (holdClientTarget) {
+            // SurfaceFlinger presents nothing more once the video is gone and the rest is
+            // still, so a frame is asked for when the client target is due to go.
+            const int64_t due = mClientTargetUsedMs + kReleaseClientTargetMs;
+            releaseAt = releaseAt ? std::min(*releaseAt, due) : due;
+        }
+
         if (!mHost.connected()) {
             mDisconnected = true;
             mReconnectWake.notify_all();
         }
         refreshAt = mResizeGate.nextDeadline();
+        if (releaseAt && (!refreshAt || *releaseAt < *refreshAt)) {
+            // SurfaceFlinger presents nothing more for a minimized window, so a frame is asked
+            // for when its buffers are due to go.
+            refreshAt = releaseAt;
+        }
     }
     if (refreshAt) {
         // SurfaceFlinger presents only when something changes; a held task whose app never
@@ -500,6 +527,45 @@ void TaskComposer::compose(Frame& frame, double presentedMs) {
         mReconnectWake.notify_all();
     }
     send(outbox);
+}
+
+std::optional<int64_t> TaskComposer::releaseTasksWithoutLayersLocked(const Layout& layout,
+                                                                     int64_t now) {
+    std::set<int32_t> withLayers;
+    for (const TaskLayers& task : layout.tasks) {
+        withLayers.insert(task.task);
+    }
+    std::optional<int64_t> next;
+    for (auto& [task, output] : mOutputs) {
+        if (withLayers.count(task)) {
+            output.withoutLayersSinceMs = 0;
+            continue;
+        }
+        if (output.targets[0] == 0 && output.targets[1] == 0) {
+            continue;
+        }
+        if (output.withoutLayersSinceMs == 0) {
+            output.withoutLayersSinceMs = std::max<int64_t>(now, 1);
+        }
+        const int64_t due = output.withoutLayersSinceMs + kReleaseWithoutLayersMs;
+        if (!releaseDue(output.withoutLayersSinceMs, now, kReleaseWithoutLayersMs)) {
+            next = next ? std::min(*next, due) : due;
+            continue;
+        }
+        // The same as when a task's buffers change size: the host display keeps the last frame
+        // posted to it until the next post, and the window shows its own copy of it.
+        for (uint32_t& target : output.targets) {
+            mHost.closeColorBuffer(target);
+            target = 0;
+        }
+        HWC_LOGI("task %d has had no layer for %lld ms: let go of its %lldx%lld buffers", task,
+                 static_cast<long long>(now - output.withoutLayersSinceMs),
+                 static_cast<long long>(output.buffers.width),
+                 static_cast<long long>(output.buffers.height));
+        output.buffers = BufferSize{};
+        output.next = 0;
+    }
+    return next;
 }
 
 void TaskComposer::refreshNow() {

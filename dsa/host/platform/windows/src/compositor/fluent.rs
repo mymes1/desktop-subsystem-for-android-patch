@@ -233,22 +233,25 @@ pub fn menu_palette(theme: &Theme) -> MenuPalette {
     }
 }
 
-/// The colors of a small round button drawn over content, such as a widget's "More" button.
+/// The colors of a small button drawn over content, such as a widget's "More" button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ButtonPalette {
     /// The button's own fill, mostly opaque so it reads over whatever is under it.
     pub fill: Argb,
-    /// Laid over the fill while the pointer is on it (`SubtleFillColorSecondary`).
+    /// Laid over the fill while the pointer is on it.
     pub hover: Argb,
-    /// Laid over the fill while it is pressed (`SubtleFillColorTertiary`).
+    /// Laid over the fill while it is pressed.
     pub pressed: Argb,
-    /// Its hairline edge (`ControlStrokeColorSecondary`).
+    /// Its hairline edge.
     pub border: Argb,
     pub glyph: Argb,
     pub glyph_pressed: Argb,
 }
 
-/// The button's colors for `theme`.
+/// The button's colors for `theme`: a dark grey close to black at 85% (#202020), a faint
+/// light edge and light dots, the same in light and dark themes. The button sits over a
+/// widget, whose colors are its app's rather than the theme's, and a quiet dark chip reads
+/// over light and dark widgets alike. High contrast keeps its own colors.
 pub fn button_palette(theme: &Theme) -> ButtonPalette {
     if let Some(hc) = theme.high_contrast {
         return ButtonPalette {
@@ -260,24 +263,13 @@ pub fn button_palette(theme: &Theme) -> ButtonPalette {
             glyph_pressed: hc.highlight_text | 0xFF00_0000,
         };
     }
-    if theme.dark {
-        ButtonPalette {
-            fill: 0xD92C_2C2C,
-            hover: 0x0FFF_FFFF,
-            pressed: 0x0AFF_FFFF,
-            border: 0x18FF_FFFF,
-            glyph: 0xFFFF_FFFF,
-            glyph_pressed: 0xC5FF_FFFF,
-        }
-    } else {
-        ButtonPalette {
-            fill: 0xD9F9_F9F9,
-            hover: 0x0900_0000,
-            pressed: 0x0600_0000,
-            border: 0x2900_0000,
-            glyph: 0xE400_0000,
-            glyph_pressed: 0x9E00_0000,
-        }
+    ButtonPalette {
+        fill: 0xD920_2020,
+        hover: 0x14FF_FFFF,
+        pressed: 0x0AFF_FFFF,
+        border: 0x14FF_FFFF,
+        glyph: 0xF2FF_FFFF,
+        glyph_pressed: 0xB3FF_FFFF,
     }
 }
 

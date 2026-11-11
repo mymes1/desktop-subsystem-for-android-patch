@@ -61,8 +61,10 @@ git -C $GfxstreamDir clean -fdx
 # next release resets it and submits with it again while the GPU may still signal it, and
 # nothing checks the renderer's device. Without 0019 a YUV gralloc buffer a guest CPU writes (a
 # video decoder's pictures, a camera's frames) gets an RGBA ColorBuffer the guest cannot copy
-# its planes into, so videos show their sound and a green picture. A patch that does not apply
-# stops the fetch.
+# its planes into, so videos show their sound and a green picture. Without 0020 every read back
+# of host-visible memory sends all of it, changed or not: the guest reads its mapped memory back
+# at each fence, so every frame of every app waited for tens of megabytes to cross the socket.
+# A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -79,7 +81,8 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

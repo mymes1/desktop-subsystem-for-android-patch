@@ -13,7 +13,13 @@
 # memory is more fragmented than this setting allows; 40, twice its default, has it gather
 # free pages sooner, so more of them reach the host without waiting for the control daemon's
 # reclaim.
+#
+# zram compresses with LZ4, fast enough for every swap. zstd, its second compressor, compresses
+# what stays in zram again during the idle reclaim (dsa-channeld.rc), about a fifth smaller. It
+# must be named before swapon_all sizes the device; a kernel without multi-compression refuses
+# the write, and zram then keeps LZ4 alone.
 on boot
+    write /sys/devices/virtual/block/zram0/recomp_algorithm "algo=zstd priority=1"
     swapon_all /vendor/etc/fstab.dsa
     write /proc/sys/vm/swappiness 100
     write /proc/sys/vm/page-cluster 0

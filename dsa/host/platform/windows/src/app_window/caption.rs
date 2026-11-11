@@ -7,9 +7,15 @@
 //! buttons over the app's top right corner in a visual of their own
 //! ([`WindowPresenter::show_caption`]).
 //!
-//! The title bar keeps the height Windows gives a caption at the window's DPI. The window
-//! reports it (`FromHost::Caption`) when it opens and whenever it changes, and Android gives
-//! the task a top inset of that height, so the app's own toolbar sits below the buttons.
+//! The title bar is Android's status bar. It keeps the height Windows gives a caption at the
+//! window's DPI. The window reports it (`FromHost::Caption`) when it opens and whenever it
+//! changes, and Android gives the task a status bar inset of exactly that height, in the
+//! task's pixels, as a phone gives an app the height of its status bar. An app that draws
+//! edge to edge keeps its toolbar below the band and draws its own status bar background
+//! under it; an app that does not gets the status bar background Android draws in its status
+//! bar colour there. Either way only what the app chooses to draw under the band is covered.
+//! The guest image also sets Android's status bar height resources to this height at each
+//! scale's density, for the apps that read those instead of their insets.
 //!
 //! The band belongs to Windows, as the platform-neutral [`CaptionLayout`] decides:
 //! `WM_NCHITTEST` answers a caption button's code over the buttons (the maximize button's

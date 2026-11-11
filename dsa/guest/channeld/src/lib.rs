@@ -33,6 +33,7 @@ pub mod android_files;
 pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
+pub mod cacerts;
 pub mod dns_redirect;
 pub mod dns_stub;
 pub mod gamepad;

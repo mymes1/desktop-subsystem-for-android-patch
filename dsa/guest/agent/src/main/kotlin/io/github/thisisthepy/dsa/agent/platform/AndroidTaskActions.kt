@@ -294,10 +294,14 @@ class AndroidTaskActions(
      * (WindowContainerTransaction.addInsetsSource and removeInsetsSource). This is how the
      * framework's own desktop windowing gives a freeform task the inset of the caption it draws
      * over the task: the frame is in display pixels, and the task's windows receive the part
-     * that overlaps them. The status bar type is given too because the guest has no status bar
-     * of its own, and apps lay out their top edge by the status bar inset. The sources do not
-     * force their insets to be consumed, so an app drawing edge to edge draws its status bar
-     * background under the band.
+     * that overlaps them. The status bar type is given too because the host window's title bar
+     * is Android's status bar: the guest has no status bar of its own, and most apps lay out
+     * their top edge by the status bar inset, as on a phone. Stock Android hands a freeform
+     * window only its caption bar and IME insets; the image's window manager keeps the status
+     * bar inset too (make-image.py's SERVICES_CODE), so an app that pads by it keeps its
+     * toolbar below the title bar. The sources do not force their insets to be consumed, so an
+     * app drawing edge to edge draws its status bar background under the band, and Android
+     * draws the status bar colour of an app that does not there.
      *
      * The caption bar source carries [boundingRects], relative to [frame], as Android's own
      * desktop windows give an app that draws its own title bar the places their caption draws
