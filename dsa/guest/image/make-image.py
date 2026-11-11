@@ -75,11 +75,11 @@ SHELL_APPS = ["Launcher3QuickStep", "SystemUI", "LatinIME"]
 # Kept on purpose, because apps rely on them: WebView, every content provider (contacts,
 # calendar, media, downloads, settings, telephony's database), PackageInstaller,
 # PermissionController, DocumentsUI, the print spooler, the sound picker, Settings, Provision
-# (it marks the device set up), Telecom and TeleService (system_server binds them at boot),
-# CarrierConfig, the browser, the camera and the clock. The browser stays although web links
-# go to the host's browser by default (the agent holds the browser role then): an app may
-# start it by name, the user can choose to keep links in Android, which gives the role back
-# to it, and a link that cannot reach the host opens in it.
+# (it marks the device set up), Telecom (system_server binds it at boot, and calling apps place
+# their own calls through it), CarrierConfig, the browser, the camera and the clock. The browser
+# stays although web links go to the host's browser by default (the agent holds the browser
+# role then): an app may start it by name, the user can choose to keep links in Android, which
+# gives the role back to it, and a link that cannot reach the host opens in it.
 UNNEEDED_APPS = [
     # Telephony without a modem (the radio HAL is removed): calls, SMS, the SIM toolkit, MMS,
     # emergency information, IMS entitlement and the carrier's captive portal app.
@@ -90,6 +90,14 @@ UNNEEDED_APPS = [
     "EmergencyInfo",
     "ImsServiceEntitlement",
     "CarrierDefaultApp",
+    # TeleService, the com.android.phone process: persistent, so the activity manager starts it
+    # at boot and again whenever it ends, and it held about 8.5 MiB. Without the telephony
+    # feature (unavailable-features.xml) it sets nothing up (PhoneGlobals returns at once), so
+    # it publishes none of the phone, subscription or carrier config services and system_server
+    # already runs without them, as an Android TV build, which has no TeleService, does.
+    # Telecom stays for apps that place their own calls. The telephony provider, which runs
+    # under the same name, stays and starts only when an app asks it something.
+    "TeleService",
     # Screen savers and wallpapers: the host draws the desktop, and the guest's display is
     # never seen, so there is no screen to save or wallpaper to show (SystemUI, which draws
     # it, is removed above).

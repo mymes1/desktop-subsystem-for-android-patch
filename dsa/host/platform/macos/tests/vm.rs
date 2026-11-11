@@ -152,7 +152,7 @@ fn config() -> MacVmConfig {
         initrd: PathBuf::from("/tmp/boot.initrd"),
         cmdline: "console=hvc0".into(),
         memory_max_mb: 8192,
-        memory_start_mb: 3072,
+        memory_start_mb: 2048,
         processors: 4,
         disks: vec![Disk {
             path: PathBuf::from("/data/android.img"),

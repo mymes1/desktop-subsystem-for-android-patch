@@ -192,6 +192,10 @@ bool releaseDue(int64_t withoutLayersSinceMs, int64_t nowMs, int64_t delayMs) {
     return withoutLayersSinceMs > 0 && nowMs - withoutLayersSinceMs >= delayMs;
 }
 
+bool clientTargetHeld(int64_t lastClientFrameMs, int64_t nowMs, int64_t delayMs) {
+    return lastClientFrameMs > 0 && !releaseDue(lastClientFrameMs, nowMs, delayMs);
+}
+
 ResizeGate::Decision ResizeGate::decide(int32_t task, int64_t postedWidth, int64_t postedHeight,
                                         const Rect& bounds, bool drawn, int64_t nowMs,
                                         uint64_t geometry) {
