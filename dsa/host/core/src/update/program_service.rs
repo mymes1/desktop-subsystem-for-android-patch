@@ -1312,6 +1312,12 @@ impl UserAndroid for WithProgramStatus {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         self.android.share_folders(on, folders)
     }
+    fn trust_host_certificates(&self, on: bool) {
+        self.android.trust_host_certificates(on)
+    }
+    fn host_certificates(&self) -> Vec<crate::host_certificates::ImportedCertificate> {
+        self.android.host_certificates()
+    }
     fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
         self.android.set_root_elevation_config(on, apps)
     }

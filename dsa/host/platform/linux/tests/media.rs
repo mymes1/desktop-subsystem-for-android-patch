@@ -26,6 +26,15 @@
 //! The test also reads the guest's log for a denial of a media service's shared memory, and
 //! for the codec HAL losing a picture because its surface gave it no buffer.
 //!
+//! The root certificate check makes a throwaway root and a server certificate for `localhost`
+//! signed by it, serves HTTPS with it on the host (`openssl s_server`), and carries the guest's
+//! `localhost:8443` there with `adb reverse`. The probe's HTTPS check opens it as an app does:
+//! refused at first, then let through once the root is in the host's system store (added with
+//! sudo, as an administrator adds one), refused again with the host-certificates setting off,
+//! let through with it on, and refused once the root is taken away. Android's own system
+//! certificates stay as they were throughout. It needs passwordless sudo, which CI's runners
+//! have.
+//!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
 //! `DSA_WIDGET_TEST_IMAGE` the image folder built from the commit under test,
 //! `DSA_WIDGET_TEST_KERNEL` the kernel to boot it with when the folder carries none,
@@ -92,6 +101,9 @@ const MEDIA_BUDGET: Duration = Duration::from_secs(900);
 /// The root check boots three times (as it starts, then with root elevation on and off), so
 /// it stays under twenty-one minutes.
 const ROOT_BUDGET: Duration = Duration::from_secs(1260);
+/// The root certificate check boots once and waits on five changes of the host's trust, so it
+/// stays under fifteen minutes.
+const CERTIFICATES_BUDGET: Duration = Duration::from_secs(900);
 /// How long past its budget a check may run before it stops everything it started and ends:
 /// inside its job step's limit (18 minutes for media, 23 for root), so the step never kills
 /// it with its VM still running.
@@ -1292,15 +1304,340 @@ fn fr26_the_boot_check_finds_sound_turned_down_before_the_host() {
 
 #[test]
 fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
-    boot_check(true, false);
+    boot_check(true, false, false);
 }
 
 #[test]
 fn fr35_an_app_needs_approval_and_su_is_hidden_when_disabled() {
-    boot_check(false, true);
+    boot_check(false, true, false);
 }
 
-fn boot_check(check_media: bool, check_root: bool) {
+#[test]
+fn fr28_android_trusts_the_root_certificates_the_host_added() {
+    boot_check(false, false, true);
+}
+
+/// Where the certificate check adds its test root, as an administrator adds one: the folder
+/// of the certificates added to the system's store beside the distribution's bundle.
+const ADDED_ROOT: &str = "/usr/local/share/ca-certificates/dsa-fr28-test-root.crt";
+
+/// The port the probe reaches the test's HTTPS server at, on the guest's own loopback address
+/// (`adb reverse` carries it to the host's).
+const GUEST_HTTPS_PORT: u16 = 8443;
+
+/// How long a change on the host may take to reach the apps: the host notices the store
+/// changed, sends the guest the roots, and the daemon writes them.
+const TRUST_WAIT: Duration = Duration::from_secs(120);
+
+/// Runs a program the check needs and fails with what it said when it does not succeed.
+fn run_tool(command: &mut Command) -> Result<String, String> {
+    let shown = format!("{command:?}");
+    let out = run_bounded(command, Duration::from_secs(120), usize::MAX)?;
+    match out.status {
+        Some(status) if status.success() => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        _ => Err(format!(
+            "{shown} failed: {}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )),
+    }
+}
+
+/// The test's root in the host's system store, put there with sudo as an administrator would
+/// and taken away when dropped, so a failed check leaves the runner's store as it found it.
+struct AddedRoot;
+
+impl AddedRoot {
+    fn add(root: &Path) -> Result<AddedRoot, String> {
+        run_tool(
+            Command::new("sudo")
+                .args(["-n", "install", "-m", "0644"])
+                .arg(root)
+                .arg(ADDED_ROOT),
+        )?;
+        run_tool(Command::new("sudo").args(["-n", "update-ca-certificates"]))?;
+        Ok(AddedRoot)
+    }
+
+    fn remove(&self) -> Result<(), String> {
+        run_tool(Command::new("sudo").args(["-n", "rm", "-f", ADDED_ROOT]))?;
+        run_tool(Command::new("sudo").args(["-n", "update-ca-certificates", "--fresh"]))?;
+        Ok(())
+    }
+}
+
+impl Drop for AddedRoot {
+    fn drop(&mut self) {
+        let _ = self.remove();
+    }
+}
+
+/// Makes a throwaway root and a server certificate for `localhost` signed by it, in `dir`.
+fn make_test_certificates(dir: &Path) -> Result<(), String> {
+    let openssl = || {
+        let mut command = Command::new("openssl");
+        command.current_dir(dir);
+        command
+    };
+    run_tool(openssl().args([
+        "req",
+        "-x509",
+        "-newkey",
+        "ec",
+        "-pkeyopt",
+        "ec_paramgen_curve:prime256v1",
+        "-nodes",
+        "-keyout",
+        "root.key",
+        "-out",
+        "root.crt",
+        "-days",
+        "2",
+        "-subj",
+        "/O=DSA Test/CN=DSA Host Certificates Test Root",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+        "-addext",
+        "keyUsage=critical,keyCertSign,cRLSign",
+    ]))?;
+    run_tool(openssl().args([
+        "req",
+        "-newkey",
+        "ec",
+        "-pkeyopt",
+        "ec_paramgen_curve:prime256v1",
+        "-nodes",
+        "-keyout",
+        "server.key",
+        "-out",
+        "server.csr",
+        "-subj",
+        "/CN=localhost",
+    ]))?;
+    std::fs::write(
+        dir.join("server.ext"),
+        "subjectAltName=DNS:localhost,IP:127.0.0.1\nbasicConstraints=CA:FALSE\n\
+         keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\n",
+    )
+    .map_err(|e| e.to_string())?;
+    run_tool(openssl().args([
+        "x509",
+        "-req",
+        "-in",
+        "server.csr",
+        "-CA",
+        "root.crt",
+        "-CAkey",
+        "root.key",
+        "-CAcreateserial",
+        "-out",
+        "server.crt",
+        "-days",
+        "2",
+        "-extfile",
+        "server.ext",
+    ]))?;
+    Ok(())
+}
+
+impl Adb {
+    /// What the probe's HTTPS check found at the test's server: "connected", "untrusted" or
+    /// "unreachable".
+    fn https(&self, dir: &Path, attempt: usize) -> Result<String, String> {
+        let out = self.shell(&format!(
+            "am instrument -w -r -e check https -e url https://localhost:{GUEST_HTTPS_PORT}/ \
+             {PROBE_RUNNER}"
+        ))?;
+        let _ = std::fs::write(dir.join(format!("probe-https-{attempt}.txt")), &out);
+        let results = instrumentation_results(&out)?;
+        results
+            .get("outcome")
+            .cloned()
+            .ok_or_else(|| format!("the HTTPS check said no outcome: {results:?}"))
+    }
+}
+
+/// Asks the probe until its HTTPS check finds `wanted`, for [TRUST_WAIT] at most.
+fn wait_for_https(
+    adb: &Adb,
+    dir: &Path,
+    attempt: &mut usize,
+    wanted: &str,
+    what: &str,
+) -> Result<(), String> {
+    let deadline = Instant::now() + TRUST_WAIT;
+    loop {
+        *attempt += 1;
+        let outcome = adb.https(dir, *attempt)?;
+        eprintln!("HTTPS check {attempt} ({what}): {outcome}");
+        if outcome == wanted {
+            return Ok(());
+        }
+        if outcome == "unreachable" {
+            return Err(format!(
+                "{what}: the probe did not reach the test's server at all (probe-https-{attempt}.txt)"
+            ));
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "{what}: the HTTPS check still found {outcome} after {} s, not {wanted}",
+                TRUST_WAIT.as_secs()
+            ));
+        }
+        std::thread::sleep(Duration::from_secs(5));
+    }
+}
+
+/// How many certificates Android's system folder holds, and whether `name` is among them.
+fn guest_certificates(adb: &Adb, name: &str) -> Result<(usize, bool), String> {
+    let listed = adb.shell("ls /apex/com.android.conscrypt/cacerts")?;
+    let names: Vec<&str> = listed.split_whitespace().collect();
+    Ok((names.len(), names.contains(&name)))
+}
+
+/// The root certificate check: an app reaches a local HTTPS server signed by a root the host
+/// added, and is refused once the root is taken away or the setting is off; Android's own
+/// certificates stay as they were throughout, and a root the host did not add is not trusted.
+fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(), String> {
+    make_test_certificates(dir)?;
+    let hash = run_tool(Command::new("openssl").current_dir(dir).args([
+        "x509",
+        "-noout",
+        "-subject_hash_old",
+        "-in",
+        "root.crt",
+    ]))?;
+    let file = format!("{}.0", hash.trim());
+    let fingerprint = run_tool(Command::new("openssl").current_dir(dir).args([
+        "x509",
+        "-noout",
+        "-fingerprint",
+        "-sha256",
+        "-in",
+        "root.crt",
+    ]))?;
+    let fingerprint = fingerprint
+        .trim()
+        .rsplit('=')
+        .next()
+        .unwrap_or_default()
+        .replace(':', "")
+        .to_ascii_lowercase();
+
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .map_err(|e| e.to_string())?
+        .port();
+    let _server = Service::spawn(
+        Command::new("openssl").current_dir(dir).args([
+            "s_server",
+            "-accept",
+            &format!("127.0.0.1:{port}"),
+            "-cert",
+            "server.crt",
+            "-key",
+            "server.key",
+            "-www",
+        ]),
+        dir.join("https-server.log"),
+    );
+    // The server listens before the probe looks, so "unreachable" means the way to it is
+    // broken, not that it was still starting.
+    let listening = Instant::now() + Duration::from_secs(20);
+    while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+        if Instant::now() >= listening {
+            return Err("the test's HTTPS server did not start (https-server.log)".into());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    adb.run(&[
+        "reverse",
+        &format!("tcp:{GUEST_HTTPS_PORT}"),
+        &format!("tcp:{port}"),
+    ])?;
+
+    let mut attempt = 0;
+    let (android_count, present) = guest_certificates(adb, &file)?;
+    if present {
+        return Err(format!(
+            "{file} is among Android's certificates before the root was added"
+        ));
+    }
+    eprintln!("Android has {android_count} system certificates of its own");
+    wait_for_https(
+        adb,
+        dir,
+        &mut attempt,
+        "untrusted",
+        "before the root is added",
+    )?;
+
+    let added = AddedRoot::add(&dir.join("root.crt"))?;
+    wait_for_https(
+        adb,
+        dir,
+        &mut attempt,
+        "connected",
+        "with the root added on the host",
+    )?;
+    match guest_certificates(adb, &file)? {
+        (count, true) if count == android_count + 1 => {}
+        (count, present) => {
+            return Err(format!(
+                "with the root added, Android's folder holds {count} certificates (it had \
+                 {android_count}), and {file} is {}there",
+                if present { "" } else { "not " }
+            ))
+        }
+    }
+    let report = api.settings().map_err(|e| e.to_string())?;
+    if !report
+        .imported_certificates
+        .iter()
+        .any(|certificate| certificate.sha256 == fingerprint)
+    {
+        return Err(format!(
+            "the settings do not list the added root ({fingerprint}): {:?}",
+            report.imported_certificates
+        ));
+    }
+
+    // Off: the root goes, and Android's own stay.
+    let mut wanted = report.settings;
+    wanted.host_certificates = false;
+    api.set_settings(&wanted).map_err(|e| e.to_string())?;
+    wait_for_https(adb, dir, &mut attempt, "untrusted", "with the setting off")?;
+    if guest_certificates(adb, &file)? != (android_count, false) {
+        return Err("with the setting off, Android's folder is not as it was".into());
+    }
+
+    // On again, then the root taken away on the host.
+    wanted.host_certificates = true;
+    api.set_settings(&wanted).map_err(|e| e.to_string())?;
+    wait_for_https(
+        adb,
+        dir,
+        &mut attempt,
+        "connected",
+        "with the setting on again",
+    )?;
+    added.remove()?;
+    drop(added);
+    wait_for_https(
+        adb,
+        dir,
+        &mut attempt,
+        "untrusted",
+        "with the root taken away on the host",
+    )?;
+    if guest_certificates(adb, &file)? != (android_count, false) {
+        return Err("with the root taken away, Android's folder is not as it was".into());
+    }
+    let _ = adb.run(&["reverse", "--remove-all"]);
+    Ok(())
+}
+
+fn boot_check(check_media: bool, check_root: bool, check_certificates: bool) {
     let (Some(crosvm), Some(image), Some(probe)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
         std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
@@ -1318,12 +1655,20 @@ fn boot_check(check_media: bool, check_root: bool) {
     let started = Instant::now();
     let (budget, what) = if check_root {
         (ROOT_BUDGET, "the root check")
+    } else if check_certificates {
+        (CERTIFICATES_BUDGET, "the root certificate check")
     } else {
         (MEDIA_BUDGET, "the media check")
     };
     let deadline = started + budget;
     let _watchdog = Watchdog::start(what, budget + OVERRUN);
-    let dir = scratch(if check_root { "root" } else { "media" });
+    let dir = scratch(if check_root {
+        "root"
+    } else if check_certificates {
+        "certs"
+    } else {
+        "media"
+    });
     let approver = dir.join("approver");
     std::fs::create_dir_all(&approver).unwrap();
     std::fs::set_permissions(&approver, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -1570,6 +1915,16 @@ fn boot_check(check_media: bool, check_root: bool) {
     if check_root {
         if let Err(why) = root_approval_check(&mut api, &adb, &dir) {
             problems.push(format!("root elevation: {why}"));
+        }
+    }
+    if check_certificates {
+        if let Err(why) = certificate_check(&mut api, &adb, &dir) {
+            problems.push(format!("the host's root certificates: {why}"));
+        }
+        let guest_log = adb.shell("logcat -d -b all").unwrap_or_default();
+        let _ = std::fs::write(dir.join("logcat.txt"), &guest_log);
+        for line in denials(&guest_log, &["dsa_cacerts_file"]) {
+            problems.push(format!("SELinux refused the host's certificates: {line}"));
         }
     }
 

@@ -2,13 +2,16 @@
 //!
 //!     dsa-channeld [--port <port>] [--log-port <port>] [--bootconfig <path>] [--cid <cid>]
 //!     dsa-channeld --keymint-key
+//!     dsa-channeld --cacerts-setup
 //!
 //! It reads the boot's secret from the kernel's bootconfig, connects to the host over
 //! vsock, and keeps the connection, connecting again whenever it is lost. While the host
 //! asks for Android's log, it reads logd and sends the records on the log port, a vsock port
 //! of its own. It exits only
 //! when it cannot work at all: no secret, or a host that refuses this guest for good.
-//! With `--keymint-key` it only fetches KeyMint's root key from the host and exits.
+//! With `--keymint-key` it only fetches KeyMint's root key from the host and exits. With
+//! `--cacerts-setup` it only copies Android's system certificates into the folders init binds
+//! over them, so the host's roots can be added beside them later, and exits.
 //! Messages go to standard error, which init sends to the kernel log.
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -335,6 +338,34 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn switch_android_files(_files: &dsa_protocol::control::AndroidFiles) {}
 
+    /// Makes Android's system certificates hold the root certificates the host added, and no
+    /// other of the host's: in the tmpfs folders `dsa-cacerts.rc` binds over Android's, so
+    /// every app sees the change at once.
+    #[cfg(target_os = "android")]
+    fn install_host_certificates(certificates: &dsa_protocol::control::HostCertificates) {
+        use dsa_guest_channeld::cacerts::Installer;
+        let wanted = if certificates.enabled {
+            certificates.certificates.clone()
+        } else {
+            Vec::new()
+        };
+        let report = Installer::of_system().install(&wanted);
+        say!(
+            "the host's root certificates: {} added, {} kept, {} taken away, {} already trusted",
+            report.added.len(),
+            report.kept.len(),
+            report.removed.len(),
+            report.already_trusted
+        );
+        for problem in &report.problems {
+            say!("the host's root certificates: {problem}");
+        }
+    }
+
+    /// Off Android there are no system certificate folders to add to.
+    #[cfg(not(target_os = "android"))]
+    fn install_host_certificates(_certificates: &dsa_protocol::control::HostCertificates) {}
+
     /// Hands idle memory back to the host: every so often, decides whether the guest should
     /// reclaim now (see `reclaim`), and has init do it. Only init may write the
     /// kernel's memory controls; the daemon only asks.
@@ -623,6 +654,16 @@ mod daemon {
         if std::env::args().nth(1).as_deref() == Some("--keymint-key") {
             return keymint_key();
         }
+        if std::env::args().nth(1).as_deref() == Some("--cacerts-setup") {
+            use dsa_guest_channeld::cacerts::{setup, FOLDERS, ROOT};
+            let problems = setup(std::path::Path::new(ROOT), &FOLDERS);
+            for problem in &problems {
+                say!("Android's system certificates: {problem}");
+            }
+            // A folder that could not be copied is not there, so init's bind of it fails and
+            // Android's own folder stays in use.
+            return 0;
+        }
         let options = match options() {
             Ok(options) => options,
             Err(why) => {
@@ -680,6 +721,7 @@ mod daemon {
                 .on_developer_mode(switch_adb)
                 .on_file_sharing(switch_shares)
                 .on_android_files(switch_android_files)
+                .on_host_certificates(install_host_certificates)
                 .on_arm_translation(Arc::new(ArmTranslation::new(
                     arm_translation::DIR,
                     BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),

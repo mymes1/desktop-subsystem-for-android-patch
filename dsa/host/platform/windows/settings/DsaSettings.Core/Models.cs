@@ -91,7 +91,9 @@ public sealed record SettingsInfo(
     TouchGesturesState TouchGesturesState = TouchGesturesState.Unknown,
     string? TouchGesturesProblem = null,
     bool RootElevation = false,
-    bool ImageAutoRestart = true)
+    bool ImageAutoRestart = true,
+    bool HostCertificates = true,
+    IReadOnlyList<ImportedCertificate>? ImportedCertificates = null)
 {
     /// <summary>The Windows folders that can be shared with Android, in the order the service
     /// keeps them.</summary>
@@ -171,6 +173,14 @@ public sealed record NetworkInfo(
     IReadOnlyList<string> DnsServers,
     string Gateway,
     string? Problem);
+
+/// <summary>A root certificate a user or an administrator added to this computer, as the service
+/// found it: who it is for and who signed it (distinguished names), the store it was found in
+/// (<c>machine</c>, <c>user</c>, <c>machine_group_policy</c> and so on), that store's registry
+/// path, its SHA-256 fingerprint in lower-case hexadecimal, and when it stops being valid, in
+/// seconds since the Unix epoch (0 when unknown).</summary>
+public sealed record ImportedCertificate(string Subject, string Issuer, string Source, string Location,
+    string Sha256, long NotAfter);
 
 /// <summary>An ARM translation package, as it describes itself.</summary>
 public sealed record ArmPackageInfo(string Name, string Version, string Library, string License);

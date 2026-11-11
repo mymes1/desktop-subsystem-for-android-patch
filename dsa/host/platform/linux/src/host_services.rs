@@ -126,6 +126,9 @@ pub fn serve(
         .with_switch(switch);
     session.serve_backup(Arc::new(backup));
 
+    // The root certificates an administrator added to the system's store.
+    session.serve_host_certificates(Arc::new(crate::host_certificates::LinuxRootStore::system()));
+
     session.set_keymint_keys(Arc::new(keymint_keys(settings_dir, account.uid, keyring)));
     let listener = VsockHub::shared(KEYMINT_PORT)
         .map_err(|e| format!("vsock port {KEYMINT_PORT}: {e}"))?

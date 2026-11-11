@@ -151,6 +151,33 @@ public enum AdbAutoConnectState: String, CaseIterable, Equatable, Sendable {
     public var textKey: String { "AdbAutoConnect_\(rawValue)" }
 }
 
+/// A root certificate the service found added to the computer's trust settings.
+public struct ImportedCertificate: Equatable, Sendable {
+    /// Who the certificate is for and who signed it, as distinguished names ("CN=Example Root,
+    /// O=Example").
+    public var subject: String
+    public var issuer: String
+    /// Where it was found, as the service names it. On a Mac it is "admin" (the administrator
+    /// trust settings) or "user" (the user's own trust settings).
+    public var source: String
+    /// The store or file it was found in, as the operating system names it.
+    public var location: String
+    /// The SHA-256 fingerprint, in lower-case hexadecimal.
+    public var sha256: String
+    /// When it stops being valid, in seconds since the Unix epoch; 0 when unknown.
+    public var notAfter: Int64
+
+    public init(subject: String, issuer: String, source: String, location: String = "", sha256: String = "",
+                notAfter: Int64 = 0) {
+        self.subject = subject
+        self.issuer = issuer
+        self.source = source
+        self.location = location
+        self.sha256 = sha256
+        self.notAfter = notAfter
+    }
+}
+
 public struct SettingsInfo: Equatable, Sendable {
     /// The folders that can be shared with Android, in the order the service keeps them.
     public static let allFolders = ["Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop"]
@@ -194,6 +221,12 @@ public struct SettingsInfo: Equatable, Sendable {
     /// Whether Android restarts by itself into an Android image the service downloaded. On by
     /// default; off, the image is used the next time the user starts Android.
     public var imageAutoRestart = true
+    /// Whether Android trusts, as system certificates, the root certificates a user or an
+    /// administrator added to this Mac. On by default; a change applies at once.
+    public var hostCertificates = true
+    /// The root certificates the service found added to this Mac's trust settings, whether or
+    /// not Android trusts them now.
+    public var importedCertificates: [ImportedCertificate] = []
 
     public init() {}
 
