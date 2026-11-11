@@ -58,6 +58,19 @@ one. They are marked "(admin)" below.
   on the **General** page, then open an app.
 - Everything else: at once.
 
+## How Android finds names
+
+Your computer answers every name Android's apps look up, with the same resolver Windows apps
+use (on Linux and macOS, the system's resolver). So your hosts file, your company's name rules,
+a VPN's own DNS servers and a DNS filter apply to Android's apps as they do to the computer's.
+Android does not ask a DNS server itself.
+
+- This is the same with **Advanced networking** on: your computer is on the same network and
+  knows its names, and a VPN or DNS filter on it still applies.
+- Android's own **Private DNS** is off by default, because it would ask a DNS server around your
+  computer. If you choose a private DNS server in Android's settings, Android uses it.
+- If DSA cannot answer for a while, Android asks the network's DNS servers until it can again.
+
 ## Values the command line takes
 
 - `render-gpu`: `display` (the GPU of the primary monitor, the default), `integrated`,

@@ -55,6 +55,18 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
   시작할 때 적용됩니다. Android를 다시 시작하려면 **일반** 페이지에서 종료한 다음 앱을 엽니다.
 - 나머지: 바로 적용됩니다.
 
+## Android가 이름을 찾는 방법
+
+Android 앱이 찾는 이름은 모두 컴퓨터가 답합니다. Windows 앱이 쓰는 것과 같은 해석기를 씁니다(Linux와
+macOS에서는 시스템 해석기). 그래서 hosts 파일, 회사의 이름 규칙, VPN의 DNS 서버, DNS 필터가 컴퓨터에서와
+같이 Android 앱에도 적용됩니다. Android가 직접 DNS 서버에 묻지 않습니다.
+
+- **고급 네트워킹**을 켜도 같습니다. 컴퓨터가 같은 네트워크에 있어 그 이름을 알고, 컴퓨터의 VPN이나 DNS
+  필터도 그대로 적용됩니다.
+- Android의 **비공개 DNS**는 기본으로 꺼져 있습니다. 켜면 컴퓨터를 거치지 않고 DNS 서버에 묻기 때문입니다.
+  Android 설정에서 비공개 DNS 서버를 고르면 Android는 그 서버를 씁니다.
+- DSA가 한동안 답하지 못하면, 다시 답할 수 있을 때까지 Android가 네트워크의 DNS 서버에 묻습니다.
+
 ## 명령줄에서 쓰는 값
 
 - `render-gpu`: `display`(주 모니터의 GPU, 기본값), `integrated`, `discrete`, 또는 `dsa gpus`가 보여 주는
