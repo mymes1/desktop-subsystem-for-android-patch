@@ -2205,6 +2205,55 @@ Google 앱에서 절감을 실제로 얻는 길은 둘이다. 소유자가 정�
 - 클라이언트 타깃 63 MiB. 줄이려면 SurfaceFlinger의 `FramebufferSurface`가 클라이언트 합성이 없을 때 버퍼를 놓게 하는 프레임워크 패치가 필요하다. 이 변경에 넣지 않았다.
 - 1 MiB/s로 파일을 새로 읽는 프로세스. root 셸이나 `/proc/<pid>/io`를 읽을 권한으로 가려야 한다.
 
+### 유휴 기준선: 커널과 상주 서비스가 잡는 것, 줄인 것 (2026-11-11)
+
+**기준.** 소유자 PC(Windows 11 Pro 26300, x64, 32 GiB), v0.2.2, Android 17 x86_64 이미지(`CP2A.260605.016`, 증분 `16373615.dsa79c0f759bacb`), Google Play 설치, 부팅 뒤 1시간 16분, VM 3072 MiB와 프로세서 4개. 잴 때 Play 스토어 창 하나가 열려 있었고 다른 앱 하나(`skplanet.musicmate`)가 캐시로 남아 있었다. 빌드하거나 실행하지 않았고 바탕 화면은 건드리지 않았다. 읽은 것: `dsa memory`, adb의 shell 사용자로 `dumpsys meminfo`, `/proc/meminfo`, 모든 프로세스의 `/proc/<pid>/status`, `/proc/mounts`, `logcat -d -b kernel`(부팅 때의 커널 메시지), `getprop`, `pm list features`, 이미지의 init 스크립트. user 빌드의 shell은 `/proc/vmallocinfo`, zram의 sysfs 파일, `/sys/kernel/slab/*`의 속성을 읽지 못하고, 이 커널에는 `/proc/slabinfo`가 없다. 그래서 slab과 vmalloc은 합계만 알고 캐시별 내역은 모른다. 이미지의 `su`는 쓰지 않았다(호스트가 바탕 화면에 승인 창을 띄운다).
+
+**잰 것.**
+
+| 항목 | 값 | 출처 |
+|---|---|---|
+| 호스트 합 | 1074 MiB: vm 상주 749(private 942), 창 관리자 29, 렌더러 260, 앱 창 36 | `dsa memory` |
+| 게스트 사용 | 823 / 2975 MiB: 페이지 캐시 214, 앱(익명) 127, 커널과 나머지 456 | `dsa memory` |
+| 커널과 나머지 456의 내역 | 회수 못 하는 slab 100, 커널 스택 21, 페이지 테이블 40, vmalloc 60, per-CPU 6, zram 저장소 164, 이름 없는 것 64 | `dsa memory` |
+| zram | 압축 전 478 MiB를 164 MiB에 보관(2.91배, LZ4), 크기 1488 MiB | `dsa memory` |
+| 부팅 때 커널이 떼어 둔 것 | 97 MiB. 커널 이미지 41 MiB(code 20873K, rwdata 2958K, rodata 14904K, bss 2732K), 3 GiB의 페이지 구조체 48 MiB(786079 페이지 × 64 B), swiotlb 4 MiB, ftrace 레코드 0.9 MiB(59032개, 232 페이지) | 커널 부팅 메시지 `Memory:`, `ftrace:` |
+| 스레드 | 1347개(커널 스택 16 KiB씩 = 21 MiB). 커널 스레드 230개: ext4-rsv-conversion 구조 스레드 75개(APEX의 ext4 마운트마다 하나), kverityd 고우선 워커 약 40개, kdmflush 17개. 사용자 스레드 1117개: system_server 252, Play 스토어 113, Play 서비스 86, musicmate 67, Play 스토어 배경 63, 에이전트 39 | `/proc/*/status` |
+| 페이지 테이블 | 사용자 프로세스 98개의 VmPTE 합 39.3 MiB. system_server 2.4, Play 서비스 2.0, Play 스토어 2.0. HAL과 네이티브 서비스 32개는 평균 0.19 MiB(스레드 평균 1.7개) | `/proc/*/status` |
+| 마운트 | ext4 170개(APEX 약 75개가 loop와 dm-verity 위의 ext4, 각각 두 번), erofs 18개, overlay 14개 | `/proc/mounts` |
+| DMA-BUF | 230 MiB(거의 모두 매핑되지 않음), Play 스토어 창이 열린 동안 | `dumpsys meminfo` |
+
+PSS(`dumpsys meminfo`, zram에 있는 몫을 압축 전 크기로 센다): Play 스토어 178(창이 열림), system_server 131, Play 서비스 73, musicmate 47, 에이전트 32, android.ext.services 30, Play 스토어 배경 28, Play 서비스 unstable 18, MediaProvider 15, SurfaceFlinger 14, NetworkStack 12, 설정 11, partnersetup 10, phone 8.5, audioserver 7.0, webview_zygote 6.9, media.swcodec 6.4, zygote64 6.0 MiB. 그 밖의 네이티브 서비스와 HAL 약 70개가 각각 0.6-4 MiB다. `dsa memory`가 세는 실제 비용(상주와 zram 몫)으로는 system_server 76(상주 39, zram 37), Play 서비스 27, 에이전트 12 MiB다.
+
+**HAL 프로세스 하나의 비용.** PSS 0.77-1.4 MiB(잰 값), 페이지 테이블 약 0.19 MiB, 스레드 1-3개의 커널 스택 16-48 KiB, 그리고 task, mm, VMA, binder 객체의 slab(재지 못했다, 수백 KiB로 본다). 하나에 약 1.2-1.8 MiB다.
+
+**바꾼 것과 기대하는 절감.**
+
+1. 하드웨어가 없는 예제 HAL 13개(APEX: authsecret, rebootescrow, cas, contexthub, input.processor, ir, memtrack, net.nlinterceptor, tetheroffload, neuralnetworks의 샘플 드라이버 셋, secure_element, usb, vibrator)와 가짜 얼굴·지문 HAL 둘(평범한 vendor 파일)을 이미지에서 뺐다. 얼굴, 지문, 적외선, 컨텍스트 허브 기능도 `unavailable-features.xml`로 거뒀다. 기능이 남아 있으면 system_server가 생체 인증 서비스와 컨텍스트 허브 서비스를 시작해 HAL을 기다리고, 적외선 서비스는 기능이 있는데 HAL이 없으면 시작을 거부해 system_server가 죽는다. 이 17개 프로세스의 PSS 합은 16.3 MiB였다(얼굴 1.2, 지문 0.85, NNAPI 샘플 셋 4.0, 나머지 0.77-1.13씩). 페이지 테이블 약 3.3 MiB, 커널 스택 약 0.5 MiB, slab 약 2-4 MiB를 더해 게스트에서 약 20-24 MiB를 기대한다. PSS의 일부는 이미 zram에 압축되어 있으므로 호스트가 실제로 아끼는 것은 약 15-20 MiB로 본다(재지 않았다). 남긴 것: thermal(게임의 열 여유 API), drm.clearkey(ClearKey 콘텐츠), identity, light, wifi, boot, 보안 HAL들, motioncontext(무엇에 쓰는지 확인하지 못해 남겼다). 커밋 `89590e3a`.
+2. zram에 두 번째 압축기로 zstd를 두었다(`CONFIG_ZRAM_MULTI_COMP`, `recomp_algorithm`을 `swapon_all` 전에). 유휴 회수가 차가운 페이지를 zram으로 보낸 뒤 zram의 페이지를 모두 idle로 표시하고, 회수마다 최대 64 MiB(16384 페이지)를 zstd로 다시 압축하고, zram을 압축 정리한다. 스왑마다 쓰는 압축기는 LZ4 그대로라서 앱을 쓰는 동안의 스왑 속도는 바뀌지 않는다. 이미 다시 압축한 페이지는 건너뛰고, 다시 읽힌 페이지는 zram을 떠나므로 차갑게 남는 것만 zstd가 된다. 안드로이드 익명 메모리에서 zstd는 LZ4보다 약 20-30% 더 작게 압축한다고 보고, 164 MiB가 약 125-135 MiB가 되어 약 30-40 MiB를 기대한다(재지 않았다). 비용: zstd의 압축 스트림(프로세서마다, 합쳐 1-2 MiB로 본다), 회수 한 번에 init이 0.3초 안팎 바쁜 것, zstd로 압축된 페이지를 다시 읽을 때 LZ4보다 몇 배 느린 해제(페이지당 수 마이크로초). 커밋 `f2f6b4ac`.
+3. config-wsl이 WSL 배포판을 위해 내장하는 것 가운데 게스트가 쓰지 않는 것을 뺐다: XFS, squashfs, ISO 9660, UDF, ext2(ext4가 대신 붙인다), NVMe, RAM 디스크, KSM, kallsyms의 변수 이름(`KALLSYMS_ALL`, 라이브 패치가 함께 빠진다). 커널 이미지는 VM이 도는 내내 상주하므로 그만큼이 모든 게스트에서 준다. 약 3 MiB로 본다(대부분 XFS, 재지 않았다). 남긴 것: BTF(netbpfload가 맵을 BTF와 함께 만든다, 부팅 로그 `btf:1`), ftrace(perfetto와 atrace), vfat, f2fs, erofs. 커밋 `88480b1a`.
+4. CI가 릴리스마다 수치를 남긴다. Image test에 boot check를 하나 더 두었다("Measure the memory with Google Play and one app window on the booted image"): LiteGapps의 빌드로 Google Play를 설치하고 다시 부팅한 뒤 설정 창 하나를 열고, 1분 손대지 않은 뒤 `dsa memory`와 같은 방법으로 10초 간격 여섯 번 읽는다. crosvm 프로세스의 상주·private, 창 관리자, 렌더러, 앱 창, 서비스, 게스트의 사용, 커널 항목, zram, 프로세스 비용(상주와 zram 몫), Google Play 서비스의 몫, `dumpsys meminfo`의 프로세스별 PSS를 중앙값으로 job summary와 `memory.json`(artifact `memory-measurement`)에 적는다. 기준선(`dsa/host/platform/linux/tests/memory_check/baseline.json`)보다 4분의 1과 100 MiB를 모두 넘게 늘었을 때만 실패한다. 기준선은 아직 비어 있다: 첫 develop 실행의 `memory.json`의 `baseline` 값을 그 실행과 이미지와 함께 옮겨 적어야 비교가 시작된다. 이 수치는 Linux 러너(KVM 위 crosvm, 렌더러는 lavapipe)의 것이라 Windows의 `vmmem`과 같지 않다. 같은 이미지끼리의 회귀를 잡는 용도다.
+
+**바꾸지 않은 것과 그 이유.**
+
+- VM 시작 크기 3072 MiB. 페이지 구조체가 48 MiB이고 VM이 도는 내내 상주한다. 2048 MiB로 시작하면 16 MiB가 준다. SPEC NFR-2가 시작 크기를 3 GiB로 정하고 있어서 바꾸지 않았다. 소유자에게 제안한다: 비용은 Google Play가 있는 부팅 직후(게스트 사용 1.4-1.8 GiB, 위 R26의 표)에 핫애드가 한두 번 일어나는 것이고, 핫애드된 메모리의 페이지 구조체는 그 메모리 안에 놓이므로(`MHP_MEMMAP_ON_MEMORY`) 시작 크기 밖의 비용은 늘지 않는다.
+- zram 크기(메모리의 절반, 1488 MiB). zram의 슬롯 표가 슬롯마다 16 B, 약 6 MiB의 vmalloc이다. 절반으로 줄이면 3 MiB가 주지만 압축해 둘 수 있는 양도 준다.
+- zram writeback(디스크로 내보내기). 뒷받침 장치가 있어야 하고, 쓰기는 사용자의 디스크를 닳게 한다. Android 17의 mmd가 writeback과 재압축을 하지만 이 빌드에서는 aconfig 플래그가 꺼져 있어(`mmd.enabled_aconfig`가 없다) `mmd_setup`이 아무것도 하지 않는다. aconfig 플래그를 켜려면 이미지의 플래그 저장소를 바꿔야 한다. 재압축은 위 2로 대신했다.
+- ART 힙. 이미 1 GiB 휴대전화의 값이다(`heaptargetutilization` 0.75, `heapminfree` 512k, `heapmaxfree` 8m). 더 낮추면 GC가 잦아지는 데 비해 줄어드는 몫은 프로세스마다 수 MiB 이하다.
+- zygote 프리로드. zygote64는 PSS 6 MiB(RSS 19 MiB)이고 그 페이지를 모든 앱이 나눠 쓴다. 프리로드를 줄이면 그 비용이 앱마다 따로 생긴다. Google Play 서비스의 프로세스 다섯과 시스템 앱이 늘 있으므로 지금이 낫다.
+- webview_zygote(PSS 6.9 MiB). WebViewUpdateService가 부팅 때 바로 시작한다. 늦게 시작하게 하려면 프레임워크를 고쳐 빌드해야 하고, 그것은 소유자에게 먼저 물어야 한다.
+- com.android.phone(PSS 8.5 MiB, 그중 대부분 zram). 영구 프로세스라 system_server가 바로 다시 띄운다. 전화 기능은 이미 거뒀다. 없애려면 프레임워크 변경이 필요하다.
+- ext4-rsv-conversion 구조 스레드 75개(약 2 MiB). 읽기 전용 ext4 마운트에도 하나씩 생긴다. 읽기 전용일 때 만들지 않게 하는 커널 패치는 다시 쓰기로 붙일 때를 함께 다뤄야 해서 이번에 하지 않았다.
+- swiotlb(4 MiB), KFENCE 풀(끔), dentry·inode·TCP·UDP 해시 표: 이미 커널 명령줄로 줄여 두었다.
+- 렌더러의 GPU 메모리, 창을 보일 때 늘어나는 페이지 캐시, 앱 창 프로그램의 버퍼, `dsa memory`의 프로세스 줄은 다른 작업이 맡았다. 위 DMA-BUF 230 MiB도 창이 열린 동안의 버퍼라 그쪽에 속한다.
+
+**확인하지 못한 것.**
+
+- 위 1-3의 절감은 모두 기대값이다. 이 PC에서 빌드하거나 부팅하지 않았다. Image test와 Kernel test가 develop에서 이미지와 커널을 만들고 부팅한다. 특히 SELinux가 enforcing일 때 `vendor_init`이 zram의 sysfs 파일(`recomp_algorithm`, `idle`, `recompress`, `compact`)에 쓸 수 있는지는 부팅 로그의 거부 줄로 확인해야 한다.
+- slab 100 MiB와 vmalloc 60 MiB의 캐시별 내역. root로 `/sys/kernel/slab`과 `/proc/vmallocinfo`를 읽어야 한다. VMA(`vm_area_struct`, `maple_node`), SELinux 정책(`avtab_node`), dm-bufio(파티션과 APEX의 dm-verity 해시 블록), binder를 의심한다.
+- CI의 첫 측정값과 기준선. 기준선을 적기 전에는 비교하지 않는다.
+- 뺀 HAL을 앱이 찾는 경우(진동, NNAPI 가속, IR)에 앱이 하드웨어가 없는 기기처럼 동작하는지. 실기에서 확인해야 한다.
+
 ## R27. 호스트 주소 변환: 행정 경계 데이터 고르기 (FR-36)
 
 FR-36의 주소 변환(`Geocoder`)을 호스트가 무엇으로 답할지 2026-11-10에 조사했다. 처음에는 공개 서버(Nominatim, `CLGeocoder`)를 썼으나, 소유자가 같은 날 FR-36을 바꿨다(PR #579). Google Play가 없을 때만 DSA가 답하고, 호스트에 둔 행정 경계 데이터로 좌표를 시, 구, 동 수준의 주소로 바꾸며, 서버와 키 없이 위치가 밖으로 나가지 않아야 한다. 아래는 그 조건으로 다시 고른 결과다.
