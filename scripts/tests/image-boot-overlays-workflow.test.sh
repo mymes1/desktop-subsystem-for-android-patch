@@ -42,4 +42,11 @@ grep -Fq 'if: always() && matrix.summary' "$workflow"
 grep -Fq 'cat "$report" >> "$GITHUB_STEP_SUMMARY"' "$workflow"
 grep -Fq '/tmp/overlays-test-*/idle-reclaim*' "$workflow"
 grep -Fq '"dsa/host/platform/linux/tests/idle_reclaim/**"' "$workflow"
+# The memory with Google Play and one app window is measured on a runner of its own too, so
+# every release shows it; the overlay check leaves it out.
+grep -Fq -- '--skip nfr1_the_memory_with_google_play_and_one_app_window_is_measured' "$workflow"
+grep -Fq 'filter: nfr1_the_memory_with_google_play_and_one_app_window_is_measured' "$workflow"
+grep -Fq 'summary: /tmp/overlays-test-*/memory.md' "$workflow"
+grep -Fq '/tmp/overlays-test-*/memory*' "$workflow"
+grep -Fq '"dsa/host/platform/linux/tests/memory_check/**"' "$workflow"
 echo "image boot overlays workflow: ok"
