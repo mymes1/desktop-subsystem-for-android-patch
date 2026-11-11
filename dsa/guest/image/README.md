@@ -346,12 +346,7 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
   which are read only. `dsa-cacerts.rc` makes the tmpfs folder `/dev/dsa_cacerts` at
   post-fs-data, has `dsa-channeld --cacerts-setup` copy both folders into it, and binds each
   copy over the original before the zygote starts, so every app's mount namespace has them.
-  Only the bind under `/system` reaches the apps: init binds from its own mount namespace,
-  `/apex` is private to each namespace, and on Android 17 init cannot switch to the one the
-  zygote starts in. So the system `build.prop` sets
-  `dalvik.vm.extra-opts=-Dsystem.certs.enabled=true`, which makes every app read
-  `/system/etc/security/cacerts`, and the setup fills that copy with the APEX's certificates,
-  the ones Android trusts without DSA. The daemon then writes each root the host sends there, named as Android names its own
+  The daemon then writes each root the host sends there, named as Android names its own
   (`<subject hash>.<n>`), and takes away those the host no longer names, or all of them when
   the user turns the setting off. It lists what it added in `/dev/dsa_cacerts/host-added`, so
   Android's own files are never touched. Being one tmpfs, a change shows in every app at once,

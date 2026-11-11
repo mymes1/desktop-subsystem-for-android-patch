@@ -622,18 +622,6 @@ LOG_PROPS = {
     "ro.logd.kernel": "true",
 }
 
-# The root certificates the host added reach the apps only through the bind under /system
-# (dsa-cacerts.rc): init binds from its own mount namespace, /apex is private to each one, and
-# on Android 17 init cannot switch to the zygote's, so its bind under /apex stays where no app
-# looks. Every Java VM is therefore started with system.certs.enabled=true, which makes
-# Android's certificate store and the network security config read
-# /system/etc/security/cacerts instead of the APEX's folder; the setup fills that copy with the
-# APEX's certificates. dalvik.vm.extra-opts is passed to every VM the zygote and app_process
-# start; nothing else in the image sets it.
-CACERTS_PROPS = {
-    "dalvik.vm.extra-opts": "-Dsystem.certs.enabled=true",
-}
-
 # Cuttlefish ships selectable vendor APEX implementations. Its launcher passes
 # the selections in bootconfig. DSA does not run that launcher, so choose the
 # implementations that can start without Cuttlefish remote services before
@@ -2650,9 +2638,8 @@ def permission_controller_edits():
 # Properties the vendor and odm build.prop files may not set. init reads those two files as
 # vendor_init, and the platform's policy gives vendor_init no right to set these: each line
 # was refused, and logged as a denial, on every boot. The system build.prop sets them.
-# adbd's listening address and the USB configuration are the system's to set too, and so are
-# the VM's extra options, which only the system build.prop needs to carry.
-VENDOR_FORBIDDEN_PROPS = {*USER_PROPS, *ADB_PROPS, *CACERTS_PROPS, "sys.use_memfd"}
+# adbd's listening address and the USB configuration are the system's to set too.
+VENDOR_FORBIDDEN_PROPS = {*USER_PROPS, *ADB_PROPS, "sys.use_memfd"}
 VENDOR_PROP_FILES = {"VENDOR/build.prop", "ODM/etc/build.prop"}
 
 # The build's own fingerprint is AOSP's, and it stays the same however often DSA's image
@@ -2806,8 +2793,7 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False, 
     with the imports of the identity the user chose. With `network`, it is the vendor build.prop
     that chooses how the VM's network adapter reaches Android (NETWORK_PROPS)."""
     props_to_apply = {**USER_PROPS, **ADB_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS,
-                      **LOG_PROPS, **CACERTS_PROPS, **(CODEC2_PROPS if codec2 else {}),
-                      **(NETWORK_PROPS if network else {})}
+                      **LOG_PROPS, **(CODEC2_PROPS if codec2 else {}), **(NETWORK_PROPS if network else {})}
     if vendor:
         props_to_apply = {k: v for k, v in props_to_apply.items() if k not in VENDOR_FORBIDDEN_PROPS}
     out = []
@@ -3959,9 +3945,6 @@ CACERTS_SCRIPT = [
     f"    mount none {CACERTS_DIR}/conscrypt /apex/com.android.conscrypt/cacerts bind",
     f"    mount none {CACERTS_DIR}/system /system/etc/security/cacerts bind",
 ]
-# The line of the system build.prop that makes apps read the bound folder under /system
-# (CACERTS_PROPS).
-CACERTS_PROP_LINE = "dalvik.vm.extra-opts=-Dsystem.certs.enabled=true"
 # The agent: a privileged app in system_ext, signed with the platform key, which reports
 # each app task to the host and starts and ends tasks for it. The framework refuses to boot
 # when a privileged app requests a privileged permission its allowlist does not grant.
@@ -4839,12 +4822,6 @@ def cacerts_problems(names, read):
             if line not in script:
                 problems.append(f"{CACERTS_RC} lacks \"{line.strip()}\", so the host's root certificates do not "
                                 "reach Android's system certificates before the zygote starts")
-    if "SYSTEM/build.prop" in names:
-        props = read("SYSTEM/build.prop").decode().splitlines()
-        if CACERTS_PROP_LINE not in props:
-            problems.append(f"SYSTEM/build.prop lacks \"{CACERTS_PROP_LINE}\", so apps read the APEX's "
-                            "certificate folder, which the bind does not reach, and never trust the "
-                            "root certificates the host added")
     contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
                 if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
     if CACERTS_CONTEXT not in contexts:
