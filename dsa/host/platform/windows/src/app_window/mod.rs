@@ -30,6 +30,7 @@ pub mod text_store;
 pub mod thumb_bar;
 pub mod tsf;
 pub mod window;
+pub mod window_menu;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
