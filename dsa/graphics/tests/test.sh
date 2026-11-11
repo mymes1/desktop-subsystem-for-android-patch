@@ -21,6 +21,15 @@ mkdir -p "$out"
 "$out/shadow_blocks_test"
 
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/shadow_record_test.cpp" -o "$out/shadow_record_test"
+"$out/shadow_record_test"
+
+# The guard on what host-visible memory adds to a resized window's wait for a frame.
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/readback_latency_test.cpp" -o "$out/readback_latency_test"
+"$out/readback_latency_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
     "$here/shadow_memory_test.cpp" -o "$out/shadow_memory_test"
 "$out/shadow_memory_test"
 
