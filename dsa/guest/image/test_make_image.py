@@ -4694,6 +4694,39 @@ def linkable_framework_table(home_padding=False, overlaid=()):
     return table_of(sorted(named | set(overlaid)), public=named)
 
 
+def complex_dp(dp):
+    """`dp` as a compiled dimension in dp, with 15 fraction bits, as aapt2 writes 35.4198dp."""
+    return (round(dp * (1 << 15)) << 8) | (2 << 4) | make_image.ARSC_UNIT_DIP
+
+
+def status_bar_table(heights, names=None):
+    """A compiled resource table of dimens: each of `names` (the status bar heights) in every
+    density of `heights` ({density: dp}, 0 for the values without a density), and in the
+    values without a density the highest of them unless `heights` gives one."""
+    names = names or make_image.STATUS_BAR_DIMENS
+    heights = dict(heights)
+    heights.setdefault(0, max(heights.values()))
+    type_pool, key_pool = string_pool(["dimen"]), string_pool(names)
+    spec_body = struct.pack("<BBHI", 1, 0, 0, len(names)) + bytes(4 * len(names))
+    chunks = struct.pack("<HHI", make_image.ARSC_TYPE_SPEC, 16, 8 + len(spec_body)) + spec_body
+    for density, dp in sorted(heights.items()):
+        entries = b"".join(struct.pack("<HHI", 8, 0, i) + struct.pack("<HBBI", 8, 0, 0x05, complex_dp(dp))
+                           for i in range(len(names)))
+        array = b"".join(struct.pack("<I", 16 * i) for i in range(len(names)))
+        config = bytearray(struct.pack("<I", 64) + bytes(60))
+        struct.pack_into("<H", config, make_image.ARSC_CONFIG_DENSITY, density)
+        header_size = 8 + 12 + len(config)
+        body = struct.pack("<BBHII", 1, 0, 0, len(names), header_size + len(array)) + bytes(config) + array + entries
+        chunks += struct.pack("<HHI", make_image.ARSC_TYPE, header_size, 8 + len(body)) + body
+    name = "io.github.thisisthepy.dsa.overlay.framework".encode("utf-16-le").ljust(256, b"\0")
+    package_body = (struct.pack("<I", 0x7F) + name
+                    + struct.pack("<IIIII", 288, 1, 288 + len(type_pool), len(names), 0)
+                    + type_pool + key_pool + chunks)
+    package = struct.pack("<HHI", 0x0200, 288, 8 + len(package_body)) + package_body
+    globals_pool = string_pool(["x"])
+    return struct.pack("<HHII", 0x0002, 12, 12 + len(globals_pool) + len(package), 1) + globals_pool + package
+
+
 def apk_with_table(table, files=None):
     """An APK holding the resource table `table` and `files`."""
     out = io.BytesIO()
@@ -4887,8 +4920,10 @@ class SystemScreenDesignTests(unittest.TestCase):
             record = make_image.overlay_record(overlay["target"], framework_table or own,
                                                own if overlay["target"] == "android" else app)
             if overlay["apk"] != without:
+                table = status_bar_table(make_image.status_bar_heights()) if overlay["target"] == "android" \
+                    else b"overlay"
                 files[f"VENDOR/overlay/{overlay['apk']}"] = apk_with_table(
-                    b"overlay", {make_image.SYSTEM_OVERLAY_RECORD: json.dumps(record)})
+                    table, {make_image.SYSTEM_OVERLAY_RECORD: json.dumps(record)})
         return list(files), files.__getitem__
 
     def test_fr34_check_image_accepts_overlays_built_against_its_framework_res_and_apps(self):
@@ -4909,6 +4944,23 @@ class SystemScreenDesignTests(unittest.TestCase):
         problems = make_image.system_overlay_problems(*self.image(break_settings=True))
         self.assertEqual(len(problems), 1)
         self.assertIn("DsaSettingsOverlay.apk was built for another build of com.android.settings", problems[0])
+
+    def test_fr22_check_image_rejects_a_framework_overlay_whose_status_bar_is_not_the_title_bar(self):
+        names, read = self.image()
+        files = {name: read(name) for name in names}
+        path = make_image.FRAMEWORK_OVERLAY_APK
+        with zipfile.ZipFile(io.BytesIO(files[path])) as apk:
+            record = apk.read(make_image.SYSTEM_OVERLAY_RECORD)
+        phone = {density: 24 for density in make_image.status_bar_heights()}
+        files[path] = apk_with_table(status_bar_table(phone), {make_image.SYSTEM_OVERLAY_RECORD: record})
+        problems = make_image.system_overlay_problems(list(files), files.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("does not line up with the window's title bar", problems[0])
+        self.assertIn("status_bar_height is 24 (unit 1) at 262 dpi, not the title bar's 58 px there", problems[0])
+        files[path] = apk_with_table(b"overlay", {make_image.SYSTEM_OVERLAY_RECORD: record})
+        problems = make_image.system_overlay_problems(list(files), files.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("cannot be read", problems[0])
 
     def test_fr34_check_image_rejects_an_overlay_that_does_not_say_what_it_was_built_against(self):
         names, read = self.image()
@@ -7187,6 +7239,209 @@ class KeyMintKeyImageTests(unittest.TestCase):
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
         self.assertEqual(len(problems), len(expected), problems)
+
+
+INSETS_POLICY = "Lcom/android/server/wm/InsetsPolicy;->enforceInsetsPolicyForTarget"
+CAPTION_BAR = "Landroid/view/WindowInsets$Type;->captionBar"
+SYSTEM_BARS = "Landroid/view/WindowInsets$Type;->systemBars"
+IS_FLOATING = "Landroid/app/WindowConfiguration;->isFloating"
+
+
+def services_dex(caption_test_before=False, floating=True):
+    """InsetsPolicy.enforceInsetsPolicyForTarget of services.jar as d8 compiles Android 17's,
+    cut down to the calls that matter: the windowing mode, isFloating, then the types a
+    floating window keeps (captionBar(), and ime()). With `caption_test_before`, it first tests
+    a source's type against captionBar(), as a later Android does for non-fullscreen windows."""
+    methods = [
+        ("Lcom/android/server/wm/InsetsPolicy;", "enforceInsetsPolicyForTarget", "LLL"),
+        ("Landroid/view/WindowInsets$Type;", "captionBar", "I"),
+        ("Landroid/view/WindowInsets$Type;", "systemBars", "I"),
+        ("Lcom/android/server/wm/ConfigurationContainer;", "getWindowingMode", "I"),
+        ("Landroid/app/WindowConfiguration;", "isFloating", "ZI"),
+        ("Landroid/view/WindowInsets$Type;", "ime", "I"),
+    ]
+    code = ""
+    if caption_test_before:
+        code += "71000100 0000" "0a00"  # invoke-static {}, captionBar; move-result v0
+    code += "71000200 0000" "0a00"  # invoke-static {}, systemBars (the provided insets' types)
+    code += "6e100300 0300" "0a00"  # invoke-virtual {v3}, getWindowingMode; move-result v0
+    if floating:
+        code += "71100400 0000" "0a01"  # invoke-static {v0}, isFloating; move-result v1
+    code += "38010900"  # if-eqz v1, :keep
+    code += "71000100 0000" "0a00"  # invoke-static {}, captionBar; move-result v0
+    code += "71000500 0000" "0a01"  # invoke-static {}, ime; move-result v1
+    code += "0f00"  # :keep return v0
+    return dex_file(methods, {0: (4, bytes.fromhex(code))})
+
+
+def dex_calls(dex, method):
+    """The methods `method` calls, in order."""
+    defined, refs = make_image.dex_methods(dex)
+    (code_off, _), = defined[method]
+    return [refs[struct.unpack_from("<H", dex, at + 2)[0]]
+            for at, op in make_image.dex_instructions(dex, code_off) if op in make_image.DEX_INVOKES]
+
+
+def jar_of(dex, misaligned=True):
+    """A jar with `dex` stored as classes.dex, as the build stores a system server jar's dex,
+    after a stored member whose length leaves the dex unaligned when `misaligned`."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as jar:
+        jar.writestr("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\n" + (b"x" if misaligned else b""))
+        jar.writestr("classes.dex", dex)
+        jar.writestr("com/android/server/x.xml", b"<x/>" * 50, compress_type=zipfile.ZIP_DEFLATED)
+    return out.getvalue()
+
+
+class CaptionIsStatusBarTests(unittest.TestCase):
+    """The host window's title bar is Android's status bar: an app that pads by its status bar
+    inset, or by the framework's status bar height, keeps its content below the title bar."""
+
+    def test_fr22_a_freeform_window_receives_its_status_bar_inset(self):
+        # Android keeps only the caption bar (and the IME) of a floating window's insets, so
+        # the status bar source the agent gives a task never reached its app, and an app that
+        # pads by its status bar inset drew its toolbar under the title bar.
+        self.assertEqual(dex_calls(services_dex(), INSETS_POLICY)[-2:], [CAPTION_BAR, "Landroid/view/WindowInsets$Type;->ime"])
+        edited, changed = make_image.edit_dex(services_dex(), make_image.SERVICES_CODE)
+        self.assertEqual(changed, [INSETS_POLICY])
+        calls = dex_calls(edited, INSETS_POLICY)
+        self.assertEqual(calls[calls.index(IS_FLOATING) + 1:],
+                         [SYSTEM_BARS, "Landroid/view/WindowInsets$Type;->ime"])
+        self.assertNotIn(CAPTION_BAR, calls)
+        # Only the method the instruction names changes: the file is as long, the code as long.
+        self.assertEqual(len(edited), len(services_dex()))
+        self.assertEqual(len(dex_code(edited, INSETS_POLICY)), len(dex_code(services_dex(), INSETS_POLICY)))
+        # Applied again, it changes nothing.
+        self.assertEqual(make_image.edit_dex(edited, make_image.SERVICES_CODE)[1], [])
+
+    def test_fr22_only_the_types_a_floating_window_keeps_change(self):
+        # A later Android tests a source's type against captionBar() before isFloating: that
+        # test stays as it is.
+        edited, changed = make_image.edit_dex(services_dex(caption_test_before=True), make_image.SERVICES_CODE)
+        self.assertEqual(changed, [INSETS_POLICY])
+        calls = dex_calls(edited, INSETS_POLICY)
+        self.assertEqual(calls[0], CAPTION_BAR)
+        self.assertEqual(calls[calls.index(IS_FLOATING) + 1], SYSTEM_BARS)
+
+    def test_fr22_an_insets_policy_built_from_other_sources_stops_the_image(self):
+        with self.assertRaisesRegex(ValueError, "built from other sources"):
+            make_image.edit_dex(services_dex(floating=False), make_image.SERVICES_CODE)
+
+    def test_fr22_the_edited_services_jar_keeps_its_dex_stored_and_aligned(self):
+        jar = jar_of(services_dex())
+        self.assertEqual(make_image.zip_misaligned(jar), ["classes.dex"])
+        self.assertTrue(make_image.apk_edits_left(jar, code=make_image.SERVICES_CODE))
+        edited = make_image.edit_services_jar(jar, make_image.SERVICES_JAR)
+        self.assertEqual(make_image.zip_misaligned(edited), [])
+        self.assertEqual(make_image.apk_edits_left(edited, code=make_image.SERVICES_CODE), [])
+        with zipfile.ZipFile(io.BytesIO(jar)) as before, zipfile.ZipFile(io.BytesIO(edited)) as after:
+            self.assertEqual([i.filename for i in before.infolist()], [i.filename for i in after.infolist()])
+            self.assertEqual([i.compress_type for i in before.infolist()], [i.compress_type for i in after.infolist()])
+            self.assertEqual(after.read("com/android/server/x.xml"), before.read("com/android/server/x.xml"))
+        # A jar that has the edit is left as it is.
+        self.assertIs(make_image.edit_services_jar(edited, make_image.SERVICES_JAR), edited)
+
+    def test_fr22_the_image_edits_services_jar_and_compiles_it_again(self):
+        jar = jar_of(services_dex())
+        odex, vdex = make_image.oat_files(make_image.SERVICES_JAR)
+        self.assertEqual(odex, make_image.FRAMEWORK_ODEX)
+        context = "PCL[/system/framework/com.android.location.provider.jar*1880069816]"
+        published = {
+            make_image.SERVICES_JAR: jar,
+            odex: fake_odex(**{"bootclasspath": BOOTCLASSPATH, "bootclasspath-checksums": "i;2/cb8fc4a6:i;2/f8c5165e",
+                               "classpath": context, "compiler-filter": "speed-profile"}),
+            vdex: fake_vdex(make_image.apk_dex_checksums(jar)),
+            odex[:-len(".odex")] + ".art": b"art",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                for name, data in published.items():
+                    archive.writestr(name, data)
+            make_image.modify(source, root / "modified.zip")
+            with zipfile.ZipFile(root / "modified.zip") as archive:
+                files = {name: archive.read(name) for name in archive.namelist()}
+        edited = files[make_image.SERVICES_JAR]
+        self.assertEqual(make_image.apk_edits_left(edited, code=make_image.SERVICES_CODE), [])
+        self.assertEqual(make_image.zip_misaligned(edited), [])
+        record = json.loads(files[make_image.PREBUILT_OAT_RECORD])
+        self.assertEqual(record[make_image.SERVICES_JAR]["filter"], "speed-profile")
+        self.assertEqual(record[make_image.SERVICES_JAR]["classpath"], context)
+        # Its published odex was made for the unedited dex, so it is compiled again with the
+        # published build's filter, class loader context and app image.
+        self.assertEqual(make_image.compile_jobs(files, files.__getitem__),
+                         [(make_image.SERVICES_JAR, "speed-profile", context, True)])
+        self.assertIn(make_image.SERVICES_JAR, make_image.EDITED_JARS)
+        # Until it is, the image check says so.
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name, data in files.items():
+                archive.writestr(name, data)
+        with zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as archive:
+            self.assertTrue(any("dex checksums" in p for p in make_image.prebuilt_oat_problems(archive)))
+
+    def test_fr22_services_jar_is_compiled_with_the_published_builds_own_profile(self):
+        lock = json.loads((Path(make_image.__file__).parent.parent / "framework/framework-lock.json").read_text())
+        commits = {v["build_id"]: next(p["commit"] for p in v["projects"] if p["path"] == "frameworks/base")
+                   for v in lock["versions"]}
+        inputs = json.loads((Path(make_image.__file__).parent / "inputs.json").read_text())["images"]
+        for image in inputs:
+            base = f"https://android.googlesource.com/platform/frameworks/base/+/{commits[image['build_id']]}/services/"
+            for key, file in [("services_profile", "art-profile"), ("services_profile_extra", "art-profile-extra")]:
+                entry = image["files"][key]
+                self.assertEqual(entry["url"], base + file + "?format=TEXT", image["version"])
+                self.assertEqual(entry["encoding"], "base64")
+                self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
+                self.assertGreater(entry["size"], 0)
+        fetch = (Path(make_image.__file__).parent / "fetch.sh").read_text()
+        self.assertIn(".url // empty", fetch)
+        self.assertIn('base64 -d "$file.download"', fetch)
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = make_image.image_spec(inputs, 17)
+            with self.assertRaisesRegex(ValueError, "fetch.sh"):
+                make_image.services_profiles(spec, Path(tmp))
+            for key in ("services_profile", "services_profile_extra"):
+                (Path(tmp) / spec["files"][key]["name"]).write_text(key)
+            self.assertEqual(make_image.services_profiles(spec, Path(tmp)), {make_image.SERVICES_JAR: [
+                Path(tmp) / "services-art-profile", Path(tmp) / "services-art-profile-extra"]})
+
+    def test_fr22_the_status_bar_height_is_the_title_bars_at_each_density(self):
+        # Android draws at 131 x the monitor's scale, as the host's density rule says.
+        self.assertEqual([make_image.status_bar_density(d) for d in (96, 120, 144, 168, 192, 240)],
+                         [130, 164, 196, 228, 262, 328])
+        heights = make_image.status_bar_heights()
+        self.assertEqual(len(heights), len(make_image.STATUS_BAR_TITLE_HEIGHTS))
+        for dpi, px in make_image.STATUS_BAR_TITLE_HEIGHTS.items():
+            density = make_image.status_bar_density(dpi)
+            # As getDimensionPixelSize rounds the dimension the overlay writes.
+            dp = float(f"{heights[density]:.4f}")
+            self.assertEqual(int(dp * density / 160 + 0.5), px, dpi)
+            self.assertTrue(34 < dp < 39, (dpi, dp))
+        # A 200% monitor: a 58 px title bar, the statusBars inset the owner's PC showed.
+        self.assertEqual(make_image.STATUS_BAR_TITLE_HEIGHTS[192], 58)
+        files = make_image.status_bar_overlay_files()
+        self.assertIn('<dimen name="status_bar_height">35.4198dp</dimen>', files["res/values-262dpi/dsa_status_bar.xml"])
+        self.assertIn(f'<dimen name="status_bar_height_default">{max(heights.values()):.4f}dp</dimen>',
+                      files["res/values/dsa_status_bar.xml"])
+        for name in make_image.STATUS_BAR_DIMENS:
+            self.assertIn(f"dimen/{name}", make_image.framework_overlaid())
+            for path, text in files.items():
+                self.assertIn(f'<dimen name="{name}">', text, path)
+
+    def test_fr22_check_image_rejects_a_status_bar_height_that_is_not_the_title_bars(self):
+        self.assertEqual(make_image.status_bar_overlay_problems(status_bar_table(make_image.status_bar_heights())), [])
+        problems = make_image.status_bar_overlay_problems(status_bar_table({0: 24}))
+        self.assertTrue(any("status_bar_height has no value for 262 dpi" in p for p in problems), problems)
+        self.assertTrue(any("not the title bar's" in p for p in problems), problems)
+        phone = {density: 24 for density in make_image.status_bar_heights()}
+        problems = make_image.status_bar_overlay_problems(status_bar_table(phone))
+        self.assertIn("status_bar_height is 24 (unit 1) at 262 dpi, not the title bar's 58 px there", problems)
+
+    def test_fr22_check_image_checks_services_jar(self):
+        script = (Path(make_image.__file__).parent / "check-image.py").read_text()
+        self.assertIn("apk_edits_left(services, code=make_image.SERVICES_CODE)", script)
+        self.assertIn("zip_misaligned(services)", script)
 
 
 if __name__ == "__main__":

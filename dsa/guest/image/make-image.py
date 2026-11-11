@@ -17,7 +17,8 @@ It takes the pinned target_files, otatools and dexpreopt_tools (fetch.sh downloa
 5. compiles the system apps users open (COMPILED_APPS) with the build's own dex2oat
    (dexpreopt_tools.zip), against the guest's boot image, so they do not run interpreted, and
    compiles again, with its own filter, any app the published build shipped compiled whose
-   dex no longer matches its odex (PREBUILT_OAT_RECORD);
+   dex no longer matches its odex (PREBUILT_OAT_RECORD), and services.jar, whose window
+   manager it edits so a freeform window gets its status bar inset (SERVICES_CODE);
 6. builds the images, and lays them out on the template of a user's Android disk.
 
 The results go to dsa/target/image/<version>/:
@@ -412,6 +413,47 @@ DOCUMENTSUI_CODE = {
         ],
     }),
 }
+
+# The host window's title bar is Android's status bar. A task's window draws its caption over
+# the task's top band, and the agent gives the task status bar and caption bar inset sources
+# as high as that band. An app that draws edge to edge then lays out below the band as it lays
+# out below a phone's status bar, and draws its own status bar background under the caption;
+# an app that does not gets the status bar background Android draws for it there.
+#
+# Android hands a window in a floating windowing mode (freeform, as every DSA task is, or
+# picture-in-picture) only its caption bar and IME insets: InsetsPolicy's
+# enforceInsetsPolicyForTarget keeps WindowInsets.Type.captionBar() (and the IME) and drops
+# the rest. The status bar source the agent gives the task never reached its app, so an app
+# that pads its toolbar by its status bar inset, as most edge-to-edge apps do (FLO's player
+# screen, for one), got 0 and drew its toolbar under the caption, its buttons under the
+# window's close button. The call that names the kept types names systemBars() instead
+# (status bars, navigation bars and the caption bar), so the app receives the status bar
+# source too, and with it the inset a phone gives it. The guest has no navigation bar and no
+# system UI of its own, so the only system bar sources are the ones the agent gives tasks.
+# Only the first call after isFloating changes: Android 16 and 17 have no other caption bar
+# call before it, and a later Android that tests a source's type against captionBar() before
+# it keeps that test.
+#
+# services.jar is compiled ahead of time (services.odex, .vdex and .art beside it), for its
+# dex: the edited jar is compiled again with the published build's filter, class loader
+# context and profile (SERVICES_PROFILE), as compile_apps compiles an edited app.
+SERVICES_JAR = "SYSTEM/framework/services.jar"
+SERVICES_CODE = {
+    "Lcom/android/server/wm/InsetsPolicy;->enforceInsetsPolicyForTarget": ("replace call", {
+        "after": "Landroid/app/WindowConfiguration;->isFloating",
+        "old": "Landroid/view/WindowInsets$Type;->captionBar",
+        "new": "Landroid/view/WindowInsets$Type;->systemBars",
+    }),
+}
+# The jars whose dex make-image.py edits, compiled again after the edit like EDITED_APPS.
+EDITED_JARS = [SERVICES_JAR]
+# The profile services.jar was compiled with: frameworks/base's services/art-profile and
+# art-profile-extra, one after the other (the build's art-profile-combined), at the commit the
+# published build was made from. inputs.json names them for each build (services_profile and
+# services_profile_extra), and fetch.sh downloads them beside the build's other inputs.
+# profman turns them into the binary profile dex2oat reads; should it fail, services.jar is
+# compiled with speed, which compiles all of what speed-profile compiles.
+SERVICES_PROFILE_INPUT = "services_profile"
 
 # Cuttlefish's logger writes to a virtio console Hyper-V does not have, so it exits as soon as
 # it starts. init starts it again every five seconds, and each exit runs flags_health_check.
@@ -1183,6 +1225,7 @@ def framework_overlay_sources(dest, record=None):
         f"res/layout/{DIALOG_BUTTON_BAR_LAYOUT}.xml": dialog_button_bar(),
         f"res/layout/{TOAST_LAYOUT}.xml": toast_layout(),
         f"res/drawable/{TOAST_FRAME}.xml": toast_frame(),
+        **status_bar_overlay_files(),
     })
     write_overlay_record(dest, record)
 
@@ -1193,6 +1236,7 @@ def framework_overlaid():
     return ([f"integer/{name}" for name in FRAMEWORK_OVERLAY_INTEGERS]
             + [f"bool/{name}" for name in FRAMEWORK_OVERLAY_BOOLEANS]
             + [f"string/{name}" for name in FRAMEWORK_OVERLAY_STRINGS]
+            + [f"dimen/{name}" for name in STATUS_BAR_DIMENS]
             + FRAMEWORK_DESIGN_OVERLAID)
 
 
@@ -1619,6 +1663,75 @@ def _arsc_entry_offsets(table, at, flags, count):
     return [(index, offset) for index, offset in enumerate(offsets) if offset != ARSC_NO_ENTRY]
 
 
+ARSC_TYPE_DIMENSION = 0x05
+ARSC_UNIT_DIP = 1
+BASE_DENSITY = 160  # the density at which a dp is one pixel
+ARSC_CONFIG_DENSITY = 14  # where the density sits in a type chunk's configuration
+
+
+def complex_dimension(data):
+    """The value and unit of a compiled dimension (Android's complex value format): a signed
+    24-bit mantissa, a radix and a unit."""
+    mantissa = struct.unpack("<i", struct.pack("<I", data & 0xFFFFFF00))[0] / 256
+    return mantissa / (1 << (0, 7, 15, 23)[(data >> 4) & 3]), data & 0xF
+
+
+def arsc_dimensions(table):
+    """{(name, density): (value, unit)} of each dimension a compiled resource table defines,
+    by the density of its configuration (0 where it has none)."""
+    chunk_type, header_size, _ = struct.unpack_from("<HHI", table, 0)
+    if chunk_type != ARSC_TABLE:
+        raise ValueError("not a compiled resource table")
+    found = {}
+    offset = header_size
+    while offset < len(table):
+        chunk_type, header_size, size = struct.unpack_from("<HHI", table, offset)
+        if chunk_type == ARSC_PACKAGE:
+            type_strings, _, key_strings = struct.unpack_from("<III", table, offset + 8 + 4 + 256)
+            types = xml_strings(table, offset + type_strings)
+            keys = xml_strings(table, offset + key_strings)
+            child = offset + header_size
+            while child < offset + size:
+                kind, child_header, child_size = struct.unpack_from("<HHI", table, child)
+                if kind == ARSC_TYPE:
+                    type_id, flags, _, count, entries_start = struct.unpack_from("<BBHII", table, child + 8)
+                    density = struct.unpack_from("<H", table, child + 20 + ARSC_CONFIG_DENSITY)[0]
+                    if types[type_id - 1] == "dimen":
+                        for _, entry in _arsc_entry_offsets(table, child + child_header, flags, count):
+                            at = child + entries_start + entry
+                            first, entry_flags = struct.unpack_from("<HH", table, at)
+                            if entry_flags & ARSC_ENTRY_COMPACT:
+                                key, data_type, data = first, entry_flags >> 8, struct.unpack_from("<I", table, at + 4)[0]
+                            else:
+                                key = struct.unpack_from("<I", table, at + 4)[0]
+                                data_type, data = struct.unpack_from("<BI", table, at + first + 3)
+                            if data_type == ARSC_TYPE_DIMENSION:
+                                found[(keys[key], density)] = complex_dimension(data)
+                child += child_size
+        offset += size
+    return found
+
+
+def status_bar_overlay_problems(table):
+    """What is wrong with the status bar heights of the framework overlay's resource table:
+    each STATUS_BAR_DIMENS value must be there for every density status_bar_heights names and
+    come to the title bar's pixels there, as getDimensionPixelSize rounds them, and the value
+    without a density must be the highest of them."""
+    found = arsc_dimensions(table)
+    heights = status_bar_heights()
+    problems = []
+    for name in STATUS_BAR_DIMENS:
+        for density, dp in sorted(heights.items()) + [(0, max(heights.values()))]:
+            value = found.get((name, density))
+            wanted = int(dp * (density or BASE_DENSITY) / BASE_DENSITY + 0.5)
+            if value is None:
+                problems.append(f"{name} has no value for {density or 'any'} dpi")
+            elif value[1] != ARSC_UNIT_DIP or int(value[0] * (density or BASE_DENSITY) / BASE_DENSITY + 0.5) != wanted:
+                problems.append(f"{name} is {value[0]:g} (unit {value[1]}) at {density or 'any'} dpi, not "
+                                f"the title bar's {wanted} px there")
+    return problems
+
+
 def arsc_resource_names(table):
     """The resources a compiled resource table defines in any configuration, as "type/name"."""
     return set(arsc_resources(table))
@@ -1843,6 +1956,16 @@ def system_overlay_problems(names, read):
         if target is not None and record.get("target_resources") != table_digest(read(target)):
             problems.append(f"{path} was built for another build of {overlay['target']} than {target}, so "
                             "what it replaces may not be there")
+        if path == FRAMEWORK_OVERLAY_APK:
+            with zipfile.ZipFile(io.BytesIO(read(path))) as apk:
+                table = apk.read("resources.arsc") if "resources.arsc" in apk.namelist() else None
+            try:
+                found = status_bar_overlay_problems(table) if table is not None else ["it has no resource table"]
+            except (ValueError, IndexError, struct.error):
+                found = ["its resource table cannot be read"]
+            if found:
+                problems.append(f"{path}: {'; '.join(found)}, so an app that pads by the status bar's height "
+                                "does not line up with the window's title bar")
     return problems
 
 
@@ -2271,6 +2394,14 @@ def assemble_dex(lines, dex):
     return struct.pack(f"<{len(code)}H", *code), outs
 
 
+def _method_index(refs, name):
+    """The index of the method "Lclass;->name" a dex file refers to exactly once."""
+    found = [i for i, ref in enumerate(refs) if ref == name]
+    if len(found) != 1:
+        raise ValueError(f"the dex file refers to {name} {len(found)} times, not once")
+    return found[0]
+
+
 def edit_dex(dex, edits):
     """Applies {"Lclass;->method": edit, or a list of edits} to a dex file. An edit is
     ("return false", None) or ("return true", None), which makes a method that returns a
@@ -2278,8 +2409,11 @@ def edit_dex(dex, edits):
     that method, whose result is not used, into no-ops; or ("replace code", {"registers": n,
     "old": [...], "new": [...]}), which replaces a method whose code is exactly `old` with
     `new` (Dalvik assembly, see assemble_dex) in n registers, padded with no-ops to the same
-    size. Returns the new file and the methods it changed. A method already edited, or not in
-    this file, is not changed; one whose code is neither `old` nor `new` is refused."""
+    size; or ("replace call", {"after": a, "old": o, "new": n}), which makes the first call to
+    the static method o after the first call to a a call to n, which takes and returns the same
+    types (only the method the instruction names changes). Returns the new file and the
+    methods it changed. A method already edited, or not in this file, is not changed; one
+    whose code is neither `old` nor `new` is refused."""
     defined, refs = dex_methods(dex)
     out = bytearray(dex)
     changed = []
@@ -2336,6 +2470,27 @@ def edit_dex(dex, edits):
                     raise ValueError(f"{method} takes {ins} registers of arguments")
                 struct.pack_into("<HHH", out, code_off, target["registers"], ins, max(outs, new_outs))
                 out[insns:insns + 2 * count] = new
+                changed.append(method)
+            elif kind == "replace call":
+                old_index, new_index = (_method_index(refs, target[k]) for k in ("old", "new"))
+                method_shorty = dex_ids(dex)[1]
+                if method_shorty[old_index] != method_shorty[new_index]:
+                    raise ValueError(f"{target['new']} takes or returns other types than {target['old']}")
+                calls = [(at, refs[struct.unpack_from("<H", dex, at + 2)[0]])
+                         for at, op in dex_instructions(dex, code_off) if op in DEX_INVOKES]
+                after = next((i for i, (_, ref) in enumerate(calls) if ref == target["after"]), None)
+                found = next(((at, ref) for at, ref in calls[after + 1:]
+                              if ref in (target["old"], target["new"])), None) if after is not None else None
+                if found is None:
+                    raise ValueError(f"{method} calls neither {target['old']} nor {target['new']} after "
+                                     f"{target['after']}: it was built from other sources, and the edit "
+                                     "must be written for them")
+                at, ref = found
+                if ref == target["new"]:
+                    continue
+                if out[at] != 0x71:
+                    raise ValueError(f"{method} calls {target['old']} other than as a static method")
+                struct.pack_into("<H", out, at + 2, new_index)
                 changed.append(method)
             else:
                 raise ValueError(f"unknown dex edit {kind}")
@@ -2408,6 +2563,52 @@ def edit_settings_apk(data, name):
     return edit_apk(data, name, code={**SETTINGS_CODE_WITHOUT_BLUETOOTH, **SETTINGS_CODE_LIST_MARGIN},
                     controllers=SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH, dimensions=SETTINGS_LIST_DIMENSIONS,
                     theme_attributes=SETTINGS_TITLE_EXPANDED)
+
+
+ZIP_ALIGNMENT_EXTRA = 0xD935  # zipalign's alignment extra field: a 16-bit alignment, then padding
+
+
+def aligned_zip(data, alignment=4):
+    """The zip `data` with the data of each stored member starting at a multiple of
+    `alignment` bytes, as zipalign leaves it. ART maps a jar's stored dex files straight from
+    the file only when they are aligned, and otherwise copies them into memory: 20 MiB of
+    system_server's for services.jar. Members keep their order, names, dates and compression."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(out, "w") as aligned:
+        for info in source.infolist():
+            member = zipfile.ZipInfo(info.filename, info.date_time)
+            member.compress_type = info.compress_type
+            member.external_attr = info.external_attr
+            member.create_system = info.create_system
+            if info.compress_type == zipfile.ZIP_STORED:
+                # The local header is 30 bytes, then the name and the extra field.
+                start = out.tell() + 30 + len(info.filename.encode("utf-8")) + 6
+                padding = -start % alignment
+                member.extra = struct.pack("<HHH", ZIP_ALIGNMENT_EXTRA, 2 + padding, alignment) + bytes(padding)
+            aligned.writestr(member, source.read(info))
+    return out.getvalue()
+
+
+def zip_misaligned(data, alignment=4):
+    """The stored dex files (classes*.dex) of the zip `data` whose data does not start at a
+    multiple of `alignment` bytes."""
+    found = []
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for info in z.infolist():
+            if info.compress_type != zipfile.ZIP_STORED or not re.fullmatch(r"classes\d*\.dex", info.filename):
+                continue
+            name_length, extra_length = struct.unpack_from("<HH", data, info.header_offset + 26)
+            if (info.header_offset + 30 + name_length + extra_length) % alignment:
+                found.append(info.filename)
+    return found
+
+
+def edit_services_jar(data, name):
+    """services.jar with InsetsPolicy giving a freeform window its status bar inset
+    (SERVICES_CODE), its stored dex files aligned again. Returns the jar as it was when it
+    already has the edit."""
+    edited = edit_apk(data, name, code=SERVICES_CODE)
+    return data if edited is data else aligned_zip(edited)
 
 
 def edit_documentsui_apk(data, name):
@@ -3796,6 +3997,55 @@ GAPPS_FRAMEWORK_OVERLAY = {
     "bool/config_enableGeocoderOverlay": False,
     "string/config_geocoderProviderPackageName": GAPPS_GEOCODER_PACKAGE,
 }
+# The host window's title bar is Android's status bar (see SERVICES_CODE): many apps take the
+# status bar's height from the framework's resources (getIdentifier("status_bar_height",
+# "dimen", "android"), or SystemBarUtils' status_bar_height_default) rather than from their
+# window's insets, and pad their own status bar background and toolbar by it, as they would on
+# a phone. These resources are the title bar's height, so such an app also stays clear of it.
+#
+# The host draws the title bar at the height a standard window's caption and top border have
+# at the monitor's DPI (STATUS_BAR_TITLE_HEIGHTS, read from AdjustWindowRectExForDpi on the
+# Windows host with the default theme), and Android draws at 131 times the monitor's scale,
+# rounded and made even (status_bar_density, as the host's density_for_dpi). The title bar is
+# then 34.0 to 38.2 dp high depending on the scale (35.4 dp at 200%), so each density Android draws at on a
+# monitor scale gets its own value, which getDimensionPixelSize rounds to the title bar's
+# pixels exactly. Android picks the nearest density for a task that draws at another one (an
+# app that keeps its density on a monitor of another scale), which differs from the title bar
+# by at most a few dp. The values without a density are the highest, at a scale of 100%, so
+# an app never pads less than the title bar.
+STATUS_BAR_TITLE_HEIGHTS = {96: 31, 120: 38, 144: 45, 168: 52, 192: 58, 216: 65, 240: 72, 264: 79,
+                            288: 85, 336: 99, 384: 112, 432: 126, 480: 139}
+STATUS_BAR_DIMENS = ["status_bar_height", "status_bar_height_default", "status_bar_height_portrait",
+                     "status_bar_height_landscape"]
+
+
+def status_bar_density(dpi):
+    """The density Android draws at on a monitor of `dpi`: 131 x the scale, rounded to the
+    nearest dpi and then down to an even number."""
+    return ((dpi * 131 + 48) // 96) & ~1
+
+
+def status_bar_heights():
+    """{density: dp}: the status bar height for each density Android draws at on a monitor
+    scale, the title bar's height there in dp."""
+    return {status_bar_density(dpi): px * BASE_DENSITY / status_bar_density(dpi)
+            for dpi, px in STATUS_BAR_TITLE_HEIGHTS.items()}
+
+
+def status_bar_overlay_files():
+    """The framework overlay's status bar height values: {path: XML}, one values folder per
+    density and the default one."""
+    heights = status_bar_heights()
+
+    def values(dp):
+        return resources_xml([f'<dimen name="{name}">{dp:.4f}dp</dimen>' for name in STATUS_BAR_DIMENS])
+
+    files = {"res/values/dsa_status_bar.xml": values(max(heights.values()))}
+    for density, dp in sorted(heights.items()):
+        files[f"res/values-{density}dpi/dsa_status_bar.xml"] = values(dp)
+    return files
+
+
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'
@@ -4988,6 +5238,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = edit_settings_apk(data, name)
                 elif name.endswith(DOCUMENTSUI_APK):
                     data = edit_documentsui_apk(data, name)
+                elif name == SERVICES_JAR:
+                    data = edit_services_jar(data, name)
                 elif name in PERMISSION_APEXES:
                     data = edit_permission_apex(data, name, otatools, Path(dest).parent)
                 elif name.endswith("lib/modules/modules.load") or name.endswith("lib/modules/modules.dep"):
@@ -5438,9 +5690,9 @@ def device_path(name):
 
 
 def oat_files(apk):
-    """The odex and vdex target_files members ART looks for beside an APK."""
+    """The odex and vdex target_files members ART looks for beside an APK or a jar."""
     folder, file = apk.rsplit("/", 1)
-    stem = file[:-len(".apk")]
+    stem = file.rsplit(".", 1)[0]
     return (f"{folder}/oat/{COMPILED_ISA}/{stem}.odex", f"{folder}/oat/{COMPILED_ISA}/{stem}.vdex")
 
 
@@ -5595,16 +5847,22 @@ PREBUILT_OAT_PARTITIONS = "|".join(PARTITION_DIRS)
 
 def prebuilt_oat(names, read):
     """{apk: {"files": [odex, vdex, art...], "filter": f, "classpath": c}} for each APK in a
-    target_files whose member names are `names` that has its odex in its own partition, for
-    the guest's instruction set. `read` reads a member."""
+    target_files whose member names are `names` that has its odex in its own partition, and
+    for each jar make-image.py edits (EDITED_JARS) that has its odex beside it, for the guest's
+    instruction set. `read` reads a member."""
     names = set(names)
     found = {}
     for odex in sorted(names):
         m = re.fullmatch(rf"((?:{PREBUILT_OAT_PARTITIONS})/.+)/oat/{COMPILED_ISA}/([^/]+)\.odex", odex)
-        if not m or f"{m.group(1)}/{m.group(2)}.apk" not in names:
+        if not m:
+            continue
+        source = next((f"{m.group(1)}/{m.group(2)}{ext}" for ext in (".apk", ".jar")
+                       if f"{m.group(1)}/{m.group(2)}{ext}" in names
+                       and (ext == ".apk" or f"{m.group(1)}/{m.group(2)}{ext}" in EDITED_JARS)), None)
+        if source is None:
             continue
         keys = oat_key_values(read(odex))
-        found[f"{m.group(1)}/{m.group(2)}.apk"] = {
+        found[source] = {
             "files": [odex] + [odex[:-len(".odex")] + ext for ext in (".vdex", ".art")
                                if odex[:-len(".odex")] + ext in names],
             "filter": keys.get("compiler-filter"),
@@ -5839,9 +6097,28 @@ def permission_controller_problems(signed, otatools, work, env):
     return problems
 
 
-def compile_apps(signed, tools_zip, otatools, work, env):
-    """Compiles COMPILED_APPS in the signed target_files and adds their odex and vdex files
-    and filesystem rules to it. Returns the bytes each app's compiled files take."""
+def services_profiles(spec, inputs):
+    """{SERVICES_JAR: [art-profile, art-profile-extra]}: the text profiles the inputs.json
+    entry `spec` pins for services.jar, in the folder `inputs` fetch.sh put them in, in the
+    order the published build concatenated them (its art-profile-combined)."""
+    paths = []
+    for key in (SERVICES_PROFILE_INPUT, SERVICES_PROFILE_INPUT + "_extra"):
+        if key not in spec["files"]:
+            raise ValueError(f"inputs.json names no {key} for build {spec['build_id']}, so the edited "
+                             "services.jar could not be compiled with the published build's profile")
+        path = inputs / spec["files"][key]["name"]
+        if not path.exists():
+            raise ValueError(f"{path} is missing: run dsa/guest/image/fetch.sh first")
+        paths.append(path)
+    return {SERVICES_JAR: paths}
+
+
+def compile_apps(signed, tools_zip, otatools, work, env, profiles=None):
+    """Compiles COMPILED_APPS in the signed target_files, and again each app or edited jar
+    whose dex no longer matches the odex the published build shipped (compile_jobs), and adds
+    their odex and vdex files and filesystem rules to it. `profiles` maps a jar to the text
+    profiles (frameworks/base's art-profile format) the published build compiled it with.
+    Returns the bytes each app's compiled files take."""
     tools = work / "dexpreopt-tools"
     with zipfile.ZipFile(tools_zip) as z:
         z.extractall(tools)
@@ -5903,6 +6180,17 @@ def compile_apps(signed, tools_zip, otatools, work, env):
                         print(f"{apk}: profman could not read its profile, so it is compiled with speed",
                               flush=True)
                         profile = None
+            if profile is None and filter == "speed-profile" and apk in (profiles or {}):
+                listing = host_apk.with_suffix(".profile.txt")
+                listing.write_bytes(b"".join(Path(p).read_bytes() for p in profiles[apk]))
+                profile = host_apk.with_suffix(".prof")
+                try:
+                    run(profman, f"--create-profile-from={listing}", f"--apk={host_apk}",
+                        f"--dex-location={location}", f"--reference-profile-file={profile}", env=env)
+                except subprocess.CalledProcessError:
+                    print(f"{apk}: profman could not read the published build's profile, so it is "
+                          "compiled with speed", flush=True)
+                    profile = None
             if filter is None:
                 filter = compiler_filter(apk, profile is not None)
             elif filter == "speed-profile" and profile is None:
@@ -6287,7 +6575,8 @@ def main():
     problems = permission_controller_problems(signed, otatools, work, env)
     if problems:
         raise ValueError("; ".join(problems))
-    compile_apps(signed, inputs / spec["files"]["dexpreopt_tools"]["name"], otatools, work, env)
+    compile_apps(signed, inputs / spec["files"]["dexpreopt_tools"]["name"], otatools, work, env,
+                 profiles=services_profiles(spec, inputs))
     run(otatools / "bin/add_img_to_target_files", "-p", otatools, "-a", signed, env=env)
 
     images = work / "images"
