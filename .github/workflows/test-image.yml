@@ -4,7 +4,7 @@
 # disk template and ramdisk match image.json. Each run signs with a throwaway key set; a
 # release signs with the project's keys.
 #
-# The Android 17 x86_64 image is then booted by seven boot checks at once, each on a runner of
+# The Android 17 x86_64 image is then booted by eight boot checks at once, each on a runner of
 # its own, with the guest kernel built from the same commit. That image is kept in the Actions
 # cache, keyed on everything that decides it, so a run whose inputs did not change takes it
 # from there instead of making it again; the checks run on it all the same.
@@ -41,6 +41,9 @@ on:
       - "dsa/host/platform/linux/tests/system_screens.rs"
       - "dsa/host/platform/linux/tests/graphics.rs"
       - "dsa/host/platform/linux/tests/overlays.rs"
+      - "dsa/host/platform/linux/tests/dns.rs"
+      - "dsa/host/core/src/dns/**"
+      - "dsa/host/platform/unix/src/dns_resolver.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
       - "dsa/host/platform/linux/tests/idle_reclaim/**"
       - ".github/scripts/linux-vm/**"
@@ -569,7 +572,7 @@ jobs:
       - name: Build the widget boot check
         working-directory: dsa
         run: |
-          cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test overlays --no-run \
+          cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test dns --test overlays --no-run \
             --message-format=json-render-diagnostics > "$RUNNER_TEMP/boot-checks.json"
           cargo build -p dsa-host-linux --bin dsa-compositor --message-format=json-render-diagnostics >> "$RUNNER_TEMP/boot-checks.json"
           out="$GITHUB_WORKSPACE/.scratch/boot-checks"
@@ -584,7 +587,7 @@ jobs:
           while IFS=$'\t' read -r name executable; do
             cp "$executable" "$out/bin/$name"
           done < "$out/bin/programs.tsv"
-          for check in widgets system_screens media graphics overlays; do
+          for check in widgets system_screens media graphics overlays dns; do
             test -x "$out/tests/$check" || { echo "cargo built no $check boot check"; exit 1; }
           done
           for program in dsa-linux-hostd dsa-compositor dsa-devices dsa-gfx; do
@@ -1137,6 +1140,14 @@ jobs:
             logs: |
               .scratch/root-*/*.log
               .scratch/root-*/*.txt
+              ~/.local/share/dsa/logs/android-console.log*
+          - check: Resolve a name only the host knows on the booted image
+            test: dns
+            timeout: 14
+            keep: Keep the DNS check's logs
+            artifact: dns-check-logs
+            logs: |
+              /tmp/dns-test-*/*.log
               ~/.local/share/dsa/logs/android-console.log*
           - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
             test: graphics
