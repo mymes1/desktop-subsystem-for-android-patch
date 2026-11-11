@@ -13,8 +13,11 @@
 (allow dsa_cacerts_file tmpfs (filesystem (associate)))
 
 ; init makes the folder, and binds its folders over Android's: the bind reads the folder it
-; lays over the other (the mount point, Android's own folder, is init's to mount on already).
+; lays over the other, and mounts on Android's own folder, which both places label
+; system_security_cacerts_file. Android's policy gives init no mounton on that type, so without
+; the second rule both binds fail with "Permission denied" and the copies are never used.
 (allow init dsa_cacerts_file (dir (create search getattr setattr open read write add_name relabelto mounton)))
+(allow init system_security_cacerts_file (dir (mounton)))
 
 ; The daemon: --cacerts-setup copies Android's certificates (system files, which every domain
 ; reads; the APEX's folder is under /apex) into a folder it makes under another name and then

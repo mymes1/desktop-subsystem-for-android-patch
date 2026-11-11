@@ -3,8 +3,9 @@
 //!
 //! `dsa-channeld --dns-redirect` runs as root, which changing the packet filter needs, in a
 //! domain of its own (`channeld.cil`). init starts it whenever the daemon sets
-//! [`crate::dns_stub::PROPERTY`] (`dsa-channeld.rc`), and once netd runs, since netd sets up
-//! the packet filter's tables first. It reads the property and makes the rules match it:
+//! [`crate::dns_stub::PROPERTY`] (`dsa-channeld.rc`), whether netd runs yet or not: netd never
+//! flushes `nat`'s `OUTPUT`, where the jump goes, and `-w` waits while netd holds the packet
+//! filter's lock. It reads the property and makes the rules match it:
 //!
 //! - `on`: a chain of its own in the `nat` table, [`CHAIN`], which `OUTPUT` jumps to, sends
 //!   every UDP and TCP packet a program in the guest sends to port 53 to the stub's port on the

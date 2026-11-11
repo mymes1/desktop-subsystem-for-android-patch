@@ -652,7 +652,17 @@ fn nfr2_a_swap_total_larger_than_the_pss_does_not_make_every_total_zero_resident
         host: Vec::new(),
     };
     let text = snapshot.to_string();
-    assert!(!text.contains("(0 resident"), "{text}");
+    // The totals read as resident memory. One process can still be wholly swapped out: the
+    // agent counted 61 MiB swapped of android.ext.services' 35 MiB, so its own row says
+    // "0 resident", and rightly.
+    for total in ["processes: ", "Google Play services: "] {
+        let line = text
+            .lines()
+            .find(|line| line.trim_start().starts_with(total))
+            .unwrap_or_else(|| panic!("no {total:?} line in {text}"));
+        assert!(!line.contains("(0 resident"), "{text}");
+    }
+    assert!(text.contains("(38 resident, 43 compressed)"), "{text}");
 }
 
 #[test]

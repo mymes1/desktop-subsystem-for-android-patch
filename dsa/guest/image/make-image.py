@@ -3882,7 +3882,7 @@ ROOT_ELEVATION_PROPERTY_CONTEXT = f"{ROOT_ELEVATION_PROPERTY} u:object_r:dsa_roo
 DNS_PROPERTY = "vendor.dsa.dns"
 DNS_PROPERTY_CONTEXT = f"{DNS_PROPERTY} u:object_r:dsa_dns_prop:s0 exact enum on off"
 DNS_REDIRECT_SERVICE = "service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect"
-DNS_REDIRECT_TRIGGER = f"on property:{DNS_PROPERTY}=* && property:init.svc.netd=running"
+DNS_REDIRECT_TRIGGER = f"on property:{DNS_PROPERTY}=*"
 # Root elevation's su client. It is a system file, where an app's PATH and the kernel's su
 # guard look for su, labelled with a type of its own so the policy lets apps run that file
 # alone (su.cil). The label goes in only with the daemon, whose policy declares the type.
@@ -4729,8 +4729,9 @@ def root_elevation_problems(names, read):
 def dns_problems(names, read):
     """Returns what an image with the daemon lacks for the guest's DNS to be answered by the
     host's resolver: the redirect service that sends DNS queries to the daemon's stub, as root
-    in its own domain and started once netd has set up the packet filter, and the type of the
-    property that switches it."""
+    in its own domain and started whenever the daemon switches it, and the type of the property
+    that switches it. A trigger of the vendor script on a service's state (init.svc.*) is named
+    too: vendor_init may not read those properties, so init drops the whole action at boot."""
     problems = []
     rc = read(CHANNELD_RC).decode().splitlines() if CHANNELD_RC in names else []
     for line, why in [
@@ -4741,6 +4742,10 @@ def dns_problems(names, read):
     ]:
         if line not in rc:
             problems.append(f"{CHANNELD_RC} lacks \"{line.strip()}\", so {why}")
+    for line in rc:
+        if line.startswith("on ") and "property:init.svc." in line:
+            problems.append(f"{CHANNELD_RC} has \"{line}\", which init drops as an unexported property "
+                            "trigger, so nothing it lists ever runs")
     if VENDOR_PROPERTY_CONTEXTS in names and DNS_PROPERTY_CONTEXT not in read(
             VENDOR_PROPERTY_CONTEXTS).decode().splitlines():
         problems.append(f"vendor_property_contexts does not give {DNS_PROPERTY} its type, so the daemon "
@@ -4845,6 +4850,8 @@ CACERTS_RULES = {
         "apps cannot look a certificate up in the bound folders",
     "(allow init dsa_cacerts_file (dir (create search getattr setattr open read write add_name relabelto mounton)))":
         "init cannot make the folder or bind it",
+    "(allow init system_security_cacerts_file (dir (mounton)))":
+        "init cannot bind the copies over Android's certificate folders",
 }
 
 
