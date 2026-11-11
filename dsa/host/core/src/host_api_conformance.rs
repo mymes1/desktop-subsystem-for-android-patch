@@ -4980,7 +4980,8 @@ pub fn added_widget_is_placed_and_kept(make: MakeLocal<'_>) {
             x: 64,
             y: 64,
             width_dp: 180,
-            height_dp: 110
+            height_dp: 110,
+            resized: false,
         }
     );
     let second = client
@@ -5051,6 +5052,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
         y: 20,
         width_dp: 240,
         height_dp: 147,
+        resized: false,
     };
     client
         .place_widget(widget.widget_id, moved, 360, 220, 240)

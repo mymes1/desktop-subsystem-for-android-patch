@@ -160,6 +160,7 @@ pub fn placement_of(x: i32, y: i32, width: i32, height: i32, dpi: u32) -> Placem
         y,
         width_dp: dp_of_px(width, dpi).max(1),
         height_dp: dp_of_px(height, dpi).max(1),
+        resized: false,
     }
 }
 
@@ -3319,6 +3320,7 @@ mod tests {
             y: 20,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         // A dp is 0.819 of a device-independent pixel.
         assert_eq!(window_size(&placement, 96), (146, 89));
@@ -3418,6 +3420,7 @@ mod tests {
                     y: 0,
                     width_dp: 180,
                     height_dp: 110,
+                    resized: false,
                 },
                 dpi,
             );
@@ -3656,6 +3659,7 @@ mod tests {
             y: 0,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         let ids = |provider: &WidgetProvider| -> Vec<u32> {
             let sizes = widget_menu::size_choices(provider);
@@ -3927,6 +3931,7 @@ mod tests {
             y: 0,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         for dark in [false, true] {
             // Transparency off: the solid fill DWM's acrylic falls back to, as a picture can
@@ -4233,6 +4238,7 @@ mod tests {
             y: 40,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         };
         windows.command(WindowCommand::Place(Widget {
             widget_id: 4242,

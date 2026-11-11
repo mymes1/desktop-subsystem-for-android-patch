@@ -2399,6 +2399,7 @@ fn fr12_widgets_watch_prints_one_json_line_per_change_with_the_app_name() {
             y: 64,
             width_dp: 180,
             height_dp: 110,
+            resized: false,
         },
     };
     let first: serde_json::Value = serde_json::from_str(&dsa_cli::widgets_now_line(
