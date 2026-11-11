@@ -26,10 +26,13 @@
 //! The test also reads the guest's log for a denial of a media service's shared memory, and
 //! for the codec HAL losing a picture because its surface gave it no buffer.
 //!
-//! The root certificate check makes a throwaway root and a server certificate for `localhost`
-//! signed by it, serves HTTPS with it on the host (`openssl s_server`), and carries the guest's
-//! `localhost:8443` there with `adb reverse`. The probe's HTTPS check opens it as an app does:
-//! refused at first, then let through once the root is in the host's system store (added with
+//! The root certificate check makes a throwaway root and a server certificate for a test name
+//! of its own ([`CERTIFICATE_HOST`]) signed by it, serves HTTPS with it on the host
+//! (`openssl s_server`), and carries the guest's loopback port 8443 there with `adb reverse`.
+//! The probe's HTTPS check connects to that port and checks the server under the test's name,
+//! as an app does after a lookup: not under `localhost`, for which Android 17 trusts no
+//! certificate at all in an app without a network security config of its own. It is refused
+//! at first, then let through once the root is in the host's system store (added with
 //! sudo, as an administrator adds one), refused again with the host-certificates setting off,
 //! let through with it on, and refused once the root is taken away. Android's own system
 //! certificates stay as they were throughout. It needs passwordless sudo, which CI's runners
@@ -1325,6 +1328,14 @@ const ADDED_ROOT: &str = "/usr/local/share/ca-certificates/dsa-fr28-test-root.cr
 /// (`adb reverse` carries it to the host's).
 const GUEST_HTTPS_PORT: u16 = 8443;
 
+/// The name the test's server certificate is for, and the host the probe checks it under. It
+/// is not `localhost`: from Android 17 the network security config of an app without one of
+/// its own gives `localhost` and every loopback address a config that trusts no certificate,
+/// so a server checked under such a name is refused whatever Android trusts. `.test` is
+/// reserved for testing (RFC 6761); the probe connects to the loopback address itself instead
+/// of looking the name up.
+const CERTIFICATE_HOST: &str = "certificate-check.dsa.test";
+
 /// How long a change on the host may take to reach the apps: the host notices the store
 /// changed, sends the guest the roots, and the daemon writes them.
 const TRUST_WAIT: Duration = Duration::from_secs(120);
@@ -1412,12 +1423,14 @@ fn make_test_certificates(dir: &Path) -> Result<(), String> {
         "-out",
         "server.csr",
         "-subj",
-        "/CN=localhost",
+        &format!("/CN={CERTIFICATE_HOST}"),
     ]))?;
     std::fs::write(
         dir.join("server.ext"),
-        "subjectAltName=DNS:localhost,IP:127.0.0.1\nbasicConstraints=CA:FALSE\n\
-         keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\n",
+        format!(
+            "subjectAltName=DNS:{CERTIFICATE_HOST}\nbasicConstraints=CA:FALSE\n\
+             keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\n"
+        ),
     )
     .map_err(|e| e.to_string())?;
     run_tool(openssl().args([
@@ -1441,34 +1454,52 @@ fn make_test_certificates(dir: &Path) -> Result<(), String> {
 }
 
 impl Adb {
-    /// What the probe's HTTPS check found at the test's server: "connected", "untrusted" or
-    /// "unreachable".
-    fn https(&self, dir: &Path, attempt: usize) -> Result<String, String> {
+    /// What the probe's HTTPS check found at the test's server ("connected", "untrusted",
+    /// "misnamed" or "unreachable"), and what the probe's process saw of Android's certificate
+    /// folders, of the file `certificate` among them, and of its mount table (its `certs.*`
+    /// results, one line each).
+    fn https(
+        &self,
+        dir: &Path,
+        attempt: usize,
+        certificate: &str,
+    ) -> Result<(String, String), String> {
         let out = self.shell(&format!(
-            "am instrument -w -r -e check https -e url https://localhost:{GUEST_HTTPS_PORT}/ \
-             {PROBE_RUNNER}"
+            "am instrument -w -r -e check https \
+             -e url https://{CERTIFICATE_HOST}:{GUEST_HTTPS_PORT}/ -e address 127.0.0.1 \
+             -e certificate {certificate} {PROBE_RUNNER}"
         ))?;
         let _ = std::fs::write(dir.join(format!("probe-https-{attempt}.txt")), &out);
         let results = instrumentation_results(&out)?;
-        results
+        let seen = results
+            .iter()
+            .filter(|(key, _)| key.starts_with("certs."))
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let outcome = results
             .get("outcome")
             .cloned()
-            .ok_or_else(|| format!("the HTTPS check said no outcome: {results:?}"))
+            .ok_or_else(|| format!("the HTTPS check said no outcome: {results:?}"))?;
+        Ok((outcome, seen))
     }
 }
 
-/// Asks the probe until its HTTPS check finds `wanted`, for [TRUST_WAIT] at most.
+/// Asks the probe until its HTTPS check finds `wanted`, for [TRUST_WAIT] at most. `certificate`
+/// is the test root's file name in Android's folders, which the probe looks for in the app's
+/// own view of them.
 fn wait_for_https(
     adb: &Adb,
     dir: &Path,
     attempt: &mut usize,
+    certificate: &str,
     wanted: &str,
     what: &str,
 ) -> Result<(), String> {
     let deadline = Instant::now() + TRUST_WAIT;
     loop {
         *attempt += 1;
-        let outcome = adb.https(dir, *attempt)?;
+        let (outcome, seen) = adb.https(dir, *attempt, certificate)?;
         eprintln!("HTTPS check {attempt} ({what}): {outcome}");
         if outcome == wanted {
             return Ok(());
@@ -1478,21 +1509,49 @@ fn wait_for_https(
                 "{what}: the probe did not reach the test's server at all (probe-https-{attempt}.txt)"
             ));
         }
+        if outcome == "misnamed" {
+            return Err(format!(
+                "{what}: the test's server certificate does not name {CERTIFICATE_HOST} \
+                 (probe-https-{attempt}.txt)"
+            ));
+        }
         if Instant::now() >= deadline {
             return Err(format!(
-                "{what}: the HTTPS check still found {outcome} after {} s, not {wanted}",
-                TRUST_WAIT.as_secs()
+                "{what}: the HTTPS check still found {outcome} after {} s, not {wanted}; the \
+                 probe's process saw (probe-https-{attempt}.txt):\n{seen}\nand adb's shell \
+                 mounts:\n{}",
+                TRUST_WAIT.as_secs(),
+                certificate_mounts(adb)
             ));
         }
         std::thread::sleep(Duration::from_secs(5));
     }
 }
 
-/// How many certificates Android's system folder holds, and whether `name` is among them: the
-/// folder under /system, which the image has every app read (the copy bound over it holds the
-/// APEX's certificates and the host's roots).
+/// The lines of adb's shell's mount table that name a certificate folder, to set beside the
+/// probe's own when the HTTPS check does not find what it should.
+fn certificate_mounts(adb: &Adb) -> String {
+    match adb.shell("cat /proc/self/mountinfo") {
+        Ok(table) => {
+            let lines: Vec<&str> = table.lines().filter(|l| l.contains("cacerts")).collect();
+            if lines.is_empty() {
+                "none".to_string()
+            } else {
+                lines.join("\n")
+            }
+        }
+        Err(why) => format!("unreadable: {why}"),
+    }
+}
+
+/// The folder of Android's system certificates that apps read: the APEX's, which Android
+/// prefers to its own folder under /system whenever it holds any certificate. The image binds
+/// a copy over it that holds Android's certificates and the host's roots.
+const APPS_CERTIFICATES: &str = "/apex/com.android.conscrypt/cacerts";
+
+/// How many certificates the folder apps read holds, and whether `name` is among them.
 fn guest_certificates(adb: &Adb, name: &str) -> Result<(usize, bool), String> {
-    let listed = adb.shell("ls /system/etc/security/cacerts")?;
+    let listed = adb.shell(&format!("ls {APPS_CERTIFICATES}"))?;
     let names: Vec<&str> = listed.split_whitespace().collect();
     Ok((names.len(), names.contains(&name)))
 }
@@ -1576,6 +1635,7 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
         adb,
         dir,
         &mut attempt,
+        &file,
         "untrusted",
         "before the root is added",
     )?;
@@ -1585,6 +1645,7 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
         adb,
         dir,
         &mut attempt,
+        &file,
         "connected",
         "with the root added on the host",
     )
@@ -1622,7 +1683,14 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
     let mut wanted = report.settings;
     wanted.host_certificates = false;
     api.set_settings(&wanted).map_err(|e| e.to_string())?;
-    wait_for_https(adb, dir, &mut attempt, "untrusted", "with the setting off")?;
+    wait_for_https(
+        adb,
+        dir,
+        &mut attempt,
+        &file,
+        "untrusted",
+        "with the setting off",
+    )?;
     if guest_certificates(adb, &file)? != (android_count, false) {
         return Err("with the setting off, Android's folder is not as it was".into());
     }
@@ -1634,6 +1702,7 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
         adb,
         dir,
         &mut attempt,
+        &file,
         "connected",
         "with the setting on again",
     )?;
@@ -1643,6 +1712,7 @@ fn certificate_check(api: &mut HostApiClient, adb: &Adb, dir: &Path) -> Result<(
         adb,
         dir,
         &mut attempt,
+        &file,
         "untrusted",
         "with the root taken away on the host",
     )?;
