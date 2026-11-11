@@ -791,6 +791,9 @@ impl UserAndroid for UpdatingAndroid {
     fn adb_auto_connect_state(&self) -> crate::adb_discovery::AutoConnectState {
         UserAndroid::adb_auto_connect_state(&*self.session)
     }
+    fn dns_answered_by_host(&self) -> Option<bool> {
+        UserAndroid::dns_answered_by_host(&*self.session)
+    }
     fn watch_links(&self) -> Option<std::sync::mpsc::Receiver<String>> {
         UserAndroid::watch_links(&*self.session)
     }

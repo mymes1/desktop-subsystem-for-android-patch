@@ -212,7 +212,13 @@ public sealed partial class DsaService
         Strings(json, "addresses"),
         Strings(json, "dns_servers"),
         String(json, "gateway"),
-        OptionalString(json, "problem") is { Length: > 0 } problem ? problem : null);
+        OptionalString(json, "problem") is { Length: > 0 } problem ? problem : null,
+        OptionalString(json, "dns_resolver") switch
+        {
+            "host" => DnsResolver.Host,
+            "network" => DnsResolver.Network,
+            _ => DnsResolver.Unknown,
+        });
 
     /// <summary>Android's network as it stands now.</summary>
     public async Task<NetworkInfo> NetworkAsync() =>

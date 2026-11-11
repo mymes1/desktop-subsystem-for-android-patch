@@ -2046,6 +2046,12 @@ pub struct NetworkStatus {
     /// network. Empty when there is none.
     #[prost(string, tag = "5")]
     pub problem: ::prost::alloc::string::String,
+    /// Who answers the guest's DNS queries: "host" while this host's resolver answers them (so
+    /// the host's hosts file, VPN and DNS filters apply to Android's apps), "network" while the
+    /// host's resolver does not answer and Android asks `dns_servers` itself. Empty while Android
+    /// is not running or still booting, and from a service that cannot say.
+    #[prost(string, tag = "6")]
+    pub dns_resolver: ::prost::alloc::string::String,
 }
 /// Erases the caller's Android data: the apps they installed, their accounts and every app's
 /// data. The service stops the caller's Android, waits for it to stop, and replaces their data

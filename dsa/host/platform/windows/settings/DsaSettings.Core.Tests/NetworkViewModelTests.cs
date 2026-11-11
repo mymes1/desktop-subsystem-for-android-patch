@@ -44,6 +44,32 @@ public class NetworkViewModelTests
     }
 
     [Fact]
+    public async Task Fr28_the_page_says_this_pcs_resolver_answers_androids_names_and_when_it_does_not()
+    {
+        var host = Nat.Replace("\"problem\":null", "\"problem\":null,\"dns_resolver\":\"host\"");
+        var fallback = Nat.Replace("\"problem\":null", "\"problem\":null,\"dns_resolver\":\"network\"");
+        var cli = Cli(Settings(false, host)).Answer("network --json", fallback);
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.Equal(DnsResolver.Host, vm.Network!.DnsResolver);
+        Assert.Equal("Network_DnsHost", vm.NetworkDns);
+
+        // The guest no longer reaches this PC's resolver: Android asks the network's servers.
+        await vm.RefreshNetworkAsync();
+        Assert.Equal(DnsResolver.Network, vm.Network!.DnsResolver);
+        Assert.Equal("dns fallback: 172.28.16.1", vm.NetworkDns);
+    }
+
+    [Fact]
+    public async Task Fr28_a_service_that_does_not_say_who_answers_names_shows_the_dns_servers()
+    {
+        var vm = new SettingsViewModel(new DsaService(Cli(Settings(false, Nat))), new KeyText());
+        await vm.LoadAsync();
+        Assert.Equal(DnsResolver.Unknown, vm.Network!.DnsResolver);
+        Assert.Equal("172.28.16.1", vm.NetworkDns);
+    }
+
+    [Fact]
     public async Task Fr28_turning_advanced_networking_on_goes_through_the_service_and_waits_for_a_restart()
     {
         var cli = Cli(Settings(false, Nat))

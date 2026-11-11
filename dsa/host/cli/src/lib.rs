@@ -281,9 +281,11 @@
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
 //! the network: NAT, advanced or none while it is not running, its addresses (a program on this
-//! computer reaches a server in Android at any of them), its DNS servers and its gateway. With
-//! `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway` and `problem`. `dsa gpus` lists the GPUs of this machine, for
-//! choosing the render GPU.
+//! computer reaches a server in Android at any of them), who answers its DNS queries (this
+//! computer's resolver, or the DNS servers it shows when that does not answer) and its
+//! gateway. With `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway`, `problem`
+//! and `dns_resolver` (`host`, `network`, or empty while nobody can say). `dsa gpus` lists the
+//! GPUs of this machine, for choosing the render GPU.
 //!
 //! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
 //! 64-bit ARM (`arm64-v8a`) can be installed and run: which translator Android uses (the
@@ -2423,8 +2425,8 @@ pub fn describe_certificate_source(source: &str, location: &str) -> String {
     }
 }
 
-/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`),
-/// or null from a service that does not report it.
+/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`,
+/// `dns_resolver`), or null from a service that does not report it.
 pub fn network_json(network: Option<&NetworkStatus>) -> Value {
     match network {
         Some(network) => json!({
@@ -2433,6 +2435,7 @@ pub fn network_json(network: Option<&NetworkStatus>) -> Value {
             "dns_servers": network.dns_servers,
             "gateway": network.gateway,
             "problem": network.problem,
+            "dns_resolver": network.dns_resolver,
         }),
         None => Value::Null,
     }
@@ -2463,7 +2466,14 @@ pub fn describe_network(report: &SettingsReport) -> String {
     let mut lines = vec![setting, format!("Network: {mode}")];
     if network.mode != NetworkStatus::OFF {
         lines.push(format!("Addresses: {}", list(&network.addresses)));
-        lines.push(format!("DNS servers: {}", list(&network.dns_servers)));
+        lines.push(match network.dns_resolver.as_str() {
+            NetworkStatus::DNS_HOST => "DNS: answered by this computer's resolver".to_string(),
+            NetworkStatus::DNS_NETWORK => format!(
+                "DNS: this computer's resolver does not answer, so Android asks {}",
+                list(&network.dns_servers)
+            ),
+            _ => format!("DNS servers: {}", list(&network.dns_servers)),
+        });
         if !network.gateway.is_empty() {
             lines.push(format!("Gateway: {}", network.gateway));
         }

@@ -27,6 +27,7 @@ grep -Fq 'filter: fr28_' <<<"$boot" || { echo "the root certificate check does n
 check overlays 18 overlay-check-logs "Lay the ARM translator and Google Play over the booted system"
 check overlays 25 idle-reclaim-measurement "Measure the idle reclaim with Google Play on the booted image"
 check overlays 25 memory-measurement "Measure the memory with Google Play and one app window on the booted image"
+check dns 14 dns-check-logs "Resolve a name only the host knows on the booted image"
 check graphics 28 graphics-check-results "Run the Vulkan CTS subset and the graphics test apps on the booted image"
 grep -Fq 'timeout-minutes: ${{ matrix.timeout }}' <<<"$boot"
 grep -Fq 'fail-fast: false' <<<"$boot"

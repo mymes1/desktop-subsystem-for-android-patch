@@ -1303,6 +1303,9 @@ impl UserAndroid for WithProgramStatus {
     fn adb_auto_connect_state(&self) -> crate::adb_discovery::AutoConnectState {
         self.android.adb_auto_connect_state()
     }
+    fn dns_answered_by_host(&self) -> Option<bool> {
+        self.android.dns_answered_by_host()
+    }
     fn watch_links(&self) -> Option<std::sync::mpsc::Receiver<String>> {
         self.android.watch_links()
     }

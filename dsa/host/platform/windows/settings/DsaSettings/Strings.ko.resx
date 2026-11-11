@@ -1654,11 +1654,17 @@
   <data name="Network_None" xml:space="preserve">
     <value>없음</value>
   </data>
+  <data name="Network_DnsHost" xml:space="preserve">
+    <value>이 PC의 해석기가 응답합니다. 이 PC의 hosts 파일, VPN, DNS 필터가 Android 앱에도 적용됩니다.</value>
+  </data>
+  <data name="Network_DnsFallback" xml:space="preserve">
+    <value>이 PC의 해석기가 응답하지 않아 Android가 네트워크의 DNS 서버에 직접 묻습니다: {0}</value>
+  </data>
   <data name="NetworkAddressLabel.Text" xml:space="preserve">
     <value>주소</value>
   </data>
   <data name="NetworkDnsLabel.Text" xml:space="preserve">
-    <value>DNS 서버</value>
+    <value>DNS</value>
   </data>
   <data name="NetworkGatewayLabel.Text" xml:space="preserve">
     <value>게이트웨이</value>
