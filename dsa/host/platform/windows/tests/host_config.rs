@@ -346,12 +346,14 @@ fn fr14_an_image_made_from_aosp_boots_from_one_disk_made_from_its_template() {
     vm.kernel_cmdline = files.kernel_cmdline;
     let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
     let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
-    // The user's disk, then the pstore disk every user VM keeps beside it.
+    // The user's disk, then the pstore disk and the read-only add-on disk every user VM
+    // keeps beside it.
     assert_eq!(
         attachments.as_object().unwrap().len(),
-        2,
-        "only the user's disk and its pstore disk"
+        3,
+        "only the user's disk, its pstore disk and its add-on disk"
     );
+    assert_eq!(attachments["2"]["ReadOnly"], true);
     assert_eq!(attachments["0"]["ReadOnly"], false);
     assert_eq!(
         attachments["1"]["Path"].as_str().map(PathBuf::from),
@@ -564,12 +566,14 @@ fn fr14_an_image_with_two_disks_attaches_system_image_and_data_disk() {
     vm.kernel_cmdline = files.kernel_cmdline;
     let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
     let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
-    // The system and data disks, then the pstore disk every user VM keeps.
+    // The system and data disks, then the pstore disk and the read-only add-on disk every
+    // user VM keeps.
     assert_eq!(
         attachments.as_object().unwrap().len(),
-        3,
-        "both system and data disks, and the pstore disk"
+        4,
+        "both system and data disks, the pstore disk and the add-on disk"
     );
+    assert_eq!(attachments["3"]["ReadOnly"], true);
     assert_eq!(attachments["0"]["ReadOnly"], true);
     assert_eq!(attachments["1"]["ReadOnly"], false);
     assert_eq!(
