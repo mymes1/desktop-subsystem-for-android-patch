@@ -233,8 +233,9 @@ after two minutes. `"keep_window_manager": false` turns this off.
   frames, decoded with WIC, with what the widget leaves clear see-through. Until the first
   frame comes, or when a frame has nothing in it, it shows a mostly opaque dark card with
   rounded corners, so a widget is never an invisible hole on the desktop. While the pointer
-  is over a widget, a small round "More" button fades in at its top right corner, inside
-  its rounded corners. Clicking it, or right-clicking the widget, opens the widget's menu:
+  is over a widget, a small "More" button fades in at its top right corner, inside its
+  rounded corners: a 24 px rounded square of dark grey at 85% with three light dots, the
+  same in light and dark themes, which takes presses in a 32 px square for touch. Clicking it, or right-clicking the widget, opens the widget's menu:
   Widget settings, for a widget whose app lets it be set up again, Resize, with the sizes
   the widget allows, and Remove (in Korean when that is the display language). The menu is
   a Windows 11 menu drawn by the window manager, with rounded corners, the acrylic backdrop
