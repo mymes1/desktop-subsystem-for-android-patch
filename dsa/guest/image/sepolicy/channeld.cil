@@ -203,6 +203,9 @@
 (allow dsa_channeld dsa_dns_prop (property_service (set)))
 (allow dsa_channeld dsa_dns_prop (file (read open getattr map)))
 (allow vendor_init dsa_dns_prop (file (read open getattr map)))
+; adb's shell reads it too, so `getprop vendor.dsa.dns` says whether the host answers rather
+; than an empty value for a refused read.
+(allow shell dsa_dns_prop (file (read open getattr map)))
 
 ; The DNS redirect: init runs dsa-channeld --dns-redirect as root in this domain when
 ; vendor.dsa.dns changes (dsa-channeld.rc). It reads the property and runs iptables and

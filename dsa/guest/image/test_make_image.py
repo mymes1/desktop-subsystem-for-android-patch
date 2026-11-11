@@ -7287,14 +7287,23 @@ class HostDnsTests(unittest.TestCase):
         end = text.find("\n\n", start)
         return [line.strip() for line in text[start:end if end >= 0 else len(text)].splitlines()]
 
-    def test_fr28_the_dns_redirect_runs_as_root_in_its_own_domain_once_netd_runs(self):
+    def test_fr28_the_dns_redirect_runs_as_root_in_its_own_domain_when_the_daemon_switches_it(self):
         rc = (self.HERE / "dsa-channeld.rc").read_text()
         service = self._block(rc, make_image.DNS_REDIRECT_SERVICE)
         for option in ["user root", "seclabel u:r:dsa_dns_redirect:s0", "oneshot", "disabled",
                        "capabilities NET_ADMIN NET_RAW"]:
             self.assertIn(option, service)
-        trigger = self._block(rc, make_image.DNS_REDIRECT_TRIGGER)
+        trigger = self._block(rc, make_image.DNS_REDIRECT_TRIGGER + "\n")
         self.assertEqual(trigger[1:], ["start dsa_dns_redirect"])
+        # vendor_init may not read a service's state, and init drops an action that triggers
+        # on one ("unexported property trigger found: init.svc.netd"), so the redirect never ran.
+        for line in rc.splitlines():
+            if line.startswith("on "):
+                self.assertNotIn("property:init.svc.", line)
+
+    def test_fr28_adb_shell_reads_whether_the_host_answers_dns(self):
+        # The DNS boot check reads vendor.dsa.dns with getprop; a refused read reads as "".
+        self.assertRegex(self.POLICY, r"\(allow\s+shell\s+dsa_dns_prop\s+\(\s*file\s+\(\s*read\b")
 
     def test_fr28_only_the_daemon_switches_the_dns_redirect(self):
         setters = re.findall(r"\(allow\s+(\S+)\s+dsa_dns_prop\s+\(\s*property_service\s+\(([^)]*)\)",
@@ -7317,8 +7326,10 @@ class HostDnsTests(unittest.TestCase):
         files[make_image.CHANNELD_RC] = "\n".join(
             line for line in rc.splitlines() if line != "    seclabel u:r:dsa_dns_redirect:s0").encode()
         files[make_image.VENDOR_PROPERTY_CONTEXTS] = b""
+        files[make_image.CHANNELD_RC] += b"\n\non property:sys.boot_completed=1 && property:init.svc.netd=running\n"
         problems = make_image.dns_problems(list(files), files.__getitem__)
-        expected = ['lacks "seclabel u:r:dsa_dns_redirect:s0"', f"does not give {make_image.DNS_PROPERTY}"]
+        expected = ['lacks "seclabel u:r:dsa_dns_redirect:s0"', f"does not give {make_image.DNS_PROPERTY}",
+                    "unexported property trigger"]
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
         self.assertEqual(len(problems), len(expected), problems)

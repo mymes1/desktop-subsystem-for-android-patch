@@ -141,8 +141,10 @@ on property:vendor.dsa.root_elevation=0
 # dsa-channeld --dns-redirect then makes the packet filter send every DNS query a program sends
 # to port 53 to that port, or stop doing so, in a nat chain of its own (dsa_dns), so the
 # guest's queries reach the host's resolver rather than the network's DNS servers. It runs as
-# root, which changing the packet filter needs, in a domain of its own (channeld.cil), and once
-# netd runs, because netd sets up the packet filter's tables at its start.
+# root, which changing the packet filter needs, in a domain of its own (channeld.cil). It starts
+# on the property alone: a vendor script may not trigger on init.svc.netd (init drops the whole
+# action as an "unexported property trigger"), and it needs no wait for netd, which never
+# flushes nat OUTPUT, where the jump to the chain goes; -w waits out netd's lock instead.
 service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect
     user root
     group root
@@ -152,7 +154,7 @@ service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect
     disabled
     stdio_to_kmsg
 
-on property:vendor.dsa.dns=* && property:init.svc.netd=running
+on property:vendor.dsa.dns=*
     start dsa_dns_redirect
 
 # KeyMint's root key, which the host keeps sealed by the user's credential store and gives
