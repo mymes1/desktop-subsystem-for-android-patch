@@ -125,5 +125,39 @@ class DeviceRemakePatchTests(unittest.TestCase):
         self.assertIn('"$here/device_remake_test.cpp"', tests)
 
 
+class BoundedCopiesPatchTests(unittest.TestCase):
+    """Patch 0022: a ColorBuffer read back or written whole goes in jobs of at most
+    dsa::kMaxCopyPixels, each submitted and waited for on its own, so none grows with a
+    window maximized on a 200% monitor (2880x2048 and more)."""
+
+    def setUp(self):
+        self.patch = next((HERE / "patches").glob("0022-*.patch"))
+        self.after = new_side(self.patch, SOURCE)
+        self.added, _ = file_hunks(self.patch, SOURCE)
+
+    def test_nfr5_a_whole_colorbuffer_copy_is_cut_into_bands_of_rows(self):
+        cut = function(self.after, "std::vector<std::vector<VkBufferImageCopy>> boundedCopies(")
+        self.assertIn("dsa::copy_bands(whole.imageExtent.width, height)", cut)
+        self.assertIn("part.bufferOffset = rowBytes * band.y;", cut)
+        self.assertIn("part.imageExtent.height = band.rows;", cut)
+        self.assertIn('#include "dsa_copy_bands.h"', self.added)
+
+    def test_nfr5_each_band_is_its_own_submission_and_wait(self):
+        text = "\n".join(self.after)
+        for label, copy in (('"readColorBufferToBytes(ColorBuffer:%d)"', "vkCmdCopyImageToBuffer"),
+                            ('"updateColorBufferFromBytes(ColorBuffer:%d)"',
+                             "vkCmdCopyBufferToImage")):
+            at = text.index(label)
+            start = text.rindex("for (size_t group = 0; group < groups.size(); ++group) {", 0, at)
+            loop = text[start:text.index("VK_EMU_TRY(vk->vkResetFences(", at)]
+            self.assertLess(loop.index(copy), loop.index("vkQueueSubmit"))
+            self.assertLess(loop.index("vkQueueSubmit"), loop.index("waitForFenceBounded"))
+            self.assertIn("cmdAfterEarlierCopies(vk, mCommandBuffer);", loop)
+
+    def test_nfr5_the_fetch_applies_it(self):
+        for script in (HERE / "host/fetch.ps1", HERE / "host/fetch.sh"):
+            self.assertIn("0022", script.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()
