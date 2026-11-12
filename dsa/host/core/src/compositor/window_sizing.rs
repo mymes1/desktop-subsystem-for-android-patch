@@ -209,14 +209,17 @@ pub fn clamp_size(size: (u32, u32), max: Option<(u32, u32)>) -> (u32, u32) {
 }
 
 /// Where a maximised window of `outer` pixels goes, along one direction, on a work area
-/// that starts at `start` and is `area` pixels long, when the window manager proposed
-/// `proposed`. A window is never larger than the guest can draw, so on a monitor larger
-/// than that it maximises to the guest's largest size, shown 1:1, and is centred on the work
-/// area rather than left in its corner. A window that fills the work area stays where the
-/// window manager put it.
-pub fn maximized_position(proposed: i32, start: i32, area: i32, outer: i32) -> i32 {
+/// that starts at `start` and is `area` pixels long, when the window's border on that side
+/// is `border` pixels thick. A window is never larger than the guest can draw, so on a
+/// monitor larger than that it maximises to the guest's largest size, shown 1:1, and is
+/// centred on the work area rather than left in its corner. A window that fills the work
+/// area hangs its border off the work area's edge, so its client area starts exactly at
+/// `start`. That holds wherever the window was before: a maximised window that takes a
+/// frame of the work area's size while it still stands where its smaller frame was centred
+/// goes to the work area's edge, rather than staying put and running off the screen.
+pub fn maximized_position(start: i32, area: i32, outer: i32, border: i32) -> i32 {
     if outer >= area {
-        return proposed;
+        return start - border;
     }
     start + (area - outer) / 2
 }
@@ -770,13 +773,25 @@ mod tests {
     #[test]
     fn fr4_a_window_maximised_smaller_than_the_work_area_is_centred_on_it() {
         // A 1920x1080 client (1936x1119 outer at 100%) on a 3840x2100 work area at (0, 0).
-        assert_eq!(maximized_position(-8, 0, 3840, 1936), 952);
-        assert_eq!(maximized_position(-8, 0, 2100, 1119), 490);
+        assert_eq!(maximized_position(0, 3840, 1936, 8), 952);
+        assert_eq!(maximized_position(0, 2100, 1119, 8), 490);
         // On a second monitor, from its own corner.
-        assert_eq!(maximized_position(2552, 2560, 3840, 1936), 2560 + 952);
-        // A window as large as the work area, borders and all, stays where it was put.
-        assert_eq!(maximized_position(-8, 0, 1920, 1936), -8);
-        assert_eq!(maximized_position(-8, 0, 1920, 1920), -8);
+        assert_eq!(maximized_position(2560, 3840, 1936, 8), 2560 + 952);
+        // A window as large as the work area, borders and all, hangs its border off the edge.
+        assert_eq!(maximized_position(0, 1920, 1936, 8), -8);
+        assert_eq!(maximized_position(0, 1920, 1920, 0), 0);
+    }
+
+    #[test]
+    fn fr4_a_window_that_fills_the_work_area_starts_at_its_edge_wherever_it_was() {
+        // A maximised window took the work area's frame (1040x736 outer at 100%, a 1024x720
+        // client) while it still stood where its smaller frame was centred, at (304, 202).
+        // Its client area starts at the work area's corner all the same.
+        assert_eq!(maximized_position(0, 1024, 1040, 8), -8);
+        assert_eq!(maximized_position(0, 720, 736, 8), -8);
+        // On a second monitor to the right of the primary, and on one above it.
+        assert_eq!(maximized_position(1920, 2048, 2064, 8), 1912);
+        assert_eq!(maximized_position(-1152, 1104, 1120, 8), -1160);
     }
 
     #[test]
