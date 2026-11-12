@@ -397,8 +397,21 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         return;
     }
     /* A lost device is made again before the copy, and none is made while the copy uses it. */
+    const auto recover_started = std::chrono::steady_clock::now();
+    const uint64_t generation_before = emu->deviceGeneration();
     if (!emu->recoverIfLost()) {
         return;
+    }
+    if (emu->deviceGeneration() != generation_before) {
+        /* Every guest call on the renderer waits while the device is made again, and an app
+         * whose input goes unanswered for five seconds is ended by Android, so how long it
+         * took is what a report needs. */
+        const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now() - recover_started)
+                              .count();
+        WARN("Making the renderer's Vulkan device again took %lld ms; the guest's calls waited "
+             "for it.",
+             static_cast<long long>(took));
     }
     auto device_use = emu->useDevice();
     follow_device(*emu, presenter);

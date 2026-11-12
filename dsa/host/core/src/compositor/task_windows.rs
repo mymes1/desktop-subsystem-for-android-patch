@@ -593,6 +593,16 @@ impl TaskWindows {
         Some(TaskRequest::Close { task_id })
     }
 
+    /// The task's window went away without the user closing it (its window program crashed),
+    /// and the task goes on: its window opens again, as it first opened, with everything the
+    /// new window has to be told. Nothing for a task that has no window.
+    pub fn reopen(&mut self, task_id: i32) -> Vec<WindowChange> {
+        if !self.has_window(task_id) {
+            return Vec::new();
+        }
+        self.open_window(task_id)
+    }
+
     /// The request to end a task the user closed did not reach the guest, so the task is
     /// still there: its window opens again.
     pub fn close_failed(&mut self, task_id: i32) -> Vec<WindowChange> {
@@ -1276,6 +1286,22 @@ mod tests {
         );
         assert!(windows.has_window(1));
         assert!(windows.close_failed(1).is_empty());
+    }
+
+    #[test]
+    fn nfr5_a_window_whose_program_crashed_opens_again_for_the_same_task() {
+        let mut windows = TaskWindows::new();
+        windows.apply(&updated(1, "Clock"));
+        windows.apply(&frames(1, 3));
+        // The new window program is told everything the first one was, and the task, its
+        // display and its frames stay.
+        assert_eq!(windows.reopen(1), vec![opened(1, "Clock"), dark_glyphs(1)]);
+        assert!(windows.has_window(1));
+        assert_eq!(windows.task_for_display(3), Some(1));
+        // A task without a window, or one the user is closing, opens nothing.
+        assert!(windows.reopen(2).is_empty());
+        windows.user_closed(1);
+        assert!(windows.reopen(1).is_empty());
     }
 
     #[test]
