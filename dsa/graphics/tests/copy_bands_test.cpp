@@ -64,6 +64,8 @@ void nfr5_odd_sizes_and_empty_copies() {
     // A row wider than the limit is still copied, a row at a time.
     const auto wide = dsa::copy_bands(5000, 3, 1000);
     check(wide.size() == 3 && wide[0].rows == 1, test, "one row each");
+    // A copy between buffers holds as many bytes as a band of RGBA pixels.
+    check(dsa::kMaxCopyBytes == dsa::kMaxCopyPixels * 4, test, "bytes of a band");
 }
 
 }  // namespace

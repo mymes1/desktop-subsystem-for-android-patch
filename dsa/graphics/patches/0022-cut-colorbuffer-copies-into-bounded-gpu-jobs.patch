@@ -1,5 +1,5 @@
 diff --git a/host/vulkan/VkCommonOperations.cpp b/host/vulkan/VkCommonOperations.cpp
-index 6acce55..33f539e 100644
+index 6acce55..6d37570 100644
 --- a/host/vulkan/VkCommonOperations.cpp
 +++ b/host/vulkan/VkCommonOperations.cpp
 @@ -28,6 +28,7 @@
@@ -209,14 +209,18 @@ index 6acce55..33f539e 100644
 -    } else {
 -        colorBufferInfo->currentLayout = transferSrcLayout;
 -    }
--
--    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
  
--    VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
+-    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
 +        {
 +            android::base::AutoLock queueLock(*mQueueLock);
 +            VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
 +        }
+ 
+-    VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
++        // Bounded: a wait of 5 s and then 10 s more held mMutex, and every guest call behind
++        // it, while the GPU hung.
++        VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Reading a ColorBuffer back"),
++                   false);
  
 -    const VkSubmitInfo submitInfo = {
 -        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -229,11 +233,7 @@ index 6acce55..33f539e 100644
 -        .signalSemaphoreCount = 0,
 -        .pSignalSemaphores = nullptr,
 -    };
-+        // Bounded: a wait of 5 s and then 10 s more held mMutex, and every guest call behind
-+        // it, while the GPU hung.
-+        VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Reading a ColorBuffer back"),
-+                   false);
- 
+-
 -    {
 -        android::base::AutoLock queueLock(*mQueueLock);
 -        VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
@@ -401,9 +401,9 @@ index 6acce55..33f539e 100644
 -    } else {
 -        colorBufferInfo->currentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 -    }
- 
--    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
 -
+-    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
+ 
 -    VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
 +        {
 +            android::base::AutoLock queueLock(*mQueueLock);
@@ -436,3 +436,165 @@ index 6acce55..33f539e 100644
      const VkMappedMemoryRange toInvalidate = {
          .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
          .pNext = nullptr,
+@@ -4617,44 +4680,50 @@ bool VkEmulation::readBufferToBytes(uint32_t bufferHandle, uint64_t offset, uint
+         .pNext = nullptr,
+         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+     };
+-    VK_EMU_TRY(vk->vkBeginCommandBuffer(mCommandBuffer, &beginInfo), false);
++    // In bounded jobs of at most dsa::kMaxCopyBytes, each submitted and waited for on
++    // its own, so no single GPU job grows with what the guest asked for.
++    for (uint64_t done = 0; done < size;) {
++        const uint64_t chunk = std::min<uint64_t>(size - done, dsa::kMaxCopyBytes);
++        VK_EMU_TRY(vk->vkBeginCommandBuffer(mCommandBuffer, &beginInfo), false);
++
++        mDebugUtilsHelper.cmdBeginDebugLabel(mCommandBuffer, "readBufferToBytes(Buffer:%d)",
++                                             bufferHandle);
++
++        const VkBufferCopy bufferCopy = {
++            .srcOffset = offset + done,
++            .dstOffset = done,
++            .size = chunk,
++        };
++        vk->vkCmdCopyBuffer(mCommandBuffer, bufferInfo->buffer, stagingBufferInfo.buffer, 1,
++                            &bufferCopy);
+ 
+-    mDebugUtilsHelper.cmdBeginDebugLabel(mCommandBuffer, "readBufferToBytes(Buffer:%d)",
+-                                         bufferHandle);
++        mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
+ 
+-    const VkBufferCopy bufferCopy = {
+-        .srcOffset = offset,
+-        .dstOffset = 0,
+-        .size = size,
+-    };
+-    vk->vkCmdCopyBuffer(mCommandBuffer, bufferInfo->buffer, stagingBufferInfo.buffer, 1,
+-                        &bufferCopy);
++        VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
+ 
+-    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
++        const VkSubmitInfo submitInfo = {
++            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
++            .pNext = nullptr,
++            .waitSemaphoreCount = 0,
++            .pWaitSemaphores = nullptr,
++            .pWaitDstStageMask = nullptr,
++            .commandBufferCount = 1,
++            .pCommandBuffers = &mCommandBuffer,
++            .signalSemaphoreCount = 0,
++            .pSignalSemaphores = nullptr,
++        };
+ 
+-    VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
++        {
++            android::base::AutoLock queueLock(*mQueueLock);
++            VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
++        }
+ 
+-    const VkSubmitInfo submitInfo = {
+-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+-        .pNext = nullptr,
+-        .waitSemaphoreCount = 0,
+-        .pWaitSemaphores = nullptr,
+-        .pWaitDstStageMask = nullptr,
+-        .commandBufferCount = 1,
+-        .pCommandBuffers = &mCommandBuffer,
+-        .signalSemaphoreCount = 0,
+-        .pSignalSemaphores = nullptr,
+-    };
++        VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Reading a buffer back"), false);
+ 
+-    {
+-        android::base::AutoLock queueLock(*mQueueLock);
+-        VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
++        VK_EMU_TRY(vk->vkResetFences(mDevice, 1, &mCommandBufferFence), false);
++        done += chunk;
+     }
+ 
+-    VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Reading a buffer back"), false);
+-
+-    VK_EMU_TRY(vk->vkResetFences(mDevice, 1, &mCommandBufferFence), false);
+-
+     const VkMappedMemoryRange toInvalidate = {
+         .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+         .pNext = nullptr,
+@@ -4712,44 +4781,50 @@ bool VkEmulation::updateBufferFromBytes(uint32_t bufferHandle, uint64_t offset,
+         .pNext = nullptr,
+         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+     };
+-    VK_EMU_TRY(vk->vkBeginCommandBuffer(mCommandBuffer, &beginInfo), false);
++    // In bounded jobs of at most dsa::kMaxCopyBytes, each submitted and waited for on
++    // its own, so no single GPU job grows with what the guest asked for.
++    for (uint64_t done = 0; done < size;) {
++        const uint64_t chunk = std::min<uint64_t>(size - done, dsa::kMaxCopyBytes);
++        VK_EMU_TRY(vk->vkBeginCommandBuffer(mCommandBuffer, &beginInfo), false);
++
++        mDebugUtilsHelper.cmdBeginDebugLabel(mCommandBuffer, "updateBufferFromBytes(Buffer:%d)",
++                                             bufferHandle);
++
++        const VkBufferCopy bufferCopy = {
++            .srcOffset = done,
++            .dstOffset = offset + done,
++            .size = chunk,
++        };
++        vk->vkCmdCopyBuffer(mCommandBuffer, stagingBufferInfo.buffer, bufferInfo->buffer, 1,
++                            &bufferCopy);
+ 
+-    mDebugUtilsHelper.cmdBeginDebugLabel(mCommandBuffer, "updateBufferFromBytes(Buffer:%d)",
+-                                         bufferHandle);
++        mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
+ 
+-    const VkBufferCopy bufferCopy = {
+-        .srcOffset = 0,
+-        .dstOffset = offset,
+-        .size = size,
+-    };
+-    vk->vkCmdCopyBuffer(mCommandBuffer, stagingBufferInfo.buffer, bufferInfo->buffer, 1,
+-                        &bufferCopy);
++        VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
+ 
+-    mDebugUtilsHelper.cmdEndDebugLabel(mCommandBuffer);
++        const VkSubmitInfo submitInfo = {
++            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
++            .pNext = nullptr,
++            .waitSemaphoreCount = 0,
++            .pWaitSemaphores = nullptr,
++            .pWaitDstStageMask = nullptr,
++            .commandBufferCount = 1,
++            .pCommandBuffers = &mCommandBuffer,
++            .signalSemaphoreCount = 0,
++            .pSignalSemaphores = nullptr,
++        };
+ 
+-    VK_EMU_TRY(vk->vkEndCommandBuffer(mCommandBuffer), false);
++        {
++            android::base::AutoLock queueLock(*mQueueLock);
++            VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
++        }
+ 
+-    const VkSubmitInfo submitInfo = {
+-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+-        .pNext = nullptr,
+-        .waitSemaphoreCount = 0,
+-        .pWaitSemaphores = nullptr,
+-        .pWaitDstStageMask = nullptr,
+-        .commandBufferCount = 1,
+-        .pCommandBuffers = &mCommandBuffer,
+-        .signalSemaphoreCount = 0,
+-        .pSignalSemaphores = nullptr,
+-    };
++        VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Writing a buffer"), false);
+ 
+-    {
+-        android::base::AutoLock queueLock(*mQueueLock);
+-        VK_EMU_TRY(vk->vkQueueSubmit(mQueue, 1, &submitInfo, mCommandBufferFence), false);
++        VK_EMU_TRY(vk->vkResetFences(mDevice, 1, &mCommandBufferFence), false);
++        done += chunk;
+     }
+ 
+-    VK_EMU_TRY(waitForFenceBounded(vk, mCommandBufferFence, "Writing a buffer"), false);
+-
+-    VK_EMU_TRY(vk->vkResetFences(mDevice, 1, &mCommandBufferFence), false);
+-
+     return true;
+ }
+ 

@@ -20,6 +20,10 @@ namespace dsa {
 // The most pixels one submitted copy covers: a 1920x1080 frame fits in one.
 inline constexpr uint64_t kMaxCopyPixels = 2u * 1024u * 1024u;
 
+// The most bytes one submitted copy between buffers covers: as many as kMaxCopyPixels of
+// RGBA pixels.
+inline constexpr uint64_t kMaxCopyBytes = kMaxCopyPixels * 4u;
+
 // Rows `y` to `y + rows` of a copy.
 struct CopyBand {
     uint32_t y = 0;

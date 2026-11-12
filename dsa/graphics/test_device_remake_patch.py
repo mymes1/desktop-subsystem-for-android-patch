@@ -154,6 +154,14 @@ class BoundedCopiesPatchTests(unittest.TestCase):
             self.assertLess(loop.index("vkQueueSubmit"), loop.index("waitForFenceBounded"))
             self.assertIn("cmdAfterEarlierCopies(vk, mCommandBuffer);", loop)
 
+    def test_nfr5_a_buffer_copy_goes_in_chunks_each_its_own_submission(self):
+        text = "\n".join(self.added)
+        self.assertEqual(text.count("    for (uint64_t done = 0; done < size;) {"), 2)
+        self.assertEqual(
+            text.count("const uint64_t chunk = std::min<uint64_t>(size - done, dsa::kMaxCopyBytes);"),
+            2)
+        self.assertIn("            .size = chunk,", self.added)
+
     def test_nfr5_the_fetch_applies_it(self):
         for script in (HERE / "host/fetch.ps1", HERE / "host/fetch.sh"):
             self.assertIn("0022", script.read_text(encoding="utf-8"))
