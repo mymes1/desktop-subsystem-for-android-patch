@@ -209,6 +209,8 @@ class Agent(
     appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
     accessibility: AccessibilitySource = AccessibilitySource.NONE,
+    /** Where the accessibility trees of watched tasks are read, past the scheduler's thread. */
+    accessibilityReader: Scheduler = scheduler,
     clock: () -> Long = { System.nanoTime() / 1_000_000 },
     diagnostics: DiagnosticsSource = DiagnosticsSource.NONE,
     diagnosticsRunner: (Runnable) -> Unit = { Thread(it, "dsa-diagnostics").start() },
@@ -236,7 +238,7 @@ class Agent(
         log = log,
         onFrame = ::onFrame,
         onConnected = ::onConnected,
-        intercept = ::pointerFrame,
+        intercept = ::interceptFrame,
     )
     private val reporter = TaskReporter(ownPackage, apps) { frame -> channel.send(frame) }
     private val requests = HostRequests(ownPackage, actions, reporter::isReported)
@@ -471,6 +473,7 @@ class Agent(
         log,
         reporter::reportedBounds,
         clock,
+        accessibilityReader,
     )
     /** Where the apps on the display keep system gestures out, as last heard. */
     private var exclusion: List<TaskBounds> = emptyList()
@@ -481,6 +484,10 @@ class Agent(
     private var appsPending = false
     private var appsForced = false
     private var checkPending = false
+
+    /** Sizes and densities from the host, with when each arrived, for [takeWindowFrames]. */
+    private val windowFrames = java.util.concurrent.ConcurrentLinkedQueue<Pair<ByteArray, Long>>()
+    private val windowFramesPosted = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun start() {
         scheduler.post {
@@ -720,11 +727,20 @@ class Agent(
         if (settingsSync.handle(frame)) return
         if (deviceNameSync.handle(frame)) return
         if (linksOrFiles(frame)) return
+        if (handleRequest(frame)) requestRefresh()
+    }
+
+    /**
+     * Acts on a request from the host (a launch, a close, a size, ...). Returns whether it was
+     * one for the agent, after which the tasks are read again. [queuedMillis] is how long the
+     * frame waited for the scheduler's thread, for the resize trace.
+     */
+    private fun handleRequest(frame: ByteArray, queuedMillis: Double? = null): Boolean {
         val result = try {
             requests.handle(frame)
         } catch (e: Exception) {
             log.warn("acting on a frame from the channel failed", e)
-            return
+            return false
         }
         when (result) {
             is RequestResult.Launched ->
@@ -744,7 +760,7 @@ class Agent(
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")
             is RequestResult.CloseRefused -> log.warn("did not end task ${result.taskId}: ${result.reason}")
             is RequestResult.Resize -> {
-                trace.received(result.taskId, result.size, result.live)
+                trace.received(result.taskId, result.size, result.live, queuedMillis)
                 arranger.resize(result.taskId, result.size, result.live)
             }
             is RequestResult.Density -> {
@@ -765,20 +781,51 @@ class Agent(
             is RequestResult.Malformed -> log.warn("dropped a frame: ${result.reason}")
             is RequestResult.NotForTheAgent -> Unit
         }
-        if (result !is RequestResult.NotForTheAgent) requestRefresh()
+        return result !is RequestResult.NotForTheAgent
     }
 
-    /** Queues the frame for the input thread if it is pointer input. Called on a binder thread. */
-    private fun pointerFrame(frame: ByteArray): Boolean {
+    /**
+     * Queues the frame for the input thread if it is pointer input, and ahead of the
+     * scheduler's other work if it gives a task a new size or density. Called on a binder
+     * thread.
+     */
+    private fun interceptFrame(frame: ByteArray): Boolean {
         val envelope = try {
             Envelope.parseFrom(frame)
         } catch (e: InvalidProtocolBufferException) {
             // The scheduler's thread reports it.
             return false
         }
-        if (envelope.bodyCase != Envelope.BodyCase.POINTER_EVENT) return false
-        pointerQueue.add(envelope.pointerEvent)
+        when (envelope.bodyCase) {
+            Envelope.BodyCase.POINTER_EVENT -> pointerQueue.add(envelope.pointerEvent)
+            Envelope.BodyCase.RESIZE_TASK, Envelope.BodyCase.SET_TASK_DENSITY -> windowFrame(frame)
+            else -> return false
+        }
         return true
+    }
+
+    /**
+     * A window's new size or density, which the user is waiting to see. It goes ahead of
+     * whatever else waits for the scheduler's thread (task reads, notifications, an
+     * accessibility tree being sent), so a window resized while the thread is busy is not
+     * held back by that work. The frames that arrive together are handled together and in
+     * order, with one read of the tasks after them, so a density and the size that comes with
+     * it still reach the framework in one change. Called on a binder thread.
+     */
+    private fun windowFrame(frame: ByteArray) {
+        windowFrames.add(frame to System.nanoTime())
+        if (windowFramesPosted.compareAndSet(false, true)) scheduler.postFirst(::takeWindowFrames)
+    }
+
+    private fun takeWindowFrames() {
+        windowFramesPosted.set(false)
+        var any = false
+        while (true) {
+            val (frame, arrived) = windowFrames.poll() ?: break
+            handleRequest(frame, queuedMillis = (System.nanoTime() - arrived) / 1_000_000.0)
+            any = true
+        }
+        if (any) refresh()
     }
 
     /** Injects the frame if it is key or text input. False for any other frame. */

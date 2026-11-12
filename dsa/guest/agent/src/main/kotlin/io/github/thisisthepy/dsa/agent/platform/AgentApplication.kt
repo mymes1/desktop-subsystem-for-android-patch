@@ -101,6 +101,9 @@ class AgentApplication : Application() {
             appProcesses = AndroidAppProcesses(this),
             widgetStore = AndroidWidgetStore(this),
             accessibility = AndroidAccessibilitySource(this, log),
+            // Reading an app's accessibility tree waits on the app's UI thread for each node,
+            // so it has a thread of its own and never holds up the host's requests.
+            accessibilityReader = HandlerScheduler(HandlerThread("dsa-accessibility").apply { start() }.looper),
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
             privateDns = AndroidPrivateDns(this),

@@ -7,8 +7,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 /**
- * The agent's part of the resize trace: when a ResizeTask arrived, when the agent had
- * applied it to the framework, and when the task's bounds read back at the new size.
+ * The agent's part of the resize trace: when a ResizeTask arrived, how long it waited for the
+ * agent's thread (`queued=`), when the agent had applied it to the framework, and when the
+ * task's bounds read back at the new size.
  *
  * Lines look like the host's, so the logs can be merged on their `utc` time:
  * `resize-trace task=7 size=800x600 stage=agent.received utc=2026-10-26T06:23:03.123Z mono=1234.000 live=true`.
@@ -23,7 +24,7 @@ class ResizeTrace(
     private val monoMillis: () -> Double = { System.nanoTime() / 1_000_000.0 },
     private val wallMillis: () -> Long = System::currentTimeMillis,
 ) {
-    private class Pending(val size: Size, val receivedAt: Double) {
+    private class Pending(val size: Size, val receivedAt: Double, val queuedMillis: Double?) {
         var appliedAt: Double? = null
     }
 
@@ -31,10 +32,17 @@ class ResizeTrace(
     private val stages = HashMap<Pair<Int, String>, Size>()
     private val summaries = HashMap<Int, Pair<Double, Int>>()
 
-    /** The host asked for task [taskId] to take [size]. */
-    fun received(taskId: Int, size: Size, live: Boolean) {
-        pending[taskId] = Pending(size, monoMillis())
-        stage(taskId, "agent.received", size, "live=$live")
+    /**
+     * The host asked for task [taskId] to take [size]. [queuedMillis], when known, is how long
+     * the request waited for the agent's thread after it arrived. The same size asked for again
+     * before the bounds read back at it (the host reconfigures a task at the size it gave it
+     * live) keeps the first request's time, so the summary measures from the first.
+     */
+    fun received(taskId: Int, size: Size, live: Boolean, queuedMillis: Double? = null) {
+        val waiting = pending[taskId]
+        if (waiting == null || waiting.size != size) pending[taskId] = Pending(size, monoMillis(), queuedMillis)
+        val queued = if (queuedMillis == null) "" else " queued=${fmt(queuedMillis)}"
+        stage(taskId, "agent.received", size, "live=$live$queued")
     }
 
     /**
@@ -60,7 +68,8 @@ class ResizeTrace(
         val applied = resize.appliedAt
         val appliedPart = if (applied == null) "applied=none" else "applied=${fmt(applied - resize.receivedAt)}"
         stage(taskId, "agent.bounds", resize.size, "since_received=${fmt(now - resize.receivedAt)}")
-        summary(taskId, resize.size, "$appliedPart bounds=${fmt(now - resize.receivedAt)}")
+        val queuedPart = resize.queuedMillis?.let { " queued=${fmt(it)}" } ?: ""
+        summary(taskId, resize.size, "$appliedPart bounds=${fmt(now - resize.receivedAt)}$queuedPart")
     }
 
     /** The task has ended. */
