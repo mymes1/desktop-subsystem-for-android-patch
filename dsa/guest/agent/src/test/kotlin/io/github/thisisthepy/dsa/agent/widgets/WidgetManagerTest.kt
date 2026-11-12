@@ -578,6 +578,35 @@ class WidgetManagerTest {
         assertEquals(before, platform.shown.size)
     }
 
+    /**
+     * A size the widget is drawn at already changes nothing: the host passes the size of a
+     * window being resized as the drag pauses and again at its end, and a widget drawn anew
+     * makes its views again, which costs memory and time.
+     */
+    @Test
+    fun fr12_a_size_the_widget_is_drawn_at_already_does_not_draw_it_again() {
+        started()
+        platform.offered += clock()
+        add()
+        fun resize(width: Int, widthDp: Int) = manager.handle(
+            Envelope.newBuilder().setResizeWidget(
+                ResizeWidget.newBuilder().setWidgetId(1).setWidth(width).setHeight(220).setDensityDpi(240)
+                    .setWidthDp(widthDp).setHeightDp(147),
+            ).build(),
+        )
+        resize(360, 240)
+        val drawn = platform.shown.size
+        resize(360, 240)
+        resize(360, 240)
+        scheduler.runDue()
+        assertEquals("the same size drew the widget again", drawn, platform.shown.size)
+        assertEquals(WidgetSize(360, 220, 240, 240, 147), store.sizes()[1])
+        // A new size draws it once more.
+        resize(420, 280)
+        assertEquals(drawn + 1, platform.shown.size)
+        assertEquals(1 to WidgetSize(420, 220, 240, 280, 147), platform.shown.last())
+    }
+
     @Test
     fun fr12_a_click_goes_to_the_widgets_view_within_its_size() {
         started()
