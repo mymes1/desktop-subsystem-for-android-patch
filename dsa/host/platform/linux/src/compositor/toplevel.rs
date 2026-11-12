@@ -117,6 +117,7 @@ impl Toplevel {
         WindowGeometry {
             client: self.shown,
             task: self.task,
+            scale: self.frame_scale,
         }
     }
 

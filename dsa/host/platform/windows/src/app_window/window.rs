@@ -1526,6 +1526,8 @@ impl Ui {
                             self.open.get(&task_id).and_then(|hwnd| window_data(*hwnd))
                         {
                             data.pointer.task_resized((width, height));
+                            // A point in the window is a task pixel at the window's scale.
+                            data.pointer.set_scale(scale);
                             if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
                                 tree.task_resized((width, height));
                             }
