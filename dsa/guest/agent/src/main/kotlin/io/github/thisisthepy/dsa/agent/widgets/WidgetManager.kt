@@ -206,6 +206,41 @@ object WidgetFit {
     /** [px] pixels at [densityDpi], in dp, rounded up so the content is held whole. */
     fun dpOf(px: Int, densityDpi: Int): Int =
         if (densityDpi <= 0) px else kotlin.math.ceil(px * 160.0 / densityDpi - 0.001).toInt().coerceAtLeast(0)
+
+    /**
+     * The pixels a widget's views take along a side of [room] pixels when they span from
+     * [start] to [end] pixels from its edge: the room, grown by as far as they reach past
+     * either end. Android centres a widget's content in its view, so content larger than the
+     * room reaches past both ends, the first as far as the last; counting only the far end
+     * took half of it, and the window grew by halves without ever holding it.
+     */
+    fun span(room: Int, start: Int, end: Int): Int = maxOf(end, room) - minOf(start, 0)
+
+    /**
+     * Where a parent that cuts off its children at [edge] leaves the limit of what shows,
+     * [current] before it, along a side whose own edge is [roomEdge]: the start of the room
+     * when [low], its end otherwise. An edge inside the room is the app's own, and what it cuts
+     * off is drawn as the app means it. An edge at or past the room's is where the widget's
+     * window ends, and what reaches past it is cut off by the window, so it does not count as
+     * a limit.
+     */
+    fun clipEdge(current: Int, edge: Int, roomEdge: Int, low: Boolean): Int = when {
+        low && edge > roomEdge -> maxOf(current, edge)
+        !low && edge < roomEdge -> minOf(current, edge)
+        else -> current
+    }
+
+    /**
+     * What a widget's app is told its size is, in dp: the size of its window, which is the
+     * room its view is laid out in. Android's `updateAppWidgetSize` takes 8 dp off each side
+     * for padding a launcher puts around a widget, but the agent's widget view has none: the
+     * app was told 16 dp less each way than it had, laid its content out that much shorter,
+     * and the window showed it with an empty band along its bottom.
+     */
+    fun told(widthDp: Int, heightDp: Int): Told = Told(widthDp.coerceAtLeast(1), heightDp.coerceAtLeast(1))
+
+    /** A widget's size as its app is told it, in dp: the least and the most are both this size. */
+    data class Told(val widthDp: Int, val heightDp: Int)
 }
 
 /** The guest's widget framework, as the agent drives it. Every method runs on the agent's thread. */

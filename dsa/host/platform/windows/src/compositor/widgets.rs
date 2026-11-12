@@ -3420,6 +3420,47 @@ mod tests {
         assert_eq!(min_window_size(&clock(), 192), (180, 80));
     }
 
+    /// A 5 by 2 music widget placed at 369 by 170 dp was drawn with an empty band along its
+    /// bottom on a monitor at 200%. Its window and the size Android draws it at must be the
+    /// same pixels and the same dp at every scale, so the image fills the window as it is.
+    #[test]
+    fn fr12_a_widget_placed_at_369_by_170_dp_is_drawn_at_its_windows_size_at_200_and_125_percent() {
+        let placement = Placement {
+            x: 536,
+            y: 258,
+            width_dp: 369,
+            height_dp: 170,
+            resized: false,
+        };
+        for (dpi, density, pixels) in [(192, 262, (604, 278)), (120, 164, (378, 174))] {
+            let (width, height) = window_size(&placement, dpi);
+            assert_eq!((width, height), pixels, "the window at {dpi} dpi");
+            assert_eq!(android_density(dpi), density);
+            // The window reports this size, and Android is told the same dp it was placed at.
+            assert_eq!(placement_of(536, 258, width, height, dpi), placement);
+            let size = dsa_host_core::widgets::WidgetSize::of_pixels(
+                width as u32,
+                height as u32,
+                android_density(dpi),
+            );
+            assert_eq!(
+                (size.width, size.height, size.width_dp, size.height_dp),
+                (width as u32, height as u32, 369, 170),
+                "Android draws the widget at its window's size at {dpi} dpi"
+            );
+            // An image of that size covers the window pixel for pixel, not scaled.
+            assert_eq!(
+                to_frame(
+                    width - 1,
+                    height - 1,
+                    (width, height),
+                    (size.width, size.height)
+                ),
+                ((width - 1) as f32, (height - 1) as f32)
+            );
+        }
+    }
+
     #[test]
     fn fr12_a_widget_window_is_kept_off_the_taskbar_and_alt_tab_and_never_takes_the_focus() {
         let (style, ex) = window_styles();

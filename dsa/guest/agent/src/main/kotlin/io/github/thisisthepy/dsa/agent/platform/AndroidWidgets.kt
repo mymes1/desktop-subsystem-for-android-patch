@@ -280,6 +280,39 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         return context.createConfigurationContext(configuration)
     }
 
+    /**
+     * Tells the app of widget [id] its size, the size of its window in dp ([WidgetFit.told]),
+     * through the widget's options. `AppWidgetHostView.updateAppWidgetSize` is not used: it
+     * takes a launcher's padding off the size, which this view does not have. The options are
+     * left as they are when they say this size already, so drawing the widget again, as when it
+     * is shrunk to fit, does not make its app send its views again.
+     */
+    private fun tellSize(id: Int, view: AppWidgetHostView, size: WidgetSize) {
+        val told = WidgetFit.told(size.widthDp, size.heightDp)
+        val sizes = arrayListOf(SizeF(told.widthDp.toFloat(), told.heightDp.toFloat()))
+        val current = try {
+            manager.getAppWidgetOptions(id)
+        } catch (e: Exception) {
+            null
+        }
+        if (current != null &&
+            current.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH) == told.widthDp &&
+            current.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH) == told.widthDp &&
+            current.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT) == told.heightDp &&
+            current.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT) == told.heightDp &&
+            current.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java) == sizes
+        ) {
+            return
+        }
+        val options = Bundle()
+        options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, told.widthDp)
+        options.putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, told.widthDp)
+        options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, told.heightDp)
+        options.putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, told.heightDp)
+        options.putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, sizes)
+        view.updateAppWidgetOptions(options)
+    }
+
     override fun pointer(widgetId: Int, action: PointerAction, pointerId: Int, x: Float, y: Float) {
         main.post { renderers[widgetId]?.pointer(action, x, y) }
     }
@@ -395,6 +428,17 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
          * keeps the widget's last image until the app draws again.
          */
         override fun getErrorView(): View = View(context)
+
+        /**
+         * Android pads a widget's view by 8 dp on each side, as a launcher's grid does, each
+         * time it is given its widget, which the framework does again when the widget's app
+         * changes. The agent's window is the widget's own size, so the view has no padding:
+         * with it the content was laid out 16 dp smaller than the window each way.
+         */
+        override fun setAppWidget(appWidgetId: Int, info: AppWidgetProviderInfo?) {
+            super.setAppWidget(appWidgetId, info)
+            setPadding(0, 0, 0, 0)
+        }
     }
 
     /** The window a widget's views run in: a presentation on a private display of its size. */
@@ -505,8 +549,7 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         private var downTime = 0L
 
         init {
-            val sizes = Bundle()
-            view.updateAppWidgetSize(sizes, listOf(SizeF(size.widthDp.toFloat(), size.heightDp.toFloat())))
+            tellSize(id, view, size)
             captureReader.setOnImageAvailableListener({ reader ->
                 val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
                 val pixels = try {
@@ -645,23 +688,31 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
          * that takes this one's place: this image, which would cut it off, is never sent.
          */
         private fun fits(): Boolean {
-            val reach = IntArray(2)
+            // Left, top, right and bottom of what the views cover, from the root's corner.
+            val bounds = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, Int.MIN_VALUE, Int.MIN_VALUE)
+            val room = intArrayOf(layoutWidth, layoutHeight)
             for (i in 0 until root.childCount) {
                 val child = root.getChildAt(i)
-                reachOf(child, child.left, child.top, reach)
+                boundsOf(child, child.left, child.top, bounds, room)
             }
-            if (reach[0] <= layoutWidth && reach[1] <= layoutHeight) return true
+            if (bounds[0] > bounds[2] || bounds[1] > bounds[3]) return true
+            // Views cut off at the top or the left count as much as those cut off at the far
+            // side: Android centres a widget's content, so it overflows both ways at once.
+            val spanWidth = WidgetFit.span(layoutWidth, bounds[0], bounds[2])
+            val spanHeight = WidgetFit.span(layoutHeight, bounds[1], bounds[3])
+            if (spanWidth <= layoutWidth && spanHeight <= layoutHeight) return true
             // The need along a side the views fit is the widget's own size there, in the dp
             // the host gave, so a side that fits never creeps up by its rounding.
             val density = size.densityDpi
-            val needWidth = if (reach[0] > layoutWidth) WidgetFit.dpOf(reach[0], density) else size.widthDp
-            val needHeight = if (reach[1] > layoutHeight) WidgetFit.dpOf(reach[1], density) else size.heightDp
+            val needWidth = if (spanWidth > layoutWidth) WidgetFit.dpOf(spanWidth, density) else size.widthDp
+            val needHeight = if (spanHeight > layoutHeight) WidgetFit.dpOf(spanHeight, density) else size.heightDp
             onNeeds(id, needWidth, needHeight)
-            val wanted = scale * WidgetFit.scale(layoutWidth, layoutHeight, reach[0], reach[1])
+            val wanted = scale * WidgetFit.scale(layoutWidth, layoutHeight, spanWidth, spanHeight)
             if (wanted >= scale - 0.001f || scale <= WidgetFit.MIN_SCALE) return true
             val next = wanted.coerceAtLeast(WidgetFit.MIN_SCALE)
             log.info(
-                "widget $id: its views reach ${reach[0]}x${reach[1]} pixels, past its ${layoutWidth}x$layoutHeight; " +
+                "widget $id: its views span ${spanWidth}x$spanHeight pixels " +
+                    "(from ${bounds[0]},${bounds[1]} to ${bounds[2]},${bounds[3]}), past its ${layoutWidth}x$layoutHeight; " +
                     "drawing it shrunk to ${"%.2f".format(next)} until its window holds it",
             )
             refitting = true
@@ -756,19 +807,47 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
 
     /**
-     * Grows [reach] to how far right and down [view] and the views in it reach, in pixels from
-     * the corner of the widget's root, [view] being at [left], [top] from it. Views that do
-     * not show take no room. A list is not looked into: it lays out only the rows that show,
-     * and the last of them is meant to be cut off by the list's own edge.
+     * Grows [bounds] (left, top, right and bottom) to take in [view] and the views in it, in
+     * pixels from the corner of the widget's root, [view] being at [left], [top] from it: a
+     * view laid out above or left of the root reaches below zero. Views that do not show take
+     * no room. A list is not looked into: it lays out only the rows that show, and the last of
+     * them is meant to be cut off by the list's own edge.
+     *
+     * A view that its parent cuts off inside the room, as an app's own rounded card cuts its
+     * picture, is drawn as its app means it, so only as much of it counts as the parent shows
+     * ([WidgetFit.clipEdge]). A parent's edge at or past the room's edge is the widget's own
+     * edge, and what reaches past it counts whole.
      */
-    private fun reachOf(view: View, left: Int, top: Int, reach: IntArray) {
+    private fun boundsOf(
+        view: View,
+        left: Int,
+        top: Int,
+        bounds: IntArray,
+        room: IntArray,
+        clip: IntArray = intArrayOf(Int.MIN_VALUE, Int.MIN_VALUE, Int.MAX_VALUE, Int.MAX_VALUE),
+    ) {
         if (view.visibility != View.VISIBLE || view.width <= 0 || view.height <= 0) return
-        reach[0] = maxOf(reach[0], left + view.width)
-        reach[1] = maxOf(reach[1], top + view.height)
+        val right = left + view.width
+        val bottom = top + view.height
+        if (right <= clip[0] || bottom <= clip[1] || left >= clip[2] || top >= clip[3]) return
+        bounds[0] = minOf(bounds[0], maxOf(left, clip[0]))
+        bounds[1] = minOf(bounds[1], maxOf(top, clip[1]))
+        bounds[2] = maxOf(bounds[2], minOf(right, clip[2]))
+        bounds[3] = maxOf(bounds[3], minOf(bottom, clip[3]))
         if (view !is ViewGroup || view is AdapterView<*>) return
+        val inner = if (view.clipChildren) {
+            intArrayOf(
+                WidgetFit.clipEdge(clip[0], left, 0, low = true),
+                WidgetFit.clipEdge(clip[1], top, 0, low = true),
+                WidgetFit.clipEdge(clip[2], right, room[0], low = false),
+                WidgetFit.clipEdge(clip[3], bottom, room[1], low = false),
+            )
+        } else {
+            clip
+        }
         for (i in 0 until view.childCount) {
             val child = view.getChildAt(i)
-            reachOf(child, left + child.left - view.scrollX, top + child.top - view.scrollY, reach)
+            boundsOf(child, left + child.left - view.scrollX, top + child.top - view.scrollY, bounds, room, inner)
         }
     }
 
