@@ -136,9 +136,11 @@ unsafe fn geometry(view: &AnyObject) -> WindowGeometry {
     let scale = view_scale(view);
     let client =
         crate::compositor::sizing::task_pixels((bounds.size.width, bounds.size.height), scale);
+    let scale = frame_scale_of(view);
     WindowGeometry {
         client,
-        task: dsa_host_core::compositor::window_sizing::to_task_size(client, frame_scale_of(view)),
+        task: dsa_host_core::compositor::window_sizing::to_task_size(client, scale),
+        scale,
     }
 }
 
