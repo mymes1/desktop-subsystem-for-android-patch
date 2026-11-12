@@ -104,8 +104,9 @@ set(SUPPRESS_FLAGS -Wno-error -Wno-c++98-compat -Wno-c++98-compat-pedantic)
 if(TARGET gfxstream-vulkan-server)
     target_compile_options(gfxstream-vulkan-server PRIVATE ${SUPPRESS_FLAGS})
     # The decoder keeps what each guest's copy of host-visible memory holds
-    # (dsa_shadow_record.h, patch 0020).
-    target_include_directories(gfxstream-vulkan-server PRIVATE
+    # (dsa_shadow_record.h, patch 0020), and the emulation's header names its device's state
+    # (dsa_device_remake.h, patch 0021), so whatever includes that header needs the folder too.
+    target_include_directories(gfxstream-vulkan-server PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 endif()
 if(TARGET gfxstream_backend_static)

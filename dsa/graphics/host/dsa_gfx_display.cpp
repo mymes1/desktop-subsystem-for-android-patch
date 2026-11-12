@@ -320,7 +320,9 @@ bool import_target(VkEmulation& emu, void* handle, uint32_t width, uint32_t heig
 /* The renderer made a new device after a GPU reset: everything made on the old one went with
  * it, so it is forgotten, not destroyed, and made again on the new one as frames come. */
 void follow_device(VkEmulation& emu, Presenter& presenter) {
-    const uint64_t generation = emu.deviceGeneration();
+    /* A device being made again may be gone already: nothing is destroyed on it, and the
+     * objects are made again on the new one. */
+    const uint64_t generation = emu.deviceUsable() ? emu.deviceGeneration() : UINT64_MAX;
     if (presenter.generation == generation) {
         return;
     }
@@ -396,22 +398,11 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
     if (!emu || !fb) {
         return;
     }
-    /* A lost device is made again before the copy, and none is made while the copy uses it. */
-    const auto recover_started = std::chrono::steady_clock::now();
-    const uint64_t generation_before = emu->deviceGeneration();
+    /* A lost device is made again on a thread of the renderer's own, which logs how long it
+     * took; until then the frame is dropped at once, as the guest's calls fail at once. None
+     * is made while the copy uses the device. */
     if (!emu->recoverIfLost()) {
         return;
-    }
-    if (emu->deviceGeneration() != generation_before) {
-        /* Every guest call on the renderer waits while the device is made again, and an app
-         * whose input goes unanswered for five seconds is ended by Android, so how long it
-         * took is what a report needs. */
-        const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::steady_clock::now() - recover_started)
-                              .count();
-        WARN("Making the renderer's Vulkan device again took %lld ms; the guest's calls waited "
-             "for it.",
-             static_cast<long long>(took));
     }
     auto device_use = emu->useDevice();
     follow_device(*emu, presenter);
@@ -1517,7 +1508,8 @@ void present_pixels(PixelPresenter& presenter, uint32_t display_id, const Pendin
 /* The renderer made a new device after a GPU reset: what was made on the old one went with
  * it, so it is forgotten, not destroyed, and made again as frames come. */
 void follow_device(VkEmulation& emu, PixelPresenter& presenter) {
-    const uint64_t generation = emu.deviceGeneration();
+    /* A device being made again may be gone already: nothing is destroyed on it. */
+    const uint64_t generation = emu.deviceUsable() ? emu.deviceGeneration() : UINT64_MAX;
     if (presenter.generation == generation) {
         return;
     }
