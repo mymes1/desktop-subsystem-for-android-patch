@@ -29,8 +29,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_protocol::renderer::types::{
-    envelope::Body, MemoryReport, Note, RendererLog, Role, Start, Started, Stop, Target,
-    TargetRequest,
+    envelope::Body, DeviceState, MemoryReport, Note, RendererLog, Role, Start, Started, Stop,
+    Target, TargetRequest,
 };
 use dsa_protocol::renderer::{
     decode_body, local_hello, renderer_connect, send_on, window_manager_accept,
@@ -954,6 +954,63 @@ impl WindowManagerLink {
     }
 }
 
+/// How often the renderer process looks whether its Vulkan device was lost or made again.
+/// Reading the two counts costs two atomic loads, and the window manager hears of a GPU reset
+/// within this of the renderer finding it.
+pub const DEVICE_STATE_POLL: Duration = Duration::from_millis(50);
+
+/// What the window manager was last told of the renderer's device, so a change is sent once.
+///
+/// A GPU reset lost the renderer's device 13 s before the window manager's own Direct3D
+/// device failed on the owner's PC: the window manager read the renderer's count only when
+/// both ran in one process. The counts now cross to the window manager the moment the
+/// renderer finds the loss.
+#[derive(Debug, Default)]
+pub struct DeviceWatch {
+    told: (u64, u64),
+}
+
+impl DeviceWatch {
+    pub fn new() -> DeviceWatch {
+        DeviceWatch::default()
+    }
+
+    /// The renderer found its device lost `losses` times and made it again `generation`
+    /// times: what to send, or `None` when the window manager knows it already. Nothing is
+    /// sent for a renderer that never lost its device.
+    pub fn look(&mut self, losses: u64, generation: u64) -> Option<DeviceState> {
+        let now = (losses, generation);
+        let before = std::mem::replace(&mut self.told, now);
+        (now != before).then_some(DeviceState { losses, generation })
+    }
+}
+
+/// One number for the renderer's device that goes up the moment the renderer finds it lost
+/// and again when it has made it again: the window manager takes any change as a GPU reset.
+pub fn device_resets(state: &DeviceState) -> u64 {
+    state.losses.saturating_add(state.generation)
+}
+
+/// Tells the window manager on `link` of the renderer's device, as `read` gives its counts
+/// (losses, then generation), every [`DEVICE_STATE_POLL`] until the window manager is gone.
+pub fn follow_device_state(
+    link: Arc<WindowManagerLink>,
+    read: Box<dyn Fn() -> (u64, u64) + Send>,
+) -> std::io::Result<thread::JoinHandle<()>> {
+    thread::Builder::new()
+        .name("dsa-gfx-device-state".into())
+        .spawn(move || {
+            let mut watch = DeviceWatch::new();
+            while !link.is_gone() {
+                let (losses, generation) = read();
+                if let Some(state) = watch.look(losses, generation) {
+                    link.send(Body::DeviceState(state));
+                }
+                thread::sleep(DEVICE_STATE_POLL);
+            }
+        })
+}
+
 /// The renderer's side of the handshake: says hello on `connection` as `build`, and waits for
 /// the window manager's `Start`.
 pub fn open_renderer(connection: &mut dyn Connection, build: &str) -> Result<Start, String> {
@@ -999,6 +1056,39 @@ mod tests {
         }
         assert_eq!(backoff.ended(t), RestartBackoff::LONGEST);
         assert_eq!(backoff.restarts(), 24);
+    }
+
+    #[test]
+    fn nfr5_the_window_manager_is_told_of_a_lost_device_at_once_and_once() {
+        let mut watch = DeviceWatch::new();
+        // A renderer that never lost its device says nothing.
+        assert_eq!(watch.look(0, 0), None);
+        assert_eq!(watch.look(0, 0), None);
+        // The loss is told the moment the renderer finds it, before the device is made again.
+        let lost = watch.look(1, 0).expect("the loss is told");
+        assert_eq!((lost.losses, lost.generation), (1, 0));
+        assert_eq!(watch.look(1, 0), None);
+        // And the new device once it is made.
+        let made = watch.look(1, 1).expect("the new device is told");
+        assert_eq!((made.losses, made.generation), (1, 1));
+        assert_eq!(watch.look(1, 1), None);
+    }
+
+    #[test]
+    fn nfr5_each_loss_and_each_new_device_changes_what_the_window_manager_follows() {
+        let counts = [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)];
+        let resets: Vec<u64> = counts
+            .iter()
+            .map(|&(losses, generation)| device_resets(&DeviceState { losses, generation }))
+            .collect();
+        assert!(resets.windows(2).all(|pair| pair[1] > pair[0]));
+    }
+
+    #[test]
+    fn nfr5_the_device_state_is_looked_at_well_within_androids_input_timeout() {
+        // Android ends an app whose input goes unanswered for five seconds; the window
+        // manager must know of the reset long before.
+        assert!(DEVICE_STATE_POLL <= Duration::from_millis(100));
     }
 
     #[test]
