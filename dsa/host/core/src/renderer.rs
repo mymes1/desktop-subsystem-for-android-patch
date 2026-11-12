@@ -760,6 +760,7 @@ impl<H: PartialEq + Copy> TextureBook<H> {
 pub struct HeldTargets<H> {
     held: HashMap<u32, Vec<(u64, H)>>,
     last: HashMap<u32, u64>,
+    keep: usize,
 }
 
 impl<H> Default for HeldTargets<H> {
@@ -767,6 +768,7 @@ impl<H> Default for HeldTargets<H> {
         HeldTargets {
             held: HashMap::new(),
             last: HashMap::new(),
+            keep: TEXTURES_PER_DISPLAY,
         }
     }
 }
@@ -774,6 +776,17 @@ impl<H> Default for HeldTargets<H> {
 impl<H: Copy> HeldTargets<H> {
     pub fn new() -> HeldTargets<H> {
         HeldTargets::default()
+    }
+
+    /// Holds at most `keep` textures per display (at least one). A window manager that gives
+    /// each display one texture at a time, and a new one only when the display outgrows it,
+    /// has the renderer keep one: an older texture it holds would stay alive in the renderer
+    /// with nothing to use it, a whole buffer of the window's last size for every resize.
+    pub fn keeping(keep: usize) -> HeldTargets<H> {
+        HeldTargets {
+            keep: keep.max(1),
+            ..HeldTargets::default()
+        }
     }
 
     /// The IDs of the textures held for `display_id`, for the next request.
@@ -808,7 +821,7 @@ impl<H: Copy> HeldTargets<H> {
         };
         list.push((target.texture_id, opened));
         let mut released = Vec::new();
-        while list.len() > TEXTURES_PER_DISPLAY {
+        while list.len() > self.keep {
             released.push(list.remove(0).1);
         }
         self.last.insert(display_id, target.texture_id);
