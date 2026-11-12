@@ -29,6 +29,9 @@ check overlays 25 idle-reclaim-measurement "Measure the idle reclaim with Google
 check overlays 25 memory-measurement "Measure the memory with Google Play and one app window on the booted image"
 check dns 14 dns-check-logs "Resolve a name only the host knows on the booted image"
 check graphics 28 graphics-check-results "Run the Vulkan CTS subset and the graphics test apps on the booted image"
+# A real app's window resized while an accessibility client watches it, on its own runner.
+check resize 18 resize-check-measurement "Resize a real app's window on the booted image"
+grep -Fq 'summary: /tmp/resize-test-*/resize.md' <<<"$boot" || { echo "the resize check's numbers do not reach the job summary"; exit 1; }
 grep -Fq 'timeout-minutes: ${{ matrix.timeout }}' <<<"$boot"
 grep -Fq 'fail-fast: false' <<<"$boot"
 grep -Fq '"$GITHUB_WORKSPACE/.scratch/boot-checks/tests/${{ matrix.test }}" --nocapture --test-threads 1' <<<"$boot"

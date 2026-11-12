@@ -51,7 +51,7 @@ use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
 use dsa_host_core::compositor::window_sizing::{
-    maximized_position, min_client_size, rescaled_rect, to_task_size,
+    maximized_outer, maximized_position, min_client_size, rescaled_rect, to_task_size,
 };
 use dsa_host_core::input::InputEvent;
 use windows_sys::Win32::Foundation::{
@@ -775,11 +775,29 @@ unsafe extern "system" fn task_window_proc(
                     x: width.min(info.ptMaxTrackSize.x),
                     y: height.min(info.ptMaxTrackSize.y),
                 };
-                // A maximized window keeps a top border off the screen as well.
-                let (width, height) = outer_size(max, dpi, true);
+                // A maximized window keeps a top border off the screen as well. Windows
+                // proposes the maximised size of the primary monitor and adjusts it to this
+                // window's monitor only while it is at least that large, so the guest's
+                // smaller largest size is kept to this monitor's own work area here, or on a
+                // monitor smaller than the primary one the window would maximise past its
+                // screen's edge (maximized_outer).
+                let guest = outer_size(max, dpi, true);
+                let (width, height) = match window_work_area(hwnd) {
+                    Some(work) => {
+                        let (frame_width, frame_height) = outer_size((0, 0), dpi, true);
+                        maximized_outer(
+                            guest,
+                            (
+                                work.right - work.left + frame_width,
+                                work.bottom - work.top + frame_height,
+                            ),
+                        )
+                    }
+                    None => (guest.0.min(info.ptMaxSize.x), guest.1.min(info.ptMaxSize.y)),
+                };
                 info.ptMaxSize = POINT {
-                    x: width.min(info.ptMaxSize.x),
-                    y: height.min(info.ptMaxSize.y),
+                    x: width,
+                    y: height,
                 };
             }
             // Never smaller than Android gives this task, which its app may declare: the guest

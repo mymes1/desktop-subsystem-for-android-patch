@@ -400,6 +400,56 @@ class AgentTest {
     }
 
     @Test
+    fun fr4_a_resize_goes_ahead_of_work_already_waiting_for_the_agents_thread() {
+        tasks.running = listOf(appTask(1, bounds = TaskBounds(0, 0, 400, 300)))
+        started()
+        // Work the agent's thread has queued already (a tree to read, a notification), which
+        // on a real guest can take a second.
+        var resizedBefore = -1
+        var reportedBefore = -1
+        scheduler.post {
+            resizedBefore = actions.resizedLive.size
+            reportedBefore = taskUpdates().count { it.bounds.right == 500 }
+        }
+
+        resize(1, 500, 300, live = true)
+        scheduler.runDue()
+
+        // The size reached the framework, and the host heard the task is taking it, first.
+        assertEquals(1, resizedBefore)
+        assertEquals(1, reportedBefore)
+    }
+
+    @Test
+    fun fr4_a_density_and_its_size_ahead_of_other_work_still_go_in_one_change() {
+        tasks.running = listOf(appTask(1, bounds = TaskBounds(0, 0, 548, 974)))
+        started()
+        var resizedBefore = -1
+        scheduler.post { resizedBefore = actions.resized.size }
+
+        density(1, 320)
+        resize(1, 1096, 1080)
+        scheduler.runDue()
+
+        assertEquals(1, resizedBefore)
+        assertEquals(listOf(Triple(1, TaskBounds(0, 0, 1096, 1080), 320 as Int?)), actions.resized)
+    }
+
+    @Test
+    fun fr4_the_resize_trace_says_how_long_a_size_waited_for_the_agents_thread() {
+        tasks.running = listOf(appTask(1, bounds = TaskBounds(0, 0, 400, 300)))
+        started()
+
+        resize(1, 500, 300)
+        tasks.running = listOf(appTask(1, bounds = TaskBounds(0, 0, 500, 300)))
+        scheduler.advance(100)
+
+        val summary = log.lines.single { "stage=agent.summary" in it }
+        assertTrue(summary, summary.contains("size=500x300"))
+        assertTrue(summary, Regex(" queued=\\d+\\.\\d").containsMatchIn(summary))
+    }
+
+    @Test
     fun fr4_a_task_that_grows_into_a_newer_one_moves_the_newer_one() {
         tasks.running = listOf(
             appTask(1, bounds = TaskBounds(0, 0, 500, 400)),

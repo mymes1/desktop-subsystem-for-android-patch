@@ -5268,13 +5268,18 @@ impl HostApiService {
     fn trace_resize(&self, resize: &types::ResizeTask, started: Instant) {
         let now = Instant::now();
         let size = (resize.width, resize.height);
-        let detail = format!(
+        let mut detail = format!(
             "live={} took={}",
             resize.live,
             resize_trace::millis(now.saturating_duration_since(started))
         );
         let wall = resize_trace::wall_now();
         let mut trace = self.resize_trace.lock().unwrap_or_else(|e| e.into_inner());
+        if resize.live {
+            trace.live_sent(resize.task_id, size, now);
+        } else if let Some(since) = trace.since_live(resize.task_id, size, now) {
+            detail.push_str(&format!(" since_live={}", resize_trace::millis(since)));
+        }
         let line = if trace.detailed() {
             trace.stage(
                 resize.task_id,

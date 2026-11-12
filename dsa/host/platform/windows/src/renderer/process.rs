@@ -69,7 +69,10 @@ impl RemoteSink {
     pub fn new(link: Arc<WindowManagerLink>) -> RemoteSink {
         RemoteSink {
             link,
-            held: Mutex::new(HeldTargets::new()),
+            // The window manager gives each display one texture, and a new one only when the
+            // window outgrows it (`RemoteWindow::texture`), so the one it replaced is closed
+            // here as soon as the new one is open rather than kept with nothing to use it.
+            held: Mutex::new(HeldTargets::keeping(1)),
         }
     }
 

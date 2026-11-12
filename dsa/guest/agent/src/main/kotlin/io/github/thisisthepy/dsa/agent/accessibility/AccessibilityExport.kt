@@ -94,6 +94,15 @@ interface AccessibilitySource {
  * A tree holds at most [MAX_NODES] nodes and [MAX_TREE_BYTES] bytes, the nearest nodes first,
  * so one frame stays far below what the binder call to the daemon may carry.
  *
+ * Reading a tree is a binder call into the app for each window and for many of its nodes, and
+ * an app that is busy laying itself out (as every app is right after its window is resized)
+ * answers each one only when its UI thread is free. A large tree can take a second or more to
+ * read that way, so the nodes are read on [reader], a thread of their own, and only what was
+ * read is turned into a tree and sent on the scheduler's thread. The scheduler's thread is
+ * never held up by a slow app: the host's requests (a window's new size above all) and the
+ * task reports go on meanwhile. A task's tree is read by one read at a time; a change that
+ * comes during a read is read once that read is done.
+ *
  * Every method runs on the agent's scheduler thread.
  */
 class AccessibilityExport(
@@ -103,6 +112,8 @@ class AccessibilityExport(
     private val log: Log,
     private val taskBounds: (Int) -> TaskBounds?,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
+    /** Where the nodes are read: a thread of their own on the guest, the scheduler in tests. */
+    private val reader: Scheduler = scheduler,
 ) {
     private class TaskState {
         var epoch = 0
@@ -116,6 +127,12 @@ class AccessibilityExport(
         var sentFocus = 0
         var handles: Map<Int, NodeHandle> = emptyMap()
         var retries = 0
+
+        /** Whether [reader] is reading the tree now. */
+        var reading = false
+
+        /** Whether the tree changed while it was being read, so it is read again. */
+        var changedWhileReading = false
     }
 
     private val watched = HashMap<Int, TaskState>()
@@ -205,15 +222,42 @@ class AccessibilityExport(
         }
     }
 
+    /** Reads the task's nodes on [reader], then sends what changed from the scheduler's thread. */
     private fun read(taskId: Int, state: TaskState) {
-        val bounds = taskBounds(taskId)
-        val roots = try {
-            source.roots(taskId)
-        } catch (e: Exception) {
-            log.warn("reading the accessibility nodes of task $taskId failed", e)
-            null
+        if (state.reading) {
+            state.changedWhileReading = true
+            return
         }
-        if (roots == null || bounds == null) {
+        val bounds = taskBounds(taskId)
+        if (bounds == null) {
+            // The task is not placed yet.
+            if (state.retries++ < MAX_RETRIES) schedule(taskId, state, RETRY_MILLIS)
+            return
+        }
+        state.reading = true
+        state.changedWhileReading = false
+        reader.post {
+            val read = try {
+                source.roots(taskId)?.let { roots -> readNodes(roots, bounds) }
+            } catch (e: Exception) {
+                log.warn("reading the accessibility nodes of task $taskId failed", e)
+                null
+            }
+            scheduler.post {
+                state.reading = false
+                if (watched[taskId] !== state) return@post
+                sendRead(taskId, state, read)
+                if (state.changedWhileReading) {
+                    state.changedWhileReading = false
+                    schedule(taskId, state, BATCH_MILLIS)
+                }
+            }
+        }
+    }
+
+    private fun sendRead(taskId: Int, state: TaskState, read: ReadNodes?) {
+        val bounds = taskBounds(taskId)
+        if (read == null || bounds == null) {
             // The service is still starting, or the task is not placed yet.
             if (state.retries++ < MAX_RETRIES) schedule(taskId, state, RETRY_MILLIS)
             return
@@ -228,7 +272,7 @@ class AccessibilityExport(
             state.sentRoots = emptyList()
             state.sentFocus = 0
         }
-        val snapshot = collect(state, roots, bounds)
+        val snapshot = snapshot(state, read, bounds)
         val changed = snapshot.nodes.values.filter { state.sent[it.id] != it }
         val removed = state.sent.keys.filter { it !in snapshot.nodes }
         if (!full && changed.isEmpty() && removed.isEmpty() && snapshot.roots == state.sentRoots && snapshot.focus == state.sentFocus) {
@@ -266,40 +310,44 @@ class AccessibilityExport(
         val truncated: Boolean,
     )
 
-    /** Reads the task's nodes breadth first, so a cut tree keeps the nodes nearest the top. */
-    private fun collect(state: TaskState, roots: List<NodeHandle>, task: TaskBounds): Snapshot {
-        val nodes = LinkedHashMap<Int, AccessibilityNode>()
-        val handles = HashMap<Int, NodeHandle>()
+    /** One node as [readNodes] read it: the node, what it said, and its children's places. */
+    private class ReadNode(val handle: NodeHandle, val info: NodeInfo, val children: MutableList<Int> = mutableListOf())
+
+    /** The nodes of a task's windows, breadth first, and the places of the roots among them. */
+    private class ReadNodes(val nodes: List<ReadNode>, val roots: List<Int>, val truncated: Boolean)
+
+    /**
+     * Reads the task's nodes breadth first, so a cut tree keeps the nodes nearest the top. Runs
+     * on [reader]: it only asks the nodes, and touches none of the export's state.
+     */
+    private fun readNodes(roots: List<NodeHandle>, task: TaskBounds): ReadNodes {
+        val nodes = ArrayList<ReadNode>()
+        val seen = HashSet<Any>()
+        val rootPlaces = mutableListOf<Int>()
         var bytes = 0
         var truncated = false
-        var focus = 0
-        val idOf = { handle: NodeHandle -> state.ids.getOrPut(handle.key) { state.nextId++ } }
-        val queue = ArrayDeque<Pair<Int, Pair<NodeHandle, NodeInfo>>>()
-        val rootIds = mutableListOf<Int>()
-        val reserved = HashSet<Int>()
         for (root in roots) {
             val info = root.info()
             if (!info.visible) continue
-            val id = idOf(root)
-            if (!reserved.add(id)) continue
-            if (reserved.size > MAX_NODES) {
+            if (!seen.add(root.key)) continue
+            if (seen.size > MAX_NODES) {
                 truncated = true
                 break
             }
-            rootIds += id
-            queue.addLast(id to (root to info))
+            rootPlaces += nodes.size
+            nodes += ReadNode(root, info)
         }
-        while (queue.isNotEmpty()) {
-            val (id, pair) = queue.removeFirst()
-            val (handle, info) = pair
-            val childIds = mutableListOf<Int>()
+        var next = 0
+        while (next < nodes.size) {
+            val place = next++
+            val node = nodes[place]
             val children = try {
-                handle.children()
+                node.handle.children()
             } catch (e: Exception) {
                 emptyList()
             }
             for (child in children) {
-                if (reserved.size >= MAX_NODES || bytes >= MAX_TREE_BYTES) {
+                if (seen.size >= MAX_NODES || bytes >= MAX_TREE_BYTES) {
                     truncated = true
                     break
                 }
@@ -309,18 +357,31 @@ class AccessibilityExport(
                     continue
                 }
                 if (!childInfo.visible) continue
-                val childId = idOf(child)
-                if (!reserved.add(childId)) continue
-                childIds += childId
-                queue.addLast(childId to (child to childInfo))
+                if (!seen.add(child.key)) continue
+                node.children += nodes.size
+                nodes += ReadNode(child, childInfo)
             }
-            val node = toNode(id, childIds, info, task)
-            bytes += node.serializedSize
-            nodes[id] = node
-            handles[id] = handle
-            if (info.focused && focus == 0) focus = id
+            // The size the node takes in a tree; its place stands in for its ID, which is about
+            // as long.
+            bytes += toNode(place + 1, node.children.map { it + 1 }, node.info, task).serializedSize
         }
-        return Snapshot(rootIds, nodes, handles, focus, truncated)
+        return ReadNodes(nodes, rootPlaces, truncated)
+    }
+
+    /** What was read, with the task's IDs for its nodes: a node read before keeps its ID. */
+    private fun snapshot(state: TaskState, read: ReadNodes, task: TaskBounds): Snapshot {
+        val idOf = { handle: NodeHandle -> state.ids.getOrPut(handle.key) { state.nextId++ } }
+        val ids = read.nodes.map { idOf(it.handle) }
+        val nodes = LinkedHashMap<Int, AccessibilityNode>()
+        val handles = HashMap<Int, NodeHandle>()
+        var focus = 0
+        for ((place, node) in read.nodes.withIndex()) {
+            val id = ids[place]
+            nodes[id] = toNode(id, node.children.map { ids[it] }, node.info, task)
+            handles[id] = node.handle
+            if (node.info.focused && focus == 0) focus = id
+        }
+        return Snapshot(read.roots.map { ids[it] }, nodes, handles, focus, read.truncated)
     }
 
     private fun perform(action: AccessibilityAction) {
