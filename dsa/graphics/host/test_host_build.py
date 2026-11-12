@@ -161,8 +161,10 @@ class HostGraphicsBuildTests(unittest.TestCase):
         # The guest's buffers keep their size while a window is resized; the display's size
         # says how much of the buffer the frame fills, and only that is copied and shown.
         self.assertIn("operations.getDisplayPose", source)
-        self.assertIn("region.srcOffsets[1] = {copy_width, copy_height, 1};", source)
-        self.assertIn("region.dstOffsets[1] = {copy_width, copy_height, 1};", source)
+        # In bands of rows of the region, none past the frame (dsa_copy_bands.h).
+        self.assertIn("dsa::copy_bands(content_width, content_height);", source)
+        self.assertIn("region.srcOffsets[1] = {copy_width, bottom, 1};", source)
+        self.assertIn("region.dstOffsets[1] = {copy_width, bottom, 1};", source)
         self.assertIn(
             "presenter.frame_cb(presenter.context, display_id, content_width, content_height);",
             source,
@@ -250,9 +252,27 @@ class HostGraphicsBuildTests(unittest.TestCase):
         # it.
         display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
         self.assertNotIn("UINT64_MAX", display)
-        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &took_ns)"), 3)
+        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &took_ns)"), 2)
+        # On Windows each band of a copy is waited for on its own.
+        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &band_ns)"), 1)
         tests = (HERE.parent / "tests" / "test.sh").read_text(encoding="utf-8")
         self.assertIn("copy_wait_test.cpp", tests)
+
+    def test_nfr5_no_copy_into_a_task_window_is_one_gpu_job_past_two_megapixels(self):
+        # The owner's GPU was reset on 2026-11-12 just after a window was maximized to
+        # 2880x1800 on a 200% monitor and back. Each band is a submission of its own, waited
+        # for before the next, and the wait ends the moment the device is found lost.
+        display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        windows = display[display.index("#ifdef _WIN32"):display.index("#else /* !_WIN32 */")]
+        self.assertIn('#include "dsa_copy_bands.h"', display)
+        self.assertIn("for (size_t band = 0; band < bands.size(); ++band) {", windows)
+        loop = windows[windows.index("for (size_t band = 0;"):]
+        self.assertLess(loop.index("vkQueueSubmit"), loop.index("finish_copy("))
+        self.assertIn("[&] { return !emu.deviceUsable(); }, timeout_ns);", display)
+        cmake = CMAKE_FILE.read_text(encoding="utf-8")
+        self.assertIn('target_include_directories(gfxstream_backend PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../include")', cmake)
+        tests = (HERE.parent / "tests" / "test.sh").read_text(encoding="utf-8")
+        self.assertIn("copy_bands_test.cpp", tests)
 
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration

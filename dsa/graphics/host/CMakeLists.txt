@@ -91,6 +91,9 @@ if(TARGET gfxstream_backend)
         "${CMAKE_CURRENT_SOURCE_DIR}/dsa_gfx_display.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/dsa_gfx_memory.cpp")
     target_include_directories(gfxstream_backend PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    # The presentation cuts its copies into bands (dsa_copy_bands.h) and follows the device's
+    # state (dsa_device_remake.h).
+    target_include_directories(gfxstream_backend PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../include")
     # On macOS the frames are copied into the window manager's IOSurfaces, which the
     # presentation holds (CFRetain) while it has them imported.
     if(APPLE)
