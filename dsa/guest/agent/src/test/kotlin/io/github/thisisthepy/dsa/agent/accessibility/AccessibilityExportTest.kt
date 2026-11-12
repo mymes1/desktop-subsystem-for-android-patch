@@ -251,6 +251,52 @@ class AccessibilityExportTest {
     }
 
     @Test
+    fun fr4_a_slow_tree_read_holds_up_no_resize_and_a_change_during_it_is_read_after() {
+        // The reader's thread, which this test runs only when it says so: reading an app's tree
+        // waits on the app, which is busy laying itself out right after a resize.
+        val reader = FakeScheduler()
+        val actions = FakeActions()
+        locator.up = daemon
+        tasks.running = listOf(appTask(3, bounds = TaskBounds(30, 20, 430, 620)))
+        val agent = Agent(
+            AGENT, tasks, actions, locator, FakeWindowing(), FakeInjector(), scheduler, log,
+            accessibility = service,
+            accessibilityReader = reader,
+            clock = { scheduler.now },
+        )
+        agent.start()
+        scheduler.runDue()
+        service.windows[3] = listOf(list)
+        watch(3, true)
+        scheduler.advance(10)
+        // The read is under way on the reader's thread and has not come back.
+        assertTrue(trees().isEmpty())
+
+        daemon.deliver(
+            Envelope.newBuilder()
+                .setResizeTask(io.github.thisisthepy.dsa.control.v1.ResizeTask.newBuilder().setTaskId(3).setWidth(500).setHeight(700))
+                .build().toByteArray(),
+        )
+        scheduler.runDue()
+        assertEquals(TaskBounds(30, 20, 530, 720), actions.resized.single().second)
+
+        // The tree changes while it is read: no second read starts beside the first, the read
+        // in hand is sent, and the tree is read again once it is done.
+        service.onChange!!.invoke()
+        scheduler.advance(300)
+        reader.runDue()
+        assertEquals(1, service.reads)
+        scheduler.runDue()
+        assertEquals(1, trees().size)
+        title.info = title.info.copy(text = "Wi-Fi")
+        scheduler.advance(300)
+        reader.runDue()
+        scheduler.runDue()
+        assertEquals(2, service.reads)
+        assertEquals("Wi-Fi", trees().last().nodesList.single().text)
+    }
+
+    @Test
     fun fr18_password_text_never_leaves_the_guest() {
         val node = AccessibilityExport.toNode(1, emptyList(), NodeInfo(text = "hunter2", password = true, editable = true), TaskBounds(0, 0, 0, 0))
         assertEquals(7, node.text.length)

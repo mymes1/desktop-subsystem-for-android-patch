@@ -345,6 +345,34 @@ fn nfr5_the_renderer_lets_go_of_a_texture_only_after_it_has_the_next() {
 }
 
 #[test]
+fn nfr1_a_renderer_keeping_one_texture_closes_the_last_size_once_the_next_is_open() {
+    let mut held: HeldTargets<isize> = HeldTargets::keeping(1);
+    let target = |texture_id, handle| Target {
+        texture_id,
+        handle,
+        ..Target::default()
+    };
+    let open = |t: &Target| (t.handle != 0).then_some(t.handle as isize);
+    assert_eq!(held.take(3, &target(1, 0x40), open), (Some(0x40), vec![]));
+    // The window outgrew its texture: the new one is opened, and only then the old one goes.
+    assert_eq!(
+        held.take(3, &target(2, 0x41), open),
+        (Some(0x41), vec![0x40])
+    );
+    assert_eq!(held.held(3), vec![2]);
+    // A texture that could not be opened takes nothing away.
+    assert_eq!(held.take(3, &target(3, 0), open), (None, vec![]));
+    assert_eq!(held.held(3), vec![2]);
+    // Another display keeps its own.
+    assert_eq!(held.take(4, &target(4, 0x50), open), (Some(0x50), vec![]));
+    assert_eq!(held.held(3), vec![2]);
+    // Asking for none still keeps the one being written.
+    let mut least: HeldTargets<isize> = HeldTargets::keeping(0);
+    least.take(3, &target(1, 0x40), open);
+    assert_eq!(least.held(3), vec![1]);
+}
+
+#[test]
 fn nfr5_the_log_says_why_the_renderer_ended_and_when_it_starts_again() {
     assert_eq!(
         describe_exit_code(0xC000_0005),

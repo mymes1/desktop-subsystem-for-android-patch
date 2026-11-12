@@ -36,6 +36,25 @@ class ResizeTraceTest {
     }
 
     @Test
+    fun fr4_the_summary_measures_from_the_first_request_for_a_size_and_says_how_long_it_queued() {
+        val trace = trace()
+        // The live size, which waited 300 ms for the agent's thread.
+        trace.received(7, Size(800, 600), live = true, queuedMillis = 300.0)
+        mono += 5.0
+        // The host reconfigures the task at the size it gave it live.
+        trace.received(7, Size(800, 600), live = false, queuedMillis = 0.5)
+        mono += 10.0
+        trace.boundsRead(7, 800, 600)
+        assertEquals(
+            listOf(
+                "info: resize-trace task=7 size=800x600 stage=agent.summary " +
+                    "utc=2026-10-26T06:23:03.123Z mono=1015.000 applied=none bounds=15.0 queued=300.0",
+            ),
+            log.lines,
+        )
+    }
+
+    @Test
     fun fr4_stage_lines_come_only_when_asked_for_and_once_per_size() {
         trace(detailed = false).received(1, Size(10, 10), live = false)
         assertTrue(log.lines.isEmpty())
