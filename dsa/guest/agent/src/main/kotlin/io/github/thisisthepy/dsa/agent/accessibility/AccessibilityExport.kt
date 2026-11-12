@@ -68,6 +68,19 @@ interface AccessibilitySource {
     /** The root node of each window of the task, in order; null while the service is not yet on. */
     fun roots(taskId: Int): List<NodeHandle>?
 
+    /** Whether Android has bound the service, so it can read windows. */
+    val connected: Boolean
+        get() = true
+
+    /** How the service stands, as Android sees it, for a warning when it does not come up. */
+    fun describe(): String = if (connected) "the service is connected" else "the service is not connected"
+
+    /**
+     * Asks Android again to bind the service, which it did not do when the service was turned
+     * on. Only called while the service is on and not connected.
+     */
+    fun reconnect() = Unit
+
     companion object {
         val NONE = object : AccessibilitySource {
             override fun enable(onChange: () -> Unit) = Unit
@@ -75,6 +88,9 @@ interface AccessibilitySource {
             override fun disable() = Unit
 
             override fun roots(taskId: Int): List<NodeHandle>? = null
+
+            override val connected: Boolean
+                get() = false
         }
     }
 }
@@ -102,6 +118,13 @@ interface AccessibilitySource {
  * never held up by a slow app: the host's requests (a window's new size above all) and the
  * task reports go on meanwhile. A task's tree is read by one read at a time; a change that
  * comes during a read is read once that read is done.
+ *
+ * A watched task gets its tree however long Android takes to bind the service. The export
+ * tries every [RETRY_MILLIS] for [MAX_RETRIES] tries, then every [SLOW_RETRY_MILLIS] for as long
+ * as the task is watched, rather than waiting for an event from a service that may never have
+ * come up: a screen reader that got no tree would otherwise find the window empty for good.
+ * When the service has not come up by then, the agent says why it can see (how Android lists
+ * the service) and asks Android to bind it again, at most every [RECONNECT_MILLIS].
  *
  * Every method runs on the agent's scheduler thread.
  */
@@ -133,11 +156,23 @@ class AccessibilityExport(
 
         /** Whether the tree changed while it was being read, so it is read again. */
         var changedWhileReading = false
+
+        /** When the host asked for the tree, on [clock]. */
+        var watchedAt = 0L
+
+        /** Whether the first tree of this watch went out, which the guest's log says once. */
+        var announced = false
+
+        /** Whether the guest's log said that the tree could not be read yet. */
+        var warned = false
     }
 
     private val watched = HashMap<Int, TaskState>()
     private var enabled = false
     private var epochs = 0
+
+    /** When the service may next be asked to bind again, on [clock]. */
+    private var reconnectAt = 0L
 
     /** Whether the accessibility service is on. */
     val active: Boolean
@@ -184,8 +219,12 @@ class AccessibilityExport(
         val state = watched.getOrPut(taskId) { TaskState() }
         state.needFull = true
         state.retries = 0
+        state.watchedAt = clock()
+        state.announced = false
+        state.warned = false
         if (!enabled) {
             enabled = true
+            reconnectAt = clock() + RECONNECT_MILLIS
             log.info("a host accessibility client watches task $taskId; the accessibility service is on")
             try {
                 source.enable { scheduler.post(::changed) }
@@ -194,6 +233,46 @@ class AccessibilityExport(
             }
         }
         schedule(taskId, state, 0)
+    }
+
+    /**
+     * The task's tree could not be read yet: the service is still coming up, or the task is
+     * not placed yet. Tries again soon a few times, then slowly for as long as it is watched.
+     */
+    private fun retry(taskId: Int, state: TaskState, why: String) {
+        if (state.retries++ < MAX_RETRIES) {
+            schedule(taskId, state, RETRY_MILLIS)
+            return
+        }
+        if (!state.warned) {
+            state.warned = true
+            log.warn(
+                "task $taskId is watched, but its accessibility tree could not be read " +
+                    "${clock() - state.watchedAt} ms after the host asked: $why (${describeSource()}); " +
+                    "trying again every ${SLOW_RETRY_MILLIS / 1000} s",
+            )
+        }
+        val connected = try {
+            source.connected
+        } catch (e: Exception) {
+            false
+        }
+        if (enabled && !connected && clock() >= reconnectAt) {
+            reconnectAt = clock() + RECONNECT_MILLIS
+            log.info("asking Android again to bind the agent's accessibility service (${describeSource()})")
+            try {
+                source.reconnect()
+            } catch (e: Exception) {
+                log.warn("could not ask Android again to bind the accessibility service", e)
+            }
+        }
+        schedule(taskId, state, SLOW_RETRY_MILLIS)
+    }
+
+    private fun describeSource(): String = try {
+        source.describe()
+    } catch (e: Exception) {
+        "the service's state could not be read: ${e.message}"
     }
 
     private fun unwatch(taskId: Int) {
@@ -230,8 +309,7 @@ class AccessibilityExport(
         }
         val bounds = taskBounds(taskId)
         if (bounds == null) {
-            // The task is not placed yet.
-            if (state.retries++ < MAX_RETRIES) schedule(taskId, state, RETRY_MILLIS)
+            retry(taskId, state, "the task is not placed yet")
             return
         }
         state.reading = true
@@ -257,9 +335,12 @@ class AccessibilityExport(
 
     private fun sendRead(taskId: Int, state: TaskState, read: ReadNodes?) {
         val bounds = taskBounds(taskId)
-        if (read == null || bounds == null) {
-            // The service is still starting, or the task is not placed yet.
-            if (state.retries++ < MAX_RETRIES) schedule(taskId, state, RETRY_MILLIS)
+        if (read == null) {
+            retry(taskId, state, "the accessibility service gave no windows")
+            return
+        }
+        if (bounds == null) {
+            retry(taskId, state, "the task is not placed yet")
             return
         }
         state.retries = 0
@@ -294,6 +375,10 @@ class AccessibilityExport(
             return
         }
         state.needFull = false
+        if (!state.announced) {
+            state.announced = true
+            log.info("sent task $taskId's accessibility tree to the host: ${snapshot.nodes.size} nodes, ${clock() - state.watchedAt} ms after it asked")
+        }
         state.lastSentAt = clock()
         state.sent = snapshot.nodes
         state.sentRoots = snapshot.roots
@@ -425,6 +510,12 @@ class AccessibilityExport(
 
         /** How many times to wait for it, two seconds in all. */
         const val MAX_RETRIES = 10
+
+        /** How often a watched task's tree is tried after that, while it is watched. */
+        const val SLOW_RETRY_MILLIS = 2_000L
+
+        /** The least time between two requests to Android to bind the service again. */
+        const val RECONNECT_MILLIS = 10_000L
 
         /** The most nodes one tree holds; the host takes up to 4000. */
         const val MAX_NODES = 2000

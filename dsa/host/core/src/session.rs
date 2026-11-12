@@ -906,6 +906,9 @@ enum InstallEvent {
 struct AccessibilityHub {
     next_watch: u64,
     watchers: HashMap<i32, Vec<(u64, Sender<GuestAccessibility>)>>,
+    /// The tasks whose first tree since their newest watch began the service's log has
+    /// named, so a watch that never gets one shows by the missing line.
+    announced: HashSet<i32>,
 }
 
 /// The guest's tasks and who is watching them, under one lock, so a new watcher's starting
@@ -1187,6 +1190,14 @@ impl Shared {
     /// Hands what the guest sent about a task's accessibility to the task's watchers.
     fn publish_accessibility(&self, task_id: i32, message: GuestAccessibility) {
         let mut hub = self.accessibility.lock().unwrap_or_else(|e| e.into_inner());
+        if let GuestAccessibility::Tree(tree) = &message {
+            if hub.watchers.contains_key(&task_id) && hub.announced.insert(task_id) {
+                eprintln!(
+                    "accessibility: Android sent task {task_id}'s tree ({} nodes)",
+                    tree.nodes.len()
+                );
+            }
+        }
         match hub.watchers.get_mut(&task_id) {
             Some(watchers) => watchers.retain(|(_, w)| w.send(message.clone()).is_ok()),
             None => eprintln!(
@@ -2846,6 +2857,7 @@ impl Session {
             hub.next_watch += 1;
             let id = hub.next_watch;
             hub.watchers.entry(task_id).or_default().push((id, tx));
+            hub.announced.remove(&task_id);
             id
         };
         eprintln!(

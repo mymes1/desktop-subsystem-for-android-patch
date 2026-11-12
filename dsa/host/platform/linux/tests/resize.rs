@@ -63,6 +63,9 @@ const SIZES: [(f64, f64); 8] = [
     (0.75, 0.55),
     (0.90, 0.65),
 ];
+/// How long the accessibility client may wait for the app's first tree: long enough for the
+/// guest to bind its accessibility service right after boot, and to ask again once.
+const TREE_WAIT: Duration = Duration::from_secs(60);
 /// The time between two resizes, as the owner's measurement on a PC used.
 const STEP: Duration = Duration::from_millis(1500);
 /// How long a resize's frame may take before the resize counts as never shown.
@@ -540,8 +543,10 @@ fn fr4_resizing_a_real_app_watched_by_an_accessibility_client_shows_each_size_in
             &log,
         );
     };
-    // A host accessibility client watches the window from here on and takes every tree.
+    // A host accessibility client watches the window from here on and takes every tree. Why
+    // its stream ended, if it did, goes into the failure.
     let watched = Arc::new(Mutex::new(0usize));
+    let ended: Arc<Mutex<Option<String>>> = Arc::default();
     {
         let stream = client(&socket, Duration::from_secs(10)).watch_accessibility(task.task_id);
         let mut stream = match stream {
@@ -553,16 +558,52 @@ fn fr4_resizing_a_real_app_watched_by_an_accessibility_client_shows_each_size_in
             ),
         };
         let watched = Arc::clone(&watched);
+        let ended = Arc::clone(&ended);
         std::thread::spawn(move || loop {
             match stream.next(Duration::from_secs(5)) {
                 Ok(Some(_)) => *watched.lock().unwrap() += 1,
                 Ok(None) => {}
-                Err(_) => return,
+                Err(why) => {
+                    *ended.lock().unwrap() = Some(why.to_string());
+                    return;
+                }
             }
         });
     }
-    // The app settles, and its first tree goes out.
-    std::thread::sleep(Duration::from_secs(5));
+    // The resizes are measured with the client holding the app's tree, as a screen reader
+    // does, so they start only once the first tree came. The guest may take a while to bind
+    // its accessibility service right after boot, but a tree that never comes is a broken
+    // export, and the check says so with what the agent and the service said about it.
+    let tree_wait = Instant::now();
+    while *watched.lock().unwrap() == 0 {
+        let why = ended.lock().unwrap().clone();
+        if why.is_some() || tree_wait.elapsed() >= TREE_WAIT {
+            let accessibility: Vec<String> = lock(&log)
+                .iter()
+                .filter(|line| line.contains("DsaAgent") && line.contains("accessibility"))
+                .cloned()
+                .collect();
+            fail(
+                format!(
+                    "the accessibility client got no tree of task {} in {} s ({}), so the app could not be resized as a watched one; what the agent said about accessibility:\n{}",
+                    task.task_id,
+                    tree_wait.elapsed().as_secs(),
+                    why.map_or_else(|| "its stream stayed open".to_string(), |why| format!("its stream ended: {why}")),
+                    accessibility.join("\n"),
+                ),
+                &service,
+                &log,
+            );
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    eprintln!(
+        "the accessibility client got task {}'s first tree {} ms after it asked",
+        task.task_id,
+        tree_wait.elapsed().as_millis()
+    );
+    // The app settles.
+    std::thread::sleep(Duration::from_secs(2));
 
     let mut measured = Vec::new();
     for round in 0..2 {
