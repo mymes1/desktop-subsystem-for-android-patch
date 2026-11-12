@@ -15,7 +15,10 @@ its own kernel. Each Android app opens in its own window on your desktop.
 ## Install on Windows
 
 You need 64-bit Windows 11 on an x64 PC, with the Windows feature **Virtual Machine
-Platform** turned on.
+Platform** turned on. A Vulkan 1.1+ GPU driver is used when present; PCs with Direct3D 11
+GPUs that have no Windows Vulkan driver (such as 4th-generation Intel Core / Iris Pro 5200)
+automatically fall back to the bundled Lavapipe software Vulkan renderer while presenting
+windows through hardware Direct3D 11 and DirectComposition.
 
 1. Turn on Virtual Machine Platform. Open **Turn Windows features on or off**, tick
    **Virtual Machine Platform**, select **OK**, and restart. Setup does not turn it on for

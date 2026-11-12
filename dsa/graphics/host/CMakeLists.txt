@@ -99,6 +99,12 @@ if(TARGET gfxstream_backend)
     if(APPLE)
         target_link_libraries(gfxstream_backend PRIVATE "-framework CoreFoundation")
     endif()
+    # On Windows, when the Vulkan driver cannot import a Direct3D 11 shared texture directly
+    # (for example on Lavapipe or across distinct adapters), dsa_gfx_display stages into the
+    # shared NT handle through Direct3D 11.1.
+    if(WIN32)
+        target_link_libraries(gfxstream_backend PRIVATE d3d11 dxgi)
+    endif()
 endif()
 
 # Suppress warning escalation to error for compiler variations

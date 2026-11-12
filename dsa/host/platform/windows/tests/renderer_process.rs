@@ -67,7 +67,11 @@ fn ports(slot: u32) -> (u32, u32) {
 }
 
 /// Starts this program as the renderer, with `backend` as its gfxstream (none: no backend).
-fn launcher(process: RendererProcess, backend: Option<&Path>) -> ProgramLauncher {
+fn launcher(
+    process: RendererProcess,
+    backend: Option<&Path>,
+    extra_env: &[(&str, String)],
+) -> ProgramLauncher {
     let mut launcher = ProgramLauncher::new(std::env::current_exe().unwrap(), process);
     launcher.args = Some(vec![
         "nfr5_renderer_child_process".into(),
@@ -81,6 +85,9 @@ fn launcher(process: RendererProcess, backend: Option<&Path>) -> ProgramLauncher
             .map(|path| path.display().to_string())
             .unwrap_or_default(),
     ));
+    for (key, value) in extra_env {
+        launcher.env.push(((*key).into(), value.clone()));
+    }
     launcher
 }
 
@@ -117,6 +124,15 @@ struct WindowManager {
 
 impl WindowManager {
     fn start(slot: u32, backend: Option<&Path>, logger: Arc<CompositorLogger>) -> WindowManager {
+        Self::start_with_env(slot, backend, &[], logger)
+    }
+
+    fn start_with_env(
+        slot: u32,
+        backend: Option<&Path>,
+        extra_env: &[(&str, String)],
+        logger: Arc<CompositorLogger>,
+    ) -> WindowManager {
         let process: RendererProcess = Arc::default();
         let client = RendererClient::new(
             GpuRequest::Ranking,
@@ -126,7 +142,7 @@ impl WindowManager {
         );
         let stop = Arc::new(AtomicBool::new(false));
         let supervisor = spawn_supervisor(
-            Box::new(launcher(process, backend)),
+            Box::new(launcher(process, backend, extra_env)),
             Arc::clone(&client) as Arc<dyn RendererHandler>,
             "dsa-wm test".into(),
             Arc::clone(&stop),
@@ -396,15 +412,12 @@ fn nfr5_killing_the_renderer_keeps_the_window_and_its_frame_and_frames_resume() 
             >= 1),
         "the renderer asks where the frame goes"
     );
-    let on_gpu = wait_until("the frame", Duration::from_secs(10), || {
-        window.shown.load(Ordering::SeqCst) >= 1
-    });
-    if !on_gpu {
-        eprintln!(
-            "this Vulkan driver cannot open the window's Direct3D texture; frames are checked \
-             up to the renderer's request"
-        );
-    }
+    assert!(
+        wait_until("the frame", Duration::from_secs(10), || {
+            window.shown.load(Ordering::SeqCst) >= 1
+        }),
+        "the renderer copies the frame into the window's Direct3D 11 texture"
+    );
     let texture = window.handle().expect("the window has its texture");
     let shown = window.shown.load(Ordering::SeqCst);
 
@@ -438,18 +451,68 @@ fn nfr5_killing_the_renderer_keeps_the_window_and_its_frame_and_frames_resume() 
         }),
         "frames resume after the restart"
     );
-    if on_gpu {
-        assert!(
-            wait_until("the next frame", WAIT, || {
-                window.shown.load(Ordering::SeqCst) > shown
-            }),
-            "the window draws again"
-        );
-    }
+    assert!(
+        wait_until("the next frame", WAIT, || {
+            window.shown.load(Ordering::SeqCst) > shown
+        }),
+        "the window draws again"
+    );
     // The same texture went over to the new renderer; the window made no other.
     assert_eq!(window.made.load(Ordering::SeqCst), 1);
     drop(guest);
 
     let log = std::fs::read_to_string(&path).unwrap();
     assert!(log.contains(&format!("pid {first}) ended")), "{log}");
+}
+
+#[test]
+fn pr3_bundled_lavapipe_fallback_presents_d3d11_frames_without_system_vulkan() {
+    let Some(backend) = backend() else {
+        eprintln!("skipping: GFXSTREAM_BACKEND_PATH does not name gfxstream_backend.dll");
+        return;
+    };
+    let Some(dir) = backend.parent() else {
+        return;
+    };
+    if !dir.join("vulkan_lvp.dll").is_file() {
+        eprintln!("skipping: vulkan_lvp.dll is not staged beside gfxstream_backend.dll");
+        return;
+    }
+    let (_path, logger) = log_file("lavapipe-fallback");
+    let missing_loader = dir.join("no-such-vulkan-1.dll").display().to_string();
+    let wm = WindowManager::start_with_env(
+        2,
+        Some(&backend),
+        &[
+            ("VK_ICD_FILENAMES", String::new()),
+            ("VK_DRIVER_FILES", String::new()),
+            ("ANDROID_EMU_VK_ICD", String::new()),
+            ("ANDROID_EMU_VK_LOADER_PATH", missing_loader),
+        ],
+        logger,
+    );
+    assert!(
+        wm.client.wait_started(WAIT),
+        "the renderer starts on the bundled vulkan_lvp.dll without vulkan-1.dll"
+    );
+    let gpu = Gpu::new(wm.client.adapter_luid(), false).expect("a Direct3D device");
+    let window = Arc::new(Window {
+        gpu,
+        texture: Mutex::new(None),
+        made: AtomicUsize::new(0),
+        asked: AtomicUsize::new(0),
+        shown: AtomicUsize::new(0),
+    });
+    wm.client
+        .present_displays(Some(Arc::clone(&window) as Arc<dyn DisplaySink>))
+        .unwrap();
+
+    let mut guest = Guest::connect(ports(2));
+    guest.post_frame();
+    assert!(
+        wait_until("the staged frame", WAIT, || {
+            window.shown.load(Ordering::SeqCst) >= 1
+        }),
+        "frames reach the window through bundled Lavapipe and Direct3D 11 staging"
+    );
 }

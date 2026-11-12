@@ -1,0 +1,34 @@
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+index bb56e59..33a5f46 100644
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+@@ -1595,10 +1595,11 @@ void ResourceTracker::flushShadowedMemory(VkEncoder* enc, VkDevice device) {
+         // Held across the scan, so another thread freeing an allocation cannot free its copy
+         // from under it.
+         std::lock_guard<std::recursive_mutex> lock(mLock);
+-        for (const auto& [memory, info] : info_VkDeviceMemory) {
+-            // Memory the app never mapped holds nothing the CPU wrote.
++        for (auto& [memory, info] : info_VkDeviceMemory) {
++            // Memory the app never mapped holds nothing the CPU wrote; memory the app
++            // unmapped flushes once at the next submit and then stays idle until mapped again.
+             if (!info.shadowed || info.device != device || !info.shadowBlocks ||
+-                !info.shadowMapping.keptInStep()) {
++                !info.shadowMapping.takeFlush()) {
+                 continue;
+             }
+             scanned += info.shadowBlocks->size();
+@@ -4469,8 +4470,12 @@ VkResult ResourceTracker::on_vkMapMemory(void* context, VkResult host_result, Vk
+     return host_result;
+ }
+ 
+-void ResourceTracker::on_vkUnmapMemory(void*, VkDevice, VkDeviceMemory) {
+-    // no-op
++void ResourceTracker::on_vkUnmapMemory(void*, VkDevice, VkDeviceMemory memory) {
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto it = info_VkDeviceMemory.find(memory);
++    if (it != info_VkDeviceMemory.end() && it->second.shadowed) {
++        it->second.shadowMapping.unmapped();
++    }
+ }
+ 
+ void ResourceTracker::transformImageMemoryRequirements2ForGuest(VkImage image,

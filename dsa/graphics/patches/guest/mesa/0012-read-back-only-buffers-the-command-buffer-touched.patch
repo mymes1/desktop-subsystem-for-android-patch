@@ -1,0 +1,793 @@
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+index 33a5f46..d4966d6 100644
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp
+@@ -1111,6 +1111,7 @@ void ResourceTracker::unregister_VkDeviceMemory(VkDeviceMemory mem) {
+ 
+ #ifdef VK_USE_PLATFORM_ANDROID_KHR
+     mCpuReadback.remove((uint64_t)mem);
++    mHasCpuReadback.store(!mCpuReadback.empty(), std::memory_order_relaxed);
+     mCpuUploads.erase((uint64_t)mem);
+     if (memInfo.ahw) {
+         mGralloc->release(memInfo.ahw);
+@@ -1377,6 +1378,7 @@ void ResourceTracker::setDeviceMemoryInfo(VkDevice device, VkDeviceMemory memory
+     info.ahw = (AHardwareBuffer*)ahw;
+     if (info.ahw && mGralloc->wantsCpuReadback(mGralloc->getNativeHandle(info.ahw))) {
+         mCpuReadback.add((uint64_t)memory, (uint64_t)device, info.ahw);
++        mHasCpuReadback.store(true, std::memory_order_relaxed);
+     }
+     if (info.ahw && !isComposerClient() &&
+         mGralloc->wantsCpuUpload(mGralloc->getNativeHandle(info.ahw))) {
+@@ -5719,10 +5721,15 @@ VkResult ResourceTracker::on_vkBindImageMemory(void* context, VkResult, VkDevice
+                                                VkImage image, VkDeviceMemory memory,
+                                                VkDeviceSize memoryOffset) {
+     VkEncoder* enc = (VkEncoder*)context;
+-    // Do not forward calls with invalid handles to host.
+-    if (info_VkDeviceMemory.find(memory) == info_VkDeviceMemory.end() ||
+-        info_VkImage.find(image) == info_VkImage.end()) {
+-        return VK_ERROR_OUT_OF_DEVICE_MEMORY;
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        // Do not forward calls with invalid handles to host.
++        auto imageIt = info_VkImage.find(image);
++        if (info_VkDeviceMemory.find(memory) == info_VkDeviceMemory.end() ||
++            imageIt == info_VkImage.end()) {
++            return VK_ERROR_OUT_OF_DEVICE_MEMORY;
++        }
++        imageIt->second.currentBacking = memory;
+     }
+     return enc->vkBindImageMemory(device, image, memory, memoryOffset, true /* do lock */);
+ }
+@@ -5736,37 +5743,46 @@ VkResult ResourceTracker::on_vkBindImageMemory2(void* context, VkResult, VkDevic
+         return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+     }
+ 
+-    for (uint32_t i = 0; i < bindingCount; i++) {
+-        const VkBindImageMemoryInfo& bimi = pBindInfos[i];
+-
+-        auto imageIt = info_VkImage.find(bimi.image);
+-        if (imageIt == info_VkImage.end()) {
+-            return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+-        }
++    {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        for (uint32_t i = 0; i < bindingCount; i++) {
++            const VkBindImageMemoryInfo& bimi = pBindInfos[i];
+ 
+-        if (bimi.memory != VK_NULL_HANDLE) {
+-            auto memoryIt = info_VkDeviceMemory.find(bimi.memory);
+-            if (memoryIt == info_VkDeviceMemory.end()) {
++            auto imageIt = info_VkImage.find(bimi.image);
++            if (imageIt == info_VkImage.end()) {
+                 return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+             }
++
++            if (bimi.memory != VK_NULL_HANDLE) {
++                auto memoryIt = info_VkDeviceMemory.find(bimi.memory);
++                if (memoryIt == info_VkDeviceMemory.end()) {
++                    return VK_ERROR_OUT_OF_DEVICE_MEMORY;
++                }
++            }
+         }
+     }
+ 
+     VkResult result = enc->vkBindImageMemory2(device, bindingCount, pBindInfos, true /* do lock */);
+-#ifdef VK_USE_PLATFORM_ANDROID_KHR
+-    if (result == VK_SUCCESS) {
+-        std::lock_guard<std::recursive_mutex> lock(mLock);
+-        for (uint32_t i = 0; i < bindingCount; i++) {
+-            const VkNativeBufferANDROID* anb =
+-                vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
+-            auto imageIt = info_VkImage.find(pBindInfos[i].image);
+-            if (anb && anb->handle && imageIt != info_VkImage.end() &&
+-                mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
+-                imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
+-            }
+-            if (anb && anb->handle && imageIt != info_VkImage.end()) {
+-                holdWindowBuffer(imageIt->second, (const native_handle_t*)anb->handle);
+-            }
+-        }
+-    }
+-#endif
++    if (result == VK_SUCCESS) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        for (uint32_t i = 0; i < bindingCount; i++) {
++            auto imageIt = info_VkImage.find(pBindInfos[i].image);
++            if (imageIt == info_VkImage.end()) {
++                continue;
++            }
++            if (pBindInfos[i].memory != VK_NULL_HANDLE) {
++                imageIt->second.currentBacking = pBindInfos[i].memory;
++            }
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++            const VkNativeBufferANDROID* anb =
++                vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
++            if (anb && anb->handle &&
++                mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
++                imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
++            }
++            if (anb && anb->handle) {
++                holdWindowBuffer(imageIt->second, (const native_handle_t*)anb->handle);
++            }
++#endif
++        }
++    }
+     return result;
+ }
+ 
+@@ -6432,11 +6448,20 @@ VkResult ResourceTracker::on_vkQueueSubmit2(void* context, VkResult input_result
+                                             VkFence fence) {
+     MESA_TRACE_SCOPE("on_vkQueueSubmit2");
+     return on_vkQueueSubmitTemplate<VkSubmitInfo2>(context, input_result, queue, submitCount,
+-                                                   pSubmits, fence);
++                                                   pSubmits, fence, false);
++}
++
++VkResult ResourceTracker::on_vkQueueSubmit2KHR(void* context, VkResult input_result, VkQueue queue,
++                                               uint32_t submitCount, const VkSubmitInfo2* pSubmits,
++                                               VkFence fence) {
++    MESA_TRACE_SCOPE("on_vkQueueSubmit2KHR");
++    return on_vkQueueSubmitTemplate<VkSubmitInfo2>(context, input_result, queue, submitCount,
++                                                   pSubmits, fence, true);
+ }
+ 
+ VkResult ResourceTracker::vkQueueSubmitEnc(VkEncoder* enc, VkQueue queue, uint32_t submitCount,
+-                                           const VkSubmitInfo* pSubmits, VkFence fence) {
++                                           const VkSubmitInfo* pSubmits, VkFence fence,
++                                           bool /*isKhr*/) {
+     if (supportsAsyncQueueSubmit()) {
+         enc->vkQueueSubmitAsyncGOOGLE(queue, submitCount, pSubmits, fence, true /* do lock */);
+         return VK_SUCCESS;
+@@ -6446,10 +6471,13 @@ VkResult ResourceTracker::vkQueueSubmitEnc(VkEncoder* enc, VkQueue queue, uint32
+ }
+ 
+ VkResult ResourceTracker::vkQueueSubmitEnc(VkEncoder* enc, VkQueue queue, uint32_t submitCount,
+-                                           const VkSubmitInfo2* pSubmits, VkFence fence) {
++                                           const VkSubmitInfo2* pSubmits, VkFence fence,
++                                           bool isKhr) {
+     if (supportsAsyncQueueSubmit()) {
+         enc->vkQueueSubmitAsync2GOOGLE(queue, submitCount, pSubmits, fence, true /* do lock */);
+         return VK_SUCCESS;
++    } else if (isKhr) {
++        return enc->vkQueueSubmit2KHR(queue, submitCount, pSubmits, fence, true /* do lock */);
+     } else {
+         return enc->vkQueueSubmit2(queue, submitCount, pSubmits, fence, true /* do lock */);
+     }
+@@ -6459,7 +6487,7 @@ template <typename VkSubmitInfoType>
+ VkResult ResourceTracker::on_vkQueueSubmitTemplate(void* context, VkResult input_result,
+                                                    VkQueue queue, uint32_t submitCount,
+                                                    const VkSubmitInfoType* pSubmits,
+-                                                   VkFence fence) {
++                                                   VkFence fence, bool isKhr) {
+     // Before the host sees the work, which may sample a buffer a CPU has written since.
+     uploadForGpu();
+     flushStagingStreams(context, queue, submitCount, pSubmits);
+@@ -6540,7 +6568,7 @@ VkResult ResourceTracker::on_vkQueueSubmitTemplate(void* context, VkResult input
+     lock.unlock();
+ 
+     if (pre_signal_semaphores.empty()) {
+-        input_result = vkQueueSubmitEnc(enc, queue, submitCount, pSubmits, fence);
++        input_result = vkQueueSubmitEnc(enc, queue, submitCount, pSubmits, fence, isKhr);
+         if (input_result != VK_SUCCESS) return input_result;
+     } else {
+         // Schedule waits on the OS external objects and
+@@ -6574,17 +6602,28 @@ VkResult ResourceTracker::on_vkQueueSubmitTemplate(void* context, VkResult input
+             .signalSemaphoreCount = static_cast<uint32_t>(pre_signal_semaphores.size()),
+             .pSignalSemaphores = pre_signal_semaphores.data()};
+         vkQueueSubmitEnc(enc, queue, 1, &submit_info, VK_NULL_HANDLE);
+-        input_result = vkQueueSubmitEnc(enc, queue, submitCount, pSubmits, fence);
++        input_result = vkQueueSubmitEnc(enc, queue, submitCount, pSubmits, fence, isKhr);
+         if (input_result != VK_SUCCESS) return input_result;
+     }
+     lock.lock();
+ #ifdef VK_USE_PLATFORM_ANDROID_KHR
+-    // The submit may draw into any buffer of the device a CPU reads. A process with none
+-    // does nothing more here.
++    // Mark only the CPU-readable buffers that the submitted command buffers touched, so an
++    // idle ImageReader or capture buffer in a game process does not stall unrelated submits.
+     if (!mCpuReadback.empty()) {
+         auto queueIt = info_VkQueue.find(queue);
+         if (queueIt != info_VkQueue.end()) {
+-            mCpuReadback.submitted((uint64_t)queueIt->second.device);
++            std::vector<uint64_t> touchedMemories;
++            for (uint32_t i = 0; i < submitCount; ++i) {
++                for (uint32_t j = 0; j < getCommandBufferCount(pSubmits[i]); ++j) {
++                    auto cbIt = info_VkCommandBuffer.find(getCommandBuffer(pSubmits[i], j));
++                    if (cbIt != info_VkCommandBuffer.end()) {
++                        touchedMemories.insert(touchedMemories.end(),
++                                               cbIt->second.cpuReadbackMemories.begin(),
++                                               cbIt->second.cpuReadbackMemories.end());
++                    }
++                }
++            }
++            mCpuReadback.submitted((uint64_t)queueIt->second.device, touchedMemories);
+         }
+     }
+ #endif
+@@ -7454,6 +7493,15 @@ VkResult ResourceTracker::on_vkBeginCommandBuffer(void* context, VkResult input_
+ 
+     resetCommandBufferStagingInfo(commandBuffer, true /* also reset primaries */,
+                                   true /* also clear pending descriptor sets */);
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    if (mHasCpuReadback.load(std::memory_order_relaxed)) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkCommandBuffer.find(commandBuffer);
++        if (it != info_VkCommandBuffer.end()) {
++            it->second.cpuReadbackMemories.clear();
++        }
++    }
++#endif
+ 
+     VkEncoder* enc = ResourceTracker::getCommandBufferEncoder(commandBuffer);
+     (void)input_result;
+@@ -7498,6 +7546,16 @@ VkResult ResourceTracker::on_vkResetCommandBuffer(void* context, VkResult input_
+     VkEncoder* enc = (VkEncoder*)context;
+     (void)input_result;
+ 
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    if (mHasCpuReadback.load(std::memory_order_relaxed)) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkCommandBuffer.find(commandBuffer);
++        if (it != info_VkCommandBuffer.end()) {
++            it->second.cpuReadbackMemories.clear();
++        }
++    }
++#endif
++
+     if (!supportsDeferredCommands()) {
+         VkResult res = enc->vkResetCommandBuffer(commandBuffer, flags, true /* do lock */);
+         resetCommandBufferStagingInfo(commandBuffer, true /* also reset primaries */,
+@@ -7541,7 +7599,146 @@ VkResult ResourceTracker::on_vkCreateImageView(void* context, VkResult input_res
+     }
+ #endif
+ 
+-    return enc->vkCreateImageView(device, &localCreateInfo, pAllocator, pView, true /* do lock */);
++    VkResult res =
++        enc->vkCreateImageView(device, &localCreateInfo, pAllocator, pView, true /* do lock */);
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (res == VK_SUCCESS && pView && mHasCpuReadback.load(std::memory_order_relaxed)) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto it = info_VkImage.find(pCreateInfo->image);
++        if (it != info_VkImage.end()) {
++            const uint64_t mem = (uint64_t)it->second.currentBacking;
++            if (mem != 0 && mCpuReadback.contains(mem)) {
++                mCpuReadbackViews[(uint64_t)*pView] = mem;
++            }
++        }
++    }
++#endif
++    return res;
++}
++
++void ResourceTracker::on_vkDestroyImageView(VkImageView imageView) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    mCpuReadbackViews.erase((uint64_t)imageView);
++#else
++    (void)imageView;
++#endif
++}
++
++void ResourceTracker::on_vkCreateFramebuffer(const VkFramebufferCreateInfo* pCreateInfo,
++                                             VkFramebuffer framebuffer) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!pCreateInfo || !mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    if ((pCreateInfo->flags & VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT) != 0 ||
++        !pCreateInfo->pAttachments) {
++        return;
++    }
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    std::vector<uint64_t> memories;
++    for (uint32_t i = 0; i < pCreateInfo->attachmentCount; ++i) {
++        auto it = mCpuReadbackViews.find((uint64_t)pCreateInfo->pAttachments[i]);
++        if (it != mCpuReadbackViews.end()) {
++            memories.push_back(it->second);
++        }
++    }
++    if (!memories.empty()) {
++        mCpuReadbackFramebuffers[(uint64_t)framebuffer] = std::move(memories);
++    }
++#else
++    (void)pCreateInfo;
++    (void)framebuffer;
++#endif
++}
++
++void ResourceTracker::on_vkDestroyFramebuffer(VkFramebuffer framebuffer) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    mCpuReadbackFramebuffers.erase((uint64_t)framebuffer);
++#else
++    (void)framebuffer;
++#endif
++}
++
++void ResourceTracker::noteImageReadback(VkCommandBuffer commandBuffer, VkImage image) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto imgIt = info_VkImage.find(image);
++    if (imgIt == info_VkImage.end()) return;
++    const uint64_t mem = (uint64_t)imgIt->second.currentBacking;
++    if (mem == 0 || !mCpuReadback.contains(mem)) return;
++    auto& list = info_VkCommandBuffer[commandBuffer].cpuReadbackMemories;
++    for (uint64_t existing : list) {
++        if (existing == mem) return;
++    }
++    list.push_back(mem);
++#else
++    (void)commandBuffer;
++    (void)image;
++#endif
++}
++
++void ResourceTracker::noteRenderPassReadback(VkCommandBuffer commandBuffer,
++                                             const VkRenderPassBeginInfo* pRenderPassBegin) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!pRenderPassBegin || !mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto& list = info_VkCommandBuffer[commandBuffer].cpuReadbackMemories;
++    auto addUnique = [&list](uint64_t mem) {
++        for (uint64_t existing : list) {
++            if (existing == mem) return;
++        }
++        list.push_back(mem);
++    };
++    auto fbIt = mCpuReadbackFramebuffers.find((uint64_t)pRenderPassBegin->framebuffer);
++    if (fbIt != mCpuReadbackFramebuffers.end()) {
++        for (uint64_t mem : fbIt->second) {
++            addUnique(mem);
++        }
++    }
++    const VkRenderPassAttachmentBeginInfo* attachBegin =
++        vk_find_struct_const(pRenderPassBegin, RENDER_PASS_ATTACHMENT_BEGIN_INFO);
++    if (attachBegin && attachBegin->pAttachments) {
++        for (uint32_t i = 0; i < attachBegin->attachmentCount; ++i) {
++            auto viewIt = mCpuReadbackViews.find((uint64_t)attachBegin->pAttachments[i]);
++            if (viewIt != mCpuReadbackViews.end()) {
++                addUnique(viewIt->second);
++            }
++        }
++    }
++#else
++    (void)commandBuffer;
++    (void)pRenderPassBegin;
++#endif
++}
++
++void ResourceTracker::noteRenderingReadback(VkCommandBuffer commandBuffer,
++                                            const VkRenderingInfo* pRenderingInfo) {
++#if defined(VK_USE_PLATFORM_ANDROID_KHR)
++    if (!pRenderingInfo || !mHasCpuReadback.load(std::memory_order_relaxed)) return;
++    std::lock_guard<std::recursive_mutex> lock(mLock);
++    auto& list = info_VkCommandBuffer[commandBuffer].cpuReadbackMemories;
++    auto addView = [this, &list](VkImageView view) {
++        if (view == VK_NULL_HANDLE) return;
++        auto it = mCpuReadbackViews.find((uint64_t)view);
++        if (it == mCpuReadbackViews.end()) return;
++        for (uint64_t existing : list) {
++            if (existing == it->second) return;
++        }
++        list.push_back(it->second);
++    };
++    if (pRenderingInfo->pColorAttachments) {
++        for (uint32_t i = 0; i < pRenderingInfo->colorAttachmentCount; ++i) {
++            addView(pRenderingInfo->pColorAttachments[i].imageView);
++            addView(pRenderingInfo->pColorAttachments[i].resolveImageView);
++        }
++    }
++#else
++    (void)commandBuffer;
++    (void)pRenderingInfo;
++#endif
+ }
+ 
+ void ResourceTracker::on_vkCmdExecuteCommands(void* context, VkCommandBuffer commandBuffer,
+@@ -7549,6 +7746,27 @@ void ResourceTracker::on_vkCmdExecuteCommands(void* context, VkCommandBuffer com
+                                               const VkCommandBuffer* pCommandBuffers) {
+     VkEncoder* enc = (VkEncoder*)context;
+ 
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++    if (mHasCpuReadback.load(std::memory_order_relaxed) && pCommandBuffers) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        auto& dst = info_VkCommandBuffer[commandBuffer].cpuReadbackMemories;
++        for (uint32_t i = 0; i < commandBufferCount; ++i) {
++            auto secIt = info_VkCommandBuffer.find(pCommandBuffers[i]);
++            if (secIt == info_VkCommandBuffer.end()) continue;
++            for (uint64_t mem : secIt->second.cpuReadbackMemories) {
++                bool present = false;
++                for (uint64_t existing : dst) {
++                    if (existing == mem) {
++                        present = true;
++                        break;
++                    }
++                }
++                if (!present) dst.push_back(mem);
++            }
++        }
++    }
++#endif
++
+     if (!mFeatureInfo.hasVulkanQueueSubmitWithCommands) {
+         enc->vkCmdExecuteCommands(commandBuffer, commandBufferCount, pCommandBuffers,
+                                   true /* do lock */);
+@@ -7617,6 +7835,7 @@ void ResourceTracker::on_vkCmdPipelineBarrier(
+             // TODO(b/236179843): figure out long term solution.
+             barrier.oldLayout = barrier.newLayout;
+         }
++        noteImageReadback(commandBuffer, barrier.image);
+ #endif
+ 
+         updatedImageMemoryBarriers.push_back(barrier);
+@@ -7628,6 +7847,45 @@ void ResourceTracker::on_vkCmdPipelineBarrier(
+                               updatedImageMemoryBarriers.data(), true /* do lock */);
+ }
+ 
++void ResourceTracker::on_vkCmdPipelineBarrier2(void* context, VkCommandBuffer commandBuffer,
++                                               const VkDependencyInfo* pDependencyInfo,
++                                               bool khr) {
++    VkEncoder* enc = (VkEncoder*)context;
++    if (!pDependencyInfo || pDependencyInfo->imageMemoryBarrierCount == 0 ||
++        !pDependencyInfo->pImageMemoryBarriers) {
++        if (khr) {
++            enc->vkCmdPipelineBarrier2KHR(commandBuffer, pDependencyInfo, true /* do lock */);
++        } else {
++            enc->vkCmdPipelineBarrier2(commandBuffer, pDependencyInfo, true /* do lock */);
++        }
++        return;
++    }
++
++    std::vector<VkImageMemoryBarrier2> updatedImageMemoryBarriers;
++    updatedImageMemoryBarriers.reserve(pDependencyInfo->imageMemoryBarrierCount);
++    for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; ++i) {
++        VkImageMemoryBarrier2 barrier = pDependencyInfo->pImageMemoryBarriers[i];
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++        if (barrier.srcQueueFamilyIndex != barrier.dstQueueFamilyIndex &&
++            (barrier.srcQueueFamilyIndex == VK_QUEUE_FAMILY_EXTERNAL ||
++             barrier.srcQueueFamilyIndex == VK_QUEUE_FAMILY_FOREIGN_EXT) &&
++            barrier.oldLayout == VK_IMAGE_LAYOUT_UNDEFINED) {
++            barrier.oldLayout = barrier.newLayout;
++        }
++        noteImageReadback(commandBuffer, barrier.image);
++#endif
++        updatedImageMemoryBarriers.push_back(barrier);
++    }
++
++    VkDependencyInfo updatedInfo = *pDependencyInfo;
++    updatedInfo.pImageMemoryBarriers = updatedImageMemoryBarriers.data();
++    if (khr) {
++        enc->vkCmdPipelineBarrier2KHR(commandBuffer, &updatedInfo, true /* do lock */);
++    } else {
++        enc->vkCmdPipelineBarrier2(commandBuffer, &updatedInfo, true /* do lock */);
++    }
++}
++
+ void ResourceTracker::on_vkDestroyDescriptorSetLayout(void* context, VkDevice device,
+                                                       VkDescriptorSetLayout descriptorSetLayout,
+                                                       const VkAllocationCallbacks* pAllocator) {
+diff --git a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+index 5eeb1f2..fe88e46 100644
+--- a/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
++++ b/src/gfxstream/guest/vulkan_enc/ResourceTracker.h
+@@ -504,6 +504,15 @@ class ResourceTracker {
+     VkResult on_vkCreateImageView(void* context, VkResult input_result, VkDevice device,
+                                   const VkImageViewCreateInfo* pCreateInfo,
+                                   const VkAllocationCallbacks* pAllocator, VkImageView* pView);
++    void on_vkDestroyImageView(VkImageView imageView);
++    void on_vkCreateFramebuffer(const VkFramebufferCreateInfo* pCreateInfo,
++                                VkFramebuffer framebuffer);
++    void on_vkDestroyFramebuffer(VkFramebuffer framebuffer);
++    void noteImageReadback(VkCommandBuffer commandBuffer, VkImage image);
++    void noteRenderPassReadback(VkCommandBuffer commandBuffer,
++                                const VkRenderPassBeginInfo* pRenderPassBegin);
++    void noteRenderingReadback(VkCommandBuffer commandBuffer,
++                               const VkRenderingInfo* pRenderingInfo);
+ 
+     void on_vkCmdExecuteCommands(void* context, VkCommandBuffer commandBuffer,
+                                  uint32_t commandBufferCount,
+@@ -522,6 +531,13 @@ class ResourceTracker {
+         uint32_t bufferMemoryBarrierCount, const VkBufferMemoryBarrier* pBufferMemoryBarriers,
+         uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier* pImageMemoryBarriers);
+ 
++    void on_vkCmdPipelineBarrier2(void* context, VkCommandBuffer commandBuffer,
++                                  const VkDependencyInfo* pDependencyInfo, bool khr);
++
++    VkResult on_vkQueueSubmit2KHR(void* context, VkResult input_result, VkQueue queue,
++                                  uint32_t submitCount, const VkSubmitInfo2* pSubmits,
++                                  VkFence fence);
++
+     void on_vkDestroyDescriptorSetLayout(void* context, VkDevice device,
+                                          VkDescriptorSetLayout descriptorSetLayout,
+                                          const VkAllocationCallbacks* pAllocator);
+@@ -640,7 +656,7 @@ class ResourceTracker {
+     template <typename VkSubmitInfoType>
+     VkResult on_vkQueueSubmitTemplate(void* context, VkResult input_result, VkQueue queue,
+                                       uint32_t submitCount, const VkSubmitInfoType* pSubmits,
+-                                      VkFence fence);
++                                      VkFence fence, bool isKhr = false);
+ 
+     void freeDescriptorSetsIfHostAllocated(VkEncoder* enc, VkDevice device,
+                                            uint32_t descriptorSetCount,
+@@ -686,10 +702,10 @@ class ResourceTracker {
+                              const VkSubmitInfoType* pSubmits);
+ 
+     VkResult vkQueueSubmitEnc(VkEncoder* enc, VkQueue queue, uint32_t submitCount,
+-                              const VkSubmitInfo* pSubmits, VkFence fence);
++                              const VkSubmitInfo* pSubmits, VkFence fence, bool isKhr = false);
+ 
+     VkResult vkQueueSubmitEnc(VkEncoder* enc, VkQueue queue, uint32_t submitCount,
+-                              const VkSubmitInfo2* pSubmits, VkFence fence);
++                              const VkSubmitInfo2* pSubmits, VkFence fence, bool isKhr = false);
+ 
+     VkResult initDescriptorUpdateTemplateBuffers(
+         const VkDescriptorUpdateTemplateCreateInfo* pCreateInfo,
+@@ -802,6 +818,9 @@ class ResourceTracker {
+ 
+     struct VkCommandBuffer_Info {
+         uint32_t placeholder;
++#ifdef VK_USE_PLATFORM_ANDROID_KHR
++        std::vector<uint64_t> cpuReadbackMemories;
++#endif
+     };
+ 
+     struct VkQueue_Info {
+@@ -945,6 +964,9 @@ class ResourceTracker {
+     std::unique_ptr<gfxstream::Gralloc> mGralloc = nullptr;
+     // The imported buffers a CPU reads what the GPU draws into, held under mLock.
+     dsa::CpuReadbackSet mCpuReadback;
++    std::atomic<bool> mHasCpuReadback{false};
++    std::unordered_map<uint64_t, uint64_t> mCpuReadbackViews;
++    std::unordered_map<uint64_t, std::vector<uint64_t>> mCpuReadbackFramebuffers;
+     // The imported buffers a CPU writes and the GPU samples, by memory, held under mLock: what
+     // the CPU wrote is copied up before each submit (dsa_cpu_upload.h).
+     std::unordered_map<uint64_t, AHardwareBuffer*> mCpuUploads;
+diff --git a/src/gfxstream/guest/vulkan_enc/func_table.cpp b/src/gfxstream/guest/vulkan_enc/func_table.cpp
+index 5a13599..edeae5e 100644
+--- a/src/gfxstream/guest/vulkan_enc/func_table.cpp
++++ b/src/gfxstream/guest/vulkan_enc/func_table.cpp
+@@ -756,6 +756,7 @@ void gfxstream_vk_DestroyImageView(VkDevice device, VkImageView imageView,
+     }
+     VK_FROM_HANDLE(gfxstream_vk_device, gfxstream_device, device);
+     {
++        gfxstream::vk::ResourceTracker::get()->on_vkDestroyImageView(imageView);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getThreadLocalEncoder();
+         vkEnc->vkDestroyImageView(gfxstream_device->internal_object, imageView, pAllocator,
+                                   true /* do lock */);
+@@ -1061,6 +1062,10 @@ VkResult gfxstream_vk_CreateFramebuffer(VkDevice device, const VkFramebufferCrea
+         vkCreateFramebuffer_VkResult_return =
+             vkEnc->vkCreateFramebuffer(gfxstream_device->internal_object, pCreateInfo, pAllocator,
+                                        pFramebuffer, true /* do lock */);
++        if (vkCreateFramebuffer_VkResult_return == VK_SUCCESS && pFramebuffer) {
++            gfxstream::vk::ResourceTracker::get()->on_vkCreateFramebuffer(pCreateInfo,
++                                                                          *pFramebuffer);
++        }
+     }
+     return vkCreateFramebuffer_VkResult_return;
+ }
+@@ -1072,6 +1077,7 @@ void gfxstream_vk_DestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer,
+     }
+     VK_FROM_HANDLE(gfxstream_vk_device, gfxstream_device, device);
+     {
++        gfxstream::vk::ResourceTracker::get()->on_vkDestroyFramebuffer(framebuffer);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getThreadLocalEncoder();
+         vkEnc->vkDestroyFramebuffer(gfxstream_device->internal_object, framebuffer, pAllocator,
+                                     true /* do lock */);
+@@ -1407,6 +1413,8 @@ void gfxstream_vk_CmdCopyImage(VkCommandBuffer commandBuffer, VkImage srcImage,
+     MESA_TRACE_SCOPE("vkCmdCopyImage");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++            gfxstream_commandBuffer->internal_object, dstImage);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdCopyImage(gfxstream_commandBuffer->internal_object, srcImage, srcImageLayout,
+@@ -1420,6 +1428,8 @@ void gfxstream_vk_CmdBlitImage(VkCommandBuffer commandBuffer, VkImage srcImage,
+     MESA_TRACE_SCOPE("vkCmdBlitImage");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++            gfxstream_commandBuffer->internal_object, dstImage);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBlitImage(gfxstream_commandBuffer->internal_object, srcImage, srcImageLayout,
+@@ -1434,6 +1444,8 @@ void gfxstream_vk_CmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer s
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     VK_FROM_HANDLE(gfxstream_vk_buffer, gfxstream_srcBuffer, srcBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++            gfxstream_commandBuffer->internal_object, dstImage);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdCopyBufferToImage(gfxstream_commandBuffer->internal_object,
+@@ -1488,6 +1500,8 @@ void gfxstream_vk_CmdClearColorImage(VkCommandBuffer commandBuffer, VkImage imag
+     MESA_TRACE_SCOPE("vkCmdClearColorImage");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++            gfxstream_commandBuffer->internal_object, image);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdClearColorImage(gfxstream_commandBuffer->internal_object, image, imageLayout,
+@@ -1528,6 +1542,8 @@ void gfxstream_vk_CmdResolveImage(VkCommandBuffer commandBuffer, VkImage srcImag
+     MESA_TRACE_SCOPE("vkCmdResolveImage");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++            gfxstream_commandBuffer->internal_object, dstImage);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdResolveImage(gfxstream_commandBuffer->internal_object, srcImage, srcImageLayout,
+@@ -1688,6 +1704,8 @@ void gfxstream_vk_CmdBeginRenderPass(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBeginRenderPass");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteRenderPassReadback(
++            gfxstream_commandBuffer->internal_object, pRenderPassBegin);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBeginRenderPass(gfxstream_commandBuffer->internal_object, pRenderPassBegin,
+@@ -2108,6 +2126,8 @@ void gfxstream_vk_CmdBeginRenderPass2(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBeginRenderPass2");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteRenderPassReadback(
++            gfxstream_commandBuffer->internal_object, pRenderPassBegin);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBeginRenderPass2(gfxstream_commandBuffer->internal_object, pRenderPassBegin,
+@@ -2440,8 +2460,9 @@ void gfxstream_vk_CmdPipelineBarrier2(VkCommandBuffer commandBuffer,
+             internal_pDependencyInfo[i].pBufferMemoryBarriers =
+                 internal_VkDependencyInfo_pBufferMemoryBarriers[i].data();
+         }
+-        vkEnc->vkCmdPipelineBarrier2(gfxstream_commandBuffer->internal_object,
+-                                     internal_pDependencyInfo.data(), true /* do lock */);
++        gfxstream::vk::ResourceTracker::get()->on_vkCmdPipelineBarrier2(
++            vkEnc, gfxstream_commandBuffer->internal_object, internal_pDependencyInfo.data(),
++            false);
+     }
+ }
+ void gfxstream_vk_CmdWriteTimestamp2(VkCommandBuffer commandBuffer, VkPipelineStageFlags2 stage,
+@@ -2545,6 +2566,10 @@ void gfxstream_vk_CmdCopyImage2(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdCopyImage2");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pCopyImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pCopyImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdCopyImage2(gfxstream_commandBuffer->internal_object, pCopyImageInfo,
+@@ -2556,6 +2581,10 @@ void gfxstream_vk_CmdCopyBufferToImage2(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdCopyBufferToImage2");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pCopyBufferToImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pCopyBufferToImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         std::vector<VkCopyBufferToImageInfo2> internal_pCopyBufferToImageInfo(1);
+@@ -2594,6 +2623,10 @@ void gfxstream_vk_CmdBlitImage2(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBlitImage2");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pBlitImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pBlitImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBlitImage2(gfxstream_commandBuffer->internal_object, pBlitImageInfo,
+@@ -2605,6 +2638,10 @@ void gfxstream_vk_CmdResolveImage2(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdResolveImage2");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pResolveImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pResolveImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdResolveImage2(gfxstream_commandBuffer->internal_object, pResolveImageInfo,
+@@ -2616,6 +2653,8 @@ void gfxstream_vk_CmdBeginRendering(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBeginRendering");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteRenderingReadback(
++            gfxstream_commandBuffer->internal_object, pRenderingInfo);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBeginRendering(gfxstream_commandBuffer->internal_object, pRenderingInfo,
+@@ -3155,6 +3194,8 @@ void gfxstream_vk_CmdBeginRenderingKHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBeginRenderingKHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteRenderingReadback(
++            gfxstream_commandBuffer->internal_object, pRenderingInfo);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBeginRenderingKHR(gfxstream_commandBuffer->internal_object, pRenderingInfo,
+@@ -3443,6 +3484,8 @@ void gfxstream_vk_CmdBeginRenderPass2KHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBeginRenderPass2KHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        gfxstream::vk::ResourceTracker::get()->noteRenderPassReadback(
++            gfxstream_commandBuffer->internal_object, pRenderPassBegin);
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBeginRenderPass2KHR(gfxstream_commandBuffer->internal_object, pRenderPassBegin,
+@@ -3870,8 +3913,8 @@ void gfxstream_vk_CmdPipelineBarrier2KHR(VkCommandBuffer commandBuffer,
+             internal_pDependencyInfo[i].pBufferMemoryBarriers =
+                 internal_VkDependencyInfo_pBufferMemoryBarriers[i].data();
+         }
+-        vkEnc->vkCmdPipelineBarrier2KHR(gfxstream_commandBuffer->internal_object,
+-                                        internal_pDependencyInfo.data(), true /* do lock */);
++        gfxstream::vk::ResourceTracker::get()->on_vkCmdPipelineBarrier2(
++            vkEnc, gfxstream_commandBuffer->internal_object, internal_pDependencyInfo.data(), true);
+     }
+ }
+ void gfxstream_vk_CmdWriteTimestamp2KHR(VkCommandBuffer commandBuffer, VkPipelineStageFlags2 stage,
+@@ -3939,10 +3982,11 @@ VkResult gfxstream_vk_QueueSubmit2KHR(VkQueue queue, uint32_t submitCount,
+             internal_pSubmits[i].signalSemaphoreInfoCount =
+                 internal_VkSubmitInfo2_pSignalSemaphoreInfos[i].size();
+         }
+-        vkQueueSubmit2KHR_VkResult_return = vkEnc->vkQueueSubmit2KHR(
+-            gfxstream_queue->internal_object, submitCount, internal_pSubmits.data(),
+-            gfxstream_fence ? gfxstream_fence->internal_object : VK_NULL_HANDLE,
+-            true /* do lock */);
++        auto resources = gfxstream::vk::ResourceTracker::get();
++        vkQueueSubmit2KHR_VkResult_return = resources->on_vkQueueSubmit2KHR(
++            vkEnc, VK_SUCCESS, gfxstream_queue->internal_object, submitCount,
++            internal_pSubmits.data(),
++            gfxstream_fence ? gfxstream_fence->internal_object : VK_NULL_HANDLE);
+     }
+     return vkQueueSubmit2KHR_VkResult_return;
+ }
+@@ -3976,6 +4020,10 @@ void gfxstream_vk_CmdCopyImage2KHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdCopyImage2KHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pCopyImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pCopyImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdCopyImage2KHR(gfxstream_commandBuffer->internal_object, pCopyImageInfo,
+@@ -3987,6 +4035,10 @@ void gfxstream_vk_CmdCopyBufferToImage2KHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdCopyBufferToImage2KHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pCopyBufferToImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pCopyBufferToImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         std::vector<VkCopyBufferToImageInfo2> internal_pCopyBufferToImageInfo(1);
+@@ -4027,6 +4079,10 @@ void gfxstream_vk_CmdBlitImage2KHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdBlitImage2KHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pBlitImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pBlitImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdBlitImage2KHR(gfxstream_commandBuffer->internal_object, pBlitImageInfo,
+@@ -4038,6 +4094,10 @@ void gfxstream_vk_CmdResolveImage2KHR(VkCommandBuffer commandBuffer,
+     MESA_TRACE_SCOPE("vkCmdResolveImage2KHR");
+     VK_FROM_HANDLE(gfxstream_vk_command_buffer, gfxstream_commandBuffer, commandBuffer);
+     {
++        if (pResolveImageInfo) {
++            gfxstream::vk::ResourceTracker::get()->noteImageReadback(
++                gfxstream_commandBuffer->internal_object, pResolveImageInfo->dstImage);
++        }
+         auto vkEnc = gfxstream::vk::ResourceTracker::getCommandBufferEncoder(
+             gfxstream_commandBuffer->internal_object);
+         vkEnc->vkCmdResolveImage2KHR(gfxstream_commandBuffer->internal_object, pResolveImageInfo,

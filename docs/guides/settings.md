@@ -76,7 +76,8 @@ Android does not ask a DNS server itself.
 ## Values the command line takes
 
 - `render-gpu`: `display` (the GPU of the primary monitor, the default), `integrated`,
-  `discrete`, or part of a GPU's name as `dsa gpus` lists it.
+  `discrete`, `lavapipe` (the bundled software Vulkan driver on Windows), or part of a
+  GPU's name as `dsa gpus` lists it.
 - `memory-limit`: `auto` (the default: no fixed limit, up to the PC's memory less what Windows keeps), or a
   size such as `4g` or `3072` (MiB).
 - `shared-folders`: `all`, `none`, or names separated by commas, such as

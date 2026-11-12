@@ -72,8 +72,11 @@ so expect rough edges. Linux and macOS are in progress (see
 
 - Android's Doze as the idle state, so notifications keep arriving while the CPU rests, and
   idle memory returned to the host. Freezing Android is an option, off by default.
-- Host devices lent to Android: GPU (Vulkan remoting through gfxstream, OpenGL ES through
-  ANGLE), audio, video codecs, microphone, camera, location, sensors and power.
+- Host devices lent to Android: GPU (Vulkan remoting through gfxstream with GPU ASTC and
+  ETC2 decompression, OpenGL ES through ANGLE, and automatic fallback to a bundled Mesa
+  Lavapipe software Vulkan ICD on Direct3D 11 PCs that have no Windows Vulkan driver, such
+  as 4th-generation Intel Core / Iris Pro 5200), audio, video codecs, microphone, camera,
+  location, sensors and power.
 - Android's network location answered by the host, with or without Google Play. Without
   Google Play, address lookups (`Geocoder`) are answered on the computer from administrative
   boundary data that comes with DSA: a position becomes its country, province and city, and
@@ -128,10 +131,18 @@ Dates after today are expected dates, not releases.
 1. Turn on the Windows feature **Virtual Machine Platform** and restart.
 2. Download `DSA-v<version>-win-x64-setup.exe`, or `DSA-v<version>-win-arm64-setup.exe` on
    an ARM64 PC, from the [latest release](https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest)
-   and check it against `SHA256SUMS.txt`.
-3. Run it. Setup installs the `DsaHost` service, the `dsa` command, DSA Settings, and the
-   first Android image (downloaded when setup does not carry one). Android starts when you
-   sign in.
+   (or from the `dsa-windows-x64-installer` artifact of a **Build** workflow run) and check
+   it against `SHA256SUMS.txt`.
+3. Run it. Setup installs the `DsaHost` service, the `dsa` command, DSA Settings, the
+   graphics renderer (`dsa-gfx.exe`, `gfxstream_backend.dll` and the bundled `vulkan_lvp.dll`
+   software Vulkan fallback), and the first Android image (downloaded when setup does not
+   carry one). Android starts when you sign in.
+
+A Vulkan 1.1+ GPU driver is used automatically when present. PCs with Direct3D 11.1 GPUs
+that lack a Windows Vulkan driver (such as Intel Haswell / Iris Pro 5200) run Android
+rendering on the bundled Lavapipe software Vulkan driver and present windows through
+hardware Direct3D 11 and DirectComposition with no extra setup (`dsa settings set render-gpu lavapipe`
+can also select it explicitly).
 
 No kernel to build and no change to your WSL setup: DSA ships its own kernel and its own VM.
 Uninstalling removes everything DSA wrote except each user's Android disk.
@@ -196,17 +207,37 @@ flowchart LR
 - **Host.** `dsa/host/core/` is platform neutral: sessions, the app registry and the
   lifecycle policy. Each OS adds the VM, the transport and the window system under
   `dsa/host/platform/<os>/`. On Windows the VM is created through the Host Compute System,
-  and frames go from the GPU to each window through Direct3D 11 and DirectComposition,
-  never through the CPU.
+  and each window is presented through Direct3D 11 and DirectComposition: directly from
+  Vulkan into the window's shared Direct3D 11 texture when the GPU driver supports
+  `VK_KHR_external_memory_win32` on the display adapter, or through Direct3D 11.1
+  shared-texture staging when rendering on bundled Lavapipe or across distinct GPUs.
 
 ## Building from source
 
-The Rust crates form one workspace in `dsa/`:
+The `.github/workflows/build.yml` GitHub Actions workflow builds the patched Android guest
+graphics transport (`guest-gfxstream-hvsocket`), the Windows x64 host renderer with bundled
+Lavapipe (`host-gfxstream-windows`), and the installable Windows x64 `setup.exe` and MSI
+(`dsa-windows-x64-installer`) on pushes and `workflow_dispatch`.
+
+To build the Rust workspace locally:
 
 ```
 cd dsa
 cargo test --workspace
 cargo build -p dsa-host-windows --release
+```
+
+To build the Windows x64 host graphics renderer (`gfxstream_backend.dll` + staged
+`vulkan_lvp.dll`) and installer from a PowerShell 7 (`pwsh`) prompt with Visual Studio 2022
+C++ tools, Rust, .NET 8 SDK, `uv` and `7z`:
+
+```powershell
+pwsh dsa/graphics/host/build.ps1 -ScratchDir .scratch -OutDir .scratch/build-host
+dotnet tool install --global wix --version 5.0.2
+wix extension add -g WixToolset.Util.wixext/5.0.2
+pwsh dsa/host/platform/windows/installer/build.ps1 -Version 0.2.0 `
+    -Kernel path\to\bzImage `
+    -GfxstreamBackend .scratch\build-host\dist\bin\gfxstream_backend.dll
 ```
 
 Other parts have their own build, described next to them:

@@ -1,0 +1,362 @@
+diff --git a/host/FrameBuffer.cpp b/host/FrameBuffer.cpp
+index 7e9f871..be5b817 100644
+--- a/host/FrameBuffer.cpp
++++ b/host/FrameBuffer.cpp
+@@ -355,7 +355,16 @@ bool FrameBuffer::initialize(int width, int height, gfxstream::host::FeatureSet
+                 [fb = fb.get()](uint64_t id) { fb->unregisterVulkanInstance(id); },
+ #endif
+         };
++        if (vk::gpuPreferenceWantsSoftwareIcd()) {
++            vk::vkSwitchToBundledSoftwareIcd();
++        }
+         fb->m_emulationVk = vk::VkEmulation::create(vkDispatch, callbacks, fb->m_features);
++        if (!fb->m_emulationVk && vk::vkSwitchToBundledSoftwareIcd()) {
++            WARN(
++                "No hardware Vulkan driver started; falling back to the bundled Lavapipe "
++                "software Vulkan driver.");
++            fb->m_emulationVk = vk::VkEmulation::create(vkDispatch, callbacks, fb->m_features);
++        }
+         if (fb->m_emulationVk) {
+             vk::VkDecoderGlobalState::initialize(fb->m_emulationVk.get());
+         } else {
+diff --git a/host/vulkan/VkCommonOperations.cpp b/host/vulkan/VkCommonOperations.cpp
+index 20767f1..b2df8e9 100644
+--- a/host/vulkan/VkCommonOperations.cpp
++++ b/host/vulkan/VkCommonOperations.cpp
+@@ -732,10 +732,17 @@ bool deviceMatchesGpuPreference(bool hasGraphicsQueueFamily,
+             return props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+         case GpuPreference::Rule::Discrete:
+             return props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+-        case GpuPreference::Rule::Name:
+-            return !preference.name.empty() &&
+-                   lowercaseGpuName(props.deviceName).find(lowercaseGpuName(preference.name)) !=
+-                       std::string::npos;
++        case GpuPreference::Rule::Name: {
++            if (preference.name.empty()) {
++                return false;
++            }
++            const std::string wanted = lowercaseGpuName(preference.name);
++            const std::string candidate = lowercaseGpuName(props.deviceName);
++            if (candidate.find(wanted) != std::string::npos) {
++                return true;
++            }
++            return wanted == "lavapipe" && candidate.find("llvmpipe") != std::string::npos;
++        }
+     }
+     return false;
+ }
+@@ -752,6 +759,15 @@ int gpuPreferenceMatched() {
+     return sGpuPreferenceMatched;
+ }
+ 
++bool gpuPreferenceWantsSoftwareIcd() {
++    std::lock_guard<std::mutex> lock(sGpuPreferenceMutex);
++    if (sGpuPreference.rule != GpuPreference::Rule::Name) {
++        return false;
++    }
++    const std::string wanted = lowercaseGpuName(sGpuPreference.name);
++    return wanted == "lavapipe" || wanted == "llvmpipe";
++}
++
+ // Checks if the user enforced a specific GPU, it can be done via index or name.
+ // Otherwise try to find the best device with discrete GPU and high vulkan API level.
+ // Scoring of the devices is done by some implicit choices based on known driver
+diff --git a/host/vulkan/VkCommonOperations.h b/host/vulkan/VkCommonOperations.h
+index 3553987..70ac189 100644
+--- a/host/vulkan/VkCommonOperations.h
++++ b/host/vulkan/VkCommonOperations.h
+@@ -94,6 +94,10 @@ void setGpuPreference(const GpuPreference& preference);
+ // 0 when it chose by the ranking because none matched, -1 when no preference was set.
+ int gpuPreferenceMatched();
+ 
++// Whether the current preference explicitly names the software Vulkan renderer ("lavapipe" or
++// "llvmpipe").
++bool gpuPreferenceWantsSoftwareIcd();
++
+ enum class AstcEmulationMode {
+     Disabled,  // No ASTC emulation (ie: ASTC not supported unless the GPU supports it natively)
+     Cpu,       // Decompress ASTC textures on the CPU
+diff --git a/host/vulkan/VulkanDispatch.cpp b/host/vulkan/VulkanDispatch.cpp
+index bb83970..cbe3d94 100644
+--- a/host/vulkan/VulkanDispatch.cpp
++++ b/host/vulkan/VulkanDispatch.cpp
+@@ -14,6 +14,17 @@
+ 
+ #include "VulkanDispatch.h"
+ 
++#include <cstring>
++
++#ifdef _WIN32
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN
++#endif
++#include <windows.h>
++#else
++#include <dlfcn.h>
++#endif
++
+ #include "aemu/base/SharedLibrary.h"
+ #include "aemu/base/files/PathUtils.h"
+ #include "aemu/base/synchronization/Lock.h"
+@@ -264,12 +275,16 @@ class VulkanDispatchImpl {
+ 
+     VulkanDispatch* dispatch() { return &mDispatch; }
+ 
++    bool switchToBundledSoftwareIcd();
++
+    private:
+     Lock mLock;
+     bool mForTesting = false;
+     bool mInitialized = false;
++    bool mUsingBundledSoftwareIcd = false;
+     VulkanDispatch mDispatch;
+     SharedLibraries mVulkanLibs;
++    android::base::SharedLibrary* mBundledSoftwareLib = nullptr;
+ };
+ 
+ VulkanDispatchImpl* sVulkanDispatchImpl() {
+@@ -277,6 +292,108 @@ VulkanDispatchImpl* sVulkanDispatchImpl() {
+     return impl;
+ }
+ 
++namespace {
++
++using PFN_vkNegotiateLoaderICDInterfaceVersion = VkResult(VKAPI_PTR*)(uint32_t* pSupportedVersion);
++
++struct BundledIcdLookupContext {
++    PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
++    VkInstance probeInstance = VK_NULL_HANDLE;
++};
++
++thread_local BundledIcdLookupContext* sBundledIcdLookup = nullptr;
++
++void* sBundledIcdDlOpen() { return sBundledIcdLookup; }
++
++void* sBundledIcdDlSym(void* lib, const char* sym) {
++    auto* ctx = static_cast<BundledIcdLookupContext*>(lib);
++    if (!ctx || !ctx->getInstanceProcAddr || !sym) {
++        return nullptr;
++    }
++    PFN_vkVoidFunction fn = ctx->getInstanceProcAddr(VK_NULL_HANDLE, sym);
++    if (!fn && ctx->probeInstance != VK_NULL_HANDLE) {
++        fn = ctx->getInstanceProcAddr(ctx->probeInstance, sym);
++    }
++    return reinterpret_cast<void*>(fn);
++}
++
++std::string currentModuleDirectory() {
++#ifdef _WIN32
++    HMODULE module = nullptr;
++    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
++                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++                            reinterpret_cast<LPCWSTR>(&sVulkanDispatchImpl), &module) ||
++        !module) {
++        return "";
++    }
++    std::wstring widePath(MAX_PATH, L'\0');
++    DWORD copied = 0;
++    while (true) {
++        copied = GetModuleFileNameW(module, widePath.data(), static_cast<DWORD>(widePath.size()));
++        if (copied == 0) {
++            return "";
++        }
++        if (copied < widePath.size() - 1) {
++            widePath.resize(copied);
++            break;
++        }
++        widePath.resize(widePath.size() * 2);
++    }
++    int utf8Len = WideCharToMultiByte(CP_UTF8, 0, widePath.data(), static_cast<int>(widePath.size()),
++                                      nullptr, 0, nullptr, nullptr);
++    if (utf8Len <= 0) {
++        return "";
++    }
++    std::string utf8Path(static_cast<size_t>(utf8Len), '\0');
++    WideCharToMultiByte(CP_UTF8, 0, widePath.data(), static_cast<int>(widePath.size()),
++                        utf8Path.data(), utf8Len, nullptr, nullptr);
++    const size_t sep = utf8Path.find_last_of("\\/");
++    return sep == std::string::npos ? "" : utf8Path.substr(0, sep);
++#else
++    Dl_info info = {};
++    if (dladdr(reinterpret_cast<const void*>(&sVulkanDispatchImpl), &info) == 0 ||
++        !info.dli_fname) {
++        return "";
++    }
++    std::string path(info.dli_fname);
++    const size_t sep = path.find_last_of('/');
++    return sep == std::string::npos ? "" : path.substr(0, sep);
++#endif
++}
++
++std::vector<std::string> bundledSoftwareIcdCandidates() {
++#if defined(_WIN32)
++    const char* basename = "vulkan_lvp.dll";
++#elif defined(__APPLE__)
++    const char* basename = "libvulkan_lvp.dylib";
++#else
++    const char* basename = "libvulkan_lvp.so";
++#endif
++    std::vector<std::string> dirs = {
++        currentModuleDirectory(),
++        android::base::getProgramDirectory(),
++        android::base::getLauncherDirectory(),
++    };
++    std::vector<std::string> candidates;
++    for (const std::string& dir : dirs) {
++        if (dir.empty()) continue;
++        std::string full = pj({dir, basename});
++        bool seen = false;
++        for (const std::string& existing : candidates) {
++            if (existing == full) {
++                seen = true;
++                break;
++            }
++        }
++        if (!seen) {
++            candidates.push_back(std::move(full));
++        }
++    }
++    return candidates;
++}
++
++}  // namespace
++
+ static void* sVulkanDispatchDlOpen() { return sVulkanDispatchImpl()->dlopen(); }
+ 
+ static void* sVulkanDispatchDlSym(void* lib, const char* sym) {
+@@ -299,11 +416,123 @@ void VulkanDispatchImpl::initialize(bool forTesting) {
+     mInitialized = true;
+ }
+ 
++bool VulkanDispatchImpl::switchToBundledSoftwareIcd() {
++    AutoLock lock(mLock);
++
++    if (mUsingBundledSoftwareIcd) {
++        return false;
++    }
++
++    if (!android::base::getEnvironmentVariable("VK_ICD_FILENAMES").empty() ||
++        !android::base::getEnvironmentVariable("VK_DRIVER_FILES").empty()) {
++        return false;
++    }
++
++    for (const std::string& candidate : bundledSoftwareIcdCandidates()) {
++        auto* library = android::base::SharedLibrary::open(candidate.c_str());
++        if (!library) {
++            continue;
++        }
++
++        auto getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
++            library->findSymbol("vk_icdGetInstanceProcAddr"));
++        if (!getInstanceProcAddr) {
++            getInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
++                library->findSymbol("vkGetInstanceProcAddr"));
++        }
++        if (!getInstanceProcAddr) {
++            continue;
++        }
++
++        auto negotiate = reinterpret_cast<PFN_vkNegotiateLoaderICDInterfaceVersion>(
++            library->findSymbol("vk_icdNegotiateLoaderICDInterfaceVersion"));
++        if (negotiate) {
++            uint32_t icdVersion = 7;
++            VkResult negRes = negotiate(&icdVersion);
++            if (negRes != VK_SUCCESS) {
++                WARN("Bundled software Vulkan ICD negotiation returned %d for %s", negRes,
++                     candidate.c_str());
++            }
++        }
++
++        auto createInstance = reinterpret_cast<PFN_vkCreateInstance>(
++            getInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
++        if (!createInstance) {
++            continue;
++        }
++
++        VkInstance probeInstance = VK_NULL_HANDLE;
++        const uint32_t apiVersions[] = {VK_API_VERSION_1_3, VK_API_VERSION_1_1, VK_API_VERSION_1_0};
++        for (uint32_t apiVersion : apiVersions) {
++            VkApplicationInfo appInfo = {
++                .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
++                .pNext = nullptr,
++                .pApplicationName = "gfxstream_icd_probe",
++                .applicationVersion = 1,
++                .pEngineName = "gfxstream",
++                .engineVersion = 1,
++                .apiVersion = apiVersion,
++            };
++            VkInstanceCreateInfo createInfo = {
++                .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
++                .pNext = nullptr,
++                .flags = 0,
++                .pApplicationInfo = &appInfo,
++                .enabledLayerCount = 0,
++                .ppEnabledLayerNames = nullptr,
++                .enabledExtensionCount = 0,
++                .ppEnabledExtensionNames = nullptr,
++            };
++            if (createInstance(&createInfo, nullptr, &probeInstance) == VK_SUCCESS &&
++                probeInstance != VK_NULL_HANDLE) {
++                break;
++            }
++            probeInstance = VK_NULL_HANDLE;
++        }
++
++        BundledIcdLookupContext lookupCtx = {
++            .getInstanceProcAddr = getInstanceProcAddr,
++            .probeInstance = probeInstance,
++        };
++        VulkanDispatch candidateDispatch = {};
++        sBundledIcdLookup = &lookupCtx;
++        init_vulkan_dispatch_from_system_loader(sBundledIcdDlOpen, sBundledIcdDlSym,
++                                                &candidateDispatch);
++        sBundledIcdLookup = nullptr;
++
++        if (probeInstance != VK_NULL_HANDLE) {
++            auto destroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(
++                getInstanceProcAddr(probeInstance, "vkDestroyInstance"));
++            if (destroyInstance) {
++                destroyInstance(probeInstance, nullptr);
++            }
++        }
++
++        if (!vkDispatchValid(&candidateDispatch) || !candidateDispatch.vkCreateInstance ||
++            !candidateDispatch.vkEnumeratePhysicalDevices) {
++            continue;
++        }
++
++        mDispatch = candidateDispatch;
++        mBundledSoftwareLib = library;
++        mUsingBundledSoftwareIcd = true;
++        mInitialized = true;
++        INFO("Switched Vulkan dispatch to bundled software ICD: %s", candidate.c_str());
++        return true;
++    }
++
++    return false;
++}
++
+ VulkanDispatch* vkDispatch(bool forTesting) {
+     sVulkanDispatchImpl()->initialize(forTesting);
+     return sVulkanDispatchImpl()->dispatch();
+ }
+ 
++bool vkSwitchToBundledSoftwareIcd() {
++    return sVulkanDispatchImpl()->switchToBundledSoftwareIcd();
++}
++
+ bool vkDispatchValid(const VulkanDispatch* vk) {
+     return vk->vkEnumerateInstanceExtensionProperties != nullptr ||
+            vk->vkGetInstanceProcAddr != nullptr || vk->vkGetDeviceProcAddr != nullptr;
+diff --git a/host/vulkan/VulkanDispatch.h b/host/vulkan/VulkanDispatch.h
+index 2c39380..7fb7be8 100644
+--- a/host/vulkan/VulkanDispatch.h
++++ b/host/vulkan/VulkanDispatch.h
+@@ -20,6 +20,7 @@ namespace vk {
+ 
+ VulkanDispatch* vkDispatch(bool forTesting = false);
+ bool vkDispatchValid(const VulkanDispatch* vk);
++bool vkSwitchToBundledSoftwareIcd();
+ 
+ }  // namespace vk
+ }  // namespace gfxstream

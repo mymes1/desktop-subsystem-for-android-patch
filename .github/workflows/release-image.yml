@@ -1055,7 +1055,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "downloading host-gfxstream-windows from run $run failed" }
           $dll = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter gfxstream_backend.dll | Select-Object -First 1
           if (-not $dll -or $dll.Length -eq 0) { throw "run $run has no usable gfxstream_backend.dll" }
+          $lvp = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter vulkan_lvp.dll | Select-Object -First 1
+          if (-not $lvp -or $lvp.Length -eq 0) { throw "run $run has no usable vulkan_lvp.dll" }
           "GFXSTREAM_DLL=$($dll.FullName)" >> $env:GITHUB_ENV
+          "LAVAPIPE_DLL=$($lvp.FullName)" >> $env:GITHUB_ENV
 
       - name: Install WiX 5
         run: dotnet tool install --global wix --version 5.0.2
@@ -1064,7 +1067,7 @@ jobs:
       - name: Build the package and setup.exe
         run: >
           dsa/host/platform/windows/installer/build.ps1 -Version ${{ inputs.installer_version }} -ReleaseTag v${{ inputs.installer_version }}
-          -Kernel .scratch/kernel-out/bzImage -GfxstreamBackend $env:GFXSTREAM_DLL
+          -Kernel .scratch/kernel-out/bzImage -GfxstreamBackend $env:GFXSTREAM_DLL -LavapipeDll $env:LAVAPIPE_DLL
           -ListUrl https://github.com/${{ github.repository }}/releases/download/images/images.json
           -TrustedKey ${{ needs.list.outputs.public_key || needs.published.outputs.public_key }}
           -AndroidMajor ${{ needs.list.outputs.newest_major || needs.published.outputs.newest_major }}
@@ -1244,12 +1247,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "downloading host-gfxstream-windows-arm64 from run $run failed" }
           $dll = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter gfxstream_backend.dll | Select-Object -First 1
           if (-not $dll -or $dll.Length -eq 0) { throw "run $run has no usable ARM64 gfxstream_backend.dll" }
+          $lvp = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter vulkan_lvp.dll | Select-Object -First 1
+          if (-not $lvp -or $lvp.Length -eq 0) { throw "run $run has no usable ARM64 vulkan_lvp.dll" }
           "GFXSTREAM_DLL=$($dll.FullName)" >> $env:GITHUB_ENV
+          "LAVAPIPE_DLL=$($lvp.FullName)" >> $env:GITHUB_ENV
 
       - name: Build the ARM64 package and setup.exe
         run: >
           dsa/host/platform/windows/installer/build.ps1 -Version ${{ inputs.installer_version }} -Arch arm64
-          -Kernel $env:KERNEL -GfxstreamBackend $env:GFXSTREAM_DLL
+          -Kernel $env:KERNEL -GfxstreamBackend $env:GFXSTREAM_DLL -LavapipeDll $env:LAVAPIPE_DLL
           -ListUrl https://github.com/${{ github.repository }}/releases/download/images/images-arm64.json
           -TrustedKey $env:PUBLIC_KEY
           -AndroidMajor ${{ needs.list.outputs.newest_major || needs.published.outputs.newest_major }}

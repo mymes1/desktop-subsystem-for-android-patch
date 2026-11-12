@@ -353,5 +353,38 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertNotIn("Rule::None", patch)
         self.assertNotIn("Rule::None", (HERE / "dsa_gfx_backend.cpp").read_text(encoding="utf-8"))
 
+    def test_pr3_astc_and_etc2_gpu_decompression_covers_angle_and_synchronization2(self):
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0023", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0023-decompress-astc-and-etc2-for-angle-and-synchronization2.patch").read_text(encoding="utf-8")
+        self.assertIn("+        return m_vkEmulation->isEtc2EmulationEnabled();", patch)
+        self.assertIn("+        return m_vkEmulation->getAstcLdrEmulationMode() != AstcEmulationMode::Disabled;", patch)
+        self.assertIn("+    inline void convertQueueFamilyForeignToExternal_VkImageMemoryBarrier2(", patch)
+        self.assertIn("+bool CompressedImageInfo::decompressIfNeeded(", patch)
+        self.assertIn("+                    m_state->on_vkCmdPipelineBarrier2(&m_pool, snapshotApiCallInfo, commandBuffer,", patch)
+        self.assertIn("+                    vkQueueSubmit2KHR_VkResult_return = m_state->on_vkQueueSubmit2(", patch)
+        # ASTC CPU decoding stays off so DllMain on Windows never joins worker threads under the loader lock.
+        cmake = (HERE / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("set(ASTC_CPU_DECODING OFF", cmake)
+
+    def test_pr3_windows_bundled_lavapipe_and_d3d11_shared_staging_support_gpus_without_vulkan(self):
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0024", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0024-fall-back-to-bundled-lavapipe-when-no-vulkan-gpu-starts.patch").read_text(encoding="utf-8")
+        self.assertIn("+bool vkSwitchToBundledSoftwareIcd();", patch)
+        self.assertIn("+        if (!fb->m_emulationVk && vk::vkSwitchToBundledSoftwareIcd()) {", patch)
+        display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        self.assertIn("OpenSharedResource1", display)
+        self.assertIn("UpdateSubresource", display)
+        cmake = (HERE / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("target_link_libraries(gfxstream_backend PRIVATE d3d11 dxgi)", cmake)
+        build_ps1 = (HERE / "build.ps1").read_text(encoding="utf-8")
+        self.assertIn("vulkan_lvp.dll", build_ps1)
+        wxs = (HERE.parents[2] / "dsa/host/platform/windows/installer/dsa.wxs").read_text(encoding="utf-8")
+        self.assertIn("VulkanLavapipeDll", wxs)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -68,7 +68,9 @@ git -C $GfxstreamDir clean -fdx
 # call that touches a ColorBuffer waits for the GPU to come back from its reset (13 s on an
 # Intel Arc), and Android ends the app whose input went unanswered. Without 0022 a ColorBuffer
 # read back or written whole is one GPU job however large the window, 2880x2048 and more for a
-# window maximized on a 200% monitor.
+# window maximized on a 200% monitor. Without 0023 ASTC and ETC2 compressed textures fail under
+# ANGLE or synchronization2 when the Vulkan driver emulates them. Without 0024 a Windows PC
+# with no hardware Vulkan driver cannot fall back to the bundled Lavapipe software ICD.
 # A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
@@ -89,7 +91,9 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0021-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0022-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0022-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0023-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0024-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

@@ -383,6 +383,9 @@
             <Component Id="GfxstreamBackendDll" Guid="*">
                 <File Id="GfxstreamBackendDll" Source="$(SourceDir)\gfxstream_backend.dll" KeyPath="yes" />
             </Component>
+            <Component Id="VulkanLavapipeDll" Guid="*">
+                <File Id="VulkanLavapipeDll" Source="$(SourceDir)\vulkan_lvp.dll" KeyPath="yes" />
+            </Component>
             <Component Id="WindowManagerRun" Guid="c1904da8-fec3-46a3-9d9f-676d1873a52e">
                 <RegistryValue Root="HKLM"
                                Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"

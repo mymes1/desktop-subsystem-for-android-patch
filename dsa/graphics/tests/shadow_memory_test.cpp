@@ -106,11 +106,26 @@ void nfr1_only_memory_the_app_mapped_is_kept_in_step() {
     const char* test = __func__;
     ShadowMapping mapping;
     check(!mapping.keptInStep(), test, "memory the app never mapped is neither sent nor read back");
+    check(!mapping.takeFlush(), test, "memory the app never mapped is never flushed");
     check(mapping.firstMap(), test, "the first map reads the device's writes back");
     check(!mapping.keptInStep(), test, "not kept in step until the read back is done");
     mapping.mapped();
     check(mapping.keptInStep(), test, "a mapped allocation is kept in step");
-    check(!mapping.firstMap(), test, "a later map does not read it back again");
+    check(mapping.takeFlush(), test, "a mapped allocation flushes on every submit");
+    check(mapping.takeFlush(), test, "while mapped, later submits keep flushing");
+    check(!mapping.firstMap(), test, "while mapped, it is not treated as unmapped");
+
+    // Unmapping flushes once at the next submit, then stops hashing and reading back.
+    mapping.unmapped();
+    check(!mapping.keptInStep(), test, "an unmapped allocation is not invalidated on waits");
+    check(mapping.takeFlush(), test, "the first submit after unmap flushes pre-unmap writes");
+    check(!mapping.takeFlush(), test, "later submits do not hash unmapped memory");
+    check(!mapping.takeFlush(), test, "unmapped memory stays idle across frames");
+    check(mapping.firstMap(), test, "remapping reads back device writes made while unmapped");
+
+    mapping.mapped();
+    check(mapping.keptInStep(), test, "remapping resumes keeping the copy in step");
+    check(mapping.takeFlush(), test, "remapped memory flushes again");
 }
 
 }  // namespace

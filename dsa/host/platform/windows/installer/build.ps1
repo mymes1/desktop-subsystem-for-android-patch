@@ -64,6 +64,7 @@ param(
     [string]$PipeSddl,
     [int]$AndroidMajor,
     [string]$GfxstreamBackend,
+    [string]$LavapipeDll,
     [string]$ReleaseTag,
     [string]$GeodataDir,
     [ValidateSet("x64", "arm64")]
@@ -115,6 +116,25 @@ if ($GfxstreamBackend) {
     Set-Content -Path (Join-Path $stage "gfxstream_backend.dll") -Value "" -NoNewline
 } else {
     throw "name the gfxstream backend library with -GfxstreamBackend (or -PlaceholderKernel for an installer test)"
+}
+
+$adjacentLavapipe = if ($GfxstreamBackend) {
+    Join-Path (Split-Path -Parent (Resolve-Path $GfxstreamBackend).Path) "vulkan_lvp.dll"
+} else {
+    ""
+}
+if ($LavapipeDll) {
+    Copy-Item $LavapipeDll (Join-Path $stage "vulkan_lvp.dll")
+} elseif ($adjacentLavapipe -and (Test-Path $adjacentLavapipe)) {
+    Copy-Item $adjacentLavapipe (Join-Path $stage "vulkan_lvp.dll")
+} elseif (Test-Path (Join-Path $stage "vulkan_lvp.dll")) {
+    # Already staged.
+} elseif (Test-Path (Join-Path $dsa "..\..\..\.scratch\$localGraphics\dist\bin\vulkan_lvp.dll")) {
+    Copy-Item (Join-Path $dsa "..\..\..\.scratch\$localGraphics\dist\bin\vulkan_lvp.dll") (Join-Path $stage "vulkan_lvp.dll")
+} elseif ($PlaceholderKernel) {
+    Set-Content -Path (Join-Path $stage "vulkan_lvp.dll") -Value "" -NoNewline
+} else {
+    throw "name the bundled Lavapipe software Vulkan library with -LavapipeDll or place vulkan_lvp.dll beside gfxstream_backend.dll"
 }
 
 # Generate the licence bundle for all shipped components and dependencies.

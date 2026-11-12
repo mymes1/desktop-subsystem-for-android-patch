@@ -66,25 +66,47 @@ inline void freeShadowMemory(uint8_t* memory, uint64_t size) {
     if (memory) munmap(memory, static_cast<size_t>(shadowMemoryLength(size)));
 }
 
-// Whether an allocation's copy is kept in step with the host: only once the app has mapped it.
-// Unmapping does not end it, since what the app wrote before unmapping still goes to the host
-// at the next submit.
+// Whether an allocation's copy is kept in step with the host: only while the app has it
+// mapped, plus one final flush after unmapping so what the app wrote before vkUnmapMemory
+// reaches the host at the next submit without hashing unmapped memory on every frame after.
 class ShadowMapping {
    public:
-    // Whether the app's next map is its first. Then the copy is read back from the host before
-    // the app sees it, since the device may have written the memory while it was not kept in
-    // step.
+    // Whether the app's next map must read the host's writes back first: before the first map,
+    // and again after unmapping since invalidations are skipped while unmapped.
     bool firstMap() const { return !mMapped; }
 
     // The copy holds what the host has and the app has it mapped: from now on it is kept in
     // step. Marked only after the read back, so a submit meanwhile does not send the copy's
     // half-read contents to the host as if the app had written them.
-    void mapped() { mMapped = true; }
+    void mapped() {
+        mMapped = true;
+        mNeedsFlush = false;
+    }
+
+    // The app unmapped the allocation: send what it wrote at the next submit once, then stop
+    // hashing or reading back until the app maps it again.
+    void unmapped() {
+        if (mMapped) {
+            mMapped = false;
+            mNeedsFlush = true;
+        }
+    }
+
+    // Whether flushShadowedMemory should scan and send changed blocks for this submit.
+    bool takeFlush() {
+        if (mMapped) return true;
+        if (mNeedsFlush) {
+            mNeedsFlush = false;
+            return true;
+        }
+        return false;
+    }
 
     bool keptInStep() const { return mMapped; }
 
    private:
     bool mMapped = false;
+    bool mNeedsFlush = false;
 };
 
 }  // namespace dsa

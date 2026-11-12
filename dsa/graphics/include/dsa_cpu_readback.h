@@ -150,12 +150,24 @@ class CpuReadbackSet {
     }
     void remove(uint64_t memory) { mEntries.erase(memory); }
     bool empty() const { return mEntries.empty(); }
+    bool contains(uint64_t memory) const { return mEntries.find(memory) != mEntries.end(); }
 
     // A submit on `device`: the GPU may draw into any of its buffers. With no buffer to read
     // back, which is every process but the few that read the GPU's drawing, this does nothing.
     void submitted(uint64_t device) {
         for (auto& item : mEntries) {
             if (item.second.device == device) item.second.pending = true;
+        }
+    }
+
+    // Marks only the tracked buffers of `device` that the submitted command buffers touched, so
+    // an idle ImageReader or capture buffer in a game process does not stall unrelated submits.
+    void submitted(uint64_t device, const std::vector<uint64_t>& memories) {
+        for (uint64_t memory : memories) {
+            auto it = mEntries.find(memory);
+            if (it != mEntries.end() && it->second.device == device) {
+                it->second.pending = true;
+            }
         }
     }
 

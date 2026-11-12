@@ -114,6 +114,14 @@ distribution = "linked"
 source = "https://android.googlesource.com/platform/external/mesa3d"
 
 [[component]]
+name = "Mesa Lavapipe software Vulkan ICD (vulkan_lvp.dll, with LLVM and zlib)"
+version = "26.2.5"
+license = "MIT AND Apache-2.0 WITH LLVM-exception AND Zlib"
+part = "graphics"
+distribution = "linked"
+source = "https://github.com/mmozeiko/build-mesa"
+
+[[component]]
 name = "libdrm"
 license = "MIT"
 part = "graphics"

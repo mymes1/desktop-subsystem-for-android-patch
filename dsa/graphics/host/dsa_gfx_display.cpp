@@ -119,20 +119,42 @@ dsa::CopyEnd finish_copy(gfxstream::vk::VkEmulation& emu, VkFence fence, uint64_
 
 #ifdef _WIN32
 
+#include <d3d11_1.h>
+#include <dxgi1_2.h>
+#include <wrl/client.h>
+
 namespace {
 
 using gfxstream::FrameBuffer;
 using gfxstream::vk::BorrowedImageInfoVk;
 using gfxstream::vk::VkEmulation;
 using gfxstream::vk::VulkanDispatch;
+using Microsoft::WRL::ComPtr;
 
-/* A texture of the embedder's, imported into Vulkan. */
+struct D3d11SharedDevice {
+    ComPtr<ID3D11Device1> device;
+    ComPtr<ID3D11DeviceContext> context;
+    ComPtr<ID3D11Query> event_query;
+};
+
+/* A texture of the embedder's, either imported into Vulkan or opened through Direct3D 11.1
+ * when the Vulkan driver cannot import Direct3D 11 handles directly (e.g. Lavapipe or a
+ * cross-adapter render GPU). */
 struct Target {
     void* handle = nullptr;
     uint32_t width = 0;
     uint32_t height = 0;
     VkImage image = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory staging_memory = VK_NULL_HANDLE;
+    void* staging_mapped = nullptr;
+    VkDeviceSize staging_size = 0;
+    bool staging_coherent = false;
+    VkImage convert_image = VK_NULL_HANDLE;
+    VkDeviceMemory convert_memory = VK_NULL_HANDLE;
+    ComPtr<ID3D11Texture2D> d3d_texture;
+    size_t d3d_device_index = 0;
 };
 
 /* A frame waiting to be shown: its color buffer, and the display's size when it was set
@@ -159,6 +181,8 @@ struct Presenter {
 
     /* Only the presentation thread touches these. */
     std::map<uint32_t, Target> targets;
+    std::vector<D3d11SharedDevice> d3d_devices;
+    bool d3d_devices_probed = false;
     VkCommandPool pool = VK_NULL_HANDLE;
     VkCommandBuffer commands = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
@@ -239,13 +263,273 @@ bool install_hook() {
 
 void destroy_target(VkEmulation& emu, Target& target) {
     VulkanDispatch* vk = emu.getDeviceDispatch();
+    VkDevice device = emu.getDevice();
+    if (target.staging_mapped && target.staging_memory != VK_NULL_HANDLE) {
+        vk->vkUnmapMemory(device, target.staging_memory);
+        target.staging_mapped = nullptr;
+    }
+    if (target.staging_buffer != VK_NULL_HANDLE) {
+        vk->vkDestroyBuffer(device, target.staging_buffer, nullptr);
+    }
+    if (target.staging_memory != VK_NULL_HANDLE) {
+        vk->vkFreeMemory(device, target.staging_memory, nullptr);
+    }
+    if (target.convert_image != VK_NULL_HANDLE) {
+        vk->vkDestroyImage(device, target.convert_image, nullptr);
+    }
+    if (target.convert_memory != VK_NULL_HANDLE) {
+        vk->vkFreeMemory(device, target.convert_memory, nullptr);
+    }
     if (target.image != VK_NULL_HANDLE) {
-        vk->vkDestroyImage(emu.getDevice(), target.image, nullptr);
+        vk->vkDestroyImage(device, target.image, nullptr);
     }
     if (target.memory != VK_NULL_HANDLE) {
-        vk->vkFreeMemory(emu.getDevice(), target.memory, nullptr);
+        vk->vkFreeMemory(device, target.memory, nullptr);
     }
     target = Target{};
+}
+
+bool find_memory_type(VulkanDispatch* ivk, VkPhysicalDevice phys, uint32_t type_bits,
+                      VkMemoryPropertyFlags wanted, uint32_t* out_index, bool* out_coherent) {
+    VkPhysicalDeviceMemoryProperties props = {};
+    ivk->vkGetPhysicalDeviceMemoryProperties(phys, &props);
+    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+        if ((type_bits & (1u << i)) == 0) {
+            continue;
+        }
+        const VkMemoryPropertyFlags flags = props.memoryTypes[i].propertyFlags;
+        if ((flags & wanted) == wanted) {
+            *out_index = i;
+            if (out_coherent) {
+                *out_coherent = (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+void ensure_d3d11_devices(Presenter& presenter) {
+    if (presenter.d3d_devices_probed) {
+        return;
+    }
+    presenter.d3d_devices_probed = true;
+
+    const D3D_FEATURE_LEVEL levels[] = {
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+    };
+
+    auto try_add_device = [&presenter, &levels](IDXGIAdapter1* adapter, D3D_DRIVER_TYPE type) {
+        ComPtr<ID3D11Device> base_device;
+        ComPtr<ID3D11DeviceContext> context;
+        D3D_FEATURE_LEVEL chosen = D3D_FEATURE_LEVEL_11_0;
+        HRESULT hr = D3D11CreateDevice(adapter, type, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                       levels, static_cast<UINT>(sizeof(levels) / sizeof(levels[0])),
+                                       D3D11_SDK_VERSION, base_device.GetAddressOf(), &chosen,
+                                       context.GetAddressOf());
+        if (FAILED(hr) || !base_device || !context) {
+            return;
+        }
+        ComPtr<ID3D11Device1> device1;
+        if (FAILED(base_device.As(&device1)) || !device1) {
+            return;
+        }
+        D3D11_QUERY_DESC query_desc = {};
+        query_desc.Query = D3D11_QUERY_EVENT;
+        ComPtr<ID3D11Query> query;
+        if (FAILED(device1->CreateQuery(&query_desc, query.GetAddressOf())) || !query) {
+            return;
+        }
+        D3d11SharedDevice entry;
+        entry.device = std::move(device1);
+        entry.context = std::move(context);
+        entry.event_query = std::move(query);
+        presenter.d3d_devices.push_back(std::move(entry));
+    };
+
+    ComPtr<IDXGIFactory1> factory;
+    if (SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory1),
+                                     reinterpret_cast<void**>(factory.GetAddressOf()))) &&
+        factory) {
+        for (UINT idx = 0;; ++idx) {
+            ComPtr<IDXGIAdapter1> adapter;
+            if (factory->EnumAdapters1(idx, adapter.GetAddressOf()) == DXGI_ERROR_NOT_FOUND) {
+                break;
+            }
+            DXGI_ADAPTER_DESC1 desc = {};
+            if (SUCCEEDED(adapter->GetDesc1(&desc)) &&
+                (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+                continue;
+            }
+            try_add_device(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN);
+        }
+    }
+    try_add_device(nullptr, D3D_DRIVER_TYPE_WARP);
+}
+
+bool open_d3d11_shared_target(VkEmulation& emu, Presenter& presenter, void* handle, uint32_t width,
+                              uint32_t height, Target* out);
+bool ensure_convert_image(VkEmulation& emu, Target& target);
+
+bool open_d3d11_shared_target(VkEmulation& emu, Presenter& presenter, void* handle, uint32_t width,
+                              uint32_t height, Target* out) {
+    ensure_d3d11_devices(presenter);
+
+    ComPtr<ID3D11Texture2D> shared_texture;
+    size_t matched_device = 0;
+    bool opened = false;
+    for (size_t i = 0; i < presenter.d3d_devices.size(); ++i) {
+        ComPtr<ID3D11Texture2D> candidate;
+        HRESULT hr = presenter.d3d_devices[i].device->OpenSharedResource1(
+            static_cast<HANDLE>(handle), __uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(candidate.GetAddressOf()));
+        if (SUCCEEDED(hr) && candidate) {
+            D3D11_TEXTURE2D_DESC desc = {};
+            candidate->GetDesc(&desc);
+            if (desc.Width >= width && desc.Height >= height &&
+                desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM) {
+                shared_texture = std::move(candidate);
+                matched_device = i;
+                opened = true;
+                break;
+            }
+        }
+    }
+    if (!opened) {
+        log_once("could not open a task window's shared Direct3D 11 texture for staging");
+        return false;
+    }
+
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    VulkanDispatch* ivk = emu.getInstanceDispatch();
+    VkDevice device = emu.getDevice();
+    VkPhysicalDevice phys = emu.getPhysicalDevice();
+    const VkDeviceSize byte_size =
+        static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4u;
+
+    Target target;
+    target.handle = handle;
+    target.width = width;
+    target.height = height;
+    target.staging_size = byte_size;
+    target.d3d_texture = std::move(shared_texture);
+    target.d3d_device_index = matched_device;
+
+    VkBufferCreateInfo buf_info = {};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = byte_size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vk->vkCreateBuffer(device, &buf_info, nullptr, &target.staging_buffer) != VK_SUCCESS) {
+        destroy_target(emu, target);
+        return false;
+    }
+
+    VkMemoryRequirements reqs = {};
+    vk->vkGetBufferMemoryRequirements(device, target.staging_buffer, &reqs);
+    uint32_t type_index = 0;
+    bool coherent = false;
+    if (!find_memory_type(ivk, phys, reqs.memoryTypeBits,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                          &type_index, &coherent) &&
+        !find_memory_type(ivk, phys, reqs.memoryTypeBits,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          &type_index, &coherent) &&
+        !find_memory_type(ivk, phys, reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                          &type_index, &coherent)) {
+        destroy_target(emu, target);
+        return false;
+    }
+    target.staging_coherent = coherent;
+
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = reqs.size;
+    alloc_info.memoryTypeIndex = type_index;
+    if (vk->vkAllocateMemory(device, &alloc_info, nullptr, &target.staging_memory) != VK_SUCCESS) {
+        destroy_target(emu, target);
+        return false;
+    }
+    if (vk->vkBindBufferMemory(device, target.staging_buffer, target.staging_memory, 0) !=
+        VK_SUCCESS) {
+        destroy_target(emu, target);
+        return false;
+    }
+    if (vk->vkMapMemory(device, target.staging_memory, 0, reqs.size, 0, &target.staging_mapped) !=
+            VK_SUCCESS ||
+        !target.staging_mapped) {
+        destroy_target(emu, target);
+        return false;
+    }
+    if (!ensure_convert_image(emu, target)) {
+        destroy_target(emu, target);
+        return false;
+    }
+
+    log_once("using Direct3D 11 shared-texture staging because Vulkan could not import the "
+             "task window's texture directly");
+    *out = std::move(target);
+    return true;
+}
+
+bool ensure_convert_image(VkEmulation& emu, Target& target) {
+    if (target.convert_image != VK_NULL_HANDLE) {
+        return true;
+    }
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    VulkanDispatch* ivk = emu.getInstanceDispatch();
+    VkDevice device = emu.getDevice();
+    VkPhysicalDevice phys = emu.getPhysicalDevice();
+
+    VkImageCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    info.extent = {target.width, target.height, 1};
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (vk->vkCreateImage(device, &info, nullptr, &target.convert_image) != VK_SUCCESS) {
+        return false;
+    }
+
+    VkMemoryRequirements reqs = {};
+    vk->vkGetImageMemoryRequirements(device, target.convert_image, &reqs);
+    uint32_t type_index = 0;
+    if (!find_memory_type(ivk, phys, reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                          &type_index, nullptr) &&
+        !find_memory_type(ivk, phys, reqs.memoryTypeBits, 0, &type_index, nullptr)) {
+        vk->vkDestroyImage(device, target.convert_image, nullptr);
+        target.convert_image = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = reqs.size;
+    alloc_info.memoryTypeIndex = type_index;
+    if (vk->vkAllocateMemory(device, &alloc_info, nullptr, &target.convert_memory) != VK_SUCCESS) {
+        vk->vkDestroyImage(device, target.convert_image, nullptr);
+        target.convert_image = VK_NULL_HANDLE;
+        return false;
+    }
+    if (vk->vkBindImageMemory(device, target.convert_image, target.convert_memory, 0) !=
+        VK_SUCCESS) {
+        vk->vkFreeMemory(device, target.convert_memory, nullptr);
+        vk->vkDestroyImage(device, target.convert_image, nullptr);
+        target.convert_memory = VK_NULL_HANDLE;
+        target.convert_image = VK_NULL_HANDLE;
+        return false;
+    }
+    return true;
 }
 
 /* Imports the embedder's texture as a Vulkan image the copy can write. */
@@ -254,8 +538,8 @@ bool import_target(VkEmulation& emu, void* handle, uint32_t width, uint32_t heig
     VulkanDispatch* vk = emu.getDeviceDispatch();
     VkDevice device = emu.getDevice();
     if (!vk->vkGetMemoryWin32HandlePropertiesKHR) {
-        log_once("the Vulkan driver cannot import Direct3D 11 textures "
-                 "(VK_KHR_external_memory_win32), so no task window can show frames");
+        log_once("the Vulkan driver does not expose VK_KHR_external_memory_win32; falling back to "
+                 "Direct3D 11 shared-texture staging");
         return false;
     }
     const VkExternalMemoryHandleTypeFlagBits handle_type =
@@ -450,15 +734,17 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         presenter.targets.erase(display_id);
         return;
     }
-    if (target.image == VK_NULL_HANDLE) {
-        if (!import_target(*emu, handle, width, height, &target)) {
+    if (target.image == VK_NULL_HANDLE && !target.d3d_texture) {
+        if (!import_target(*emu, handle, width, height, &target) &&
+            !open_d3d11_shared_target(*emu, presenter, handle, width, height, &target)) {
             presenter.targets.erase(display_id);
             return;
         }
         /* Once per texture: a resize that remakes the guest's buffers remakes it, so the log
          * shows each size a window's frames were copied at. */
-        WARN("Display %u's frames go to a new %ux%u task window texture (frame %ux%u).",
-             display_id, width, height, frame.width, frame.height);
+        WARN("Display %u's frames go to a new %ux%u task window texture (frame %ux%u, %s).",
+             display_id, width, height, frame.width, frame.height,
+             target.d3d_texture ? "d3d11-staged" : "vulkan-imported");
     }
     if (!ensure_commands(*emu, presenter)) {
         log_once("could not set up the Vulkan commands that copy frames into task windows");
@@ -483,6 +769,11 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
     }
     const int32_t copy_width = static_cast<int32_t>(content_width);
 
+    const bool use_d3d_staging = static_cast<bool>(target.d3d_texture);
+    const bool source_is_rgba8 =
+        source->imageCreateInfo.format == VK_FORMAT_R8G8B8A8_UNORM ||
+        source->imageCreateInfo.format == VK_FORMAT_R8G8B8A8_SRGB;
+
     if (image_width != width || image_height != height) {
         /* The buffer and its Vulkan image disagree on the size: the copy is cut to the smaller,
          * and the line says so, since a mismatch is one way a copy can reach past an image. */
@@ -502,14 +793,17 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, &acquire_transfers,
         &acquire_layouts, &release_layouts, &release_transfers);
 
-    /* The texture's earlier contents do not matter; it comes from and goes back to
-     * Direct3D. */
-    acquire_layouts.push_back(image_barrier(
-        target.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED));
-    release_transfers.push_back(image_barrier(
-        target.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_GENERAL, family, VK_QUEUE_FAMILY_EXTERNAL));
+    if (!use_d3d_staging) {
+        /* The texture's earlier contents do not matter; it comes from and goes back to
+         * Direct3D. */
+        acquire_layouts.push_back(image_barrier(
+            target.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED));
+        release_transfers.push_back(image_barrier(
+            target.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_GENERAL, family, VK_QUEUE_FAMILY_EXTERNAL));
+    }
 
     /* The copy goes in bands of at most dsa::kMaxCopyPixels, each a submission of its own
      * that is waited for before the next: a frame of a window maximized on a 200% monitor
@@ -520,8 +814,10 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
     for (size_t band = 0; band < bands.size(); ++band) {
         const bool first = band == 0;
         const bool last = band + 1 == bands.size();
-        const int32_t top = static_cast<int32_t>(bands[band].y);
-        const int32_t bottom = top + static_cast<int32_t>(bands[band].rows);
+        const uint32_t band_y = bands[band].y;
+        const uint32_t band_rows = bands[band].rows;
+        const int32_t top = static_cast<int32_t>(band_y);
+        const int32_t bottom = top + static_cast<int32_t>(band_rows);
 
         VkCommandBufferBeginInfo begin = {};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -544,16 +840,77 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
                                      nullptr);
         }
 
-        VkImageBlit region = {};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffsets[0] = {0, top, 0};
-        region.srcOffsets[1] = {copy_width, bottom, 1};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.dstOffsets[0] = {0, top, 0};
-        region.dstOffsets[1] = {copy_width, bottom, 1};
-        vk->vkCmdBlitImage(presenter.commands, source->image,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_NEAREST);
+        if (!use_d3d_staging) {
+            VkImageBlit region = {};
+            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.srcOffsets[0] = {0, top, 0};
+            region.srcOffsets[1] = {copy_width, bottom, 1};
+            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.dstOffsets[0] = {0, top, 0};
+            region.dstOffsets[1] = {copy_width, bottom, 1};
+            vk->vkCmdBlitImage(presenter.commands, source->image,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_NEAREST);
+        } else {
+            VkImage copy_src = source->image;
+            if (!source_is_rgba8) {
+                VkImageMemoryBarrier to_dst = image_barrier(
+                    target.convert_image, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED);
+                vk->vkCmdPipelineBarrier(presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+                                         1, &to_dst);
+                VkImageBlit blit = {};
+                blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                blit.srcOffsets[0] = {0, top, 0};
+                blit.srcOffsets[1] = {copy_width, bottom, 1};
+                blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                blit.dstOffsets[0] = {0, top, 0};
+                blit.dstOffsets[1] = {copy_width, bottom, 1};
+                vk->vkCmdBlitImage(presenter.commands, source->image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.convert_image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                                   VK_FILTER_NEAREST);
+                VkImageMemoryBarrier to_src = image_barrier(
+                    target.convert_image, VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED);
+                vk->vkCmdPipelineBarrier(presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+                                         1, &to_src);
+                copy_src = target.convert_image;
+            }
+
+            VkBufferImageCopy buf_copy = {};
+            buf_copy.bufferOffset = static_cast<VkDeviceSize>(band_y) *
+                                    static_cast<VkDeviceSize>(content_width) * 4u;
+            buf_copy.bufferRowLength = content_width;
+            buf_copy.bufferImageHeight = content_height;
+            buf_copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            buf_copy.imageOffset = {0, top, 0};
+            buf_copy.imageExtent = {content_width, band_rows, 1};
+            vk->vkCmdCopyImageToBuffer(presenter.commands, copy_src,
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.staging_buffer,
+                                       1, &buf_copy);
+
+            if (last) {
+                VkBufferMemoryBarrier host_vis = {};
+                host_vis.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                host_vis.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                host_vis.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+                host_vis.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                host_vis.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                host_vis.buffer = target.staging_buffer;
+                host_vis.offset = 0;
+                host_vis.size = static_cast<VkDeviceSize>(content_width) *
+                                static_cast<VkDeviceSize>(content_height) * 4u;
+                vk->vkCmdPipelineBarrier(presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                         VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &host_vis, 0,
+                                         nullptr);
+            }
+        }
 
         if (last) {
             cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -607,6 +964,44 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
                 presenter.commands = VK_NULL_HANDLE;
                 presenter.fence = VK_NULL_HANDLE;
                 return;
+        }
+    }
+    if (use_d3d_staging) {
+        if (!target.staging_coherent) {
+            VkMappedMemoryRange range = {};
+            range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            range.memory = target.staging_memory;
+            range.offset = 0;
+            range.size = VK_WHOLE_SIZE;
+            vk->vkInvalidateMappedMemoryRanges(emu->getDevice(), 1, &range);
+        }
+        auto& d3d = presenter.d3d_devices[target.d3d_device_index];
+        D3D11_BOX box = {0u, 0u, 0u, content_width, content_height, 1u};
+        d3d.context->UpdateSubresource(target.d3d_texture.Get(), 0, &box, target.staging_mapped,
+                                       content_width * 4u, 0u);
+        d3d.context->End(d3d.event_query.Get());
+        d3d.context->Flush();
+        const auto wait_started = std::chrono::steady_clock::now();
+        BOOL query_done = FALSE;
+        while (true) {
+            HRESULT hr =
+                d3d.context->GetData(d3d.event_query.Get(), &query_done, sizeof(query_done), 0);
+            if (hr == S_OK && query_done) {
+                break;
+            }
+            if (FAILED(hr)) {
+                log_once("Direct3D 11 shared-texture event query failed");
+                return;
+            }
+            const auto elapsed_ns = static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - wait_started)
+                    .count());
+            if (elapsed_ns >= dsa::kCopyWaitNs + dsa::kCopyHungNs) {
+                log_once("Direct3D 11 shared-texture upload timed out");
+                return;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(250));
         }
     }
     if (took_ns > dsa::kCopySlowNs && slow_copy_may_log()) {

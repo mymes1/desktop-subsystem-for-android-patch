@@ -1,0 +1,349 @@
+# Builds the patched guest graphics transport, the Windows x64 host graphics renderer
+# (gfxstream_backend.dll + bundled vulkan_lvp.dll), and a ready-to-install Windows x64
+# setup.exe + MSI package.
+
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - release
+      - "arena/**"
+    paths:
+      - "dsa/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "dsa/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Installer version (defaults to one patch above the latest published release)"
+        required: false
+        default: ""
+
+concurrency:
+  group: build-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/release' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  UPSTREAM_REPO: thisisthepy/desktop-subsystem-for-android
+
+jobs:
+  guest-graphics:
+    name: Build the guest Hyper-V graphics transport (x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.scratch/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: "%compiler% --version"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run graphics source and licence checks
+        run: |
+          bash scripts/tests/graphics-source.test.sh
+          bash scripts/tests/graphics-workflow.test.sh
+          uv run scripts/tests/nfr7_components_test.py
+
+      - name: Install ccache
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache
+
+      - name: Restore the guest graphics compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .scratch/ccache
+          key: ccache-build-guest-x86_64-${{ hashFiles('dsa/graphics/fetch.sh', 'dsa/graphics/build.sh', 'dsa/graphics/patches/**', 'dsa/graphics/include/**') }}
+          restore-keys: ccache-build-guest-x86_64-
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      - name: Fetch gfxstream and guest build dependencies
+        run: bash dsa/graphics/fetch.sh .scratch/gfxstream
+
+      - name: Test the guest transport on the build machine
+        run: bash dsa/graphics/tests/test.sh .scratch
+
+      - name: Build the guest transport
+        run: |
+          bash dsa/graphics/build.sh .scratch .scratch/build
+          ccache --show-stats
+
+      - name: Save the guest graphics compiler cache
+        if: steps.ccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .scratch/ccache
+          key: ccache-build-guest-x86_64-${{ hashFiles('dsa/graphics/fetch.sh', 'dsa/graphics/build.sh', 'dsa/graphics/patches/**', 'dsa/graphics/include/**') }}
+
+      - name: Verify ELF architecture and exported Hyper-V symbols
+        run: |
+          target=".scratch/build/libOpenglSystemCommon.so"
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          nm -D "$target" | grep -Fq 'HvSocketStream'
+          nm -D "$target" | grep -Fq 'goldfish_get_egl_tls'
+          target_vk=".scratch/build/vulkan.ranchu.so"
+          readelf -h "$target_vk" | grep -Fq 'Advanced Micro Devices X86-64'
+          exports=$(nm -D --defined-only "$target_vk" | awk '{print $3}')
+          test "$exports" = "HMI"
+          grep -aFq 'hvsocket' "$target_vk"
+
+      - name: Upload the patched guest graphics libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-gfxstream-hvsocket
+          path: |
+            .scratch/build/libOpenglSystemCommon.so
+            .scratch/build/vulkan.ranchu.so
+          if-no-files-found: error
+
+  windows-x64:
+    name: Build the Windows x64 renderer and setup.exe
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      LVP_ICD: ${{ github.workspace }}\.scratch\lavapipe\lvp_icd.json
+      CCACHE_DIR: ${{ github.workspace }}\.scratch\ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 1G
+      COMPILER_CACHE_PREFIX: ccache-build-renderer-windows-x64-
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install ccache
+        run: |
+          $version = '4.14.2'
+          $name = "ccache-$version-windows-x86_64"
+          Invoke-WebRequest -Uri "https://github.com/ccache/ccache/releases/download/v$version/$name.zip" -OutFile "$env:RUNNER_TEMP\ccache.zip"
+          Expand-Archive -Force "$env:RUNNER_TEMP\ccache.zip" -DestinationPath "$env:RUNNER_TEMP\ccache"
+          $ccache = (Get-ChildItem -Recurse -File "$env:RUNNER_TEMP\ccache" -Filter ccache.exe | Select-Object -First 1).FullName
+          if (-not $ccache) { throw "the ccache $version archive has no ccache.exe" }
+          & $ccache --version | Select-Object -First 1
+          $launcher = $ccache -replace '\\', '/'
+          "CMAKE_C_COMPILER_LAUNCHER=$launcher" >> $env:GITHUB_ENV
+          "CMAKE_CXX_COMPILER_LAUNCHER=$launcher" >> $env:GITHUB_ENV
+          "CCACHE_EXE=$ccache" >> $env:GITHUB_ENV
+
+      - name: Name the compiler cache
+        shell: bash
+        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/host/*.cpp', 'dsa/graphics/host/*.h', 'dsa/graphics/include/**', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
+
+      - name: Restore the compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .scratch/ccache
+          key: ${{ env.COMPILER_CACHE_KEY }}
+          restore-keys: ${{ env.COMPILER_CACHE_PREFIX }}
+
+      - name: Restore the Rust build cache
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: build-windows-x64
+
+      - name: Fetch gfxstream and host build dependencies
+        run: |
+          & dsa/graphics/host/fetch.ps1 -ScratchDir .scratch
+
+      - name: Build gfxstream_backend.dll and stage bundled vulkan_lvp.dll
+        run: |
+          & dsa/graphics/host/build.ps1 -ScratchDir .scratch -OutDir .scratch/build-host -Platform x64
+          & $env:CCACHE_EXE --show-stats
+
+      - name: Save the compiler cache
+        if: steps.ccache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .scratch/ccache
+          key: ${{ env.COMPILER_CACHE_KEY }}
+
+      - name: Set up software Vulkan ICD for host tests
+        run: |
+          $dllPath = (Resolve-Path .scratch/build-host/dist/bin/vulkan_lvp.dll).Path
+          New-Item -ItemType Directory -Force .scratch/lavapipe | Out-Null
+          Copy-Item $dllPath -Destination "C:\Windows\System32\vulkan_lvp.dll" -Force
+          $jsonObj = [ordered]@{
+              ICD = [ordered]@{
+                  api_version = "1.4.354"
+                  library_path = $dllPath
+              }
+              file_format_version = "1.0.1"
+          }
+          $jsonObj | ConvertTo-Json | Set-Content -Path $env:LVP_ICD -Encoding utf8
+          New-Item -Path "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers" -Force | Out-Null
+          New-ItemProperty -Path "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers" -Name $env:LVP_ICD -Value 0 -PropertyType DWord -Force | Out-Null
+
+      - name: Run host renderer smoke and bundled Lavapipe fallback tests
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          uv run dsa/graphics/host/test_host_build.py
+          uv run dsa/graphics/host/test_host_renderer.py
+
+      - name: Run Windows compositor and Direct3D 11 shared-texture staging tests
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test window_manager -- pr3_compositor_serves_a_gfxstream_client --nocapture
+          cargo test -p dsa-host-windows --test renderer_process -- --nocapture --test-threads=1
+
+      - name: Upload the Windows host graphics renderer
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-gfxstream-windows
+          path: |
+            .scratch/build-host/dist/bin/gfxstream_backend.dll
+            .scratch/build-host/dist/bin/vulkan_lvp.dll
+            .scratch/build-host/dist/include/
+          if-no-files-found: error
+
+      - name: Install WiX 5
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+          wix --version
+
+      - name: Fetch the signed guest kernel and image list trust key
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $published = (New-Item -ItemType Directory -Force .scratch\published).FullName
+          gh release download images --repo $env:UPSTREAM_REPO --pattern 'images.json*' --dir $published
+          if ($LASTEXITCODE -ne 0) { throw "downloading images.json from $env:UPSTREAM_REPO failed" }
+
+          $tag = gh release list --repo $env:UPSTREAM_REPO --limit 50 --json tagName --jq '[.[].tagName | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0]'
+          if (-not $tag) { throw "could not find a published vX.Y.Z release on $env:UPSTREAM_REPO" }
+          gh release download $tag --repo $env:UPSTREAM_REPO --pattern 'DSA-*-win-x64-setup.exe' --dir $published
+          if ($LASTEXITCODE -ne 0) { throw "downloading $tag setup.exe from $env:UPSTREAM_REPO failed" }
+
+          $upstreamSetup = (Get-ChildItem -File $published -Filter 'DSA-*-win-x64-setup.exe' | Select-Object -First 1).FullName
+          wix burn extract $upstreamSetup -o "$published\burn"
+          if ($LASTEXITCODE -ne 0) { throw "wix burn extract on upstream setup.exe failed" }
+          $upstreamMsi = Join-Path "$published\burn\AttachedContainer" "a0"
+          if (-not (Test-Path $upstreamMsi)) {
+            $upstreamMsi = (Get-ChildItem -Recurse -File "$published\burn" -Filter 'a0' | Select-Object -First 1).FullName
+          }
+          $upstreamMsiNamed = Join-Path $published "upstream.msi"
+          Copy-Item $upstreamMsi $upstreamMsiNamed -Force
+          $extractDir = Join-Path $published "upstream-admin"
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList '/a', "`"$upstreamMsiNamed`"", '/qn', "TARGETDIR=`"$extractDir`""
+          if ($p.ExitCode -ne 0) { throw "extracting upstream MSI failed ($($p.ExitCode))" }
+
+          $upstreamCfgFile = Get-ChildItem -Recurse -File $extractDir -Filter 'dsa-hostd.json' | Select-Object -First 1
+          if (-not $upstreamCfgFile) { throw "upstream MSI did not contain dsa-hostd.json" }
+          $upstreamCfg = Get-Content -Raw $upstreamCfgFile.FullName | ConvertFrom-Json
+          $publicKey = @($upstreamCfg.update.trusted_keys)[0]
+          if (-not $publicKey) { throw "upstream dsa-hostd.json had no trusted_keys" }
+
+          Push-Location dsa
+          cargo build -q --release -p dsa-host-core --bin dsa-release
+          if ($LASTEXITCODE -ne 0) { throw "building dsa-release failed" }
+          Pop-Location
+          & dsa\target\release\dsa-release.exe verify $publicKey "$published\images.json"
+          if ($LASTEXITCODE -ne 0) { throw "images.json signature verification failed" }
+
+          $list = Get-Content -Raw "$published\images.json" | ConvertFrom-Json
+          $newest = $list.images | Sort-Object android_major, build | Select-Object -Last 1
+          $kernel = $newest.files | Where-Object name -eq 'bzImage'
+          if (-not $kernel) { throw "the newest published image has no bzImage" }
+          Invoke-WebRequest -Uri $kernel.url -OutFile "$published\bzImage"
+          if ((Get-FileHash "$published\bzImage").Hash -ne $kernel.sha256.ToUpperInvariant()) {
+            throw "downloaded bzImage SHA-256 did not match signed images.json"
+          }
+
+          $major = ($list.supported_majors | Measure-Object -Maximum).Maximum
+          if ($env:INPUT_VERSION) {
+            $version = $env:INPUT_VERSION.TrimStart('v')
+          } else {
+            $parts = $tag.TrimStart('v').Split('.')
+            $version = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+          }
+
+          "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
+          "ANDROID_MAJOR=$major" >> $env:GITHUB_ENV
+          "PUBLIC_KEY=$publicKey" >> $env:GITHUB_ENV
+          "KERNEL_PATH=$published\bzImage" >> $env:GITHUB_ENV
+          "LIST_URL=https://github.com/$env:UPSTREAM_REPO/releases/download/images/images.json" >> $env:GITHUB_ENV
+
+      - name: Build the Windows x64 MSI and setup.exe
+        run: |
+          $gfxDll = (Resolve-Path .scratch/build-host/dist/bin/gfxstream_backend.dll).Path
+          $lvpDll = (Resolve-Path .scratch/build-host/dist/bin/vulkan_lvp.dll).Path
+          & dsa/host/platform/windows/installer/build.ps1 `
+            -Version $env:INSTALLER_VERSION `
+            -Arch x64 `
+            -Kernel $env:KERNEL_PATH `
+            -GfxstreamBackend $gfxDll `
+            -LavapipeDll $lvpDll `
+            -AndroidMajor $env:ANDROID_MAJOR `
+            -ListUrl $env:LIST_URL `
+            -TrustedKey $env:PUBLIC_KEY
+
+      - name: Verify packaged installer contents and stage release assets
+        run: |
+          $v = $env:INSTALLER_VERSION
+          $msi = (Resolve-Path "dsa\target\installer\dsa-$v.msi").Path
+          $setup = (Resolve-Path "dsa\target\installer\setup-$v.exe").Path
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList '/a', "`"$msi`"", '/qn', "TARGETDIR=`"$PWD\built-admin`""
+          if ($p.ExitCode -ne 0) { throw "extracting built MSI failed ($($p.ExitCode))" }
+
+          $dll = Get-ChildItem -Recurse -File built-admin -Filter gfxstream_backend.dll | Select-Object -First 1
+          $lvp = Get-ChildItem -Recurse -File built-admin -Filter vulkan_lvp.dll | Select-Object -First 1
+          $gfxExe = Get-ChildItem -Recurse -File built-admin -Filter dsa-gfx.exe | Select-Object -First 1
+          $kernel = Get-ChildItem -Recurse -File built-admin -Filter bzImage | Select-Object -First 1
+          if (-not $dll -or -not $lvp -or -not $gfxExe -or -not $kernel) {
+            throw "MSI is missing one of gfxstream_backend.dll, vulkan_lvp.dll, dsa-gfx.exe, or bzImage"
+          }
+          if ($lvp.DirectoryName -ne $dll.DirectoryName -or $gfxExe.DirectoryName -ne $dll.DirectoryName) {
+            throw "vulkan_lvp.dll, gfxstream_backend.dll, and dsa-gfx.exe must sit in the same install folder"
+          }
+
+          $out = New-Item -ItemType Directory -Force dsa\target\release-assets
+          $setupName = "DSA-v$v-win-x64-setup.exe"
+          $msiName = "dsa-$v.msi"
+          Copy-Item $setup (Join-Path $out $setupName) -Force
+          Copy-Item $msi (Join-Path $out $msiName) -Force
+          $setupHash = (Get-FileHash (Join-Path $out $setupName) -Algorithm SHA256).Hash.ToLowerInvariant()
+          $msiHash = (Get-FileHash (Join-Path $out $msiName) -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -NoNewline -Encoding ascii (Join-Path $out SHA256SUMS.txt) "$setupHash  $setupName`n$msiHash  $msiName`n"
+
+      - name: Upload the Windows x64 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsa-windows-x64-installer
+          path: |
+            dsa/target/release-assets/DSA-v*-win-x64-setup.exe
+            dsa/target/release-assets/dsa-*.msi
+            dsa/target/release-assets/SHA256SUMS.txt
+          if-no-files-found: error

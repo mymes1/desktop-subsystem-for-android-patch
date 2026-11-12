@@ -11,7 +11,8 @@ param(
     [string]$Generator = "Ninja",
     [ValidateSet("x64", "ARM64")]
     [string]$Platform = "",
-    [string]$Toolset = "ClangCL"
+    [string]$Toolset = "ClangCL",
+    [string]$LavapipeDll = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -161,5 +162,38 @@ if ($Pdb) {
 } else {
     Write-Warning "no gfxstream_backend.pdb was produced; a renderer crash will show no function names"
 }
+
+# Stage the bundled Mesa Lavapipe software Vulkan ICD (vulkan_lvp.dll) beside
+# gfxstream_backend.dll so Windows machines without a hardware Vulkan driver (such as
+# Intel Haswell / Iris Pro 5200) start Vulkan automatically out of the box.
+$LvpDest = Join-Path $DistDir "bin/vulkan_lvp.dll"
+if ($LavapipeDll) {
+    if (-not (Test-Path $LavapipeDll)) {
+        throw "LavapipeDll does not exist: $LavapipeDll"
+    }
+    Copy-Item $LavapipeDll -Destination $LvpDest -Force
+} elseif (-not (Test-Path $LvpDest)) {
+    $LvpArch = if ($Platform -eq "ARM64") { "arm64" } else { "x64" }
+    $LvpVersion = "26.2.5"
+    $LvpCacheDir = Join-Path $ScratchPath "lavapipe-$LvpArch-$LvpVersion"
+    $CachedDll = Join-Path $LvpCacheDir "vulkan_lvp.dll"
+    if (-not (Test-Path $CachedDll)) {
+        New-Item -ItemType Directory -Force $LvpCacheDir | Out-Null
+        $Archive = Join-Path $LvpCacheDir "mesa-lavapipe-$LvpArch-$LvpVersion.7z"
+        $Uri = "https://github.com/mmozeiko/build-mesa/releases/download/$LvpVersion/mesa-lavapipe-$LvpArch-$LvpVersion.7z"
+        Write-Host "Downloading bundled Lavapipe software Vulkan ICD ($LvpArch $LvpVersion)..."
+        Invoke-WebRequest -Uri $Uri -OutFile $Archive
+        if (Test-Path "C:\Program Files\7-Zip\7z.exe") {
+            & "C:\Program Files\7-Zip\7z.exe" x $Archive "-o$LvpCacheDir" -y | Out-Null
+        } else {
+            tar -xf $Archive -C $LvpCacheDir
+        }
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $CachedDll)) {
+            throw "Failed to unpack vulkan_lvp.dll from $Archive"
+        }
+    }
+    Copy-Item $CachedDll -Destination $LvpDest -Force
+}
+Write-Host "Staged bundled Lavapipe software Vulkan ICD: $LvpDest"
 
 Write-Host "Built host graphics renderer: $DllOutput"
