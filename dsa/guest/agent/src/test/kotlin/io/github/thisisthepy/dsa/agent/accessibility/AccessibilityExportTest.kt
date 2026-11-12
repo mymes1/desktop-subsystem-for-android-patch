@@ -52,6 +52,16 @@ class FakeAccessibility : AccessibilitySource {
     val windows = mutableMapOf<Int, List<FakeNode>>()
     var reads = 0
 
+    /** Whether Android has bound the service once it is on; a slow boot binds it late. */
+    var bound = true
+
+    override val connected: Boolean
+        get() = on && bound
+
+    override fun reconnect() {
+        calls += "reconnect"
+    }
+
     override fun enable(onChange: () -> Unit) {
         on = true
         calls += "enable"
@@ -65,7 +75,7 @@ class FakeAccessibility : AccessibilitySource {
     }
 
     override fun roots(taskId: Int): List<NodeHandle>? {
-        if (!on) return null
+        if (!on || !bound) return null
         reads++
         return windows[taskId].orEmpty()
     }
@@ -234,6 +244,34 @@ class AccessibilityExportTest {
         scheduler.advance(2_000)
         assertFalse(service.on)
         assertEquals(listOf("disable", "enable", "disable", "enable", "disable"), service.calls)
+    }
+
+    @Test
+    fun fr18_a_watched_task_gets_its_tree_when_the_service_comes_up_late_without_an_event() {
+        // On the booted image the host watched the task while the user was still being
+        // unlocked: the service was turned on but not bound within the first two seconds, and
+        // no event of the service came afterwards. The tree never went out, and a screen
+        // reader would have found the window empty for as long as it watched.
+        started()
+        service.bound = false
+        watch(3, true)
+        scheduler.advance(5_000)
+        assertTrue(trees().isEmpty())
+        assertTrue(log.lines.any { it.startsWith("warn: task 3 is watched, but its accessibility tree could not be read") })
+        // The agent asks Android to bind the service again, once it has had time to do so.
+        assertFalse("reconnect" in service.calls)
+        scheduler.advance(AccessibilityExport.RECONNECT_MILLIS)
+        assertEquals(1, service.calls.count { it == "reconnect" })
+        // Android binds it, with no event: the tree goes out at the next try all the same.
+        service.bound = true
+        scheduler.advance(AccessibilityExport.SLOW_RETRY_MILLIS)
+        val tree = trees().single()
+        assertTrue(tree.full)
+        assertEquals(3, tree.taskId)
+        assertTrue(log.lines.any { it.startsWith("info: sent task 3's accessibility tree to the host") })
+        // Once connected, it is not asked to bind again.
+        scheduler.advance(3 * AccessibilityExport.RECONNECT_MILLIS)
+        assertEquals(1, service.calls.count { it == "reconnect" })
     }
 
     @Test

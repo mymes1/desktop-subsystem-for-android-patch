@@ -830,7 +830,10 @@ unsafe extern "system" fn task_window_proc(
             }
             // A maximised window takes the most Android can draw (WM_GETMINMAXINFO above),
             // shown 1:1. On a monitor larger than that it is centred on the work area rather
-            // than left in its top left corner.
+            // than left in its top left corner. One that fills the work area has its client
+            // area at the work area's corner, whatever position was proposed: the window
+            // keeps its smaller frame's size, centred, until the guest draws the larger one,
+            // and the position it takes that frame at is that centred one.
             if IsZoomed(hwnd) != 0 && pos.flags & (SWP_NOMOVE | SWP_NOSIZE) == 0 {
                 let proposed = RECT {
                     left: pos.x,
@@ -839,8 +842,9 @@ unsafe extern "system" fn task_window_proc(
                     bottom: pos.y + pos.cy,
                 };
                 if let Some(work) = work_area(&proposed) {
-                    pos.x = maximized_position(pos.x, work.left, work.right - work.left, pos.cx);
-                    pos.y = maximized_position(pos.y, work.top, work.bottom - work.top, pos.cy);
+                    let (left, top) = maximized_border(hwnd);
+                    pos.x = maximized_position(work.left, work.right - work.left, pos.cx, left);
+                    pos.y = maximized_position(work.top, work.bottom - work.top, pos.cy, top);
                 }
             }
             result
@@ -1180,6 +1184,17 @@ unsafe fn take_kept_frame(hwnd: HWND, data: &WindowData) {
         if let Some(monitor) = monitor_rect(hwnd) {
             (x, y) = centred(&monitor, (width as u32, height as u32));
         }
+    } else if IsZoomed(hwnd) != 0 {
+        // A maximised window goes where a maximised window of the frame's size belongs on
+        // its own monitor, not where its last frame was: that one was smaller and centred,
+        // so a frame the size of the work area would start at its corner and run off the
+        // screen. WM_WINDOWPOSCHANGING places it the same way; this keeps the rectangle
+        // it measures on the window's own monitor.
+        if let Some(work) = window_work_area(hwnd) {
+            let (left, top) = maximized_border(hwnd);
+            x = maximized_position(work.left, work.right - work.left, width, left);
+            y = maximized_position(work.top, work.bottom - work.top, height, top);
+        }
     }
     data.following.set(true);
     SetWindowPos(
@@ -1219,19 +1234,20 @@ unsafe fn window_outer(hwnd: HWND, client: (u32, u32), dpi: u32) -> (i32, i32) {
 fn centred(monitor: &RECT, size: (u32, u32)) -> (i32, i32) {
     let (width, height) = (size.0 as i32, size.1 as i32);
     (
-        maximized_position(
-            monitor.left,
-            monitor.left,
-            monitor.right - monitor.left,
-            width,
-        ),
-        maximized_position(
-            monitor.top,
-            monitor.top,
-            monitor.bottom - monitor.top,
-            height,
-        ),
+        maximized_position(monitor.left, monitor.right - monitor.left, width, 0),
+        maximized_position(monitor.top, monitor.bottom - monitor.top, height, 0),
     )
+}
+
+/// The borders (left, top) a maximised `hwnd` hangs off its work area's edges: those of its
+/// frame at its scale, and none while it fills its monitor without a frame.
+unsafe fn maximized_border(hwnd: HWND) -> (i32, i32) {
+    if window_data(hwnd).is_some_and(|data| !titled(data)) {
+        return (0, 0);
+    }
+    let dpi = GetDpiForWindow(hwnd).max(96);
+    let (left, top, _, _) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, true);
+    (left, top)
 }
 
 /// Whether the window has its title bar: not while it fills its monitor.
