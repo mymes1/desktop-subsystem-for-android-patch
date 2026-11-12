@@ -622,8 +622,9 @@ unsafe extern "C-unwind" fn first_rect(
     }
     let scale = view_scale(this);
     let bounds: CGRect = msg_send![this, bounds];
-    // The editor's cursor in task pixels from the top left, as view points from the bottom
-    // left; with no cursor known, the view's bottom left.
+    // The editor's cursor in client pixels from the top left (the window manager gives it at
+    // the view's frame scale), as view points from the bottom left; with no cursor known, the
+    // view's bottom left.
     let rect = match cursor {
         Some(c) => CGRect {
             origin: CGPoint {
