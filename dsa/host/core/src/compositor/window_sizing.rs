@@ -95,6 +95,24 @@ pub fn to_window_rect(rect: Bounds, (numerator, denominator): Scale) -> Bounds {
     }
 }
 
+/// A position `position` task pixels from the task's top left, in window pixels from the
+/// client area's top left at `scale`, unrounded: where the window shows that task pixel. A
+/// scale with a 0 in it is 1:1.
+pub fn to_window_position(position: f64, (numerator, denominator): Scale) -> f64 {
+    if numerator == denominator || numerator == 0 || denominator == 0 {
+        position
+    } else {
+        position * f64::from(numerator) / f64::from(denominator)
+    }
+}
+
+/// A position `position` window pixels from the client area's top left, in task pixels from
+/// the task's top left at `scale`, unrounded: the task pixel the window shows there. The
+/// inverse of [`to_window_position`].
+pub fn to_task_position(position: f64, (numerator, denominator): Scale) -> f64 {
+    to_window_position(position, (denominator, numerator))
+}
+
 /// A monitor's dots per inch at a scale of 100%: a host device-independent pixel (DIP) is
 /// 1/96 inch.
 pub const BASE_DPI: u32 = 96;

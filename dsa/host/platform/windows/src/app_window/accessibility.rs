@@ -11,7 +11,9 @@
 //! reading the task ([`ClientPresence`]).
 //!
 //! Each node gets the control type of its role, its name, its bounds on the screen (the
-//! window's client area, where the task is shown 1:1, plus the node's place in the task),
+//! window's client area plus where the window shows the node: its place in the task at the
+//! scale the window shows the task at, 1:1 unless the task keeps its density on a monitor of
+//! another scale),
 //! and the patterns it supports: Invoke, Value, Toggle,
 //! SelectionItem and Scroll ([`crate::ui_automation`]). A pattern call becomes the node's
 //! accessibility action in Android, so Invoke presses a list row without moving the cursor.
@@ -44,7 +46,7 @@ use dsa_host_core::accessibility::{
     NodeAction, PresenceChange, Tree, TreeError,
 };
 use dsa_host_core::host_api::HostApiClient;
-use dsa_host_core::input::InputEvent;
+use dsa_host_core::input::{InputEvent, WindowGeometry};
 use dsa_transport::Connector;
 use windows::core::{
     implement, Error, IUnknown, IUnknownImpl, Interface, BOOL, BSTR, HRESULT, PCWSTR,
@@ -160,11 +162,24 @@ const MAX_PROPERTY_EVENTS: usize = 64;
 /// The window message that tells a task window to raise the events of the changes that came.
 pub const WM_APP_ACCESSIBILITY: u32 = windows_sys::Win32::UI::WindowsAndMessaging::WM_APP + 3;
 
+impl State {
+    /// What node bounds and points are converted with, for a client area of `client`.
+    fn geometry(&self, client: (u32, u32)) -> WindowGeometry {
+        WindowGeometry {
+            client,
+            task: self.task_size,
+            scale: self.scale,
+        }
+    }
+}
+
 /// What the window's providers share with its watch thread.
 struct State {
     tree: Tree,
     /// The task's size in Android, which node bounds are measured in.
     task_size: (u32, u32),
+    /// How large the window shows each task pixel (window pixels per task pixels).
+    scale: (u32, u32),
     /// Where actions go while the watch runs.
     actions: Option<Sender<ActionRequest>>,
     next_request: u32,
@@ -509,7 +524,7 @@ impl IRawElementProviderFragmentRoot_Impl for RootProvider_Impl {
         let Some(epoch) = state.tree.epoch() else {
             return none();
         };
-        let (tx, ty) = from_screen((x, y), state.task_size, client, origin);
+        let (tx, ty) = from_screen((x, y), state.geometry(client), origin);
         match state.tree.hit(tx, ty) {
             Some(id) => Ok(node_of(&self.shared, epoch, id)),
             None => none(),
@@ -649,9 +664,9 @@ impl IRawElementProviderFragment_Impl for NodeProvider_Impl {
 
     fn BoundingRectangle(&self) -> windows::core::Result<UiaRect> {
         let (origin, client) = self.shared.client();
-        let task_size = self.shared.lock().task_size;
+        let geometry = self.shared.lock().geometry(client);
         let bounds = self.with_node(|_, node| node.bounds)?;
-        let rect = to_screen(bounds, task_size, client, origin);
+        let rect = to_screen(bounds, geometry, origin);
         Ok(UiaRect {
             left: rect.left,
             top: rect.top,
@@ -923,6 +938,8 @@ pub struct AccessibilityWindow {
     connect: Option<ApiConnect>,
     logger: Option<Arc<CompositorLogger>>,
     task_size: (u32, u32),
+    /// How large the window shows each task pixel (window pixels per task pixels).
+    scale: (u32, u32),
     /// The icon's cell while the title bar shows the back arrow in it.
     back: Option<ClientRect>,
     /// Where the back button's Back goes.
@@ -948,6 +965,7 @@ impl AccessibilityWindow {
             connect,
             logger,
             task_size,
+            scale: (1, 1),
             back: None,
             input,
         }
@@ -981,6 +999,15 @@ impl AccessibilityWindow {
         }
     }
 
+    /// The window shows the task's frames at `scale` (window pixels per task pixels) from now
+    /// on, so a node's bounds on the screen are its bounds in the task at that scale.
+    pub fn set_scale(&mut self, scale: (u32, u32)) {
+        self.scale = scale;
+        if let Some(shared) = &self.shared {
+            shared.lock().scale = scale;
+        }
+    }
+
     fn shared(&mut self, hwnd: isize) -> Arc<Shared> {
         if let Some(shared) = &self.shared {
             return Arc::clone(shared);
@@ -992,6 +1019,7 @@ impl AccessibilityWindow {
             state: Mutex::new(State {
                 tree: Tree::new(),
                 task_size,
+                scale: self.scale,
                 actions: None,
                 next_request: 0,
                 pending: Vec::new(),
@@ -1551,6 +1579,45 @@ mod tests {
         assert_eq!(Pattern::Scroll.id(), UIA_ScrollPatternId.0);
         assert_eq!(ScrollAmount_LargeIncrement.0, 3);
         assert_eq!(ScrollAmount_SmallDecrement.0, 1);
+    }
+
+    /// A task kept at the density of a main monitor at 100% (130 dpi), on a monitor at 125%
+    /// (164 dpi) left of and above the main one.
+    #[test]
+    fn fr18_on_a_monitor_of_another_scale_ui_automation_sees_a_node_where_the_window_shows_it() {
+        use dsa_host_core::compositor::window_sizing::{
+            density_for_dpi, scale_between, to_window_size,
+        };
+        let (input, _) = mpsc::channel();
+        let mut window = AccessibilityWindow::new(6, (810, 1661), input, None, None);
+        let scale = scale_between(density_for_dpi(120), density_for_dpi(96));
+        // The scale the window manager says reaches a tree made before and after it.
+        let before = window.shared(0);
+        window.set_scale(scale);
+        let after = {
+            window.shared = None;
+            window.shared(0)
+        };
+        let client = to_window_size((810, 1661), scale);
+        let origin = (-2900, -880);
+        for shared in [before, after] {
+            let geometry = shared.lock().geometry(client);
+            assert_eq!(geometry.scale, (82, 65));
+            let button = dsa_host_core::tasks::Bounds {
+                left: 650,
+                top: 1300,
+                right: 780,
+                bottom: 1365,
+            };
+            let rect = to_screen(button, geometry, origin);
+            assert_eq!(
+                (rect.left, rect.top, rect.width, rect.height),
+                (-2900.0 + 820.0, -880.0 + 1640.0, 164.0, 82.0)
+            );
+            // Voice Access clicks the middle of what it highlights: the button's middle.
+            let middle = (rect.left + rect.width / 2.0, rect.top + rect.height / 2.0);
+            assert_eq!(from_screen(middle, geometry, origin), (715, 1332));
+        }
     }
 
     #[test]
