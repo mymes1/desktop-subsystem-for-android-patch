@@ -106,13 +106,16 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   times a second, and at most once a second while the guest dozes. That drawing does not use
   the guest's display, so it goes on while the screen is off. A clock is drawn again at each
   minute (or second) even when nothing asks. A size from the host (`ResizeWidget`) redraws
-  the widget at that size and tells its app the size in dp
-  (`AppWidgetHostView.updateAppWidgetSize`, which also sets `OPTION_APPWIDGET_SIZES`). A
+  the widget at that size and tells its app the size in dp through the widget's options
+  (`OPTION_APPWIDGET_MIN`/`MAX_WIDTH`/`HEIGHT` and `OPTION_APPWIDGET_SIZES`), exactly the
+  window's size: the widget's view has no padding, so the 8 dp a side that
+  `AppWidgetHostView.updateAppWidgetSize` takes off for a launcher's padding is not taken. A
   widget is described with a default size in whole launcher cells, as a launcher places it:
   the cells its app asks for (`targetCellWidth`/`Height`), else the fewest that hold its
   minimum (n cells hold 70n - 30 dp), each 74 dp with 16 dp between them, at most 5. When a
-  widget's views still reach past its size, as when its text is larger than its app planned
-  for, the agent never sends an image that cuts them off: it draws the widget shrunk just
+  widget's views still reach past its size on any side, as when its text is larger than its
+  app planned for (Android centres a widget's content, so it overflows at the top as much as
+  at the bottom), the agent never sends an image that cuts them off: it draws the widget shrunk just
   enough to show whole, and describes it again with a default that holds its content (kept
   across restarts, and only ever grown), so a window the user has not sized grows to it. Pointer input (`WidgetPointer`) goes to the
   widget's view; a click opens its app on the guest's display. The widget IDs outlive the
