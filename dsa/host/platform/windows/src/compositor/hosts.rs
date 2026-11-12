@@ -1224,6 +1224,9 @@ impl Manager {
             }
         }
         if let Some(seen) = &self.setup.renderer_generation {
+            // It changes the moment the renderer finds its device lost, in its own process or
+            // in this one, so the reset is followed long before this process's own Direct3D
+            // device fails, and before Android ends a task that lost its rendering.
             let generation = seen();
             if generation != self.renderer_generation {
                 self.renderer_generation = generation;

@@ -31,7 +31,9 @@
 #include <vector>
 
 #include "FrameBuffer.h"
+#include "dsa_copy_bands.h"
 #include "dsa_copy_wait.h"
+#include "dsa_device_remake.h"
 #include "host-common/logging.h"
 #include "host-common/misc.h"
 #include "host-common/multi_display_agent.h"
@@ -39,6 +41,10 @@
 #include "vulkan/VkCommonOperations.h"
 
 namespace {
+
+/* The generation the presentation follows while the renderer's device is being made again:
+ * none, so the objects made on the old device are forgotten. */
+constexpr uint64_t kNoDevice = ~uint64_t{0};
 
 /* Waits for the copy `fence` follows, never without an end (dsa_copy_wait.h), and says how
  * long it took in `took_ns`. A finished copy's fence is reset for the next one; a hung one's
@@ -48,17 +54,35 @@ dsa::CopyEnd finish_copy(gfxstream::vk::VkEmulation& emu, VkFence fence, uint64_
     gfxstream::vk::VulkanDispatch* vk = emu.getDeviceDispatch();
     VkDevice device = emu.getDevice();
     const auto started = std::chrono::steady_clock::now();
+    /* In slices, so a loss another thread found ends the wait at once: the device lock this
+     * thread holds is what making the device again waits for. */
     const dsa::CopyEnd end = dsa::wait_for_copy([&](uint64_t timeout_ns) {
-        switch (vk->vkWaitForFences(device, 1, &fence, VK_TRUE, timeout_ns)) {
-            case VK_SUCCESS:
+        const dsa::GpuWait waited = dsa::wait_bounded(
+            [&](uint64_t slice_ns) {
+                switch (vk->vkWaitForFences(device, 1, &fence, VK_TRUE, slice_ns)) {
+                    case VK_SUCCESS:
+                        return dsa::GpuWait::Signaled;
+                    case VK_TIMEOUT:
+                        return dsa::GpuWait::Timeout;
+                    case VK_ERROR_DEVICE_LOST:
+                        return dsa::GpuWait::DeviceLost;
+                    default:
+                        return dsa::GpuWait::Failed;
+                }
+            },
+            [&] { return !emu.deviceUsable(); }, timeout_ns);
+        switch (waited) {
+            case dsa::GpuWait::Signaled:
                 return dsa::FenceWait::Signaled;
-            case VK_TIMEOUT:
+            case dsa::GpuWait::Timeout:
                 return dsa::FenceWait::Timeout;
-            case VK_ERROR_DEVICE_LOST:
+            case dsa::GpuWait::DeviceLost:
+            case dsa::GpuWait::GivenUp:
                 return dsa::FenceWait::DeviceLost;
-            default:
-                return dsa::FenceWait::Failed;
+            case dsa::GpuWait::Failed:
+                break;
         }
+        return dsa::FenceWait::Failed;
     });
     *took_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                          std::chrono::steady_clock::now() - started)
@@ -320,7 +344,9 @@ bool import_target(VkEmulation& emu, void* handle, uint32_t width, uint32_t heig
 /* The renderer made a new device after a GPU reset: everything made on the old one went with
  * it, so it is forgotten, not destroyed, and made again on the new one as frames come. */
 void follow_device(VkEmulation& emu, Presenter& presenter) {
-    const uint64_t generation = emu.deviceGeneration();
+    /* A device being made again may be gone already: nothing is destroyed on it, and the
+     * objects are made again on the new one. */
+    const uint64_t generation = emu.deviceUsable() ? emu.deviceGeneration() : kNoDevice;
     if (presenter.generation == generation) {
         return;
     }
@@ -396,22 +422,11 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
     if (!emu || !fb) {
         return;
     }
-    /* A lost device is made again before the copy, and none is made while the copy uses it. */
-    const auto recover_started = std::chrono::steady_clock::now();
-    const uint64_t generation_before = emu->deviceGeneration();
+    /* A lost device is made again on a thread of the renderer's own, which logs how long it
+     * took; until then the frame is dropped at once, as the guest's calls fail at once. None
+     * is made while the copy uses the device. */
     if (!emu->recoverIfLost()) {
         return;
-    }
-    if (emu->deviceGeneration() != generation_before) {
-        /* Every guest call on the renderer waits while the device is made again, and an app
-         * whose input goes unanswered for five seconds is ended by Android, so how long it
-         * took is what a report needs. */
-        const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::steady_clock::now() - recover_started)
-                              .count();
-        WARN("Making the renderer's Vulkan device again took %lld ms; the guest's calls waited "
-             "for it.",
-             static_cast<long long>(took));
     }
     auto device_use = emu->useDevice();
     follow_device(*emu, presenter);
@@ -467,7 +482,6 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         return;
     }
     const int32_t copy_width = static_cast<int32_t>(content_width);
-    const int32_t copy_height = static_cast<int32_t>(content_height);
 
     if (image_width != width || image_height != height) {
         /* The buffer and its Vulkan image disagree on the size: the copy is cut to the smaller,
@@ -497,71 +511,103 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
         target.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_GENERAL, family, VK_QUEUE_FAMILY_EXTERNAL));
 
-    VkCommandBufferBeginInfo begin = {};
-    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vk->vkResetCommandBuffer(presenter.commands, 0);
-    vk->vkBeginCommandBuffer(presenter.commands, &begin);
-    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_transfers);
-    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_layouts);
-
-    VkImageBlit region = {};
-    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.srcOffsets[1] = {copy_width, copy_height, 1};
-    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.dstOffsets[1] = {copy_width, copy_height, 1};
-    vk->vkCmdBlitImage(presenter.commands, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       target.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,
-                       VK_FILTER_NEAREST);
-
-    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_layouts);
-    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_transfers);
-    vk->vkEndCommandBuffer(presenter.commands);
-
-    VkSubmitInfo submit = {};
-    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &presenter.commands;
-    VkResult submitted;
-    {
-        android::base::AutoLock lock(*emu->getQueueLock());
-        submitted = vk->vkQueueSubmit(emu->getQueue(), 1, &submit, presenter.fence);
-    }
-    if (submitted != VK_SUCCESS) {
-        if (submitted == VK_ERROR_DEVICE_LOST) {
-            /* The next frame finds a new device. */
-            emu->noteDeviceLost();
-        }
-        log_once("submitting the copy of a frame into a task window failed");
-        return;
-    }
+    /* The copy goes in bands of at most dsa::kMaxCopyPixels, each a submission of its own
+     * that is waited for before the next: a frame of a window maximized on a 200% monitor
+     * (2880x1800 and more) is never one GPU job, and the GPU can turn to other work between
+     * the bands. The first band takes the images over, the last hands them back. */
+    const std::vector<dsa::CopyBand> bands = dsa::copy_bands(content_width, content_height);
     uint64_t took_ns = 0;
-    switch (finish_copy(*emu, presenter.fence, &took_ns)) {
-        case dsa::CopyEnd::Done:
-            break;
-        case dsa::CopyEnd::DeviceLost:
-            ERR("The GPU was reset while a frame of display %u (ColorBuffer %u, %ux%u, frame "
-                "%ux%u) was copied into its task window's %ux%u texture.",
-                display_id, color_buffer, width, height, content_width, content_height,
-                target.width, target.height);
+    for (size_t band = 0; band < bands.size(); ++band) {
+        const bool first = band == 0;
+        const bool last = band + 1 == bands.size();
+        const int32_t top = static_cast<int32_t>(bands[band].y);
+        const int32_t bottom = top + static_cast<int32_t>(bands[band].rows);
+
+        VkCommandBufferBeginInfo begin = {};
+        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vk->vkResetCommandBuffer(presenter.commands, 0);
+        vk->vkBeginCommandBuffer(presenter.commands, &begin);
+        if (first) {
+            cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_transfers);
+            cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_layouts);
+        } else {
+            /* After the bands before, and the layouts the first one set. */
+            VkMemoryBarrier after = {};
+            after.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            after.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            after.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            vk->vkCmdPipelineBarrier(presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &after, 0, nullptr, 0,
+                                     nullptr);
+        }
+
+        VkImageBlit region = {};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.srcOffsets[0] = {0, top, 0};
+        region.srcOffsets[1] = {copy_width, bottom, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstOffsets[0] = {0, top, 0};
+        region.dstOffsets[1] = {copy_width, bottom, 1};
+        vk->vkCmdBlitImage(presenter.commands, source->image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_NEAREST);
+
+        if (last) {
+            cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_layouts);
+            cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_transfers);
+        }
+        vk->vkEndCommandBuffer(presenter.commands);
+
+        VkSubmitInfo submit = {};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &presenter.commands;
+        VkResult submitted;
+        {
+            android::base::AutoLock lock(*emu->getQueueLock());
+            submitted = vk->vkQueueSubmit(emu->getQueue(), 1, &submit, presenter.fence);
+        }
+        if (submitted != VK_SUCCESS) {
+            if (submitted == VK_ERROR_DEVICE_LOST) {
+                /* The device is made again, and a frame after that finds the new one. */
+                emu->noteDeviceLost();
+            }
+            log_once("submitting the copy of a frame into a task window failed");
             return;
-        case dsa::CopyEnd::Hung:
-            /* The GPU may still run the command buffer: it and its fence are never used again,
-             * and the next frame makes new ones. */
-            ERR("Copying a frame of display %u (ColorBuffer %u, %ux%u, frame %ux%u) into its "
-                "task window's %ux%u texture has not finished in %llu ms; the GPU may have "
-                "hung. The copy is given up and the device is checked.",
-                display_id, color_buffer, width, height, content_width, content_height,
-                target.width, target.height,
-                static_cast<unsigned long long>(took_ns / 1000000ull));
-            presenter.pool = VK_NULL_HANDLE;
-            presenter.commands = VK_NULL_HANDLE;
-            presenter.fence = VK_NULL_HANDLE;
-            return;
+        }
+        uint64_t band_ns = 0;
+        const dsa::CopyEnd end = finish_copy(*emu, presenter.fence, &band_ns);
+        took_ns += band_ns;
+        switch (end) {
+            case dsa::CopyEnd::Done:
+                break;
+            case dsa::CopyEnd::DeviceLost:
+                ERR("The GPU was reset while a frame of display %u (ColorBuffer %u, %ux%u, frame "
+                    "%ux%u) was copied into its task window's %ux%u texture (rows %d to %d, "
+                    "band %zu of %zu).",
+                    display_id, color_buffer, width, height, content_width, content_height,
+                    target.width, target.height, top, bottom, band + 1, bands.size());
+                return;
+            case dsa::CopyEnd::Hung:
+                /* The GPU may still run the command buffer: it and its fence are never used
+                 * again, and the next frame makes new ones. */
+                ERR("Copying a frame of display %u (ColorBuffer %u, %ux%u, frame %ux%u) into "
+                    "its task window's %ux%u texture (rows %d to %d, band %zu of %zu) has not "
+                    "finished in %llu ms; the GPU may have hung. The copy is given up and the "
+                    "device is checked.",
+                    display_id, color_buffer, width, height, content_width, content_height,
+                    target.width, target.height, top, bottom, band + 1, bands.size(),
+                    static_cast<unsigned long long>(band_ns / 1000000ull));
+                presenter.pool = VK_NULL_HANDLE;
+                presenter.commands = VK_NULL_HANDLE;
+                presenter.fence = VK_NULL_HANDLE;
+                return;
+        }
     }
     if (took_ns > dsa::kCopySlowNs && slow_copy_may_log()) {
         WARN("Copying a frame of display %u (ColorBuffer %u, %ux%u, frame %ux%u) into its task "
@@ -1517,7 +1563,8 @@ void present_pixels(PixelPresenter& presenter, uint32_t display_id, const Pendin
 /* The renderer made a new device after a GPU reset: what was made on the old one went with
  * it, so it is forgotten, not destroyed, and made again as frames come. */
 void follow_device(VkEmulation& emu, PixelPresenter& presenter) {
-    const uint64_t generation = emu.deviceGeneration();
+    /* A device being made again may be gone already: nothing is destroyed on it. */
+    const uint64_t generation = emu.deviceUsable() ? emu.deviceGeneration() : kNoDevice;
     if (presenter.generation == generation) {
         return;
     }
