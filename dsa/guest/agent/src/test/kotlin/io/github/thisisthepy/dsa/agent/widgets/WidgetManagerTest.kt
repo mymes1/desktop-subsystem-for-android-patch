@@ -288,6 +288,71 @@ class WidgetManagerTest {
         assertEquals(110, WidgetFit.dpOf(132, 192))
     }
 
+    /**
+     * A 5 by 2 music widget at 369 by 170 dp, on a monitor at 200% (262 dpi) and at 125%
+     * (164 dpi). Its app was told 16 dp less each way than its window, Android's padding for a
+     * launcher's grid, which the agent's widget view does not have: at 262 dpi it laid out
+     * 154 dp, 252 pixels of a 278 pixel window, and the window showed a 26 pixel empty band
+     * below the widget.
+     */
+    @Test
+    fun fr12_a_widgets_app_is_told_the_size_of_its_window_at_200_and_125_percent() {
+        for ((density, window) in listOf(262 to (604 to 278), 164 to (378 to 174))) {
+            val told = WidgetFit.told(369, 170)
+            assertEquals(WidgetFit.Told(369, 170), told)
+            // The size the app lays out for covers the window to the pixel.
+            val px = { dp: Int -> Math.round(dp * density / 160.0).toInt() }
+            assertEquals("width at $density dpi", window.first.toDouble(), px(told.widthDp).toDouble(), 1.0)
+            assertEquals("height at $density dpi", window.second.toDouble(), px(told.heightDp).toDouble(), 1.0)
+        }
+    }
+
+    /**
+     * Android centres a widget's content, so content taller than its window is cut off at the
+     * top as much as at the bottom. Counting only the bottom, the 369 by 132 dp music widget
+     * whose content was 172 dp grew 132, 140, 156, 163, 167, 169, 170 dp and never held it.
+     */
+    @Test
+    fun fr12_a_widget_whose_content_overflows_at_the_top_too_is_measured_whole_and_shown_whole() {
+        // 200%: 132 dp is 216 pixels, and 172 dp of content 282 pixels, from -33 to 249.
+        val room = 216
+        val content = 282
+        val start = (room - content) / 2
+        assertEquals(-33, start)
+        val span = WidgetFit.span(room, start, start + content)
+        assertEquals(content, span)
+        assertEquals(173, WidgetFit.dpOf(span, 262))
+        // Drawn shrunk until a room that large holds it, where centred content starts at 0.
+        val scale = WidgetFit.scale(604, room, 604, span)
+        val layout = WidgetFit.layoutSide(room, scale)
+        assertTrue(layout >= content)
+        assertTrue((layout - content) / 2 >= 0)
+        // At its 170 dp (278 pixels) the content still reaches 2 pixels past each edge.
+        assertEquals(282, WidgetFit.span(278, -2, 280))
+        assertEquals(173, WidgetFit.dpOf(282, 262))
+        // 125%: 132 dp is 135 pixels, the content 176.
+        assertEquals(176, WidgetFit.span(135, (135 - 176) / 2, (135 - 176) / 2 + 176))
+        assertEquals(172, WidgetFit.dpOf(176, 164))
+        // Content inside its window needs nothing more.
+        assertEquals(278, WidgetFit.span(278, 0, 278))
+        assertEquals(278, WidgetFit.span(278, 20, 258))
+    }
+
+    @Test
+    fun fr12_what_an_apps_own_view_cuts_off_inside_the_window_is_not_counted_as_cut() {
+        // A card from 20 to 584 of a 604 pixel window cuts off its picture: the app's design.
+        assertEquals(20, WidgetFit.clipEdge(Int.MIN_VALUE, 20, 0, low = true))
+        assertEquals(584, WidgetFit.clipEdge(Int.MAX_VALUE, 584, 604, low = false))
+        // A view at the window's edges, or past them, is cut off by the window itself.
+        assertEquals(Int.MIN_VALUE, WidgetFit.clipEdge(Int.MIN_VALUE, 0, 0, low = true))
+        assertEquals(Int.MIN_VALUE, WidgetFit.clipEdge(Int.MIN_VALUE, -13, 0, low = true))
+        assertEquals(Int.MAX_VALUE, WidgetFit.clipEdge(Int.MAX_VALUE, 278, 278, low = false))
+        assertEquals(Int.MAX_VALUE, WidgetFit.clipEdge(Int.MAX_VALUE, 291, 278, low = false))
+        // An inner edge never loosens an outer one.
+        assertEquals(30, WidgetFit.clipEdge(30, 20, 0, low = true))
+        assertEquals(500, WidgetFit.clipEdge(500, 584, 604, low = false))
+    }
+
     @Test
     fun fr12_a_widget_android_does_not_allow_or_no_app_offers_is_refused_with_the_reason() {
         started()
