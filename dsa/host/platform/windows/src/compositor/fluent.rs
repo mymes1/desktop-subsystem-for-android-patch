@@ -1,9 +1,9 @@
 //! Windows 11 (Fluent) drawing for the window manager's own surfaces: the widgets' menu and
-//! the button that opens it.
+//! the border and handles of a widget being edited.
 //!
 //! The colors are WinUI 3's theme resources (`TextFillColorPrimary`,
 //! `SubtleFillColorSecondary`, `DividerStrokeColorDefault` and the rest), in the theme the
-//! user picked for apps, so the menu and the button look as a WinUI app's would. Under a high
+//! user picked for apps, so the menu looks as a WinUI app's would. Under a high
 //! contrast theme they take the theme's system colors instead, as WinUI does.
 //!
 //! Everything is drawn on a small canvas of premultiplied BGRA pixels ([`Canvas`]), the
@@ -28,8 +28,6 @@ pub const DEFAULT_ACCENT: Argb = 0xFF00_78D4;
 /// The Segoe Fluent Icons glyphs the surfaces draw (Segoe MDL2 Assets has them at the same
 /// code points).
 pub mod glyph {
-    /// "More": three dots in a row.
-    pub const MORE: char = '\u{E712}';
     /// "CheckMark": the chosen item of a menu.
     pub const CHECK: char = '\u{E73E}';
     /// "ChevronRight": an item that opens a submenu.
@@ -230,46 +228,6 @@ pub fn menu_palette(theme: &Theme) -> MenuPalette {
             check: theme.accent.dark1,
             chevron: 0x9E00_0000,
         }
-    }
-}
-
-/// The colors of a small button drawn over content, such as a widget's "More" button.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ButtonPalette {
-    /// The button's own fill, mostly opaque so it reads over whatever is under it.
-    pub fill: Argb,
-    /// Laid over the fill while the pointer is on it.
-    pub hover: Argb,
-    /// Laid over the fill while it is pressed.
-    pub pressed: Argb,
-    /// Its hairline edge.
-    pub border: Argb,
-    pub glyph: Argb,
-    pub glyph_pressed: Argb,
-}
-
-/// The button's colors for `theme`: a dark grey close to black at 85% (#202020), a faint
-/// light edge and light dots, the same in light and dark themes. The button sits over a
-/// widget, whose colors are its app's rather than the theme's, and a quiet dark chip reads
-/// over light and dark widgets alike. High contrast keeps its own colors.
-pub fn button_palette(theme: &Theme) -> ButtonPalette {
-    if let Some(hc) = theme.high_contrast {
-        return ButtonPalette {
-            fill: hc.window | 0xFF00_0000,
-            hover: hc.highlight | 0xFF00_0000,
-            pressed: hc.highlight | 0xFF00_0000,
-            border: hc.text | 0xFF00_0000,
-            glyph: hc.text | 0xFF00_0000,
-            glyph_pressed: hc.highlight_text | 0xFF00_0000,
-        };
-    }
-    ButtonPalette {
-        fill: 0xD920_2020,
-        hover: 0x14FF_FFFF,
-        pressed: 0x0AFF_FFFF,
-        border: 0x14FF_FFFF,
-        glyph: 0xF2FF_FFFF,
-        glyph_pressed: 0xB3FF_FFFF,
     }
 }
 
@@ -820,9 +778,6 @@ mod tests {
         assert_eq!(palette.hover, hc.highlight);
         assert_eq!(palette.text_highlighted, hc.highlight_text);
         assert_eq!(palette.text_disabled, hc.gray_text);
-        let button = button_palette(&theme);
-        assert_eq!(button.border, 0xFFFF_FFFF);
-        assert_eq!(button.fill, 0xFF00_0000);
     }
 
     #[test]
