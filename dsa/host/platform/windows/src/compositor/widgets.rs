@@ -21,9 +21,11 @@
 //! or the mouse's left button held, for [`HOLD_TO_MOVE`] without moving past the drag
 //! threshold. The system's timer may come a little before that, so a hold checked too early
 //! waits out the rest rather than being dropped ([`Gesture::held`]). Android's press is
-//! cancelled then, so the long press never also clicks. The
-//! widget lifts: it grows a little over a soft shadow, with a border in the accent color and a
-//! handle on each edge it may be resized along ([`edit_layout`], [`draw_edit`]). Dragging on
+//! cancelled then, so the long press never also clicks. The widget lifts: its image, at its
+//! own size, rises a little over a soft shadow, with a border in the accent color around it
+//! and a handle on each edge it may be resized along ([`edit_layout`], [`draw_lifted`]). While
+//! it is resized, its size goes to Android when the drag pauses and when it ends
+//! ([`ResizeReports`]), and its last image shows unscaled meanwhile. Dragging on
 //! moves it; letting go without moving opens its menu under it (Widget settings, Resize,
 //! Remove). While it is edited, dragging it moves it, a click on it opens the menu again, its
 //! handles and edges resize it within what the widget allows ([`edit_hit_test`]), and Esc, a
@@ -88,6 +90,11 @@ pub const EDIT_MARGIN_DIP: u32 = 16;
 /// How much a widget being edited grows on each side as it lifts, in device-independent
 /// pixels.
 pub const LIFT_DIP: u32 = 4;
+
+/// How far a widget being edited rises as it lifts, in device-independent pixels: its image,
+/// at its own size, moves up by this much over its shadow, as a launcher shows a widget it
+/// picked up. The image itself is never scaled.
+pub const RAISE_DIP: u32 = 2;
 
 /// The width of the accent border of a widget being edited.
 pub const EDIT_BORDER_DIP: u32 = 2;
@@ -455,9 +462,88 @@ pub fn resize_rect(
     (l, t, r, b)
 }
 
-/// How often the size of a window being resized is passed on while the drag goes on, so
-/// Android draws the widget at the size it is getting rather than only once the user lets go.
-pub const RESIZE_REPORT: Duration = Duration::from_millis(100);
+/// How long a resize must rest before the size it has reached is passed on. Each size Android
+/// is told makes it lay out and draw the widget's views anew, which costs memory and time, so
+/// a size is passed on when the user pauses on it rather than at every step of the drag.
+pub const RESIZE_PAUSE: Duration = Duration::from_millis(150);
+
+/// The least time between two sizes passed on for a widget being resized.
+pub const RESIZE_REPORT: Duration = Duration::from_millis(250);
+
+/// How often a window being resized checks whether its size is due to be passed on.
+pub const RESIZE_POLL: Duration = Duration::from_millis(50);
+
+/// When the size of a widget being resized is passed on: when the drag pauses on a size for
+/// [`RESIZE_PAUSE`] and when it ends, never more often than every [`RESIZE_REPORT`], and only
+/// a size other than the last one passed on. Between them the window shows the widget's
+/// last image unscaled ([`unscaled`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResizeReports<T> {
+    /// The size the drag has reached, and when it last changed.
+    current: Option<(T, Instant)>,
+    /// The size last passed on, and when.
+    sent: Option<(T, Instant)>,
+}
+
+/// What a resize asks of its window when [`ResizeReports::poll`] is called.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResizePoll<T> {
+    /// Pass this size on now.
+    Send(T),
+    /// A size is waiting: check again in a while.
+    Wait,
+    /// Nothing is waiting to be passed on.
+    Idle,
+}
+
+impl<T: Copy + PartialEq> Default for ResizeReports<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Copy + PartialEq> ResizeReports<T> {
+    /// Nothing reached and nothing passed on yet.
+    pub fn new() -> ResizeReports<T> {
+        ResizeReports {
+            current: None,
+            sent: None,
+        }
+    }
+
+    /// A new drag begins: what the last one passed on, and when, still counts.
+    pub fn restart(&mut self) {
+        self.current = None;
+    }
+
+    /// The drag reached `size` at `now`.
+    pub fn moved(&mut self, size: T, now: Instant) {
+        if self.current.map(|(at, _)| at) != Some(size) {
+            self.current = Some((size, now));
+        }
+    }
+
+    /// Whether the size the drag reached is due to be passed on at `now`; `ended` once the
+    /// user let go, when it no longer waits for a pause.
+    pub fn poll(&mut self, now: Instant, ended: bool) -> ResizePoll<T> {
+        let Some((size, changed)) = self.current else {
+            return ResizePoll::Idle;
+        };
+        if self.sent.map(|(sent, _)| sent) == Some(size) {
+            return ResizePoll::Idle;
+        }
+        let paused = ended || now.saturating_duration_since(changed) >= RESIZE_PAUSE;
+        let spaced = self
+            .sent
+            .is_none_or(|(_, at)| now.saturating_duration_since(at) >= RESIZE_REPORT);
+        if paused && spaced {
+            self.sent = Some((size, now));
+            ResizePoll::Send(size)
+        } else {
+            ResizePoll::Wait
+        }
+    }
+}
 
 /// Where the parts of a widget being edited are in its window, which has
 /// [`EDIT_MARGIN_DIP`] of room on every side of the widget. Each is left, top, width and
@@ -466,8 +552,12 @@ pub const RESIZE_REPORT: Duration = Duration::from_millis(100);
 pub struct EditLayout {
     /// The widget's own place, where it sits when it is not edited.
     pub widget: (i32, i32, i32, i32),
-    /// The widget lifted: [`LIFT_DIP`] larger on each side, which its image is drawn into.
+    /// The widget lifted: [`LIFT_DIP`] larger on each side, which its border and shadow are
+    /// drawn around.
     pub lifted: (i32, i32, i32, i32),
+    /// Where its image goes while it is lifted: at its own size, never scaled, raised by
+    /// [`RAISE_DIP`] from its own place.
+    pub image: (i32, i32, i32, i32),
     /// A handle in the middle of each edge the widget may be resized along, with that edge.
     pub handles: Vec<(Hit, Circle)>,
 }
@@ -497,9 +587,11 @@ pub fn edit_layout(width: i32, height: i32, dpi: u32, resize_mode: u32) -> EditL
         handles.push((Hit::Top, at(cx, ly as f32)));
         handles.push((Hit::Bottom, at(cx, (ly + lh) as f32)));
     }
+    let raise = px_of_dip(RAISE_DIP, dpi).min(lift);
     EditLayout {
         widget: (margin, margin, w, h),
         lifted,
+        image: (margin, margin - raise, w, h),
         handles,
     }
 }
@@ -656,6 +748,28 @@ pub fn draw_edit(
         canvas.stroke_rounded(left, top, d, d, r, rim, look.accent);
     }
     pixels
+}
+
+/// The picture of a widget lifted for editing in a window of `width` by `height` pixels on a
+/// monitor of `dpi`: its `image` of `from` pixels (premultiplied BGRA, as Android drew it) at
+/// its own size, raised a little over a soft shadow, with the accent border and the handles
+/// around it ([`draw_edit`]). The image is never scaled to the lifted size.
+pub fn draw_lifted(
+    image: &[u8],
+    from: (usize, usize),
+    width: usize,
+    height: usize,
+    dpi: u32,
+    resize_mode: u32,
+    look: &EditLook,
+) -> Vec<u8> {
+    let layout = edit_layout(width as i32, height as i32, dpi, resize_mode);
+    let (lx, ly, lw, lh) = layout.lifted;
+    let (ix, iy, _, _) = layout.image;
+    let room = (lw.max(1) as usize, lh.max(1) as usize);
+    let at = ((ix - lx).max(0) as usize, (iy - ly).max(0) as usize);
+    let lifted = unscaled_at(image, from, room, at);
+    draw_edit(&lifted, width, height, dpi, resize_mode, look)
 }
 
 /// How far a press may move and still be a long press, at `drag` (the system's drag
@@ -1506,12 +1620,12 @@ mod win {
     use std::time::Instant;
 
     use super::{
-        context_menu_at, draw_edit, edit_layout, edit_look, edit_margin, frame_overdue, hit_test,
+        context_menu_at, draw_lifted, edit_layout, edit_look, edit_margin, frame_overdue, hit_test,
         hold_timer_ms, keep_clickable, max_window_size, menu_anchor, menu_closed_by,
         min_window_size, placed_report, placement_of, press_threshold, reachable_origin,
         right_above_desktop, to_frame, window_size, window_styles, z_place, Below, Cursor, Gesture,
-        Hit, MenuAt, MenuClosed, Press, Step, WindowCommand, WindowReport, ZPlace, HOLD_TO_MOVE,
-        NO_FRAME, NO_FRAME_CHECK, RESIZE_REPORT, RESTACK_CHECK,
+        Hit, MenuAt, MenuClosed, Press, ResizePoll, ResizeReports, Step, WindowCommand,
+        WindowReport, ZPlace, HOLD_TO_MOVE, NO_FRAME, NO_FRAME_CHECK, RESIZE_POLL, RESTACK_CHECK,
     };
     use crate::compositor::fluent::{read_theme, Theme};
     use crate::compositor::log::{note, CompositorLogger};
@@ -1537,8 +1651,10 @@ mod win {
         /// Whether the window has the keyboard.
         focused: bool,
         menu_open: bool,
-        /// When the size of the window being resized was last passed on.
-        reported: Option<Instant>,
+        /// When the widget's size is passed on while it is resized.
+        resizes: ResizeReports<super::ScreenRect>,
+        /// Whether the resize has ended, with its last size perhaps still to pass on.
+        resize_ended: bool,
         /// Since when the window waits for its first image; None once one came.
         waiting_since: Option<Instant>,
         /// Whether the wait was logged already.
@@ -1560,6 +1676,10 @@ mod win {
 
     /// The window's timer that turns a held press into a move.
     const HOLD_TIMER: usize = 3;
+
+    /// The window's timer that passes on the size of a widget being resized when the drag
+    /// pauses.
+    const RESIZE_TIMER: usize = 5;
 
     /// The controller's timer that checks for windows still without an image.
     const NO_FRAME_TIMER: usize = 1;
@@ -2203,7 +2323,8 @@ mod win {
                             gesture: Gesture::Idle,
                             focused: false,
                             menu_open: false,
-                            reported: None,
+                            resizes: ResizeReports::new(),
+                            resize_ended: true,
                             waiting_since: Some(Instant::now()),
                             noted: false,
                             view: Arc::new(Mutex::new(WidgetView::default())),
@@ -2319,53 +2440,34 @@ mod win {
                 ..
             } = s;
             let window = windows.get_mut(&(hwnd as isize))?;
-            // While it is edited the widget sits in the middle of its lifted rectangle, inside
-            // the window's room for its shadow and handles.
+            // While it is edited the widget is lifted: its image at its own size, raised a
+            // little over its shadow, inside the window's room for its border and handles.
             let resize_mode = window.widget.provider.resize_mode;
-            let layout = window
-                .editing
-                .map(|_| edit_layout(width, height, dpi, resize_mode));
-            let (room, at, widget) = match &layout {
-                Some(layout) => {
-                    let (lx, ly, lw, lh) = layout.lifted;
-                    let (wx, wy, ww, wh) = layout.widget;
-                    (
-                        (lw.max(1) as usize, lh.max(1) as usize),
-                        ((wx - lx).max(0) as usize, (wy - ly).max(0) as usize),
-                        (ww.max(1) as usize, wh.max(1) as usize),
-                    )
-                }
-                None => {
-                    let size = (width as usize, height as usize);
-                    (size, (0, 0), size)
-                }
+            let editing = window.editing.is_some();
+            let widget = if editing {
+                let (_, _, ww, wh) = edit_layout(width, height, dpi, resize_mode).widget;
+                (ww.max(1) as usize, wh.max(1) as usize)
+            } else {
+                (width as usize, height as usize)
             };
             if window.base.is_none() {
                 let (decoder, logger) = (decoder.as_ref(), logger.as_deref());
                 window.base = frame_pixels(window, decoder, logger)
                     .map(|(w, h, pixels)| (w as i32, h as i32, pixels));
             }
-            let pixels = match &window.base {
-                Some((w, h, image)) => {
-                    let from = (*w as usize, *h as usize);
-                    if at == (0, 0) {
-                        super::unscaled(image, from, room)
-                    } else {
-                        super::unscaled_at(image, from, room, at)
-                    }
-                }
+            let card;
+            let (image, from): (&[u8], (usize, usize)) = match &window.base {
+                Some((w, h, image)) => (image, (*w as usize, *h as usize)),
                 None => {
-                    let card = super::placeholder(widget.0, widget.1, dpi);
-                    super::unscaled_at(&card, widget, room, at)
+                    card = super::placeholder(widget.0, widget.1, dpi);
+                    (&card, widget)
                 }
             };
-            let mut pixels = match layout {
-                Some(_) => {
-                    let look = edit_look(theme);
-                    let (w, h) = (width as usize, height as usize);
-                    draw_edit(&pixels, w, h, dpi, resize_mode, &look)
-                }
-                None => pixels,
+            let (w, h) = (width as usize, height as usize);
+            let mut pixels = if editing {
+                draw_lifted(image, from, w, h, dpi, resize_mode, &edit_look(theme))
+            } else {
+                super::unscaled(image, from, (w, h))
             };
             // Every pixel takes the pointer: around a widget being edited too, so the whole
             // reach of a handle grabs it and a press beside the widget ends the edit.
@@ -2614,15 +2716,25 @@ mod win {
             Step::StartResize(edge) => {
                 with_state(|s| {
                     if let Some(w) = s.windows.get_mut(&(hwnd as isize)) {
-                        w.reported = None;
+                        w.resizes.restart();
+                        w.resize_ended = false;
                     }
                 });
                 set_cursor(edge.cursor());
+                // SAFETY: a timer of this window, killed once the resize has passed on its
+                // last size.
+                unsafe { SetTimer(hwnd, RESIZE_TIMER, RESIZE_POLL.as_millis() as u32, None) };
             }
             Step::ResizeTo(to) => resize_to(hwnd, to),
             Step::EndResize => {
-                // The final size is always passed on, and kept by the service.
-                report_placement(hwnd);
+                // The last size is passed on now, or as soon as the last one passed on is
+                // far enough behind, and the service keeps it.
+                with_state(|s| {
+                    if let Some(w) = s.windows.get_mut(&(hwnd as isize)) {
+                        w.resize_ended = true;
+                    }
+                });
+                poll_resize(hwnd);
                 let rect = widget_rect(hwnd);
                 with_state(|s| {
                     let id = s.windows.get(&(hwnd as isize)).map(|w| w.widget.widget_id);
@@ -2805,6 +2917,10 @@ mod win {
                     });
                 }
                 do_step(hwnd, step, 0);
+                0
+            }
+            WM_TIMER if wparam == RESIZE_TIMER => {
+                poll_resize(hwnd);
                 0
             }
             WM_TIMER if wparam == HOLD_TIMER => {
@@ -3014,10 +3130,9 @@ mod win {
         do_step(hwnd, step, lparam);
     }
 
-    /// Resizes the window to `to` on the screen, and passes the size on every
-    /// [`RESIZE_REPORT`] while the drag goes on, so Android draws the widget at the size it
-    /// is getting. Until its image of that size comes, the window shows the last one
-    /// unscaled.
+    /// Resizes the window to `to` on the screen. The widget's size is passed on when the
+    /// drag pauses and when it ends ([`ResizeReports`]); until Android's image of that size
+    /// comes, the window shows the last one unscaled.
     fn resize_to(hwnd: HWND, to: super::ScreenRect) {
         let (l, t, r, b) = to;
         // SAFETY: a window of this thread; it keeps its place in the z-order.
@@ -3032,21 +3147,34 @@ mod win {
                 SWP_NOACTIVATE | SWP_NOZORDER,
             );
         }
+        let rect = widget_rect(hwnd);
+        let widget = (rect.left, rect.top, rect.right, rect.bottom);
         let now = Instant::now();
-        let due = with_state(|s| {
-            let w = s.windows.get_mut(&(hwnd as isize))?;
-            let due = w
-                .reported
-                .is_none_or(|at| now.saturating_duration_since(at) >= RESIZE_REPORT);
-            if due {
-                w.reported = Some(now);
+        with_state(|s| {
+            if let Some(w) = s.windows.get_mut(&(hwnd as isize)) {
+                w.resizes.moved(widget, now);
             }
-            Some(due)
+        });
+    }
+
+    /// Passes the widget's size on if a resize has one due ([`ResizeReports::poll`]), and
+    /// stops the window's resize timer once an ended resize has nothing more to pass on.
+    fn poll_resize(hwnd: HWND) {
+        let now = Instant::now();
+        let polled = with_state(|s| {
+            let w = s.windows.get_mut(&(hwnd as isize))?;
+            Some((w.resizes.poll(now, w.resize_ended), w.resize_ended))
         })
-        .flatten()
-        .unwrap_or(false);
-        if due {
+        .flatten();
+        let Some((poll, ended)) = polled else {
+            return;
+        };
+        if let ResizePoll::Send(_) = poll {
             report_placement(hwnd);
+        }
+        if ended && poll != ResizePoll::Wait {
+            // SAFETY: the resize timer of this window.
+            unsafe { KillTimer(hwnd, RESIZE_TIMER) };
         }
     }
 
@@ -4234,6 +4362,141 @@ mod tests {
         assert!(!Gesture::Idle.dragging());
     }
 
+    /// A long-pressed widget lifts as a launcher shows a widget it picked up: its image rises
+    /// a little over a soft shadow, inside its accent border and handles, and the image keeps
+    /// its own pixels, never scaled to the lifted size.
+    #[test]
+    fn fr12_a_lifted_widget_rises_over_a_shadow_and_never_scales_its_frame() {
+        use crate::compositor::fluent::Theme;
+        let (width, height) = (140usize, 98usize);
+        let layout = edit_layout(width as i32, height as i32, 96, 3);
+        let (ix, iy, iw, ih) = layout.image;
+        let (wx, wy, ww, wh) = layout.widget;
+        assert_eq!((iw, ih), (ww, wh), "the image keeps the widget's own size");
+        assert_eq!(ix, wx);
+        assert_eq!(
+            iy,
+            wy - px_of_dip(RAISE_DIP, 96),
+            "it rises by {RAISE_DIP} dp"
+        );
+        // At 200% it rises twice as far.
+        let large = edit_layout(2 * width as i32, 2 * height as i32, 192, 3);
+        assert_eq!(large.widget.1 - large.image.1, px_of_dip(RAISE_DIP, 192));
+
+        // A frame of distinct, opaque pixels at the widget's size.
+        let (fw, fh) = (iw as usize, ih as usize);
+        let pixel = |x: usize, y: usize| [x as u8, y as u8, 0xC0, 0xFF];
+        let frame: Vec<u8> = (0..fh)
+            .flat_map(|y| (0..fw).flat_map(move |x| pixel(x, y)))
+            .collect();
+        let look = edit_look(&Theme::light());
+        let drawn = draw_lifted(&frame, (fw, fh), width, height, 96, 3, &look);
+        let at = |x: usize, y: usize| {
+            let i = (y * width + x) * 4;
+            [drawn[i], drawn[i + 1], drawn[i + 2], drawn[i + 3]]
+        };
+        // Every pixel of the frame, but the few its border and handles cover, is where it
+        // was raised to, one to one.
+        let (ix, iy) = (ix as usize, iy as usize);
+        for y in 6..fh - 6 {
+            for x in 6..fw - 6 {
+                assert_eq!(at(ix + x, iy + y), pixel(x, y), "frame pixel {x},{y}");
+            }
+        }
+        // Beside the image, inside the lifted rectangle, the frame does not reach: it was not
+        // stretched to the lifted size.
+        let beside = at(ix + fw + 1, iy + 10);
+        assert_ne!(beside[2], 0xC0, "the frame was stretched: {beside:?}");
+        // A soft shadow under it, darker nearer.
+        let (lx, ly, lw, lh) = layout.lifted;
+        let below = (ly + lh) as usize;
+        // A quarter along, away from the handles in the middle of each edge.
+        let mid = (lx + lw / 4) as usize;
+        let near = at(mid, below + 3);
+        let far = at(mid, height - 2);
+        assert!(near[3] > 0 && near[..3] == [0, 0, 0], "no shadow: {near:?}");
+        assert!(near[3] > far[3], "{near:?} {far:?}");
+        // Its border in the accent color.
+        assert_eq!(
+            at(mid, ly as usize),
+            crate::compositor::fluent::premultiplied(look.accent, 1.0)
+        );
+    }
+
+    /// While a widget is resized its size is passed on when the drag pauses for
+    /// [`RESIZE_PAUSE`] and when it ends, never more often than every [`RESIZE_REPORT`], and
+    /// a size passed on already is not passed on again: each size Android is told makes it
+    /// draw the widget's views anew.
+    #[test]
+    fn fr12_a_resize_passes_its_size_on_only_when_it_pauses_and_at_its_end() {
+        let t0 = Instant::now();
+        let ms = |n: u64| t0 + Duration::from_millis(n);
+        let mut reports = ResizeReports::<u32>::new();
+        assert_eq!(reports.poll(t0, false), ResizePoll::Idle);
+        // A steady two-second drag, a step every 16 ms: nothing goes out while it moves.
+        let mut sent = Vec::new();
+        for step in 0..125u64 {
+            let now = ms(step * 16);
+            reports.moved(100 + step as u32, now);
+            if let ResizePoll::Send(size) = reports.poll(now + Duration::from_millis(8), false) {
+                sent.push(size);
+            }
+        }
+        assert!(sent.is_empty(), "sent {sent:?} while the drag moved");
+        // It pauses: the size it reached goes out once.
+        let last = ms(124 * 16);
+        assert_eq!(
+            reports.poll(last + RESIZE_PAUSE - Duration::from_millis(1), false),
+            ResizePoll::Wait
+        );
+        assert_eq!(
+            reports.poll(last + RESIZE_PAUSE, false),
+            ResizePoll::Send(224)
+        );
+        assert_eq!(
+            reports.poll(last + RESIZE_PAUSE * 4, false),
+            ResizePoll::Idle
+        );
+        let sent_at = last + RESIZE_PAUSE;
+        // It moves on and pauses again soon after: the next size waits until 250 ms have
+        // passed since the last one went out.
+        reports.moved(230, sent_at + Duration::from_millis(10));
+        let paused = sent_at + Duration::from_millis(10) + RESIZE_PAUSE;
+        assert!(paused < sent_at + RESIZE_REPORT);
+        assert_eq!(reports.poll(paused, false), ResizePoll::Wait);
+        assert_eq!(
+            reports.poll(sent_at + RESIZE_REPORT, false),
+            ResizePoll::Send(230)
+        );
+        let sent_at = sent_at + RESIZE_REPORT;
+        // The user lets go at once: the end does not wait for a pause, but it waits for the
+        // 250 ms, then goes out, and nothing after it.
+        reports.moved(240, sent_at + Duration::from_millis(5));
+        assert_eq!(
+            reports.poll(sent_at + Duration::from_millis(6), true),
+            ResizePoll::Wait
+        );
+        assert_eq!(
+            reports.poll(sent_at + RESIZE_REPORT, true),
+            ResizePoll::Send(240)
+        );
+        assert_eq!(
+            reports.poll(sent_at + RESIZE_REPORT * 2, true),
+            ResizePoll::Idle
+        );
+        // A drag that comes back to the size passed on last passes nothing on.
+        reports.restart();
+        reports.moved(250, sent_at + RESIZE_REPORT * 3);
+        reports.moved(240, sent_at + RESIZE_REPORT * 3 + Duration::from_millis(16));
+        assert_eq!(
+            reports.poll(sent_at + RESIZE_REPORT * 5, true),
+            ResizePoll::Idle
+        );
+        // A press on an edge that never moves passes nothing on.
+        let mut still = ResizeReports::<u32>::new();
+        assert_eq!(still.poll(t0, true), ResizePoll::Idle);
+    }
+
     /// A widget's image is never scaled to a window it was not drawn for: Android draws it at
     /// the size it is told, so an image of another size is one drawn before a resize, and it
     /// shows at its own size from the top left corner until the next one comes.
@@ -4479,9 +4742,10 @@ mod tests {
                 let margin = edit_margin(dpi);
                 let (ew, eh) = (width + 2 * margin, height + 2 * margin);
                 let lifted = edit_layout(ew, eh, dpi, clock().resize_mode).lifted;
-                let image = placeholder(lifted.2 as usize, lifted.3 as usize, dpi);
+                let (iw, ih) = (width as usize, height as usize);
+                let image = placeholder(iw, ih, dpi);
                 let (ew, eh) = (ew as usize, eh as usize);
-                let edited = draw_edit(&image, ew, eh, dpi, 3, &edit_look(&theme));
+                let edited = draw_lifted(&image, (iw, ih), ew, eh, dpi, 3, &edit_look(&theme));
                 let mut picture = Picture::new(ew.max(root_w) + 32, eh + root_h + 40, desktop);
                 picture.place(16, 16, ew, eh, &edited);
                 let menu_x = (16 + lifted.0 as usize + lifted.2 as usize).saturating_sub(root_w);
