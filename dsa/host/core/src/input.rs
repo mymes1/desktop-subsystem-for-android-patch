@@ -11,7 +11,7 @@
 use dsa_protocol::control;
 use dsa_protocol::host_api::types as wire;
 
-use crate::compositor::window_sizing::Scale;
+use crate::compositor::window_sizing::{to_task_position, to_window_position, Scale};
 
 /// The buttons held down, as bits of [`PointerEvent::buttons`]. The values are the guest's
 /// own, so they pass through unchanged.
@@ -283,16 +283,8 @@ impl WindowGeometry {
     /// the task beside it on the guest display. A point outside (the mouse dragged out of the
     /// window while a button is down) keeps going, as it would on a phone's screen edge.
     pub fn to_guest(&self, (x, y): (f64, f64)) -> (f32, f32) {
-        let (numerator, denominator) = self.scale;
-        let in_task = |position: f64| -> f64 {
-            if numerator == denominator || numerator == 0 || denominator == 0 {
-                position
-            } else {
-                position * f64::from(denominator) / f64::from(numerator)
-            }
-        };
         let axis = |position: f64, client: u32, task: u32| -> f32 {
-            let landed = in_task(position);
+            let landed = to_task_position(position, self.scale);
             if client == 0 || task == 0 {
                 return landed as f32;
             }
@@ -306,6 +298,34 @@ impl WindowGeometry {
             axis(x, self.client.0, self.task.0),
             axis(y, self.client.1, self.task.1),
         )
+    }
+
+    /// The task pixel shown at `point` of the client area (window pixels from its top left),
+    /// in task pixels from the task's top left, unrounded and not kept inside the task: what
+    /// a hit test of the task's own layout asks about.
+    pub fn to_task_point(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        (
+            to_task_position(x, self.scale),
+            to_task_position(y, self.scale),
+        )
+    }
+
+    /// Where the window shows the task's `point` (task pixels from its top left): window
+    /// pixels from the client area's top left, unrounded. The inverse of
+    /// [`Self::to_task_point`].
+    pub fn to_window_point(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        (
+            to_window_position(x, self.scale),
+            to_window_position(y, self.scale),
+        )
+    }
+
+    /// Where the window shows the task's rectangle `rect` (task pixels), in window pixels
+    /// from the client area's top left: left, top, right and bottom, unrounded.
+    pub fn to_window_bounds(&self, rect: crate::tasks::Bounds) -> (f64, f64, f64, f64) {
+        let (left, top) = self.to_window_point((f64::from(rect.left), f64::from(rect.top)));
+        let (right, bottom) = self.to_window_point((f64::from(rect.right), f64::from(rect.bottom)));
+        (left, top, right, bottom)
     }
 }
 

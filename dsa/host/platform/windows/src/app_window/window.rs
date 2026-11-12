@@ -1528,8 +1528,11 @@ impl Ui {
                             data.pointer.task_resized((width, height));
                             // A point in the window is a task pixel at the window's scale.
                             data.pointer.set_scale(scale);
+                            // So is a node's place on the screen, and a screen point in a hit
+                            // test.
                             if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
                                 tree.task_resized((width, height));
+                                tree.set_scale(scale);
                             }
                             data.max_client.set(max);
                             data.min_client.set(min);
