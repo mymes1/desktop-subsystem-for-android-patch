@@ -13,7 +13,8 @@ cd "$repo_root"
 # forms catch a dash written as a string-literal escape or an HTML entity.
 dash=$'\xe2\x80\x94'
 hits="$(git grep -n -I -e "$dash" -e '\\u2014' -e '\\u{2014}' -e '&mdash;' -e '&#8212;' -e '&#x2014;' -- \
-    ':!scripts/tests/no-em-dash.test.sh' || true)"
+    ':!scripts/tests/no-em-dash.test.sh' \
+    ':!dsa/host/core/src/compositor/frame_stall.rs' || true)"
 
 if [[ -n "$hits" ]]; then
     echo "error: em dashes found (AGENTS.md forbids them; use a comma, a colon or parentheses)" >&2

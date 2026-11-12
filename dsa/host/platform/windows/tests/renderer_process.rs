@@ -416,7 +416,7 @@ fn nfr5_killing_the_renderer_keeps_the_window_and_its_frame_and_frames_resume() 
         wait_until("the frame", Duration::from_secs(10), || {
             window.shown.load(Ordering::SeqCst) >= 1
         }),
-        "the renderer copies the frame into the window's Direct3D 11 texture (directly or by staging)"
+        "the renderer copies the frame into the window's Direct3D 11 texture"
     );
     let texture = window.handle().expect("the window has its texture");
     let shown = window.shown.load(Ordering::SeqCst);
@@ -513,6 +513,6 @@ fn pr3_bundled_lavapipe_fallback_presents_d3d11_frames_without_system_vulkan() {
         wait_until("the staged frame", WAIT, || {
             window.shown.load(Ordering::SeqCst) >= 1
         }),
-        "a machine without hardware Vulkan (e.g. Intel Iris Pro 5200) shows frames through bundled Lavapipe + Direct3D 11 staging"
+        "frames reach the window through bundled Lavapipe and Direct3D 11 staging"
     );
 }

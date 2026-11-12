@@ -29,6 +29,12 @@ case "$branch" in
         exit 0
         ;;
 esac
+case "${GITHUB_BASE_REF:-}" in
+    main|release)
+        echo "ok    pull request targets ${GITHUB_BASE_REF}, a published branch where planning documents are stripped"
+        exit 0
+        ;;
+esac
 
 required=(AGENTS.md PROJECT.md docs/INTENT.md docs/SPEC.md)
 missing=()
