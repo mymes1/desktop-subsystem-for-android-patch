@@ -203,6 +203,17 @@ pub fn maximized_position(proposed: i32, start: i32, area: i32, outer: i32) -> i
     start + (area - outer) / 2
 }
 
+/// The outer size a maximised task window takes: the most the guest can draw (`guest`, with
+/// the borders of a maximised window) and no more than the work area of the window's own
+/// monitor with those borders, which Windows hangs off its edges (`work`). Windows proposes a
+/// maximised size measured on the primary monitor, and adjusts it to the monitor the window
+/// maximises on only while it is at least the primary monitor's size; a smaller one, such as
+/// the guest's largest size, it takes as it is. So on a monitor smaller than the primary one
+/// a window would maximise past the bottom of its own screen unless its work area limits it.
+pub fn maximized_outer(guest: (i32, i32), work: (i32, i32)) -> (i32, i32) {
+    (guest.0.min(work.0).max(1), guest.1.min(work.1).max(1))
+}
+
 /// Where a window goes and how large it is (left, top, width, height, all of its outer
 /// rectangle) when its monitor changes scale and the desktop suggests `suggested` for it.
 /// That is the suggested rectangle itself, cut down to `limit`, the largest outer size the
@@ -724,6 +735,18 @@ mod tests {
         // A drag that only moves it still ends with the task reconfigured, once.
         assert_eq!(sizing.dragging(false, now), resize(1920, 1080));
         assert_eq!(sizing.reconfigure(now), None);
+    }
+
+    #[test]
+    fn fr4_a_window_maximised_on_a_monitor_smaller_than_the_primary_stays_on_its_screen() {
+        // The guest draws 2880x2880, 1803x1800 at the window's scale: 1819x1816 outer with a
+        // maximised window's borders at 100%. On a 2048x1152 monitor whose work area is
+        // 2048x1104, the window fills the work area (2064x1120 with the borders) in height.
+        assert_eq!(maximized_outer((1819, 1816), (2064, 1120)), (1819, 1120));
+        // On a 4K monitor the guest's size is the smaller, and the window is centred instead.
+        assert_eq!(maximized_outer((1819, 1816), (3856, 2128)), (1819, 1816));
+        // A guest larger than every monitor fills the work area.
+        assert_eq!(maximized_outer((8016, 8016), (2064, 1120)), (2064, 1120));
     }
 
     #[test]
