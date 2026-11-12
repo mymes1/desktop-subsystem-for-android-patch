@@ -25,7 +25,8 @@ use dsa_host_core::renderer::{
     QUESTION_TIMEOUT, WINDOW_MANAGER_ARGUMENT,
 };
 use dsa_protocol::renderer::types::{
-    envelope::Body, ForgetDisplay, GuestVm, MemoryReport, MemoryRequest, Start, Started, Target,
+    envelope::Body, DeviceState, ForgetDisplay, GuestVm, MemoryReport, MemoryRequest, Start,
+    Started, Target,
 };
 use dsa_transport::local::LocalListener;
 use dsa_transport::TransportError;
@@ -45,6 +46,21 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// How often the window manager looks whether the VM changed, to tell the renderer.
 const VM_POLL: Duration = Duration::from_millis(100);
+
+/// The window manager's line for a renderer's DeviceState.
+pub fn describe_device_state(state: &DeviceState) -> String {
+    if state.losses > state.generation {
+        format!(
+            "the graphics renderer found its GPU device lost (loss {}); task windows are kept              while it makes a new one, and the guest's calls on the lost one fail at once",
+            state.losses
+        )
+    } else {
+        format!(
+            "the graphics renderer made its GPU device again (number {} since it started)",
+            state.generation
+        )
+    }
+}
 
 /// The compositor's stream renderer once the renderer runs in its own process: the
 /// compositor never takes a stream itself (`Compositor::without_graphics_streams`), so this
@@ -298,6 +314,9 @@ pub struct RendererClient {
     memory: Pending<MemoryReport>,
     process: RendererProcess,
     logger: Option<Arc<CompositorLogger>>,
+    /// How many times a renderer said its device was lost or made again: each DeviceState
+    /// is a change. Kept across renderer restarts, whose counts start from zero again.
+    device_changes: AtomicU64,
 }
 
 impl RendererClient {
@@ -317,6 +336,7 @@ impl RendererClient {
             memory: Pending::new(),
             process,
             logger,
+            device_changes: AtomicU64::new(0),
         })
     }
 
@@ -536,6 +556,12 @@ impl RendererHandler for RendererClient {
                 }
             }
             Body::MemoryReport(report) => self.memory.complete(report.request, report),
+            Body::DeviceState(state) => {
+                // The window manager's thread looks at this within half a second and takes
+                // the change as a GPU reset, without waiting for its own device to fail.
+                self.device_changes.fetch_add(1, Ordering::SeqCst);
+                self.log_line(&describe_device_state(&state));
+            }
             Body::RendererLog(line) => {
                 let severity = u8::try_from(line.severity).unwrap_or(b'E');
                 if let Some(line) = renderer_line(severity, &line.message) {
@@ -592,7 +618,71 @@ impl DisplayPresenter for RendererClient {
         self.ask_memory(false)
     }
 
+    fn device_generation(&self) -> u64 {
+        self.device_changes.load(Ordering::SeqCst)
+    }
+
     fn give_back(&self) -> Option<RendererProcessMemory> {
         self.ask_memory(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn client() -> Arc<RendererClient> {
+        RendererClient::new(GpuRequest::Ranking, (0, 0), Arc::default(), None)
+    }
+
+    #[test]
+    fn nfr5_the_renderers_lost_device_reaches_the_window_manager_across_the_processes() {
+        let client = client();
+        let link = RendererLink::detached();
+        // Before, the window manager read 0 from a renderer in another process, whatever it did.
+        assert_eq!(DisplayPresenter::device_generation(&*client), 0);
+        let lost = DeviceState {
+            losses: 1,
+            generation: 0,
+        };
+        RendererHandler::message(&*client, Body::DeviceState(lost), &link);
+        let at_loss = DisplayPresenter::device_generation(&*client);
+        assert_ne!(at_loss, 0, "the loss is a change at once");
+        let made = DeviceState {
+            losses: 1,
+            generation: 1,
+        };
+        RendererHandler::message(&*client, Body::DeviceState(made), &link);
+        assert_ne!(DisplayPresenter::device_generation(&*client), at_loss);
+    }
+
+    #[test]
+    fn nfr5_a_restarted_renderers_counts_from_zero_still_change_what_is_followed() {
+        let client = client();
+        let link = RendererLink::detached();
+        let mut seen = vec![DisplayPresenter::device_generation(&*client)];
+        for (losses, generation) in [(1, 0), (1, 1), (1, 0)] {
+            let state = DeviceState { losses, generation };
+            RendererHandler::message(&*client, Body::DeviceState(state), &link);
+            seen.push(DisplayPresenter::device_generation(&*client));
+        }
+        assert!(seen.windows(2).all(|pair| pair[1] != pair[0]));
+    }
+
+    #[test]
+    fn nfr5_the_log_says_whether_the_device_was_lost_or_made_again() {
+        let lost = describe_device_state(&DeviceState {
+            losses: 2,
+            generation: 1,
+        });
+        assert!(lost.contains("lost (loss 2)"), "{lost}");
+        let made = describe_device_state(&DeviceState {
+            losses: 2,
+            generation: 2,
+        });
+        assert!(
+            made.contains("made its GPU device again (number 2"),
+            "{made}"
+        );
     }
 }

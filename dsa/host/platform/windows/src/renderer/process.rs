@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use dsa_host_core::compositor::{GraphicsRenderer, GraphicsStreamKind};
 use dsa_host_core::renderer::{
-    address_from, open_renderer, HeldTargets, RendererProcessMemory, WindowManagerLink,
-    WINDOW_MANAGER_ARGUMENT,
+    address_from, follow_device_state, open_renderer, HeldTargets, RendererProcessMemory,
+    WindowManagerLink, WINDOW_MANAGER_ARGUMENT,
 };
 use dsa_protocol::renderer::types::{envelope::Body, FrameDone, FramePath, Started};
 use dsa_protocol::renderer::{decode_body, send};
@@ -314,6 +314,18 @@ pub fn run(args: &[String]) -> ! {
         .unwrap_or_default();
     if send(&mut *connection, Body::Started(started)).is_err() {
         end_now(6);
+    }
+    // A lost device reaches the window manager the moment the renderer finds it, not when the
+    // window manager's own Direct3D device fails, which on the owner's PC was 13 s later.
+    let watched = Arc::clone(&adapter);
+    if let Err(why) = follow_device_state(
+        Arc::clone(&link),
+        Box::new(move || (watched.device_losses(), watched.device_generation())),
+    ) {
+        link.note(&format!(
+            "the renderer's device state cannot be followed, so the window manager learns of \
+             a GPU reset only from its own device: {why}"
+        ));
     }
 
     let vm: VmIdSlot = Arc::default();

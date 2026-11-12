@@ -64,6 +64,11 @@ git -C $GfxstreamDir clean -fdx
 # its planes into, so videos show their sound and a green picture. Without 0020 every read back
 # of host-visible memory sends all of it, changed or not: the guest reads its mapped memory back
 # at each fence, so every frame of every app waited for tens of megabytes to cross the socket.
+# Without 0021 the renderer makes its lost device again while holding its lock, so every guest
+# call that touches a ColorBuffer waits for the GPU to come back from its reset (13 s on an
+# Intel Arc), and Android ends the app whose input went unanswered. Without 0022 a ColorBuffer
+# read back or written whole is one GPU job however large the window, 2880x2048 and more for a
+# window maximized on a 200% monitor.
 # A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
@@ -82,7 +87,9 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0021-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0022-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName
