@@ -47,7 +47,7 @@ pub struct Task {
     pub label: String,
     /// Whether the task has input focus in the guest.
     pub focused: bool,
-    /// The density the task's app draws at, in dots per inch (96 at a scale of 100%); 0
+    /// The density the task's app draws at, in dots per inch (130 at a scale of 100%); 0
     /// when the agent could not read it.
     pub density_dpi: u32,
     /// The largest size the guest can give the task, in its display pixels; 0 when unknown.

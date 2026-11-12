@@ -70,14 +70,17 @@ DSA_GFX_EXPORT void dsa_gfx_set_log_callback(dsa_gfx_log_fn cb, void* context);
 
 /* A GPU reset loses every Vulkan device on the GPU. The renderer then answers the guest's
  * calls on its lost devices with VK_ERROR_DEVICE_LOST, so the guest can make new ones, and
- * makes its own device again, with every color buffer at its size, before its next
- * operation. dsa_gfx_device_generation says how many times it has made its device again.
+ * makes its own device again, with every color buffer at its size, on a thread of its own:
+ * until it is back, what needs it fails at once. dsa_gfx_device_losses says how many times
+ * the renderer found its device lost (it counts up the moment it does), and
+ * dsa_gfx_device_generation how many times it has made its device again.
  *
  * dsa_gfx_simulate_device_loss makes every device's queue and fence calls fail with
  * VK_ERROR_DEVICE_LOST, as a reset does, so a test can see this on any driver. Returns 0, or
  * -1 when the renderer is not running. */
 DSA_GFX_EXPORT int dsa_gfx_simulate_device_loss(void);
 DSA_GFX_EXPORT uint64_t dsa_gfx_device_generation(void);
+DSA_GFX_EXPORT uint64_t dsa_gfx_device_losses(void);
 
 /* Initializes the host gfxstream renderer (Vulkan only, surfaceless). */
 DSA_GFX_EXPORT int dsa_gfx_init(uint32_t width, uint32_t height);

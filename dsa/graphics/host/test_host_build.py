@@ -161,8 +161,10 @@ class HostGraphicsBuildTests(unittest.TestCase):
         # The guest's buffers keep their size while a window is resized; the display's size
         # says how much of the buffer the frame fills, and only that is copied and shown.
         self.assertIn("operations.getDisplayPose", source)
-        self.assertIn("region.srcOffsets[1] = {copy_width, copy_height, 1};", source)
-        self.assertIn("region.dstOffsets[1] = {copy_width, copy_height, 1};", source)
+        # In bands of rows of the region, none past the frame (dsa_copy_bands.h).
+        self.assertIn("dsa::copy_bands(content_width, content_height);", source)
+        self.assertIn("region.srcOffsets[1] = {copy_width, bottom, 1};", source)
+        self.assertIn("region.dstOffsets[1] = {copy_width, bottom, 1};", source)
         self.assertIn(
             "presenter.frame_cb(presenter.context, display_id, content_width, content_height);",
             source,
@@ -250,9 +252,53 @@ class HostGraphicsBuildTests(unittest.TestCase):
         # it.
         display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
         self.assertNotIn("UINT64_MAX", display)
-        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &took_ns)"), 3)
+        # Each band of a copy is waited for on its own: on Windows in the frame copy, on Linux
+        # and macOS in the one copy the dmabuf and IOSurface paths share.
+        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &took_ns)"), 0)
+        self.assertEqual(display.count("finish_copy(*emu, presenter.fence, &band_ns)"), 1)
+        self.assertEqual(display.count("finish_copy(emu, presenter.fence, &band_ns)"), 1)
         tests = (HERE.parent / "tests" / "test.sh").read_text(encoding="utf-8")
         self.assertIn("copy_wait_test.cpp", tests)
+
+    def test_nfr5_no_copy_into_a_task_window_is_one_gpu_job_past_two_megapixels(self):
+        # The owner's GPU was reset on 2026-11-12 just after a window was maximized to
+        # 2880x1800 on a 200% monitor and back. Each band is a submission of its own, waited
+        # for before the next, and the wait ends the moment the device is found lost.
+        display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        windows = display[display.index("#ifdef _WIN32"):display.index("#else /* !_WIN32 */")]
+        self.assertIn('#include "dsa_copy_bands.h"', display)
+        self.assertIn("for (size_t band = 0; band < bands.size(); ++band) {", windows)
+        loop = windows[windows.index("for (size_t band = 0;"):]
+        self.assertLess(loop.index("vkQueueSubmit"), loop.index("finish_copy("))
+        self.assertIn("[&] { return !emu.deviceUsable(); }, timeout_ns);", display)
+        cmake = CMAKE_FILE.read_text(encoding="utf-8")
+        self.assertIn('target_include_directories(gfxstream_backend PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../include")', cmake)
+        tests = (HERE.parent / "tests" / "test.sh").read_text(encoding="utf-8")
+        self.assertIn("copy_bands_test.cpp", tests)
+
+    def test_nfr5_linux_and_macos_copies_into_a_task_window_are_cut_into_bounded_jobs(self):
+        # The dmabuf (Linux) and IOSurface (macOS) copies were one GPU job each, the size of
+        # the window, as the Windows one was before. They now go through one banded copy, each
+        # band submitted and waited for before the next, with the same 2 Mpixel limit.
+        display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        unix = display[display.index("#else /* !_WIN32 */"):]
+        banded = unix[unix.index("bool copy_in_bands("):unix.index("bool present_dmabuf(")]
+        self.assertIn("dsa::copy_bands(width, height);", banded)
+        loop = banded[banded.index("for (size_t band = 0; band < bands.size(); ++band) {"):]
+        self.assertLess(loop.index("vkQueueSubmit"), loop.index("finish_copy("))
+        # Each band covers its own rows of the frame, in the copy and in the blit.
+        self.assertIn("region.extent = {width, rows, 1};", banded)
+        self.assertIn("region.srcOffset = {0, top, 0};", banded)
+        self.assertIn("region.srcOffsets[0] = {0, top, 0};", banded)
+        # The images are taken over in the first band and handed back in the last.
+        self.assertLess(banded.index("if (first) {"), banded.index("if (last) {"))
+        # Neither path submits a copy of its own any more.
+        dmabuf = unix[unix.index("bool present_dmabuf("):unix.index("#ifdef __APPLE__\n\nvoid release_import")]
+        self.assertNotIn("vkQueueSubmit", dmabuf)
+        self.assertIn("copy_in_bands(*emu, presenter, display_id, source->image, slot.image", dmabuf)
+        iosurface = unix[unix.index("bool present_iosurface("):unix.index("#endif /* __APPLE__ */")]
+        self.assertNotIn("vkQueueSubmit", iosurface)
+        self.assertIn("copy_in_bands(*emu, presenter, display_id, source->image, target->image", iosurface)
 
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration
@@ -309,9 +355,9 @@ class HostGraphicsBuildTests(unittest.TestCase):
 
     def test_pr3_astc_and_etc2_gpu_decompression_covers_angle_and_synchronization2(self):
         for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
-            self.assertIn("0020", script.read_text(encoding="utf-8"))
+            self.assertIn("0023", script.read_text(encoding="utf-8"))
         patch = (HERE.parent / "patches" /
-                 "0020-decompress-astc-and-etc2-for-angle-and-synchronization2.patch").read_text(encoding="utf-8")
+                 "0023-decompress-astc-and-etc2-for-angle-and-synchronization2.patch").read_text(encoding="utf-8")
         self.assertIn("+        return m_vkEmulation->isEtc2EmulationEnabled();", patch)
         self.assertIn("+        return m_vkEmulation->getAstcLdrEmulationMode() != AstcEmulationMode::Disabled;", patch)
         self.assertIn("+    inline void convertQueueFamilyForeignToExternal_VkImageMemoryBarrier2(", patch)
@@ -324,9 +370,9 @@ class HostGraphicsBuildTests(unittest.TestCase):
 
     def test_pr3_windows_bundled_lavapipe_and_d3d11_shared_staging_support_gpus_without_vulkan(self):
         for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
-            self.assertIn("0021", script.read_text(encoding="utf-8"))
+            self.assertIn("0024", script.read_text(encoding="utf-8"))
         patch = (HERE.parent / "patches" /
-                 "0021-fall-back-to-bundled-lavapipe-when-no-vulkan-gpu-starts.patch").read_text(encoding="utf-8")
+                 "0024-fall-back-to-bundled-lavapipe-when-no-vulkan-gpu-starts.patch").read_text(encoding="utf-8")
         self.assertIn("+bool vkSwitchToBundledSoftwareIcd();", patch)
         self.assertIn("+        if (!fb->m_emulationVk && vk::vkSwitchToBundledSoftwareIcd()) {", patch)
         display = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")

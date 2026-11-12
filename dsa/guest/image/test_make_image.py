@@ -99,6 +99,8 @@ class ImageLayoutTests(unittest.TestCase):
         "su_process.rs": ("dsa_su", "su.cil"),
         # KeyMint's root key from the host (dsa-channeld --keymint-key).
         "keymint_key.rs": ("dsa_keymint_key", "channeld.cil"),
+        # The packet filter rules that send DNS queries to the stub (dsa-channeld --dns-redirect).
+        "dns_redirect.rs": ("dsa_dns_redirect", "channeld.cil"),
     }
     # The policy files the image installs together with the daemon, so a rule for one of its
     # domains may live in any of them (the daemon's root elevation rules are in su.cil).
@@ -807,6 +809,59 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("VENDOR/apex/com.android.hardware.boot.apex", names)
             self.assertIn('name="com.android.hardware.boot.apex"', keys)
 
+    def test_nfr1_example_hals_for_hardware_a_pc_lacks_are_not_in_the_image(self):
+        # Each ran as a process of its own from boot and answered nothing; the framework runs
+        # without each of them. The HALs the guest uses stay.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            removed = [
+                "com.android.hardware.authsecret", "com.android.hardware.rebootescrow",
+                "com.android.hardware.cas", "com.android.hardware.contexthub",
+                "com.android.hardware.input.processor", "com.google.cf.ir",
+                "com.android.hardware.memtrack", "com.android.hardware.net.nlinterceptor",
+                "com.android.hardware.tetheroffload", "com.android.hardware.neuralnetworks",
+                "com.android.hardware.secure_element", "com.android.hardware.usb",
+                "com.android.hardware.vibrator",
+            ]
+            kept = ["com.android.hardware.boot", "com.android.hardware.wifi", "com.android.hardware.thermal",
+                    "com.android.hardware.security.secretkeeper", "com.android.hardware.drm.clearkey"]
+            with zipfile.ZipFile(source, "w") as archive:
+                for apex in removed + kept:
+                    archive.writestr(f"VENDOR/apex/{apex}.apex", b"apex")
+                archive.writestr("META/apexkeys.txt", "".join(
+                    f'name="{apex}.apex" public_key="k.avbpubkey" private_key="k.pem" container_certificate="c.x509.pem" container_private_key="c.pk8" partition="vendor"\n'
+                    for apex in removed + kept
+                ))
+                for name in make_image.REMOVED_VENDOR_FILES:
+                    archive.writestr(name, b"file")
+                archive.writestr("VENDOR/etc/init/motioncontext-service-default.rc", b"service")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                xml = archive.read("VENDOR/etc/permissions/dsa-unavailable-features.xml").decode()
+            for apex in removed:
+                self.assertNotIn(f"VENDOR/apex/{apex}.apex", names)
+            for apex in kept:
+                self.assertIn(f"VENDOR/apex/{apex}.apex", names)
+            for name in make_image.REMOVED_VENDOR_FILES:
+                self.assertNotIn(name, names)
+            self.assertIn("VENDOR/etc/init/motioncontext-service-default.rc", names)
+            # Without these, system_server does not start the services that would wait for the
+            # removed HALs, and the consumer IR service does not refuse to start.
+            for feature in ["android.hardware.biometrics.face", "android.hardware.fingerprint",
+                            "android.hardware.consumerir", "android.hardware.context_hub"]:
+                self.assertIn(f'<unavailable-feature name="{feature}" />', xml)
+
+    def test_nfr1_the_biometric_hals_go_with_their_init_scripts_manifests_and_features(self):
+        for name in ["VENDOR/bin/hw/android.hardware.biometrics.fingerprint-service.default",
+                     "VENDOR/etc/init/face-default.rc",
+                     "VENDOR/etc/vintf/manifest/fingerprint-default.xml",
+                     "VENDOR/etc/permissions/android.hardware.fingerprint.xml"]:
+            self.assertTrue(make_image.removed(name), name)
+        self.assertFalse(make_image.removed("VENDOR/etc/permissions/android.hardware.wifi.xml"))
+
     def test_fr1_bluetooth_is_not_advertised_without_a_controller(self):
         # With the feature declared, system_server starts the Bluetooth stack, which aborts
         # in a loop because no HCI HAL exists.
@@ -1035,7 +1090,7 @@ class ImageLayoutTests(unittest.TestCase):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         self.assertIn(f"androidboot.dsa.display_dpi={make_image.DISPLAY_DPI}", cmdline)
         self.assertIn(f"androidboot.lcd_density={make_image.DISPLAY_DPI}", cmdline)
-        self.assertIn("androidboot.lcd_density=96", make_image.kernel_cmdline("", hwcomposer=False))
+        self.assertIn("androidboot.lcd_density=130", make_image.kernel_cmdline("", hwcomposer=False))
         # No build.prop sets it, the input's included: init reads them before any script, and
         # the first value would hold every boot at the image's density.
         for vendor in (False, True):
@@ -2092,7 +2147,7 @@ class ImageLayoutTests(unittest.TestCase):
         # The one freeform display every task window lives on.
         self.assertIn("androidboot.dsa.display_width=1920", cmdline)
         self.assertIn("androidboot.dsa.display_height=1080", cmdline)
-        self.assertIn("androidboot.dsa.display_dpi=96", cmdline)
+        self.assertIn("androidboot.dsa.display_dpi=130", cmdline)
         self.assertIn(
             "androidboot.vendor.apex.com.android.hardware.gatekeeper=com.android.hardware.gatekeeper.nonsecure",
             cmdline,
@@ -2351,7 +2406,7 @@ class GuestMemoryTests(unittest.TestCase):
 
     def test_fr4_the_boot_density_reaches_surfaceflinger_through_a_vendor_script(self):
         rc = (Path(make_image.__file__).with_name("dsa-display.rc")).read_text()
-        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-96}\n", rc)
+        self.assertIn("on early-init\n    setprop ro.sf.lcd_density ${ro.boot.lcd_density:-130}\n", rc)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("VENDOR/etc/init/dsa-display.rc").decode(), rc)
             self.assertIn(
@@ -2377,6 +2432,34 @@ class GuestMemoryTests(unittest.TestCase):
             )
             for directory in make_image.FSTAB_DIRS:
                 self.assertIn(b"zramsize=50%", archive.read(directory + "fstab.dsa"))
+
+    def test_nfr1_the_idle_reclaim_compresses_what_stays_in_zram_again_with_zstd(self):
+        # LZ4 for every swap, zstd for what stays cold: zstd must be named before swapon_all
+        # sizes the device, and the reclaim compresses again only after it swapped, in a
+        # bounded step, and compacts zram before the caches go.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
+            memory_rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
+            name = 'write /sys/devices/virtual/block/zram0/recomp_algorithm "algo=zstd priority=1"'
+            # The order of the commands, not of the words in the comments above them.
+            commands = [line.strip() for line in memory_rc.splitlines() if not line.lstrip().startswith("#")]
+            self.assertIn(name, commands)
+            swapon = next(i for i, command in enumerate(commands) if command.startswith("swapon_all "))
+            self.assertLess(commands.index(name), swapon)
+            rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
+            start = rc.index("on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1")
+            trigger = rc[start:rc.index("on property:vendor.dsa.memory.trim=1")]
+            idle = trigger.index("write /sys/devices/virtual/block/zram0/idle all")
+            again = trigger.index('write /sys/devices/virtual/block/zram0/recompress "type=idle max_pages=16384"')
+            compact = trigger.index("write /sys/devices/virtual/block/zram0/compact 1")
+            self.assertLess(trigger.rindex("cgroup/memory.reclaim"), idle)
+            self.assertLess(idle, again)
+            self.assertLess(again, compact)
+            self.assertLess(compact, trigger.index("drop_caches"))
+            # The working set trim, which runs while apps are in use, leaves zram alone.
+            trim = rc[rc.index("on property:vendor.dsa.memory.trim=1"):].split("\n\n")[0]
+            self.assertNotIn("zram0", trim)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow vendor_init sysfs_zram (file (write open getattr)))", policy)
 
     def test_nfr1_free_memory_is_compacted_sooner_so_page_reporting_hands_it_back(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
@@ -2555,6 +2638,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
             + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
+            + make_image.DNS_PROPERTY_CONTEXT + "\n"
             + "".join(context + "\n" for context in make_image.GAPPS_COMPILE_PROPERTY_CONTEXTS.values())
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
@@ -2575,6 +2659,8 @@ class GuestMemoryTests(unittest.TestCase):
     def test_nfr1_apps_a_desktop_has_no_use_for_are_removed_and_the_ones_apps_need_are_kept(self):
         removed = ["Dialer", "messaging", "Stk", "BasicDreams", "LiveWallpapersPicker", "QuickSearchBox",
                    "Calendar", "Gallery2", "Music"]
+        # The phone process (TeleService) is a privileged system app.
+        removed_paths = {"TeleService": "SYSTEM/priv-app/TeleService/TeleService.apk"}
         kept = [
             "SYSTEM/app/webview/webview.apk",
             "SYSTEM/priv-app/ContactsProvider/ContactsProvider.apk",
@@ -2591,6 +2677,7 @@ class GuestMemoryTests(unittest.TestCase):
         for app in removed:
             self.assertIn(app, make_image.REMOVED_APPS)
         extra = {f"PRODUCT/app/{app}/{app}.apk": b"apk" for app in removed}
+        extra.update({name: b"apk" for name in removed_paths.values()})
         extra.update({name: b"apk" for name in kept})
         # Settings.apk is opened to edit its sound screen, and DocumentsUI.apk to edit its
         # list's room, so each has to be an APK.
@@ -2606,15 +2693,40 @@ class GuestMemoryTests(unittest.TestCase):
             for app in removed:
                 self.assertNotIn(f"PRODUCT/app/{app}/{app}.apk", names)
                 self.assertNotIn(f'name="{app}.apk"', certs)
+            for app, name in removed_paths.items():
+                self.assertNotIn(name, names)
+                self.assertNotIn(f'name="{app}.apk"', certs)
             for name in kept:
                 self.assertIn(name, names)
                 self.assertIn(f'name="{Path(name).name}"', certs)
         for needed in ["webview", "ContactsProvider", "PackageInstaller", "PermissionController",
                        "DocumentsUI", "PrintSpooler", "Settings", "Provision", "Telecom",
-                       "TeleService", "DeskClock", "CalendarProvider", "DownloadProvider",
-                       "MusicFX"]:
+                       "TelephonyProvider", "CarrierConfig", "DeskClock", "CalendarProvider",
+                       "DownloadProvider", "MusicFX"]:
             self.assertNotIn(needed, make_image.REMOVED_APPS)
 
+    def test_nfr1_the_phone_process_is_not_in_the_image(self):
+        # com.android.phone is persistent and does nothing without the telephony feature; the
+        # image withdraws that feature and leaves TeleService out. Telecom and the telephony
+        # provider stay.
+        self.assertIn("TeleService", make_image.REMOVED_APPS)
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/TeleService.apk"))
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/TeleService/oat/x86_64/TeleService.odex"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/Telecom/Telecom.apk"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/TelephonyProvider/TelephonyProvider.apk"))
+        features = (Path(__file__).parent / "unavailable-features.xml").read_text()
+        self.assertIn('<unavailable-feature name="android.hardware.telephony" />', features)
+
+    def test_nfr1_no_persistent_app_is_left_in_the_phone_process_without_its_permissions(self):
+        # The opportunistic network service shares the phone's user ID and process and is
+        # persistent, but the network permissions it uses come from TeleService's manifest.
+        # Without TeleService it crash-looped at boot until the rescue party rebooted Android,
+        # so it leaves the image with TeleService.
+        self.assertIn("ONS", make_image.REMOVED_APPS)
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/ONS/ONS.apk"))
+        self.assertTrue(make_image.removed("SYSTEM/priv-app/ONS/oat/x86_64/ONS.odex"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/CarrierConfig/CarrierConfig.apk"))
+        self.assertFalse(make_image.removed("SYSTEM/priv-app/TelephonyProvider/TelephonyProvider.apk"))
 
 SETTINGS_NS = "http://schemas.android.com/apk/res-auto"
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
@@ -4599,6 +4711,39 @@ def linkable_framework_table(home_padding=False, overlaid=()):
     return table_of(sorted(named | set(overlaid)), public=named)
 
 
+def complex_dp(dp):
+    """`dp` as a compiled dimension in dp, with 15 fraction bits, as aapt2 writes 35.4198dp."""
+    return (round(dp * (1 << 15)) << 8) | (2 << 4) | make_image.ARSC_UNIT_DIP
+
+
+def status_bar_table(heights, names=None):
+    """A compiled resource table of dimens: each of `names` (the status bar heights) in every
+    density of `heights` ({density: dp}, 0 for the values without a density), and in the
+    values without a density the highest of them unless `heights` gives one."""
+    names = names or make_image.STATUS_BAR_DIMENS
+    heights = dict(heights)
+    heights.setdefault(0, max(heights.values()))
+    type_pool, key_pool = string_pool(["dimen"]), string_pool(names)
+    spec_body = struct.pack("<BBHI", 1, 0, 0, len(names)) + bytes(4 * len(names))
+    chunks = struct.pack("<HHI", make_image.ARSC_TYPE_SPEC, 16, 8 + len(spec_body)) + spec_body
+    for density, dp in sorted(heights.items()):
+        entries = b"".join(struct.pack("<HHI", 8, 0, i) + struct.pack("<HBBI", 8, 0, 0x05, complex_dp(dp))
+                           for i in range(len(names)))
+        array = b"".join(struct.pack("<I", 16 * i) for i in range(len(names)))
+        config = bytearray(struct.pack("<I", 64) + bytes(60))
+        struct.pack_into("<H", config, make_image.ARSC_CONFIG_DENSITY, density)
+        header_size = 8 + 12 + len(config)
+        body = struct.pack("<BBHII", 1, 0, 0, len(names), header_size + len(array)) + bytes(config) + array + entries
+        chunks += struct.pack("<HHI", make_image.ARSC_TYPE, header_size, 8 + len(body)) + body
+    name = "io.github.thisisthepy.dsa.overlay.framework".encode("utf-16-le").ljust(256, b"\0")
+    package_body = (struct.pack("<I", 0x7F) + name
+                    + struct.pack("<IIIII", 288, 1, 288 + len(type_pool), len(names), 0)
+                    + type_pool + key_pool + chunks)
+    package = struct.pack("<HHI", 0x0200, 288, 8 + len(package_body)) + package_body
+    globals_pool = string_pool(["x"])
+    return struct.pack("<HHII", 0x0002, 12, 12 + len(globals_pool) + len(package), 1) + globals_pool + package
+
+
 def apk_with_table(table, files=None):
     """An APK holding the resource table `table` and `files`."""
     out = io.BytesIO()
@@ -4792,8 +4937,10 @@ class SystemScreenDesignTests(unittest.TestCase):
             record = make_image.overlay_record(overlay["target"], framework_table or own,
                                                own if overlay["target"] == "android" else app)
             if overlay["apk"] != without:
+                table = status_bar_table(make_image.status_bar_heights()) if overlay["target"] == "android" \
+                    else b"overlay"
                 files[f"VENDOR/overlay/{overlay['apk']}"] = apk_with_table(
-                    b"overlay", {make_image.SYSTEM_OVERLAY_RECORD: json.dumps(record)})
+                    table, {make_image.SYSTEM_OVERLAY_RECORD: json.dumps(record)})
         return list(files), files.__getitem__
 
     def test_fr34_check_image_accepts_overlays_built_against_its_framework_res_and_apps(self):
@@ -4814,6 +4961,23 @@ class SystemScreenDesignTests(unittest.TestCase):
         problems = make_image.system_overlay_problems(*self.image(break_settings=True))
         self.assertEqual(len(problems), 1)
         self.assertIn("DsaSettingsOverlay.apk was built for another build of com.android.settings", problems[0])
+
+    def test_fr22_check_image_rejects_a_framework_overlay_whose_status_bar_is_not_the_title_bar(self):
+        names, read = self.image()
+        files = {name: read(name) for name in names}
+        path = make_image.FRAMEWORK_OVERLAY_APK
+        with zipfile.ZipFile(io.BytesIO(files[path])) as apk:
+            record = apk.read(make_image.SYSTEM_OVERLAY_RECORD)
+        phone = {density: 24 for density in make_image.status_bar_heights()}
+        files[path] = apk_with_table(status_bar_table(phone), {make_image.SYSTEM_OVERLAY_RECORD: record})
+        problems = make_image.system_overlay_problems(list(files), files.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("does not line up with the window's title bar", problems[0])
+        self.assertIn("status_bar_height is 24 (unit 1) at 262 dpi, not the title bar's 58 px there", problems[0])
+        files[path] = apk_with_table(b"overlay", {make_image.SYSTEM_OVERLAY_RECORD: record})
+        problems = make_image.system_overlay_problems(list(files), files.__getitem__)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("cannot be read", problems[0])
 
     def test_fr34_check_image_rejects_an_overlay_that_does_not_say_what_it_was_built_against(self):
         names, read = self.image()
@@ -7092,6 +7256,357 @@ class KeyMintKeyImageTests(unittest.TestCase):
         for text in expected:
             self.assertTrue(any(text in p for p in problems), (text, problems))
         self.assertEqual(len(problems), len(expected), problems)
+
+
+class HostDnsTests(unittest.TestCase):
+    """The guest's DNS, answered by the host's resolver: the daemon's stub, the root helper that
+    sends every DNS query to it, and the property that switches the helper."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", "/system/bin/sh u:object_r:shell_exec:s0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 0 755 capabilities=0x0\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = root / "dsa-channeld"
+        daemon.write_bytes(b"daemon")
+        client = root / "su"
+        client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _block(self, text, first_line):
+        start = text.index(first_line)
+        end = text.find("\n\n", start)
+        return [line.strip() for line in text[start:end if end >= 0 else len(text)].splitlines()]
+
+    def test_fr28_the_dns_redirect_runs_as_root_in_its_own_domain_when_the_daemon_switches_it(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.DNS_REDIRECT_SERVICE)
+        for option in ["user root", "seclabel u:r:dsa_dns_redirect:s0", "oneshot", "disabled",
+                       "capabilities NET_ADMIN NET_RAW"]:
+            self.assertIn(option, service)
+        trigger = self._block(rc, make_image.DNS_REDIRECT_TRIGGER + "\n")
+        self.assertEqual(trigger[1:], ["start dsa_dns_redirect"])
+        # vendor_init may not read a service's state, and init drops an action that triggers
+        # on one ("unexported property trigger found: init.svc.netd"), so the redirect never ran.
+        for line in rc.splitlines():
+            if line.startswith("on "):
+                self.assertNotIn("property:init.svc.", line)
+
+    def test_fr28_adb_shell_reads_whether_the_host_answers_dns(self):
+        # The DNS boot check reads vendor.dsa.dns with getprop; a refused read reads as "".
+        self.assertRegex(self.POLICY, r"\(allow\s+shell\s+dsa_dns_prop\s+\(\s*file\s+\(\s*read\b")
+
+    def test_fr28_only_the_daemon_switches_the_dns_redirect(self):
+        setters = re.findall(r"\(allow\s+(\S+)\s+dsa_dns_prop\s+\(\s*property_service\s+\(([^)]*)\)",
+                             self.POLICY)
+        self.assertEqual({who for who, perms in setters if "set" in perms.split()}, {"dsa_channeld"})
+        # The helper may change the packet filter, and nothing on the disk but what it runs.
+        self.assertRegex(self.POLICY, r"\(allow\s+dsa_dns_redirect\s+self\s+\(\s*capability\s+\([^)]*\bnet_admin\b")
+        self.assertNotRegex(self.POLICY, r"\(allow\s+dsa_dns_redirect\s+\S*data\S*")
+        # The daemon listens for the guest's queries on the loopback address.
+        for cls in ("udp_socket", "tcp_socket"):
+            self.assertRegex(self.POLICY, rf"\(allow\s+dsa_channeld\s+port\s+\(\s*{cls}\s+\(\s*name_bind")
+        self.assertIn(make_image.DNS_PROPERTY_CONTEXT,
+                      make_image.update_vendor_property_contexts("").splitlines())
+
+    def test_fr28_check_image_names_what_the_hosts_dns_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        self.assertEqual(make_image.dns_problems(list(files), files.__getitem__), [])
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = "\n".join(
+            line for line in rc.splitlines() if line != "    seclabel u:r:dsa_dns_redirect:s0").encode()
+        files[make_image.VENDOR_PROPERTY_CONTEXTS] = b""
+        files[make_image.CHANNELD_RC] += b"\n\non property:sys.boot_completed=1 && property:init.svc.netd=running\n"
+        problems = make_image.dns_problems(list(files), files.__getitem__)
+        expected = ['lacks "seclabel u:r:dsa_dns_redirect:s0"', f"does not give {make_image.DNS_PROPERTY}",
+                    "unexported property trigger"]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+
+class HostCertificatesImageTests(KeyMintKeyImageTests):
+    """The guest image's side of the root certificates a user or administrator added to the
+    host: the tmpfs copies of Android's certificate folders bound over the originals before the
+    zygote starts, the setup that copies them, and the policy that lets only the daemon write
+    there and every domain read."""
+
+    CACERTS_POLICY = (Path(__file__).parent / "sepolicy" / "cacerts.cil").read_text()
+
+    # The key's tests run once, in the class they belong to.
+    test_fr36_keymint_root_key_is_fetched_once_before_keymint_starts = None
+    test_fr36_only_keymint_reads_its_root_key = None
+    test_fr36_check_image_names_what_the_root_key_lacks = None
+
+    def test_fr28_the_host_certificates_folders_are_bound_before_the_zygote_starts(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        service = self._block(rc, make_image.CACERTS_SERVICE)
+        for option in ["user system", "group system", "oneshot", "disabled"]:
+            self.assertIn(option, service)
+        script = (self.HERE / "dsa-cacerts.rc").read_text()
+        block = self._block(script, "on post-fs-data\n")
+        self.assertEqual(block, [line.strip() for line in make_image.CACERTS_SCRIPT])
+        # The copy is made before either bind, so the binds find whole folders.
+        self.assertLess(script.index("exec_start dsa_cacerts_setup"), script.index("    mount none"))
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.cacerts_problems(names, archive.read), [])
+            self.assertEqual(archive.read(make_image.CACERTS_RC).decode(), script)
+            self.assertIn("system/etc/init/dsa-cacerts.rc 0 0 644 capabilities=0x0",
+                          archive.read(make_image.SYSTEM_FS_CONFIG).decode().splitlines())
+            self.assertIn(make_image.CACERTS_CONTEXT,
+                          archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines())
+
+    def test_fr28_apps_read_the_certificate_folder_android_chooses(self):
+        # The bind under /apex reaches the zygote's mount namespace, so apps read the copy there
+        # as Android chooses, and no VM is told to read the folder under /system instead.
+        self.assertIn("    mount none /dev/dsa_cacerts/conscrypt /apex/com.android.conscrypt/cacerts bind",
+                      make_image.CACERTS_SCRIPT)
+        for vendor in (False, True):
+            props = make_image.edit_props("ro.build.type=user\n", vendor=vendor)
+            self.assertNotIn("system.certs.enabled", props)
+
+    def test_fr28_only_the_daemon_writes_androids_system_certificates(self):
+        rules = re.findall(r"\(allow\s+(\S+)\s+dsa_cacerts_file\s+\(\s*file\s+\(([^)]*)\)", self.CACERTS_POLICY)
+        writers = {who for who, perms in rules if {"write", "create", "append", "unlink"} & set(perms.split())}
+        self.assertEqual(writers, {"dsa_channeld"})
+        readers = {who for who, perms in rules if "read" in perms.split()}
+        self.assertIn("domain", readers, "every process that checks a certificate reads them")
+        for rule in make_image.CACERTS_RULES:
+            self.assertIn(rule, self.CACERTS_POLICY)
+        self.assertNotIn("dsa_cacerts", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertIn(make_image.CACERTS_CONTEXT,
+                      make_image.update_vendor_file_contexts("", channeld=True).splitlines())
+
+    def test_fr28_check_image_names_what_the_host_certificates_lack(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        del files[make_image.CACERTS_RC]
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] += (
+            b"\n(allow untrusted_app dsa_cacerts_file (file (write open)))\n")
+        files["VENDOR/etc/selinux/vendor_file_contexts"] = b"/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n"
+        problems = make_image.cacerts_problems(list(files), files.__getitem__)
+        expected = [
+            "dsa-cacerts.rc is missing",
+            "vendor_file_contexts lacks",
+            "lets untrusted_app write Android's system certificates",
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+
+INSETS_POLICY = "Lcom/android/server/wm/InsetsPolicy;->enforceInsetsPolicyForTarget"
+CAPTION_BAR = "Landroid/view/WindowInsets$Type;->captionBar"
+SYSTEM_BARS = "Landroid/view/WindowInsets$Type;->systemBars"
+IS_FLOATING = "Landroid/app/WindowConfiguration;->isFloating"
+
+
+def services_dex(caption_test_before=False, floating=True):
+    """InsetsPolicy.enforceInsetsPolicyForTarget of services.jar as d8 compiles Android 17's,
+    cut down to the calls that matter: the windowing mode, isFloating, then the types a
+    floating window keeps (captionBar(), and ime()). With `caption_test_before`, it first tests
+    a source's type against captionBar(), as a later Android does for non-fullscreen windows."""
+    methods = [
+        ("Lcom/android/server/wm/InsetsPolicy;", "enforceInsetsPolicyForTarget", "LLL"),
+        ("Landroid/view/WindowInsets$Type;", "captionBar", "I"),
+        ("Landroid/view/WindowInsets$Type;", "systemBars", "I"),
+        ("Lcom/android/server/wm/ConfigurationContainer;", "getWindowingMode", "I"),
+        ("Landroid/app/WindowConfiguration;", "isFloating", "ZI"),
+        ("Landroid/view/WindowInsets$Type;", "ime", "I"),
+    ]
+    code = ""
+    if caption_test_before:
+        code += "71000100 0000" "0a00"  # invoke-static {}, captionBar; move-result v0
+    code += "71000200 0000" "0a00"  # invoke-static {}, systemBars (the provided insets' types)
+    code += "6e100300 0300" "0a00"  # invoke-virtual {v3}, getWindowingMode; move-result v0
+    if floating:
+        code += "71100400 0000" "0a01"  # invoke-static {v0}, isFloating; move-result v1
+    code += "38010900"  # if-eqz v1, :keep
+    code += "71000100 0000" "0a00"  # invoke-static {}, captionBar; move-result v0
+    code += "71000500 0000" "0a01"  # invoke-static {}, ime; move-result v1
+    code += "0f00"  # :keep return v0
+    return dex_file(methods, {0: (4, bytes.fromhex(code))})
+
+
+def dex_calls(dex, method):
+    """The methods `method` calls, in order."""
+    defined, refs = make_image.dex_methods(dex)
+    (code_off, _), = defined[method]
+    return [refs[struct.unpack_from("<H", dex, at + 2)[0]]
+            for at, op in make_image.dex_instructions(dex, code_off) if op in make_image.DEX_INVOKES]
+
+
+def jar_of(dex, misaligned=True):
+    """A jar with `dex` stored as classes.dex, as the build stores a system server jar's dex,
+    after a stored member whose length leaves the dex unaligned when `misaligned`."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as jar:
+        jar.writestr("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\n" + (b"x" if misaligned else b""))
+        jar.writestr("classes.dex", dex)
+        jar.writestr("com/android/server/x.xml", b"<x/>" * 50, compress_type=zipfile.ZIP_DEFLATED)
+    return out.getvalue()
+
+
+class CaptionIsStatusBarTests(unittest.TestCase):
+    """The host window's title bar is Android's status bar: an app that pads by its status bar
+    inset, or by the framework's status bar height, keeps its content below the title bar."""
+
+    def test_fr22_a_freeform_window_receives_its_status_bar_inset(self):
+        # Android keeps only the caption bar (and the IME) of a floating window's insets, so
+        # the status bar source the agent gives a task never reached its app, and an app that
+        # pads by its status bar inset drew its toolbar under the title bar.
+        self.assertEqual(dex_calls(services_dex(), INSETS_POLICY)[-2:], [CAPTION_BAR, "Landroid/view/WindowInsets$Type;->ime"])
+        edited, changed = make_image.edit_dex(services_dex(), make_image.SERVICES_CODE)
+        self.assertEqual(changed, [INSETS_POLICY])
+        calls = dex_calls(edited, INSETS_POLICY)
+        self.assertEqual(calls[calls.index(IS_FLOATING) + 1:],
+                         [SYSTEM_BARS, "Landroid/view/WindowInsets$Type;->ime"])
+        self.assertNotIn(CAPTION_BAR, calls)
+        # Only the method the instruction names changes: the file is as long, the code as long.
+        self.assertEqual(len(edited), len(services_dex()))
+        self.assertEqual(len(dex_code(edited, INSETS_POLICY)), len(dex_code(services_dex(), INSETS_POLICY)))
+        # Applied again, it changes nothing.
+        self.assertEqual(make_image.edit_dex(edited, make_image.SERVICES_CODE)[1], [])
+
+    def test_fr22_only_the_types_a_floating_window_keeps_change(self):
+        # A later Android tests a source's type against captionBar() before isFloating: that
+        # test stays as it is.
+        edited, changed = make_image.edit_dex(services_dex(caption_test_before=True), make_image.SERVICES_CODE)
+        self.assertEqual(changed, [INSETS_POLICY])
+        calls = dex_calls(edited, INSETS_POLICY)
+        self.assertEqual(calls[0], CAPTION_BAR)
+        self.assertEqual(calls[calls.index(IS_FLOATING) + 1], SYSTEM_BARS)
+
+    def test_fr22_an_insets_policy_built_from_other_sources_stops_the_image(self):
+        with self.assertRaisesRegex(ValueError, "built from other sources"):
+            make_image.edit_dex(services_dex(floating=False), make_image.SERVICES_CODE)
+
+    def test_fr22_the_edited_services_jar_keeps_its_dex_stored_and_aligned(self):
+        jar = jar_of(services_dex())
+        self.assertEqual(make_image.zip_misaligned(jar), ["classes.dex"])
+        self.assertTrue(make_image.apk_edits_left(jar, code=make_image.SERVICES_CODE))
+        edited = make_image.edit_services_jar(jar, make_image.SERVICES_JAR)
+        self.assertEqual(make_image.zip_misaligned(edited), [])
+        self.assertEqual(make_image.apk_edits_left(edited, code=make_image.SERVICES_CODE), [])
+        with zipfile.ZipFile(io.BytesIO(jar)) as before, zipfile.ZipFile(io.BytesIO(edited)) as after:
+            self.assertEqual([i.filename for i in before.infolist()], [i.filename for i in after.infolist()])
+            self.assertEqual([i.compress_type for i in before.infolist()], [i.compress_type for i in after.infolist()])
+            self.assertEqual(after.read("com/android/server/x.xml"), before.read("com/android/server/x.xml"))
+        # A jar that has the edit is left as it is.
+        self.assertIs(make_image.edit_services_jar(edited, make_image.SERVICES_JAR), edited)
+
+    def test_fr22_the_image_edits_services_jar_and_compiles_it_again(self):
+        jar = jar_of(services_dex())
+        odex, vdex = make_image.oat_files(make_image.SERVICES_JAR)
+        self.assertEqual(odex, make_image.FRAMEWORK_ODEX)
+        context = "PCL[/system/framework/com.android.location.provider.jar*1880069816]"
+        published = {
+            make_image.SERVICES_JAR: jar,
+            odex: fake_odex(**{"bootclasspath": BOOTCLASSPATH, "bootclasspath-checksums": "i;2/cb8fc4a6:i;2/f8c5165e",
+                               "classpath": context, "compiler-filter": "speed-profile"}),
+            vdex: fake_vdex(make_image.apk_dex_checksums(jar)),
+            odex[:-len(".odex")] + ".art": b"art",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                for name, data in published.items():
+                    archive.writestr(name, data)
+            make_image.modify(source, root / "modified.zip")
+            with zipfile.ZipFile(root / "modified.zip") as archive:
+                files = {name: archive.read(name) for name in archive.namelist()}
+        edited = files[make_image.SERVICES_JAR]
+        self.assertEqual(make_image.apk_edits_left(edited, code=make_image.SERVICES_CODE), [])
+        self.assertEqual(make_image.zip_misaligned(edited), [])
+        record = json.loads(files[make_image.PREBUILT_OAT_RECORD])
+        self.assertEqual(record[make_image.SERVICES_JAR]["filter"], "speed-profile")
+        self.assertEqual(record[make_image.SERVICES_JAR]["classpath"], context)
+        # Its published odex was made for the unedited dex, so it is compiled again with the
+        # published build's filter, class loader context and app image.
+        self.assertEqual(make_image.compile_jobs(files, files.__getitem__),
+                         [(make_image.SERVICES_JAR, "speed-profile", context, True)])
+        self.assertIn(make_image.SERVICES_JAR, make_image.EDITED_JARS)
+        # Until it is, the image check says so.
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name, data in files.items():
+                archive.writestr(name, data)
+        with zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as archive:
+            self.assertTrue(any("dex checksums" in p for p in make_image.prebuilt_oat_problems(archive)))
+
+    def test_fr22_services_jar_is_compiled_with_the_published_builds_own_profile(self):
+        lock = json.loads((Path(make_image.__file__).parent.parent / "framework/framework-lock.json").read_text())
+        commits = {v["build_id"]: next(p["commit"] for p in v["projects"] if p["path"] == "frameworks/base")
+                   for v in lock["versions"]}
+        inputs = json.loads((Path(make_image.__file__).parent / "inputs.json").read_text())["images"]
+        for image in inputs:
+            base = f"https://android.googlesource.com/platform/frameworks/base/+/{commits[image['build_id']]}/services/"
+            for key, file in [("services_profile", "art-profile"), ("services_profile_extra", "art-profile-extra")]:
+                entry = image["files"][key]
+                self.assertEqual(entry["url"], base + file + "?format=TEXT", image["version"])
+                self.assertEqual(entry["encoding"], "base64")
+                self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
+                self.assertGreater(entry["size"], 0)
+        fetch = (Path(make_image.__file__).parent / "fetch.sh").read_text()
+        self.assertIn(".url // empty", fetch)
+        self.assertIn('base64 -d "$file.download"', fetch)
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = make_image.image_spec(inputs, 17)
+            with self.assertRaisesRegex(ValueError, "fetch.sh"):
+                make_image.services_profiles(spec, Path(tmp))
+            for key in ("services_profile", "services_profile_extra"):
+                (Path(tmp) / spec["files"][key]["name"]).write_text(key)
+            self.assertEqual(make_image.services_profiles(spec, Path(tmp)), {make_image.SERVICES_JAR: [
+                Path(tmp) / "services-art-profile", Path(tmp) / "services-art-profile-extra"]})
+
+    def test_fr22_the_status_bar_height_is_the_title_bars_at_each_density(self):
+        # Android draws at 131 x the monitor's scale, as the host's density rule says.
+        self.assertEqual([make_image.status_bar_density(d) for d in (96, 120, 144, 168, 192, 240)],
+                         [130, 164, 196, 228, 262, 328])
+        heights = make_image.status_bar_heights()
+        self.assertEqual(len(heights), len(make_image.STATUS_BAR_TITLE_HEIGHTS))
+        for dpi, px in make_image.STATUS_BAR_TITLE_HEIGHTS.items():
+            density = make_image.status_bar_density(dpi)
+            # As getDimensionPixelSize rounds the dimension the overlay writes.
+            dp = float(f"{heights[density]:.4f}")
+            self.assertEqual(int(dp * density / 160 + 0.5), px, dpi)
+            self.assertTrue(34 < dp < 39, (dpi, dp))
+        # A 200% monitor: a 58 px title bar, the statusBars inset the owner's PC showed.
+        self.assertEqual(make_image.STATUS_BAR_TITLE_HEIGHTS[192], 58)
+        files = make_image.status_bar_overlay_files()
+        self.assertIn('<dimen name="status_bar_height">35.4198dp</dimen>', files["res/values-262dpi/dsa_status_bar.xml"])
+        self.assertIn(f'<dimen name="status_bar_height_default">{max(heights.values()):.4f}dp</dimen>',
+                      files["res/values/dsa_status_bar.xml"])
+        for name in make_image.STATUS_BAR_DIMENS:
+            self.assertIn(f"dimen/{name}", make_image.framework_overlaid())
+            for path, text in files.items():
+                self.assertIn(f'<dimen name="{name}">', text, path)
+
+    def test_fr22_check_image_rejects_a_status_bar_height_that_is_not_the_title_bars(self):
+        self.assertEqual(make_image.status_bar_overlay_problems(status_bar_table(make_image.status_bar_heights())), [])
+        problems = make_image.status_bar_overlay_problems(status_bar_table({0: 24}))
+        self.assertTrue(any("status_bar_height has no value for 262 dpi" in p for p in problems), problems)
+        self.assertTrue(any("not the title bar's" in p for p in problems), problems)
+        phone = {density: 24 for density in make_image.status_bar_heights()}
+        problems = make_image.status_bar_overlay_problems(status_bar_table(phone))
+        self.assertIn("status_bar_height is 24 (unit 1) at 262 dpi, not the title bar's 58 px there", problems)
+
+    def test_fr22_check_image_checks_services_jar(self):
+        script = (Path(make_image.__file__).parent / "check-image.py").read_text()
+        self.assertIn("apk_edits_left(services, code=make_image.SERVICES_CODE)", script)
+        self.assertIn("zip_misaligned(services)", script)
 
 
 if __name__ == "__main__":

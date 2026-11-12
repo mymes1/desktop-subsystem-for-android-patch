@@ -600,7 +600,7 @@ fn screenshot(state: &State, task_id: i32) -> Result<(), String> {
         .textures
         .get(&texture_id)
         .ok_or("the window's frame is gone")?;
-    let band = window.band_height();
+    let band = window.band_rows_in_frame();
     let shot = surface
         .read(|pixels, stride| screenshot::app_content(pixels, stride, content, band))?
         .ok_or("the window shows nothing under its title bar")?;

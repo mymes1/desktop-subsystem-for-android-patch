@@ -92,7 +92,7 @@ class MappedMemoryPatchTests(unittest.TestCase):
         self.assertIn('"$out/shadow_memory_test"', tests)
 
     def test_nfr1_unmapped_memory_flushes_once_and_stops_hashing_and_reading_back(self):
-        unmap_patch = next(PATCH_DIR.glob("0009-*.patch"))
+        unmap_patch = next(PATCH_DIR.glob("0011-*.patch"))
         added, _ = file_hunks(unmap_patch, TRACKER)
         text = "\n".join(added)
         self.assertIn("it->second.shadowMapping.unmapped();", text)

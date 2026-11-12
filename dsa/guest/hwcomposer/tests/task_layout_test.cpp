@@ -609,4 +609,27 @@ TEST(fr3_content_stays_attached_until_the_window_is_gone_as_its_task_ends) {
     EXPECT_TRUE(!leavesLastFrameUndrawn({background}, /*hasFrame=*/false));
 }
 
+TEST(nfr1_a_task_without_layers_lets_go_of_its_buffers_only_after_a_while) {
+    // Minimized at t = 10 s: its two buffers stay through a moment without layers (an
+    // activity being replaced) and go once it has had none for the delay.
+    EXPECT_TRUE(!releaseDue(10'000, 10'000, 2'000));
+    EXPECT_TRUE(!releaseDue(10'000, 11'999, 2'000));
+    EXPECT_TRUE(releaseDue(10'000, 12'000, 2'000));
+    EXPECT_TRUE(releaseDue(10'000, 600'000, 2'000));
+    // A task that has a layer keeps them, however long it has been shown.
+    EXPECT_TRUE(!releaseDue(0, 600'000, 2'000));
+}
+
+TEST(nfr1_the_client_target_is_let_go_after_a_while_without_client_composition) {
+    // SurfaceFlinger last composed a video's pictures itself at t = 10 s: the client target
+    // stays through a pause between such frames, and goes once there has been none for the
+    // delay.
+    EXPECT_TRUE(clientTargetHeld(10'000, 10'000, 2'000));
+    EXPECT_TRUE(clientTargetHeld(10'000, 11'999, 2'000));
+    EXPECT_TRUE(!clientTargetHeld(10'000, 12'000, 2'000));
+    EXPECT_TRUE(!clientTargetHeld(10'000, 600'000, 2'000));
+    // Never composed by SurfaceFlinger, or already let go: nothing to hold.
+    EXPECT_TRUE(!clientTargetHeld(0, 600'000, 2'000));
+}
+
 int main() { return ::dsa::test::runAll(); }

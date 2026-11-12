@@ -150,7 +150,7 @@ jobs:
 
       - name: Name the compiler cache
         shell: bash
-        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/host/*.cpp', 'dsa/graphics/host/*.h', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
+        run: echo "COMPILER_CACHE_KEY=${COMPILER_CACHE_PREFIX}${{ hashFiles('dsa/graphics/host/fetch.sh', 'dsa/graphics/host/fetch.ps1', 'dsa/graphics/host/build.sh', 'dsa/graphics/host/build.ps1', 'dsa/graphics/host/CMakeLists.txt', 'dsa/graphics/host/*.cpp', 'dsa/graphics/host/*.h', 'dsa/graphics/include/**', 'dsa/graphics/patches/**') }}" >> "$GITHUB_ENV"
 
       - name: Restore the compiler cache
         id: ccache

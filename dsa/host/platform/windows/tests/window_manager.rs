@@ -8,7 +8,7 @@ use dsa_host_core::tasks::TaskRequestError;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::{FakeRenderer, GraphicsRenderer, GraphicsStreamKind};
 use dsa_host_core::host_api::{HostApiService, PerUser, UserAndroid};
@@ -1097,22 +1097,39 @@ fn nfr5_a_lost_device_is_reported_to_the_guest_and_made_again() {
         "the renderer keeps serving the guest"
     );
 
-    // The renderer's own device is made again at its next operation, and buffers work.
+    // The renderer's own device is made again on a thread of its own. The call that finds
+    // the loss does not wait for it: it fails at once, so no guest's input goes unanswered
+    // while the GPU comes back from its reset (13.4 s on the owner's Intel Arc).
     let args = [64u32, 64, GL_RGBA]
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect::<Vec<u8>>();
+    let asked = Instant::now();
     wire.render_control(GfxstreamWire::RC_CREATE_COLOR_BUFFER, &args);
-    assert_ne!(
-        wire.read_u32(),
-        0,
-        "a color buffer is made on the new device"
+    let first = wire.read_u32();
+    assert!(
+        asked.elapsed() < Duration::from_secs(1),
+        "a call during the remake is answered at once, not after it ({:?})",
+        asked.elapsed()
     );
+    let made = Instant::now();
+    while adapter.device_generation() == before && made.elapsed() < Duration::from_secs(30) {
+        thread::sleep(Duration::from_millis(20));
+    }
     assert_eq!(
         adapter.device_generation(),
         before + 1,
         "the renderer made its device again"
     );
+    // A buffer asked for once it is back is made on the new device.
+    if first == 0 {
+        wire.render_control(GfxstreamWire::RC_CREATE_COLOR_BUFFER, &args);
+        assert_ne!(
+            wire.read_u32(),
+            0,
+            "a color buffer is made on the new device"
+        );
+    }
 
     // The guest makes a new device of its own, as it does after a loss, and it works.
     let made_again = create_vulkan_device(&mut wire);

@@ -95,6 +95,8 @@ pub struct FakeAndroid {
     pub adb_auto_connect: Mutex<Vec<bool>>,
     /// Where it says auto-connect stands.
     pub adb_auto_connect_state: Mutex<AutoConnectState>,
+    /// Whether it says the host's resolver answers its DNS queries.
+    pub dns_answered_by_host: Mutex<Option<bool>>,
     /// Each word on file sharing (on, and the folders), in order.
     pub shared_folders: Mutex<Vec<(bool, Vec<String>)>>,
     /// The drags the host ended, and whether each was dropped.
@@ -257,6 +259,7 @@ impl FakeAndroid {
             refuse_developer_mode: Mutex::new(None),
             adb_auto_connect: Mutex::new(Vec::new()),
             adb_auto_connect_state: Mutex::new(AutoConnectState::Off),
+            dns_answered_by_host: Mutex::new(None),
             shared_folders: Mutex::new(Vec::new()),
             ended_drags: Mutex::new(Vec::new()),
             link_watchers: Mutex::new(Vec::new()),
@@ -463,6 +466,9 @@ impl UserAndroid for FakeAndroid {
     }
     fn adb_auto_connect_state(&self) -> AutoConnectState {
         *self.adb_auto_connect_state.lock().unwrap()
+    }
+    fn dns_answered_by_host(&self) -> Option<bool> {
+        *self.dns_answered_by_host.lock().unwrap()
     }
     fn watch_links(&self) -> Option<mpsc::Receiver<String>> {
         let (tx, rx) = mpsc::channel();
@@ -4980,7 +4986,8 @@ pub fn added_widget_is_placed_and_kept(make: MakeLocal<'_>) {
             x: 64,
             y: 64,
             width_dp: 180,
-            height_dp: 110
+            height_dp: 110,
+            resized: false,
         }
     );
     let second = client
@@ -5051,6 +5058,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
         y: 20,
         width_dp: 240,
         height_dp: 147,
+        resized: false,
     };
     client
         .place_widget(widget.widget_id, moved, 360, 220, 240)
@@ -5077,7 +5085,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
     );
     assert_eq!(client.widgets().unwrap().0[0].placement, moved);
     // A size the widget does not allow is kept within its limits, and no side gets smaller
-    // than a widget window can be: 40 of the host's device-independent pixels, 67 dp.
+    // than a widget window can be: 40 of the host's device-independent pixels, 49 dp.
     client
         .place_widget(
             widget.widget_id,
@@ -5092,7 +5100,7 @@ pub fn placed_widget_size_reaches_the_caller(make: MakeLocal<'_>) {
         )
         .unwrap();
     let kept = client.widgets().unwrap().0[0].placement;
-    assert_eq!((kept.width_dp, kept.height_dp), (110, 67));
+    assert_eq!((kept.width_dp, kept.height_dp), (110, 49));
 }
 
 pub fn widget_pointer_reaches_the_caller(make: MakeLocal<'_>) {

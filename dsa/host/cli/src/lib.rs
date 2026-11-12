@@ -59,7 +59,7 @@
 //! `dsa app-window` lists the user's window settings for each app that has any; with a package
 //! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
 //! app's windows cannot be resized or maximized, and an app with a start size opens its windows
-//! at that size, in Android's dp (1/160 inch, 0.6 of a pixel at a scale of 100%).
+//! at that size, in Android's desktop dp (1/117.23 inch, 0.819 of a pixel at a scale of 100%).
 //! `--dpi-scaling` says how the app follows its window to a monitor of another scale: `app`
 //! gives it the new monitor's density and it
 //! redraws (Android recreates the screen of an app that does not say it handles a change of
@@ -269,6 +269,11 @@
 //! restarts Android into the waiting image now, whatever the setting, and `dsa android
 //! version` says when one waits (`restart_pending` in its JSON; `dsa android restart --json`
 //! prints `restarting`, the image or null, and `detail`).
+//! `host-certificates` (on by default) lets the user's Android trust, as system certificates,
+//! the root certificates a user or an administrator added to this computer, such as those an
+//! internet filter or a company proxy installs; the operating system's own are never given.
+//! It applies at once. `dsa settings` lists the ones found and where (`imported_certificates`
+//! in its JSON: `subject`, `issuer`, `source`, `location`, `sha256`, `not_after`).
 //! `root-elevation` (off by default, the computer's, so an administrator changes it) lets apps
 //! elevate to root through the computer's administrator approval, from the next start of
 //! Android; `dsa apps root <package>` then sets each app's level.
@@ -276,9 +281,11 @@
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
 //! the network: NAT, advanced or none while it is not running, its addresses (a program on this
-//! computer reaches a server in Android at any of them), its DNS servers and its gateway. With
-//! `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway` and `problem`. `dsa gpus` lists the GPUs of this machine, for
-//! choosing the render GPU.
+//! computer reaches a server in Android at any of them), who answers its DNS queries (this
+//! computer's resolver, or the DNS servers it shows when that does not answer) and its
+//! gateway. With `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway`, `problem`
+//! and `dns_resolver` (`host`, `network`, or empty while nobody can say). `dsa gpus` lists the
+//! GPUs of this machine, for choosing the render GPU.
 //!
 //! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
 //! 64-bit ARM (`arm64-v8a`) can be installed and run: which translator Android uses (the
@@ -637,6 +644,7 @@ pub enum Change {
     AdvancedNetworking(bool),
     TouchGesturesOff(bool),
     ImageAutoRestart(bool),
+    HostCertificates(bool),
     RootElevation(bool),
 }
 
@@ -671,6 +679,7 @@ impl Change {
             "advanced-networking" => switch().map(Change::AdvancedNetworking),
             "touch-gestures-off" => switch().map(Change::TouchGesturesOff),
             "image-auto-restart" => switch().map(Change::ImageAutoRestart),
+            "host-certificates" => switch().map(Change::HostCertificates),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -682,7 +691,7 @@ impl Change {
                  clipboard, links-in-android, program-updates, prerelease-updates, \
                  image-updates, input-trace, resize-trace, root-elevation, memory-limit, developer-mode, adb-port, adb-auto-connect, \
                  arm-translation, stop-without-asking, file-sharing, shared-folders, \
-                 advanced-networking, touch-gestures-off, image-auto-restart and \
+                 advanced-networking, touch-gestures-off, image-auto-restart, host-certificates and \
                  device.<field>"
             )),
         }
@@ -2375,6 +2384,15 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "advanced_networking": report.settings.advanced_networking,
         "touch_gestures_off": report.settings.touch_gestures_off,
         "image_auto_restart": report.settings.image_auto_restart,
+        "host_certificates": report.settings.host_certificates,
+        "imported_certificates": report.imported_certificates.iter().map(|certificate| json!({
+            "subject": certificate.subject,
+            "issuer": certificate.issuer,
+            "source": certificate.source,
+            "location": certificate.location,
+            "sha256": certificate.sha256,
+            "not_after": certificate.not_after,
+        })).collect::<Vec<_>>(),
         "touch_gestures_state": report.touch_gestures.as_str(),
         "touch_gestures_problem": report.touch_gestures.problem(),
         "network": network_json(report.network.as_ref()),
@@ -2387,8 +2405,28 @@ pub fn settings_json(report: &SettingsReport) -> Value {
     })
 }
 
-/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`),
-/// or null from a service that does not report it.
+/// Where a root certificate the service found was, in words.
+pub fn describe_certificate_source(source: &str, location: &str) -> String {
+    use dsa_host_core::host_certificates::source;
+    let store = match source {
+        source::MACHINE => "this computer's trusted root store",
+        source::MACHINE_GROUP_POLICY => "this computer's group policy",
+        source::MACHINE_ENTERPRISE => "this computer's enterprise roots",
+        source::USER => "your own trusted roots",
+        source::USER_GROUP_POLICY => "your group policy",
+        source::ADMIN => "the administrator's trust settings",
+        source::SYSTEM => "the system's certificate store",
+        other => other,
+    };
+    if location.is_empty() {
+        store.to_string()
+    } else {
+        format!("{store}, {location}")
+    }
+}
+
+/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`,
+/// `dns_resolver`), or null from a service that does not report it.
 pub fn network_json(network: Option<&NetworkStatus>) -> Value {
     match network {
         Some(network) => json!({
@@ -2397,6 +2435,7 @@ pub fn network_json(network: Option<&NetworkStatus>) -> Value {
             "dns_servers": network.dns_servers,
             "gateway": network.gateway,
             "problem": network.problem,
+            "dns_resolver": network.dns_resolver,
         }),
         None => Value::Null,
     }
@@ -2427,7 +2466,14 @@ pub fn describe_network(report: &SettingsReport) -> String {
     let mut lines = vec![setting, format!("Network: {mode}")];
     if network.mode != NetworkStatus::OFF {
         lines.push(format!("Addresses: {}", list(&network.addresses)));
-        lines.push(format!("DNS servers: {}", list(&network.dns_servers)));
+        lines.push(match network.dns_resolver.as_str() {
+            NetworkStatus::DNS_HOST => "DNS: answered by this computer's resolver".to_string(),
+            NetworkStatus::DNS_NETWORK => format!(
+                "DNS: this computer's resolver does not answer, so Android asks {}",
+                list(&network.dns_servers)
+            ),
+            _ => format!("DNS servers: {}", list(&network.dns_servers)),
+        });
         if !network.gateway.is_empty() {
             lines.push(format!("Gateway: {}", network.gateway));
         }
@@ -2932,6 +2978,11 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             on_off(settings.advanced_networking)
         ),
         format!(
+            "Trust the root certificates added to this computer: {} ({} found)",
+            on_off(settings.host_certificates),
+            report.imported_certificates.len()
+        ),
+        format!(
             "Restart into a downloaded Android image by itself: {} (image-auto-restart)",
             on_off(settings.image_auto_restart)
         ),
@@ -2948,6 +2999,14 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             "Touch gestures off in DSA app windows: {} ({})",
             on_off(settings.touch_gestures_off),
             describe_touch_gestures(&report.touch_gestures)
+        ));
+    }
+    for certificate in &report.imported_certificates {
+        lines.push(format!(
+            "  Root certificate: {} (issued by {}; from {})",
+            certificate.subject,
+            certificate.issuer,
+            describe_certificate_source(&certificate.source, &certificate.location)
         ));
     }
     lines.push(format!("Service version: {}", facts.version));
@@ -3202,6 +3261,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
             Change::TouchGesturesOff(on) => wanted.touch_gestures_off = *on,
             Change::ImageAutoRestart(on) => wanted.image_auto_restart = *on,
+            Change::HostCertificates(on) => wanted.host_certificates = *on,
             Change::RootElevation(on) => wanted.root_elevation = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
@@ -3478,7 +3538,7 @@ fn host_density() -> u32 {
     dsa_host_windows::monitors::system_density()
 }
 
-/// Apps draw at a 100% monitor's density (96) where the screen's is not known here.
+/// Apps draw at a 100% monitor's density (130) where the screen's is not known here.
 #[cfg(not(windows))]
 fn host_density() -> u32 {
     dsa_host_core::compositor::window_sizing::DENSITY_AT_BASE_DPI

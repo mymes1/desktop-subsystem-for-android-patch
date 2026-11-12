@@ -1,5 +1,7 @@
 //! Session start and stop, through the session's public API, over the in-memory transport.
 
+mod common;
+
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -271,7 +273,7 @@ fn connect_daemon(connector: &mut MemoryConnector, launcher: &FakeLauncher) -> B
         WAIT,
     )
     .expect("the host accepts the agent");
-    agent
+    Box::new(common::PastConnectSettings(agent))
 }
 
 #[test]
@@ -1819,6 +1821,7 @@ fn fr5_pointer_input_does_not_wait_for_the_session_to_stop_reading_the_channel()
         WAIT,
     )
     .expect("the host accepts the agent");
+    let mut agent: Box<dyn Connection> = Box::new(common::PastConnectSettings(agent));
     report_boot(&mut agent, true, true);
     assert!(session.wait_for(SessionState::Active, WAIT));
 
@@ -5418,12 +5421,12 @@ fn fr4_text_follows_the_windows_text_size() {
     session.start();
     let mut agent = connect_agent(&mut connector, &launcher);
     assert!(session.wait_for(SessionState::Active, WAIT));
-    // At a text size of 100% the guest's font scale is 160/96: a dp is 0.6 DIP, and text
-    // keeps the host's size.
+    // At a text size of 100% the guest's font scale is 1: text follows the same ratio as a
+    // dp, 0.819 DIP, so body text of 16 sp is about 13 DIP, near the host's own.
     let Body::SystemSettings(at_100) = next_body(&mut agent) else {
         panic!("expected the system settings");
     };
-    assert!((at_100.font_scale - 160.0 / 96.0).abs() < 1e-5);
+    assert!((at_100.font_scale - 1.0).abs() < 1e-5);
     // The user makes Windows' text 150%: the guest hears of it at once, as a setting and
     // nothing else, so no task is asked to change and none is relaunched for it.
     session.set_system_settings(dsa_host_core::system_settings::SystemSettings {
@@ -5433,7 +5436,7 @@ fn fr4_text_follows_the_windows_text_size() {
     let Body::SystemSettings(at_150) = next_body(&mut agent) else {
         panic!("expected the system settings");
     };
-    assert!((at_150.font_scale - 2.5).abs() < 1e-5);
+    assert!((at_150.font_scale - 1.5).abs() < 1e-5);
     assert_eq!(
         at_150,
         dsa_protocol::control::SystemSettings {
@@ -5450,7 +5453,7 @@ fn fr4_text_follows_the_windows_text_size() {
     let Body::SystemSettings(capped) = next_body(&mut agent) else {
         panic!("expected the system settings");
     };
-    assert!((capped.font_scale - 5.0).abs() < 1e-5);
+    assert!((capped.font_scale - 3.0).abs() < 1e-5);
 }
 
 #[test]

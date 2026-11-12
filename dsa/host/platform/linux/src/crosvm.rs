@@ -434,7 +434,7 @@ mod tests {
             initrd: "/home/u/.local/share/dsa/tmp/boot.initrd".into(),
             kernel_cmdline:
                 "console=ttyS0 androidboot.boot_devices=vmbus androidboot.hardware=cutf_cvm".into(),
-            memory_mb: 3072,
+            memory_mb: 2048,
             memory_max_mb: None,
             processors: 4,
             system_image: Some("/var/lib/dsa/images/1/system.img".into()),
@@ -574,7 +574,7 @@ mod tests {
         for pinned in ["--hugepages", "--lock-guest-memory", "--no-balloon"] {
             assert!(!joined.contains(pinned), "{pinned} pins guest memory");
         }
-        assert_eq!(value_of(&args, "--mem"), ["size=3072"]);
+        assert_eq!(value_of(&args, "--mem"), ["size=2048"]);
         assert!(value_of(&args, "--init-mem").is_empty());
     }
 
@@ -583,10 +583,10 @@ mod tests {
         let mut config = config();
         config.memory_max_mb = Some(16384);
         let args = config.crosvm_args().unwrap();
-        // The guest kernel sees only the base at boot, so it keeps page structs for 3 GiB, not
+        // The guest kernel sees only the base at boot, so it keeps page structs for 2 GiB, not
         // for 16 GiB; the rest is plugged in as it is needed.
-        assert_eq!(value_of(&args, "--mem"), ["size=3072"]);
-        assert_eq!(value_of(&args, "--virtio-mem"), ["13312"]);
+        assert_eq!(value_of(&args, "--mem"), ["size=2048"]);
+        assert_eq!(value_of(&args, "--virtio-mem"), ["14336"]);
         assert!(value_of(&args, "--init-mem").is_empty());
         assert!(config
             .full_kernel_cmdline()
@@ -595,15 +595,15 @@ mod tests {
             .full_kernel_cmdline()
             .contains("memory_hotplug.online_policy=auto-movable"));
         // Whole memory blocks only.
-        config.memory_max_mb = Some(3072 + 1000);
-        assert_eq!(config.memory_layout(), (3072, Some(896)));
-        config.memory_max_mb = Some(3072 + 100);
-        assert_eq!(config.memory_layout(), (3072, None));
-        config.memory_max_mb = Some(2048);
-        assert_eq!(config.memory_layout(), (3072, None));
-        assert_eq!(virtio_mem_bytes(3072, 3072), 0);
-        assert_eq!(virtio_mem_bytes(3072, 16384), 13312 * 1024 * 1024);
-        assert_eq!(virtio_mem_bytes(3072, 2048), 0);
+        config.memory_max_mb = Some(2048 + 1000);
+        assert_eq!(config.memory_layout(), (2048, Some(896)));
+        config.memory_max_mb = Some(2048 + 100);
+        assert_eq!(config.memory_layout(), (2048, None));
+        config.memory_max_mb = Some(1024);
+        assert_eq!(config.memory_layout(), (2048, None));
+        assert_eq!(virtio_mem_bytes(2048, 2048), 0);
+        assert_eq!(virtio_mem_bytes(2048, 16384), 14336 * 1024 * 1024);
+        assert_eq!(virtio_mem_bytes(2048, 1024), 0);
     }
 
     #[test]

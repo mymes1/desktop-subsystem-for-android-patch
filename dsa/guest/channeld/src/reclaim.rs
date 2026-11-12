@@ -290,6 +290,21 @@ pub struct Reclaimer {
     tasks_changed: Option<Duration>,
     /// What the last working set trim asks for, in KiB.
     trim_kb: u64,
+    /// The least the target falls to now, in KiB: `keep_cache_kb`, raised when what a trim
+    /// took came back (see [`Reclaimer::refaults`]), and back to `keep_cache_kb` when an app
+    /// closes.
+    floor_kb: u64,
+    /// The last trim not yet judged: the refault count when it ran, what it took and the
+    /// target it left, in KiB.
+    trim_mark: Option<TrimMark>,
+}
+
+/// A working set trim, as the next looks judge it by what of it comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TrimMark {
+    refaults_kb: u64,
+    took_kb: u64,
+    left_kb: u64,
 }
 
 impl Reclaimer {
@@ -309,13 +324,52 @@ impl Reclaimer {
             last_tasks: None,
             tasks_changed: None,
             trim_kb: 0,
+            floor_kb: policy.keep_cache_kb,
+            trim_mark: None,
+        }
+    }
+
+    /// The apps the working set was learnt for changed: it starts again from `keep_cache_kb`.
+    fn forget_working_set(&mut self) {
+        self.target_kb = self.policy.keep_cache_kb;
+        self.floor_kb = self.policy.keep_cache_kb;
+        self.trim_mark = None;
+        self.refaulting = false;
+    }
+
+    /// Notes a working set trim of `took_kb` that leaves the target: the looks after it judge
+    /// it by what of it is read back. The trim before it, if no look found a quarter of it
+    /// back, took cache no app used, so the floor steps down toward `keep_cache_kb` and the
+    /// next trims try for a little more.
+    fn mark_trim(&mut self, took_kb: u64) {
+        if self.trim_mark.take().is_some() {
+            self.floor_kb = self
+                .floor_kb
+                .saturating_sub(self.policy.min_trim_kb)
+                .max(self.policy.keep_cache_kb);
+        }
+        if let Some(refaults_kb) = self.last_refaults_kb {
+            self.trim_mark = Some(TrimMark {
+                refaults_kb,
+                took_kb,
+                left_kb: self.target_kb,
+            });
         }
     }
 
     /// Takes in the guest's file refault count ([`file_refaults_kb`]), for the decision that
     /// follows. Cache read back soon after a trim was cache an app still uses, so the working
     /// set target rises and the trim holds off; while little comes back, the target falls back
-    /// toward `keep_cache_kb`, so cache no app uses any more goes back to the host.
+    /// toward its floor, so cache no app uses any more goes back to the host.
+    ///
+    /// A look at a time sees only a few seconds of refaults, and an app that reads its files
+    /// back slowly never reached the limit of one look: on the owner's PC, with only the Play
+    /// Store shown, a trim of about 100 MiB came back at 8 MiB a look, 60 % of it within
+    /// 20 s, and the next trim took it again, every 10 to 30 s for as long as the window was
+    /// shown (16 MiB read back every 10 s). So each trim is also judged by what of it came
+    /// back since it ran: once a quarter of it has, it took part of the working set, and the
+    /// floor rises to what it left plus what came back. The floor steps down again only after
+    /// a trim none of the looks found a quarter of back.
     pub fn refaults(&mut self, total_kb: u64) {
         let grown = self
             .last_refaults_kb
@@ -325,16 +379,29 @@ impl Reclaimer {
             return;
         };
         let p = self.policy;
+        let mut learnt = false;
+        if let Some(mark) = self.trim_mark {
+            let back = total_kb.saturating_sub(mark.refaults_kb);
+            if mark.took_kb > 0 && back.saturating_mul(4) >= mark.took_kb {
+                self.trim_mark = None;
+                self.floor_kb = self
+                    .floor_kb
+                    .max(mark.left_kb.saturating_add(back))
+                    .min(p.keep_cache_max_kb);
+                self.target_kb = self.target_kb.max(self.floor_kb);
+                learnt = true;
+            }
+        }
         if grown >= p.refault_limit_kb {
             self.refaulting = true;
             self.target_kb = (self.target_kb + p.min_trim_kb).min(p.keep_cache_max_kb);
         } else {
-            self.refaulting = false;
-            if grown.saturating_mul(4) <= p.refault_limit_kb {
+            self.refaulting = learnt;
+            if !learnt && grown.saturating_mul(4) <= p.refault_limit_kb {
                 self.target_kb = self
                     .target_kb
                     .saturating_sub(p.min_trim_kb)
-                    .max(p.keep_cache_kb);
+                    .max(self.floor_kb);
             }
         }
     }
@@ -357,8 +424,7 @@ impl Reclaimer {
     pub fn app_closed(&mut self, now: Duration, tasks: usize, memory: &MemInfo) -> Option<Reason> {
         // The closed app's cache is not the working set any more, and the refaults it caused
         // say nothing about the apps left.
-        self.target_kb = self.policy.keep_cache_kb;
-        self.refaulting = false;
+        self.forget_working_set();
         self.last_tasks = Some(tasks);
         let opening = tasks > 0
             && self
@@ -371,6 +437,7 @@ impl Reclaimer {
                 return None;
             }
             self.last_trim = Some(now);
+            self.mark_trim(self.trim_kb);
             return Some(Reason::Gradual);
         }
         if tasks == 0 {
@@ -414,8 +481,7 @@ impl Reclaimer {
             Some(last) if tasks < last => {
                 // An app closed: the cache it used is not the working set any more, and the
                 // refaults it caused say nothing about the apps left.
-                self.target_kb = self.policy.keep_cache_kb;
-                self.refaulting = false;
+                self.forget_working_set();
             }
             _ => {}
         }
@@ -478,6 +544,7 @@ impl Reclaimer {
             let excess = memory.droppable_kb() - self.target_kb;
             // Whole MiB, as init's script writes it.
             self.trim_kb = excess.min(self.policy.max_trim_kb) / 1024 * 1024;
+            self.mark_trim(self.trim_kb);
             return Some(Reason::Gradual);
         } else {
             None
@@ -487,6 +554,9 @@ impl Reclaimer {
             // A full reclaim also counts as the latest trim: no second one right behind it.
             self.last_trim = Some(now);
             self.measure_floor = true;
+            // It dropped every cache, so what is read back now says nothing about the trim
+            // before it.
+            self.trim_mark = None;
         }
         reason
     }

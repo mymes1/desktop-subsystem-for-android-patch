@@ -204,7 +204,7 @@ message ResizeTask {
 }
 
 // A task's window moved to a monitor of another scale: asks the caller's Android to draw
-// the task at `density_dpi` (96 at a scale of 100%, where a dp is 0.6 of a host pixel).
+// the task at `density_dpi` (130 at a scale of 100%, where a dp is 0.819 of a host pixel).
 message SetTaskDensity {
   int32 task_id = 1;
   uint32 density_dpi = 2;
@@ -917,8 +917,8 @@ message WidgetEvent {
 message PlaceWidget {
   int32 widget_id = 1;
   WidgetPlacement placement = 2;
-  // The window's size in its monitor's pixels, and Android's density for it (96 at a scale of
-  // 100%).
+  // The window's size in its monitor's pixels, and Android's density for it (130 at a scale
+  // of 100%).
   uint32 width = 3;
   uint32 height = 4;
   uint32 density_dpi = 5;
@@ -1217,7 +1217,7 @@ message Task {
   string label = 4;
   // Whether the task has input focus in Android.
   bool focused = 5;
-  // The density the task's app draws at, in dots per inch (96 at a scale of 100%). 0 when
+  // The density the task's app draws at, in dots per inch (130 at a scale of 100%). 0 when
   // unknown.
   uint32 density_dpi = 6;
   // The largest size Android can give the task, in its display pixels. 0 when unknown.
@@ -1818,12 +1818,40 @@ message Settings {
   // it off; a client sends back the value it read. Off, a downloaded image is used from the
   // next time the user starts Android.
   bool image_auto_restart = 39;
+  // Whether the caller's Android trusts, as system certificates, the root certificates a user
+  // or an administrator added to this computer (imported_certificates). On unless the user
+  // turned it off; a client sends back the value it read. It applies at once, without
+  // restarting Android.
+  bool host_certificates = 40;
+  // The root certificates the service found added to this computer's trust stores for the
+  // caller, whether or not host_certificates is on. Those the operating system ships are left
+  // out. A client cannot change it.
+  repeated ImportedCertificate imported_certificates = 41;
   // A run mode setting (run_mode, a RunMode enum, stop_after_secs and keep_for_notifications)
   // was here and is gone: an idle Android stays in Doze. Its numbers and names are never
   // used again, so an older peer that still sends them is read without them. The enum name
   // RunMode is not used again either.
   reserved 310, 311, 312;
   reserved "run_mode", "stop_after_secs", "keep_for_notifications";
+}
+
+// One root certificate the service found added to the computer's trust stores.
+message ImportedCertificate {
+  // Who the certificate is for and who signed it, as distinguished names ("CN=Example Root,
+  // O=Example").
+  string subject = 1;
+  string issuer = 2;
+  // Where it was found: "machine" (the computer's trusted root store), "machine_group_policy",
+  // "machine_enterprise", "user" (the caller's own trusted root store), "user_group_policy",
+  // "admin" (the computer's administrator trust settings) or "system" (a certificate added to
+  // the system's certificate store).
+  string source = 3;
+  // The store or file it was found in, as the operating system names it.
+  string location = 4;
+  // The SHA-256 fingerprint of the certificate, in lower-case hexadecimal.
+  string sha256 = 5;
+  // When it stops being valid, in seconds since the Unix epoch; 0 when unknown.
+  int64 not_after = 6;
 }
 
 // How the caller's Android reaches the network.
@@ -1841,6 +1869,11 @@ message NetworkStatus {
   // Why advanced networking is not in use although it is on, or another problem with the
   // network. Empty when there is none.
   string problem = 5;
+  // Who answers the guest's DNS queries: "host" while this host's resolver answers them (so
+  // the host's hosts file, VPN and DNS filters apply to Android's apps), "network" while the
+  // host's resolver does not answer and Android asks `dns_servers` itself. Empty while Android
+  // is not running or still booting, and from a service that cannot say.
+  string dns_resolver = 6;
 }
 
 // Erases the caller's Android data: the apps they installed, their accounts and every app's

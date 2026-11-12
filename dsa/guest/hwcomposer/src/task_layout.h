@@ -138,6 +138,20 @@ bool leavesLastFrame(bool layerMissing, bool hasFrame);
 // with an earlier frame keeps that one, which its window then closes with; a first frame goes.
 bool leavesLastFrameUndrawn(const std::vector<LayerFill>& layers, bool hasFrame);
 
+// Whether a task that has had no layer since `withoutLayersSinceMs` (steady clock; 0 while it
+// has one) lets go of its host ColorBuffers at `nowMs`: once that has lasted `delayMs`. A
+// minimized window, or one whose app is in the background, has no layer, and its window shows
+// its own copy of the last frame.
+bool releaseDue(int64_t withoutLayersSinceMs, int64_t nowMs, int64_t delayMs);
+
+// Whether this process keeps its hold on the client target's host ColorBuffers at `nowMs`,
+// when SurfaceFlinger last composed something itself at `lastClientFrameMs` (steady clock; 0
+// for not since they were let go). The client target is as large as the display (two buffers
+// of 2880x2880 are 63 MiB), and SurfaceFlinger composes into it only while some layer needs it
+// (a video's YUV pictures), so it is kept for `delayMs` after the last such frame and let go
+// after that. SurfaceFlinger lets go of its own buffers on the frame that follows.
+bool clientTargetHeld(int64_t lastClientFrameMs, int64_t nowMs, int64_t delayMs);
+
 // Whether a task's frame goes to the host, after the task's size changed.
 //
 // When a task's bounds take a new size, its app has not redrawn yet: its surface keeps the

@@ -61,8 +61,17 @@ git -C $GfxstreamDir clean -fdx
 # next release resets it and submits with it again while the GPU may still signal it, and
 # nothing checks the renderer's device. Without 0019 a YUV gralloc buffer a guest CPU writes (a
 # video decoder's pictures, a camera's frames) gets an RGBA ColorBuffer the guest cannot copy
-# its planes into, so videos show their sound and a green picture. A patch that does not apply
-# stops the fetch.
+# its planes into, so videos show their sound and a green picture. Without 0020 every read back
+# of host-visible memory sends all of it, changed or not: the guest reads its mapped memory back
+# at each fence, so every frame of every app waited for tens of megabytes to cross the socket.
+# Without 0021 the renderer makes its lost device again while holding its lock, so every guest
+# call that touches a ColorBuffer waits for the GPU to come back from its reset (13 s on an
+# Intel Arc), and Android ends the app whose input went unanswered. Without 0022 a ColorBuffer
+# read back or written whole is one GPU job however large the window, 2880x2048 and more for a
+# window maximized on a 200% monitor. Without 0023 ASTC and ETC2 compressed textures fail under
+# ANGLE or synchronization2 when the Vulkan driver emulates them. Without 0024 a Windows PC
+# with no hardware Vulkan driver cannot fall back to the bundled Lavapipe software ICD.
+# A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -81,7 +90,10 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0018-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0019-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0020-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0021-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0021-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0022-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0023-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0024-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

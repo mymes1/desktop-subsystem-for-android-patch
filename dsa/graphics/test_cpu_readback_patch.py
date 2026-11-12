@@ -139,7 +139,7 @@ class CpuReadbackPatchTests(unittest.TestCase):
         self.assertIn('"$here/cpu_readback_test.cpp"', TESTS.read_text(encoding="utf-8"))
 
     def test_nfr1_only_cpu_readback_buffers_touched_by_submitted_command_buffers_are_marked_dirty(self):
-        selective = next((HERE / "patches/guest/mesa").glob("0010-*.patch"))
+        selective = next((HERE / "patches/guest/mesa").glob("0012-*.patch"))
         added, removed = file_hunks(selective, "src/gfxstream/guest/vulkan_enc/ResourceTracker.cpp")
         text = "\n".join(added)
         self.assertIn("            mCpuReadback.submitted((uint64_t)queueIt->second.device);", removed)

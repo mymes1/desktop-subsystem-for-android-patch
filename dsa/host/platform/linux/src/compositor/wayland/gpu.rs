@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::caption::BandSample;
-use dsa_host_core::compositor::window_sizing::{to_task_length, to_window_size};
+use dsa_host_core::compositor::window_sizing::to_window_size;
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_shm::Format;
 use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
@@ -322,7 +322,7 @@ impl State {
                 && window.pip.is_none()
                 && band_probe_due(window.band_probed, now))
             // The band is the window's; the frame is read in its own pixels.
-            .then(|| to_task_length(window.model.caption_height(), window.model.frame_scale))
+            .then(|| window.model.caption_rows_in_frame())
         });
         if let Some(band) = probe {
             let sample = self.gpu_band_sample(display_id, frame, band);

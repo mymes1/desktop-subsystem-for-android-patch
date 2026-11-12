@@ -73,9 +73,25 @@ index 33a5f46..d4966d6 100644
  
      VkResult result = enc->vkBindImageMemory2(device, bindingCount, pBindInfos, true /* do lock */);
 -#ifdef VK_USE_PLATFORM_ANDROID_KHR
-     if (result == VK_SUCCESS) {
-         std::lock_guard<std::recursive_mutex> lock(mLock);
-         for (uint32_t i = 0; i < bindingCount; i++) {
+-    if (result == VK_SUCCESS) {
+-        std::lock_guard<std::recursive_mutex> lock(mLock);
+-        for (uint32_t i = 0; i < bindingCount; i++) {
+-            const VkNativeBufferANDROID* anb =
+-                vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
+-            auto imageIt = info_VkImage.find(pBindInfos[i].image);
+-            if (anb && anb->handle && imageIt != info_VkImage.end() &&
+-                mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
+-                imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
+-            }
+-            if (anb && anb->handle && imageIt != info_VkImage.end()) {
+-                holdWindowBuffer(imageIt->second, (const native_handle_t*)anb->handle);
+-            }
+-        }
+-    }
+-#endif
++    if (result == VK_SUCCESS) {
++        std::lock_guard<std::recursive_mutex> lock(mLock);
++        for (uint32_t i = 0; i < bindingCount; i++) {
 +            auto imageIt = info_VkImage.find(pBindInfos[i].image);
 +            if (imageIt == info_VkImage.end()) {
 +                continue;
@@ -84,18 +100,18 @@ index 33a5f46..d4966d6 100644
 +                imageIt->second.currentBacking = pBindInfos[i].memory;
 +            }
 +#ifdef VK_USE_PLATFORM_ANDROID_KHR
-             const VkNativeBufferANDROID* anb =
-                 vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
--            auto imageIt = info_VkImage.find(pBindInfos[i].image);
--            if (anb && anb->handle && imageIt != info_VkImage.end() &&
++            const VkNativeBufferANDROID* anb =
++                vk_find_struct_const(&pBindInfos[i], NATIVE_BUFFER_ANDROID);
 +            if (anb && anb->handle &&
-                 mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
-                 imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
-             }
++                mGralloc->wantsCpuReadback((const native_handle_t*)anb->handle)) {
++                imageIt->second.cpuReadbackHandle = (const native_handle_t*)anb->handle;
++            }
++            if (anb && anb->handle) {
++                holdWindowBuffer(imageIt->second, (const native_handle_t*)anb->handle);
++            }
 +#endif
-         }
-     }
--#endif
++        }
++    }
      return result;
  }
  

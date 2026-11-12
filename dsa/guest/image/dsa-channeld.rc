@@ -28,7 +28,13 @@ on property:sys.boot_completed=1
 # a time because init does nothing else during a command. Writing to the root cgroup covers
 # every process, and "swappiness=200" prefers anonymous pages. vendor.dsa.memory.reclaim_step
 # says how many MiB each quarter takes: together half the anonymous memory, the coldest, so the
-# pages of the processes still running are not swapped out only to come straight back. Then the
+# pages of the processes still running are not swapped out only to come straight back. What
+# zram holds is then compressed again with zstd (dsa-memory.rc names it), which takes about a
+# fifth less than LZ4: every page in zram is marked idle, and up to 64 MiB of them (16384
+# pages) is compressed again each time, so one reclaim keeps init busy for a fraction of a
+# second and the rest follows in the next ones. A page already compressed again is skipped,
+# and one swapped back in leaves zram, so only what stays cold is ever recompressed. zram's
+# own compaction then frees the memory the old copies left in its pages. Then the
 # clean page cache and the reclaimable kernel caches are dropped, and compaction leaves whole
 # blocks free, which free page reporting hands back to Hyper-V. Nothing is lost: what left is read back when needed.
 # It waits for boot to finish, so a boot still under way does not swap out what it is using;
@@ -38,6 +44,9 @@ on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"
+    write /sys/devices/virtual/block/zram0/idle all
+    write /sys/devices/virtual/block/zram0/recompress "type=idle max_pages=16384"
+    write /sys/devices/virtual/block/zram0/compact 1
     write /proc/sys/vm/drop_caches 3
     write /proc/sys/vm/compact_memory 1
     setprop vendor.dsa.memory.reclaim 0
@@ -126,6 +135,28 @@ on property:vendor.dsa.root_elevation=1
 on property:vendor.dsa.root_elevation=0
     stop dsa_su
 
+# The guest's DNS, answered by the host's resolver. dsa-channeld listens on the loopback
+# addresses (port 5553, UDP and TCP) and hands each query to the host on the DNS port; it sets
+# vendor.dsa.dns to "on" while the host answers and to "off" when the host stays unreachable.
+# dsa-channeld --dns-redirect then makes the packet filter send every DNS query a program sends
+# to port 53 to that port, or stop doing so, in a nat chain of its own (dsa_dns), so the
+# guest's queries reach the host's resolver rather than the network's DNS servers. It runs as
+# root, which changing the packet filter needs, in a domain of its own (channeld.cil). It starts
+# on the property alone: a vendor script may not trigger on init.svc.netd (init drops the whole
+# action as an "unexported property trigger"), and it needs no wait for netd, which never
+# flushes nat OUTPUT, where the jump to the chain goes; -w waits out netd's lock instead.
+service dsa_dns_redirect /vendor/bin/dsa-channeld --dns-redirect
+    user root
+    group root
+    capabilities NET_ADMIN NET_RAW
+    seclabel u:r:dsa_dns_redirect:s0
+    oneshot
+    disabled
+    stdio_to_kmsg
+
+on property:vendor.dsa.dns=*
+    start dsa_dns_redirect
+
 # KeyMint's root key, which the host keeps sealed by the user's credential store and gives
 # once each boot. dsa-channeld --keymint-key asks for it on the host's KeyMint port and writes
 # it to /dev/dsa_keymint/root_key, a tmpfs file only KeyMint's domain may read
@@ -138,6 +169,18 @@ service dsa_keymint_key /vendor/bin/dsa-channeld --keymint-key
     user nobody
     group nobody
     seclabel u:r:dsa_keymint_key:s0
+    oneshot
+    disabled
+    stdio_to_kmsg
+
+# Android's system certificates, copied into the tmpfs folders dsa-cacerts.rc binds over
+# Android's own, so the daemon can add the root certificates a user or administrator added to
+# the host beside them. dsa-cacerts.rc runs it once, at post-fs-data, before the zygote starts.
+# It runs as the system user, which the daemon runs as and which owns the folders, in the
+# daemon's domain (sepolicy/cacerts.cil).
+service dsa_cacerts_setup /vendor/bin/dsa-channeld --cacerts-setup
+    user system
+    group system
     oneshot
     disabled
     stdio_to_kmsg

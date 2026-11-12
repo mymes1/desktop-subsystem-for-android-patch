@@ -109,7 +109,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -168,6 +168,7 @@ use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
 
+mod dns_port;
 mod host_services;
 pub use host_services::{KeyMintKeyState, RestoreOutcome};
 
@@ -749,6 +750,11 @@ struct Shared {
     boot_secret: Mutex<Option<BootSecret>>,
     /// Set when the session ends, so the log port's threads end with it.
     log_port_stop: Arc<AtomicBool>,
+    /// The guest's connections on the DNS port that passed the handshake and are still open:
+    /// while there is one, the host's resolver answers the guest's names.
+    dns_connections: AtomicUsize,
+    /// Whether the platform serves the DNS port, so the guest's names can be answered here.
+    dns_port_served: AtomicBool,
     /// Which of the user's host folders their Android shows, which each agent that connects
     /// is told.
     file_sharing: SharingNow,
@@ -900,6 +906,9 @@ enum InstallEvent {
 struct AccessibilityHub {
     next_watch: u64,
     watchers: HashMap<i32, Vec<(u64, Sender<GuestAccessibility>)>>,
+    /// The tasks whose first tree since their newest watch began the service's log has
+    /// named, so a watch that never gets one shows by the missing line.
+    announced: HashSet<i32>,
 }
 
 /// The guest's tasks and who is watching them, under one lock, so a new watcher's starting
@@ -1181,6 +1190,14 @@ impl Shared {
     /// Hands what the guest sent about a task's accessibility to the task's watchers.
     fn publish_accessibility(&self, task_id: i32, message: GuestAccessibility) {
         let mut hub = self.accessibility.lock().unwrap_or_else(|e| e.into_inner());
+        if let GuestAccessibility::Tree(tree) = &message {
+            if hub.watchers.contains_key(&task_id) && hub.announced.insert(task_id) {
+                eprintln!(
+                    "accessibility: Android sent task {task_id}'s tree ({} nodes)",
+                    tree.nodes.len()
+                );
+            }
+        }
         match hub.watchers.get_mut(&task_id) {
             Some(watchers) => watchers.retain(|(_, w)| w.send(message.clone()).is_ok()),
             None => eprintln!(
@@ -1404,6 +1421,8 @@ impl Session {
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
             log_port_stop: Arc::new(AtomicBool::new(false)),
+            dns_connections: AtomicUsize::new(0),
+            dns_port_served: AtomicBool::new(false),
             file_sharing: Arc::new(Mutex::new(Sharing::default())),
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
@@ -2838,6 +2857,7 @@ impl Session {
             hub.next_watch += 1;
             let id = hub.next_watch;
             hub.watchers.entry(task_id).or_default().push((id, tx));
+            hub.announced.remove(&task_id);
             id
         };
         eprintln!(
@@ -5226,6 +5246,9 @@ impl Worker {
             self.replay_system_settings();
             self.replay_gamepads();
         }
+        // A change to the host's root certificates while the guest was frozen was not heard.
+        let body = self.shared.host_certificates_body();
+        self.send_body(body);
         true
     }
 
@@ -5619,6 +5642,11 @@ impl Worker {
             // hears that the user turned backup on.
             let body = self.shared.backup_setting_body();
             self.send_body(body);
+            // The root certificates added on the host again: a change the daemon could not
+            // hear while Android was starting reaches it now, and the new agent has the apps
+            // that started before it forget the anchors they looked up.
+            let body = self.shared.host_certificates_body();
+            self.send_body(body);
         } else {
             self.agent_lost_at = Some(now);
             // The tasks are what the agent reported, and the agent goes when Android's framework
@@ -5929,6 +5957,10 @@ impl Worker {
                             // A new boot's control daemon has no controller yet.
                             self.system_pending = false;
                             self.replay_gamepads();
+                            // A boot trusts none of the root certificates added on the host
+                            // until its daemon is told them, before any app reaches the network.
+                            let body = self.shared.host_certificates_body();
+                            self.send_body(body);
                             return;
                         }
                         Err(Refusal::NotTheGuest(why)) => {
@@ -6486,6 +6518,9 @@ impl Worker {
                      on the KeyMint port"
                 );
             }
+            Some(Body::DnsQuery(_) | Body::DnsAnswer(_)) => {
+                eprintln!("control channel: dropping a DNS message, which belongs on the DNS port");
+            }
             Some(
                 body @ (Body::ListSpeechVoices(_)
                 | Body::SpeakText(_)
@@ -6604,6 +6639,7 @@ impl Worker {
             | Some(Body::PasskeyResponse(_))
             | Some(Body::KeymintRootKey(_))
             | Some(Body::BackupSetting(_))
+            | Some(Body::HostCertificates(_))
             | Some(Body::SetAppVolume(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }

@@ -21,6 +21,15 @@ mkdir -p "$out"
 "$out/shadow_blocks_test"
 
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/shadow_record_test.cpp" -o "$out/shadow_record_test"
+"$out/shadow_record_test"
+
+# The guard on what host-visible memory adds to a resized window's wait for a frame.
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/readback_latency_test.cpp" -o "$out/readback_latency_test"
+"$out/readback_latency_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
     "$here/shadow_memory_test.cpp" -o "$out/shadow_memory_test"
 "$out/shadow_memory_test"
 
@@ -43,6 +52,14 @@ mkdir -p "$out"
 "$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../host" \
     "$here/copy_wait_test.cpp" -o "$out/copy_wait_test"
 "$out/copy_wait_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/copy_bands_test.cpp" -o "$out/copy_bands_test"
+"$out/copy_bands_test"
+
+"$cxx" -std=c++17 -O2 -Wall -Wextra -Werror -I"$here/../include" \
+    "$here/device_remake_test.cpp" -o "$out/device_remake_test"
+"$out/device_remake_test"
 
 # The upstream headers are not ours to warn about.
 upstream=(

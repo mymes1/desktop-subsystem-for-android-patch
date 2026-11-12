@@ -1130,6 +1130,111 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
 }
 
 #[test]
+fn fr4_a_window_maximised_with_a_guest_larger_than_its_monitor_fills_the_work_area_and_restores() {
+    let presenter = Arc::new(CapturingPresenter::default());
+    let running = start(Some(Arc::clone(&presenter)));
+    running.android.start();
+    // The guest draws more than any monitor shows, as a 2880x2880 guest display does on a
+    // 2048x1152 monitor.
+    let mut notes = task_at_monitor_density(1, 400, 300);
+    notes.max_width = 8000;
+    notes.max_height = 8000;
+    running.android.publish(TaskEvent::Updated(notes.clone()));
+    running.android.publish(TaskEvent::Frames {
+        task_id: 1,
+        display_id: 3,
+    });
+    let open = windows_of(&running, 1);
+    let hwnd = open[0].hwnd;
+    let (_, work) = window_and_work_area(hwnd);
+    let filled = (
+        (work.right - work.left) as u32,
+        (work.bottom - work.top) as u32,
+    );
+    let sink = presenter.sink.lock().unwrap().clone();
+    if let Some(sink) = &sink {
+        wait_for("display 3 to reach task 1's window", || {
+            sink.target(3, filled.0.max(1280), filled.1.max(720))
+        });
+        let (width, height) = client_size(hwnd);
+        sink.frame(3, (width as u32, height as u32));
+    }
+
+    thread::sleep(Duration::from_millis(200));
+    let before = running.android.requests.lock().unwrap().len();
+    let normal = client_size(hwnd);
+    unsafe { ShowWindow(hwnd as HWND, SW_MAXIMIZE) };
+    assert_ne!(unsafe { IsZoomed(hwnd as HWND) }, 0);
+    // The guest is asked for the work area of the window's own monitor, never more.
+    wait_for("the maximised size to reach the guest", || {
+        (resizes_since(&running, before, 1) == vec![(filled, true)]).then_some(())
+    });
+    if let Some(sink) = &sink {
+        sink.frame(3, filled);
+        wait_for("the window to take the size of its frame", || {
+            (client_size(hwnd) == (filled.0 as i32, filled.1 as i32)).then_some(())
+        });
+        // Its client area is the work area, on the screen.
+        let (window, work) = window_and_work_area(hwnd);
+        let mut client = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        unsafe { GetClientRect(hwnd as HWND, &mut client) };
+        let mut origin = POINT { x: 0, y: 0 };
+        unsafe { ClientToScreen(hwnd as HWND, &mut origin) };
+        assert_eq!(
+            (origin.x, origin.y),
+            (work.left, work.top),
+            "the maximised window at {}x{}..{}x{} does not fill the work area {}x{}..{}x{}",
+            window.left,
+            window.top,
+            window.right,
+            window.bottom,
+            work.left,
+            work.top,
+            work.right,
+            work.bottom
+        );
+    }
+    let asked = resizes_since(&running, before, 1);
+    assert!(
+        asked
+            .iter()
+            .all(|((width, height), _)| *width <= filled.0 && *height <= filled.1),
+        "a size larger than the work area {}x{} was asked for: {asked:?}",
+        filled.0,
+        filled.1
+    );
+
+    // Restoring it gives the window and the task their old size back.
+    let mut maximised = notes.clone();
+    maximised.bounds.right = maximised.bounds.left + filled.0 as i32;
+    maximised.bounds.bottom = maximised.bounds.top + filled.1 as i32;
+    running.android.publish(TaskEvent::Updated(maximised));
+    let restored_from = running.android.requests.lock().unwrap().len();
+    unsafe { ShowWindow(hwnd as HWND, SW_RESTORE) };
+    assert_eq!(unsafe { IsZoomed(hwnd as HWND) }, 0);
+    let restored = (normal.0 as u32, normal.1 as u32);
+    wait_for("the restored size to reach the guest", || {
+        resizes_since(&running, restored_from, 1)
+            .contains(&(restored, true))
+            .then_some(())
+    });
+    if let Some(sink) = &sink {
+        sink.frame(3, restored);
+        wait_for("the window to take its restored size", || {
+            (client_size(hwnd) == normal).then_some(())
+        });
+    }
+
+    running.android.publish(TaskEvent::Removed { task_id: 1 });
+    windows_of(&running, 0);
+}
+
+#[test]
 fn fr4_a_task_window_cannot_grow_past_what_the_guest_can_draw() {
     let running = start(None);
     running.android.start();
@@ -1152,7 +1257,7 @@ fn fr4_a_task_window_opens_at_its_monitors_scale() {
     let running = start(None);
     running.android.start();
     let mut notes = task(1, "Notes", 400, 300);
-    notes.density_dpi = 96;
+    notes.density_dpi = 130;
     notes.max_width = 1920;
     notes.max_height = 1080;
     running.android.publish(TaskEvent::Updated(notes));
@@ -1160,9 +1265,9 @@ fn fr4_a_task_window_opens_at_its_monitors_scale() {
     let dpi = unsafe { GetDpiForWindow(open[0].hwnd as HWND) }.max(96);
     let wanted = density_for_dpi(dpi);
 
-    let (width, height) = rescale((400, 300), 96, wanted);
+    let (width, height) = rescale((400, 300), 130, wanted);
     assert_eq!(client_size(open[0].hwnd), (width as i32, height as i32));
-    if wanted != 96 {
+    if wanted != 130 {
         wait_for("the density to reach the guest", || {
             let requests = running.android.requests.lock().unwrap().clone();
             (requests.first()
