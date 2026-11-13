@@ -301,29 +301,70 @@ impl AttachedDisk {
             ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER, ATTACH_VIRTUAL_DISK_FLAG_READ_ONLY,
             ATTACH_VIRTUAL_DISK_PARAMETERS, ATTACH_VIRTUAL_DISK_VERSION_1,
             OPEN_VIRTUAL_DISK_FLAG_NONE, OPEN_VIRTUAL_DISK_PARAMETERS, OPEN_VIRTUAL_DISK_VERSION_1,
-            VIRTUAL_DISK_ACCESS_ALL,
+            VIRTUAL_DISK_ACCESS_ALL, VIRTUAL_DISK_ACCESS_ATTACH_RO, VIRTUAL_DISK_ACCESS_GET_INFO,
         };
         let storage = VIRTUAL_STORAGE_TYPE {
             DeviceId: VIRTUAL_STORAGE_TYPE_DEVICE_VHDX,
             VendorId: VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT,
         };
-        let mut open = OPEN_VIRTUAL_DISK_PARAMETERS {
-            Version: OPEN_VIRTUAL_DISK_VERSION_1,
-            ..Default::default()
-        };
-        open.Anonymous.Version1.RWDepth = 1;
         let wide_path = wide(path);
         let mut handle: HANDLE = std::ptr::null_mut();
-        // SAFETY: valid parameters and out pointer; the handle is closed on drop.
-        let code = unsafe {
-            OpenVirtualDisk(
-                &storage,
-                wide_path.as_ptr(),
-                VIRTUAL_DISK_ACCESS_ALL,
-                OPEN_VIRTUAL_DISK_FLAG_NONE,
-                &open,
-                &mut handle,
-            )
+        let code = if read_only {
+            // Open read-only templates with RWDepth = 0 and read-only access so vhdmp.sys never
+            // initializes or replays a journal block in the image store's VHDX file.
+            let mut open_ro = OPEN_VIRTUAL_DISK_PARAMETERS {
+                Version: OPEN_VIRTUAL_DISK_VERSION_1,
+                ..Default::default()
+            };
+            open_ro.Anonymous.Version1.RWDepth = 0;
+            // SAFETY: valid parameters and out pointer; the handle is closed on drop.
+            let ro_code = unsafe {
+                OpenVirtualDisk(
+                    &storage,
+                    wide_path.as_ptr(),
+                    VIRTUAL_DISK_ACCESS_ATTACH_RO | VIRTUAL_DISK_ACCESS_GET_INFO,
+                    OPEN_VIRTUAL_DISK_FLAG_NONE,
+                    &open_ro,
+                    &mut handle,
+                )
+            };
+            if ro_code == ERROR_SUCCESS {
+                ro_code
+            } else {
+                let mut open_rw = OPEN_VIRTUAL_DISK_PARAMETERS {
+                    Version: OPEN_VIRTUAL_DISK_VERSION_1,
+                    ..Default::default()
+                };
+                open_rw.Anonymous.Version1.RWDepth = 1;
+                // SAFETY: valid parameters and out pointer; the handle is closed on drop.
+                unsafe {
+                    OpenVirtualDisk(
+                        &storage,
+                        wide_path.as_ptr(),
+                        VIRTUAL_DISK_ACCESS_ALL,
+                        OPEN_VIRTUAL_DISK_FLAG_NONE,
+                        &open_rw,
+                        &mut handle,
+                    )
+                }
+            }
+        } else {
+            let mut open = OPEN_VIRTUAL_DISK_PARAMETERS {
+                Version: OPEN_VIRTUAL_DISK_VERSION_1,
+                ..Default::default()
+            };
+            open.Anonymous.Version1.RWDepth = 1;
+            // SAFETY: valid parameters and out pointer; the handle is closed on drop.
+            unsafe {
+                OpenVirtualDisk(
+                    &storage,
+                    wide_path.as_ptr(),
+                    VIRTUAL_DISK_ACCESS_ALL,
+                    OPEN_VIRTUAL_DISK_FLAG_NONE,
+                    &open,
+                    &mut handle,
+                )
+            }
         };
         win32(code, &format!("opening {}", path.display()))?;
         let mut disk = AttachedDisk {

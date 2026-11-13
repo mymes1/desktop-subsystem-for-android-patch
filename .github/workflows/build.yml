@@ -287,7 +287,8 @@ jobs:
             $version = $env:INPUT_VERSION.TrimStart('v')
           } else {
             $parts = $tag.TrimStart('v').Split('.')
-            $version = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
+            $patch = [Math]::Min(65535, [int]$parts[2] + [Math]::Max(1, [int]$env:GITHUB_RUN_NUMBER))
+            $version = "$($parts[0]).$($parts[1]).$patch"
           }
 
           "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
@@ -295,6 +296,15 @@ jobs:
           "PUBLIC_KEY=$publicKey" >> $env:GITHUB_ENV
           "KERNEL_PATH=$published\bzImage" >> $env:GITHUB_ENV
           "LIST_URL=https://github.com/$env:UPSTREAM_REPO/releases/download/images/images.json" >> $env:GITHUB_ENV
+
+      - name: Test host update, download, VHDX, and GApps suites
+        working-directory: dsa
+        env:
+          DSA_SERVICE_TESTS: "1"
+        run: |
+          cargo test -p dsa-host-core --test update --test update_service --test android_versions
+          cargo test -p dsa-host-core --lib gapps
+          cargo test -p dsa-host-windows --test https --test host_config --test user_disk_update
 
       - name: Build the Windows x64 MSI and setup.exe
         run: |

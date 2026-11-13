@@ -716,3 +716,112 @@ fn fr14_a_failed_image_is_skipped_until_a_newer_build_of_it_is_offered() {
         Decision::Apply(newer)
     );
 }
+
+#[test]
+fn fr14_an_interrupted_multi_file_download_reuses_files_already_verified() {
+    struct CountingFetch {
+        files: std::sync::Mutex<HashMap<String, Vec<u8>>>,
+        requests: std::sync::Mutex<HashMap<String, u32>>,
+    }
+    impl Fetch for CountingFetch {
+        fn fetch(&self, url: &str, out: &mut dyn Write) -> Result<u64, String> {
+            *self
+                .requests
+                .lock()
+                .unwrap()
+                .entry(url.to_string())
+                .or_insert(0) += 1;
+            let bytes = self
+                .files
+                .lock()
+                .unwrap()
+                .get(url)
+                .cloned()
+                .ok_or_else(|| format!("{url} transient error"))?;
+            out.write_all(&bytes).map_err(|e| e.to_string())?;
+            Ok(bytes.len() as u64)
+        }
+    }
+
+    let first = installed("none", 0, 0);
+    let (store, root) = fresh_store(&first);
+    let sys_bytes = b"vhdxfile system image payload";
+    let data_bytes = b"vhdxfile data template payload";
+    let offered = ImageEntry {
+        version: "17.0.0-1".into(),
+        android_major: 17,
+        build: 1,
+        files: vec![
+            FileEntry {
+                name: "system.vhdx".into(),
+                url: "mem://17.0.0-1/system.vhdx".into(),
+                size: sys_bytes.len() as u64,
+                sha256: hex(&Sha256::digest(sys_bytes)),
+            },
+            FileEntry {
+                name: "data.vhdx".into(),
+                url: "mem://17.0.0-1/data.vhdx".into(),
+                size: data_bytes.len() as u64,
+                sha256: hex(&Sha256::digest(data_bytes)),
+            },
+        ],
+    };
+    let manifest = list(&[17], vec![offered.clone()]);
+    let fetch = CountingFetch {
+        files: std::sync::Mutex::new(HashMap::from([(
+            "mem://17.0.0-1/system.vhdx".into(),
+            sys_bytes.to_vec(),
+        )])),
+        requests: std::sync::Mutex::new(HashMap::new()),
+    };
+
+    // First attempt: system.vhdx finishes and is verified, data.vhdx fails.
+    assert!(store.stage(&offered, &manifest, &fetch).is_err());
+    assert!(!root.join("images/17.0.0-1").exists());
+
+    // Second attempt: data.vhdx becomes available; system.vhdx is reused from staging without
+    // a second network fetch.
+    fetch
+        .files
+        .lock()
+        .unwrap()
+        .insert("mem://17.0.0-1/data.vhdx".into(), data_bytes.to_vec());
+    store.stage(&offered, &manifest, &fetch).unwrap();
+    assert_eq!(
+        fetch
+            .requests
+            .lock()
+            .unwrap()
+            .get("mem://17.0.0-1/system.vhdx"),
+        Some(&1),
+        "already-verified system.vhdx must not be downloaded a second time"
+    );
+    assert_eq!(
+        std::fs::read(root.join("images/17.0.0-1/system.vhdx")).unwrap(),
+        sys_bytes
+    );
+    assert_eq!(
+        std::fs::read(root.join("images/17.0.0-1/data.vhdx")).unwrap(),
+        data_bytes
+    );
+}
+
+#[test]
+fn fr14_a_disk_expanded_by_the_vhdx_driver_stays_usable() {
+    use dsa_host_core::update::store::image_is_usable;
+    let first = installed("16.0.1", 16, 1);
+    let (_store, root) = fresh_store(&first);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    let dir = root.join("images").join("17.0.0-1");
+    assert!(image_is_usable(&dir));
+
+    // Appending a metadata log block to disk.vhdx keeps the image usable.
+    let mut disk = std::fs::read(dir.join("disk.vhdx")).unwrap();
+    disk.extend_from_slice(&[0u8; 4096]);
+    std::fs::write(dir.join("disk.vhdx"), &disk).unwrap();
+    assert!(image_is_usable(&dir));
+
+    // Truncating disk.vhdx below its recorded size is still refused.
+    std::fs::write(dir.join("disk.vhdx"), b"vhdxfile").unwrap();
+    assert!(!image_is_usable(&dir));
+}

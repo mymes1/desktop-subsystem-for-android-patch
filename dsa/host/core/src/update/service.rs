@@ -29,7 +29,7 @@ use crate::keys::KeyEvent;
 use crate::memory::GuestMemoryReport;
 use crate::print::{PrintEvent, PrintOutcome};
 use crate::session::BackgroundRequest;
-use crate::session::{BootProblem, Session, SessionState};
+use crate::session::{BootProblem, Session, SessionState, StopReason};
 use crate::tasks::{AppSettingsPage, TaskRequest, TaskRequestError, TaskWatch};
 use crate::widgets::{WidgetError, WidgetProvider, WidgetSize};
 use std::sync::mpsc::Receiver;
@@ -258,12 +258,24 @@ pub fn next_image_check(
 pub struct SessionBoot(pub Arc<Session>);
 
 impl Boot for SessionBoot {
-    /// A disk made under other signing keys stops the agent whichever image runs on it.
+    /// A disk made under other signing keys, a missing host prerequisite, or an explicit stop
+    /// asked for by the user or host service is not the image's fault.
     fn image_to_blame(&self) -> bool {
-        !matches!(
+        if matches!(
             self.0.problem(),
-            Some(BootProblem::DiskFromOtherKeys { .. })
-        )
+            Some(BootProblem::DiskFromOtherKeys { .. } | BootProblem::Prerequisite(_))
+        ) {
+            return false;
+        }
+        if self.0.state() == SessionState::Stopped
+            && matches!(
+                self.0.last_reason(),
+                Some(StopReason::Requested | StopReason::PrerequisiteLost(_))
+            )
+        {
+            return false;
+        }
+        true
     }
 
     fn boot(
@@ -277,12 +289,15 @@ impl Boot for SessionBoot {
         session.start();
         let mut deadline = Instant::now() + timeout;
         loop {
-            // A session already stalled for the image's sake fails the boot now, even when the
-            // problem changed after the Stalled event (a missing prerequisite that came back,
-            // then an agent that never connects): the event is not sent again for it.
+            // A session already stalled because the guest's agent failed after boot ends the
+            // trial now, even when the problem changed after the Stalled event. BootUnfinished
+            // only reports that compilation is taking past ready_timeout, so the trial keeps
+            // waiting until its own deadline.
             if session.state() == SessionState::Stalled {
                 match session.problem() {
-                    Some(BootProblem::Prerequisite(_)) | None => {}
+                    Some(BootProblem::Prerequisite(_))
+                    | Some(BootProblem::BootUnfinished { .. })
+                    | None => {}
                     Some(problem) => return Err(problem.to_string()),
                 }
             }
@@ -297,8 +312,10 @@ impl Boot for SessionBoot {
             match events.recv_timeout(left) {
                 Ok(event) if event.state == SessionState::Active => return Ok(()),
                 Ok(event) if event.state == SessionState::Stalled => match session.problem() {
-                    // Not the image's fault; the same when it moved on again in between.
-                    Some(BootProblem::Prerequisite(_)) | None => {}
+                    // Not the image's fault, or still compiling within the trial's deadline.
+                    Some(BootProblem::Prerequisite(_))
+                    | Some(BootProblem::BootUnfinished { .. })
+                    | None => {}
                     Some(problem) => return Err(problem.to_string()),
                 },
                 Ok(event) if event.state == SessionState::Stopped => {
@@ -310,10 +327,13 @@ impl Boot for SessionBoot {
                 Ok(_) => {}
                 Err(RecvTimeoutError::Timeout) if Instant::now() < deadline => {}
                 Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => {
+                    if let Some(problem) = session.problem() {
+                        return Err(problem.to_string());
+                    }
                     return Err(format!(
                         "it did not finish booting within {} seconds",
                         timeout.as_secs()
-                    ))
+                    ));
                 }
             }
         }
@@ -902,7 +922,11 @@ impl UserAndroid for UpdatingAndroid {
         let store = Arc::clone(&self.store);
         let notices = Arc::clone(&self.notices);
         let running = Arc::clone(&self.trial_running);
-        let timeout = self.boot_timeout;
+        let timeout = if first && self.boot_timeout >= Duration::from_secs(300) {
+            self.boot_timeout.max(Duration::from_secs(900))
+        } else {
+            self.boot_timeout
+        };
         let rollback = Arc::clone(&self.rollback);
         let image_restart = Arc::clone(&self.image_restart);
         thread::spawn(move || {

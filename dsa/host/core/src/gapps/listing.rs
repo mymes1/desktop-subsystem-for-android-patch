@@ -170,6 +170,16 @@ impl Write for Counted<'_> {
     }
 }
 
+/// SourceForge's direct mirror-selector URL when `project` is [`PROJECT`].
+fn direct_mirror_url(project: &str, target: &Target, build: &Build) -> Option<String> {
+    (project.trim_end_matches('/') == PROJECT).then(|| {
+        format!(
+            "https://downloads.sourceforge.net/project/litegapps/litegapps/{}/{}/{VARIANT}/{}/{}?use_mirror=autoselect",
+            target.arch, target.sdk, build.folder, build.file
+        )
+    })
+}
+
 /// Downloads `build` to `path`, telling `progress` how many bytes have arrived, and checks
 /// its length and MD5 digest against the listing. Returns its description; on any failure the
 /// file is removed.
@@ -182,9 +192,17 @@ pub fn download(
     progress: &mut dyn FnMut(u64),
 ) -> Result<GappsPackage, String> {
     let url = download_url(project, target, build);
-    let result = download_to(fetch, &url, target, build, path, progress);
+    let mut result = download_to(fetch, &url, target, build, path, progress);
     if result.is_err() {
         let _ = std::fs::remove_file(path);
+        if let Some(mirror_url) = direct_mirror_url(project, target, build) {
+            progress(0);
+            if let Ok(package) = download_to(fetch, &mirror_url, target, build, path, progress) {
+                result = Ok(package);
+            } else {
+                let _ = std::fs::remove_file(path);
+            }
+        }
     }
     result
 }
@@ -268,7 +286,7 @@ pub mod fixture {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::sync::Mutex;
