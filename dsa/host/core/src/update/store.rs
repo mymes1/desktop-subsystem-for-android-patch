@@ -91,9 +91,16 @@ const VHDX_SIGNATURE: &[u8] = b"vhdxfile";
 
 fn is_vhdx(path: &Path) -> bool {
     let mut head = [0u8; 8];
-    fs::File::open(path)
-        .and_then(|mut file| file.read_exact(&mut head))
-        .is_ok_and(|()| head == VHDX_SIGNATURE)
+    match fs::File::open(path) {
+        Ok(mut file) => file.read_exact(&mut head).is_ok() && head == VHDX_SIGNATURE,
+        // On Windows, a VHDX currently attached by Hyper-V/vhdmp.sys can refuse a handle asking
+        // for write/delete sharing with ERROR_SHARING_VIOLATION (32); a non-empty VHDX locked by
+        // the hypervisor is already mounted as a virtual disk.
+        Err(e) if cfg!(windows) && e.raw_os_error() == Some(32) => {
+            fs::metadata(path).is_ok_and(|meta| meta.len() >= 65_536)
+        }
+        Err(_) => false,
+    }
 }
 
 /// The guest architecture this host runs, as an image's `image.json` names it in `arch`:
@@ -135,9 +142,19 @@ pub fn image_is_usable(dir: &Path) -> bool {
                     let Ok(meta) = fs::metadata(&path) else {
                         return false;
                     };
+                    // Windows' VHDX driver can initialize a metadata log block when opening a
+                    // sparse disk, making the file slightly larger than image.json recorded;
+                    // only a shorter file is truncated.
+                    let size_ok = entry["size"].as_u64().is_none_or(|size| {
+                        if is_disk(name) {
+                            meta.len() >= size
+                        } else {
+                            meta.len() == size
+                        }
+                    });
                     is_plain_name(name)
                         && meta.is_file()
-                        && entry["size"].as_u64().is_none_or(|size| size == meta.len())
+                        && size_ok
                         && (!is_disk(name) || is_vhdx(&path))
                 })
         }
@@ -290,27 +307,22 @@ impl ImageStore {
             state.older_allowed,
         )
         .map_err(UpdateError::Refused)?;
-        let staging = self
-            .root
-            .join("images")
-            .join(format!(".staging-{}", image.version));
-        let _ = fs::remove_dir_all(&staging);
+        let staging_name = format!(".staging-{}", image.version);
+        let staging = self.root.join("images").join(&staging_name);
         fs::create_dir_all(&staging).map_err(|e| store_error("creating", &staging, e))?;
+        let existing_dir = self.image_dir(&image.version);
         let mut before = 0;
-        let result = image.files.iter().try_for_each(|file| {
-            download(file, &staging, fetch, &mut |written| {
+        image.files.iter().try_for_each(|file| {
+            download_or_reuse(file, &staging, &existing_dir, fetch, &mut |written| {
                 progress(before + written)
             })?;
             before += file.size;
             Ok(())
-        });
-        if let Err(error) = result {
-            let _ = fs::remove_dir_all(&staging);
-            return Err(error);
-        }
+        })?;
         let target = self.image_dir(&image.version);
         let _ = fs::remove_dir_all(&target);
         fs::rename(&staging, &target).map_err(|e| store_error("placing", &target, e))?;
+        self.remove_staging();
         let previous = std::mem::replace(&mut state.current, InstalledImage::of(image));
         state.previous = Some(previous);
         state.on_trial = true;
@@ -461,7 +473,9 @@ impl ImageStore {
         state.failed_build = self.build.clone();
         state.on_trial = false;
         self.write_state(&state)?;
-        let _ = fs::remove_dir_all(self.image_dir(&failed.version));
+        if self.has_image(&state.current.version) {
+            let _ = fs::remove_dir_all(self.image_dir(&failed.version));
+        }
         Ok(state.current)
     }
 
@@ -516,6 +530,7 @@ impl ImageStore {
         candidates.push(installed.clone());
         let usable = candidates.into_iter().find(|image| {
             image.version != broken.version
+                && !state.failed.contains(&image.version)
                 && is_plain_name(&image.version)
                 && image_is_usable(&self.image_dir(&image.version))
         });
@@ -567,6 +582,18 @@ impl ImageStore {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             if !keep.contains(&name.as_str()) && !name.starts_with(".staging-") {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+
+    fn remove_staging(&self) {
+        let Ok(entries) = fs::read_dir(self.root.join("images")) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(".staging-") {
                 let _ = fs::remove_dir_all(entry.path());
             }
         }
@@ -675,12 +702,58 @@ pub(crate) fn download_checked(
     Ok(())
 }
 
-fn download(
+fn file_matches_expected(path: &Path, size: u64, sha256_hex: &str) -> bool {
+    let Ok(meta) = fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() || meta.len() != size {
+        return false;
+    }
+    let Some(expected) = from_hex::<32>(sha256_hex) else {
+        return false;
+    };
+    let Ok(mut file) = fs::File::open(path) else {
+        return false;
+    };
+    let mut hash = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let Ok(read) = file.read(&mut buf) else {
+            return false;
+        };
+        if read == 0 {
+            break;
+        }
+        hash.update(&buf[..read]);
+    }
+    let actual: [u8; 32] = hash.finalize().into();
+    actual == expected
+}
+
+fn download_or_reuse(
     file: &super::manifest::FileEntry,
-    folder: &Path,
+    staging: &Path,
+    existing_dir: &Path,
     fetch: &dyn Fetch,
     progress: &mut dyn FnMut(u64),
 ) -> Result<(), UpdateError> {
+    let dest = staging.join(&file.name);
+    if file_matches_expected(&dest, file.size, &file.sha256) {
+        progress(file.size);
+        return Ok(());
+    }
+    let existing = existing_dir.join(&file.name);
+    if file_matches_expected(&existing, file.size, &file.sha256) {
+        let _ = fs::remove_file(&dest);
+        if fs::hard_link(&existing, &dest)
+            .or_else(|_| fs::copy(&existing, &dest).map(|_| ()))
+            .is_ok()
+        {
+            progress(file.size);
+            return Ok(());
+        }
+    }
+    let part = staging.join(format!("{}.part", file.name));
     let expected = Expected {
         name: &file.name,
         url: &file.url,
@@ -688,12 +761,15 @@ fn download(
         sha256: &file.sha256,
         list: "release list",
     };
-    download_checked(&expected, &folder.join(&file.name), fetch, progress).map_err(|failure| {
-        match failure {
+    if let Err(failure) = download_checked(&expected, &part, fetch, progress) {
+        let _ = fs::remove_file(&part);
+        return Err(match failure {
             DownloadFailure::Download(why) => UpdateError::Download(why),
             DownloadFailure::Store(why) => UpdateError::Store(why),
-        }
-    })
+        });
+    }
+    let _ = fs::remove_file(&dest);
+    fs::rename(&part, &dest).map_err(|e| store_error("placing", &dest, e))
 }
 
 /// Reads all of a `Read`, for small files such as the release list.

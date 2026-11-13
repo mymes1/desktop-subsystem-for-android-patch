@@ -474,7 +474,33 @@ impl Source {
             done: 0,
             total: 0,
         });
-        let build = listing::newest(&*self.fetch, &self.project, target)?;
+        let (resolved, build) = match listing::newest(&*self.fetch, &self.project, target) {
+            Ok(build) => (*target, build),
+            Err(first_err) => {
+                // LiteGapps can lag behind a newly released Android API level while its prior
+                // Core APKs run cleanly on the newer guest with DSA's generated allowlist.
+                let mut found = None;
+                for &sdk in SDKS.iter().rev().filter(|&&sdk| sdk < target.sdk) {
+                    let fallback = Target {
+                        arch: target.arch,
+                        sdk,
+                    };
+                    if let Ok(build) = listing::newest(&*self.fetch, &self.project, &fallback) {
+                        eprintln!(
+                            "gapps: LiteGapps has no Core build at API level {} yet ({first_err}); \
+                             using its API level {sdk} Core build ({})",
+                            target.sdk, build.file
+                        );
+                        found = Some((fallback, build));
+                        break;
+                    }
+                }
+                match found {
+                    Some(pair) => pair,
+                    None => return Err(first_err),
+                }
+            }
+        };
         let total = build.size;
         let zip = dir.join("gapps-download.zip");
         let mut told = 0u64;
@@ -483,30 +509,62 @@ impl Source {
             done: 0,
             total,
         });
-        let package = listing::download(
-            &*self.fetch,
-            &self.project,
-            target,
-            &build,
-            &zip,
-            &mut |done| {
-                if done >= told + NEWS_STEP || done == total {
-                    told = done;
-                    progress(Progress {
-                        stage: Stage::Downloading,
-                        done,
-                        total,
-                    });
+        let matches_build = |candidate: &Path| -> bool {
+            std::fs::metadata(candidate).is_ok_and(|m| m.is_file() && m.len() == build.size)
+                && file_md5(candidate).is_ok_and(|digest| digest.eq_ignore_ascii_case(&build.md5))
+        };
+        let reused = matches_build(&zip)
+            || self.kept_package(user).is_ok_and(|kept| {
+                matches_build(&kept) && {
+                    let _ = std::fs::remove_file(&zip);
+                    std::fs::hard_link(&kept, &zip)
+                        .or_else(|_| std::fs::copy(&kept, &zip).map(|_| ()))
+                        .is_ok()
                 }
-            },
-        )?;
+            });
+        let package = if reused {
+            progress(Progress {
+                stage: Stage::Downloading,
+                done: total,
+                total,
+            });
+            GappsPackage {
+                variant: VARIANT.to_string(),
+                version: build.version.clone(),
+                android_version: build.android_version.clone(),
+                sdk: resolved.sdk,
+                arch: resolved.arch.to_string(),
+                file: build.file.clone(),
+                source: listing::download_url(&self.project, &resolved, &build),
+                md5: build.md5.to_ascii_lowercase(),
+                image_format: 0,
+            }
+        } else {
+            listing::download(
+                &*self.fetch,
+                &self.project,
+                &resolved,
+                &build,
+                &zip,
+                &mut |done| {
+                    if done >= told + NEWS_STEP || done == total {
+                        told = done;
+                        progress(Progress {
+                            stage: Stage::Downloading,
+                            done,
+                            total,
+                        });
+                    }
+                },
+            )?
+        };
         progress(Progress {
             stage: Stage::Building,
             done: 0,
             total: 0,
         });
         let image = dir.join("gapps-system.img");
-        let built = match package::build_image(&zip, target, &image) {
+        let built = match package::build_image(&zip, &resolved, &image) {
             Ok(built) => built,
             Err(why) => {
                 let _ = std::fs::remove_file(&zip);
@@ -827,6 +885,67 @@ mod tests {
 
         source.forget(user);
         assert!(!source.is_kept(user));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr32_android_17_falls_back_to_api_36_core_build_when_api_37_is_not_published_yet() {
+        use std::collections::HashMap;
+        let dir = scratch("fallback-37-to-36");
+        let zip = package::fixture::sample();
+        let mut digest = md5::Md5::new();
+        digest.update(&zip);
+        let zip_md5 = md5::hex(&digest.finish());
+        let feed_37 = listing::fixture::feed(&[]);
+        let feed_36 = listing::fixture::feed(&[listing::fixture::item(
+            "/litegapps/x86_64/36/core/2026-10-01/LiteGapps-core-x86_64-16.0-20261001-official.zip",
+            zip.len() as u64,
+            &zip_md5,
+        )]);
+        let project = "https://example.com/litegapps";
+        let target_37 = Target {
+            arch: "x86_64",
+            sdk: 37,
+        };
+        let target_36 = Target {
+            arch: "x86_64",
+            sdk: 36,
+        };
+        let build_36 = listing::Build {
+            folder: "2026-10-01".into(),
+            file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
+            android_version: "16.0".into(),
+            version: "20261001".into(),
+            size: zip.len() as u64,
+            md5: zip_md5.clone(),
+        };
+        let served = Arc::new(listing::tests::Served(Mutex::new(HashMap::from([
+            (
+                listing::listing_url(project, &target_37),
+                feed_37.into_bytes(),
+            ),
+            (
+                listing::listing_url(project, &target_36),
+                feed_36.into_bytes(),
+            ),
+            (listing::download_url(project, &target_36, &build_36), zip),
+        ]))));
+        let source = Source::new(served, dir.join("work"))
+            .with_project(project)
+            .with_package_dir(dir.join("kept"));
+        let mut prepared = source
+            .prepare("uid:1000", &target_37, &mut |_| {})
+            .expect("API 37 guest uses API 36 Core build when API 37 has none");
+        assert_eq!(prepared.package.sdk, 36);
+        assert_eq!(prepared.package.image_format, IMAGE_FORMAT);
+        let files = crate::erofs::read::files(&std::fs::read(&prepared.image).unwrap());
+        assert!(files.contains_key("product/priv-app/GmsCore/GmsCore.apk"));
+        assert!(files.contains_key("product/etc/permissions/dsa-gapps-privapp-permissions.xml"));
+        source.keep("uid:1000", &mut prepared).unwrap();
+        let rebuilt = source.rebuild("uid:1000", &prepared.package).unwrap();
+        assert_eq!(rebuilt.package.sdk, 36);
+        drop(rebuilt);
+        drop(prepared);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

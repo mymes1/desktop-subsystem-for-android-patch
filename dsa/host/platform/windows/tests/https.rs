@@ -141,3 +141,67 @@ fn fr36_a_passkey_check_stops_at_its_size_limit() {
     assert_eq!(body, b"[]");
     server.join().unwrap();
 }
+
+#[test]
+fn fr14_an_interrupted_download_resumes_with_http_range() {
+    let body: Vec<u8> = (0..1_500_000u32).map(|i| (i % 251) as u8).collect();
+    let split = 700_000usize;
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let expected = body.clone();
+    let server = thread::spawn(move || {
+        // First connection: advertise full Content-Length, send `split` bytes, then drop!
+        {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut req = Vec::new();
+            let mut b = [0u8; 1];
+            while !req.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut b).unwrap();
+                req.push(b[0]);
+            }
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                expected.len()
+            );
+            stream.write_all(header.as_bytes()).unwrap();
+            stream.write_all(&expected[..split]).unwrap();
+        }
+        // Second connection: verify Range header and answer 206 Partial Content with remainder.
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut req = Vec::new();
+        let mut b = [0u8; 1];
+        while !req.ends_with(b"\r\n\r\n") {
+            stream.read_exact(&mut b).unwrap();
+            req.push(b[0]);
+        }
+        let req_str = String::from_utf8_lossy(&req).into_owned();
+        let rest = &expected[split..];
+        let header = format!(
+            "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {split}-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            expected.len() - 1,
+            expected.len(),
+            rest.len()
+        );
+        stream.write_all(header.as_bytes()).unwrap();
+        stream.write_all(rest).unwrap();
+        req_str
+    });
+
+    let fetcher = WinHttpFetch {
+        retry_delay: std::time::Duration::from_millis(50),
+        ..WinHttpFetch::default()
+    };
+    let mut out = Vec::new();
+    let written = fetcher
+        .fetch(&format!("http://{address}/17.0.0-1/system.vhdx"), &mut out)
+        .unwrap();
+    assert_eq!(written, body.len() as u64);
+    assert!(out == body, "resumed download must match byte-for-byte");
+    let second_request = server.join().unwrap();
+    assert!(
+        second_request
+            .to_ascii_lowercase()
+            .contains(&format!("range: bytes={split}-")),
+        "{second_request}"
+    );
+}

@@ -1163,3 +1163,179 @@ fn fr14_a_downloaded_image_is_applied_without_the_user_restarting() {
         done.store(true, Ordering::Relaxed);
     }
 }
+
+#[test]
+fn fr14_stopping_android_during_its_trial_boot_neither_deletes_nor_blames_the_image() {
+    let store = store_without_an_image();
+    check(
+        &store,
+        &server(
+            &[16, 17],
+            &[("17.0.0-1", 17, 1), ("16.0.0-1", 16, 1)],
+            &key(),
+        ),
+        "mem://list.json",
+        &trusted(),
+    )
+    .unwrap();
+    let (listener, mut connector) = memory::pair();
+    let secret = Arc::new(Mutex::new(None));
+    let session = Arc::new(Session::new(
+        StoreLauncher {
+            store: Arc::clone(&store),
+            broken: Vec::new(),
+            other_keys: false,
+            secret: Arc::clone(&secret),
+            boots: Default::default(),
+        },
+        Box::new(listener),
+        ControlHandshake::new("test host", WAIT),
+        SessionConfig {
+            connect_timeout: WAIT,
+            stop_timeout: WAIT,
+            ..SessionConfig::default()
+        },
+    ));
+    let android = UpdatingAndroid {
+        session,
+        store: Arc::clone(&store),
+        notices: Arc::new(UpdateNotices::default()),
+        boot_timeout: WAIT,
+        trial_running: Arc::new(AtomicBool::new(false)),
+        rollback: Default::default(),
+        image_restart: Default::default(),
+    };
+
+    // Start the trial boot and stop Android while it is still starting (as a PC restart or
+    // `dsa restart` does).
+    android.start();
+    let deadline = Instant::now() + WAIT;
+    while secret.lock().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "the guest was never started");
+        thread::sleep(Duration::from_millis(5));
+    }
+    android.stop();
+    let notice = wait_for_notice(&android);
+    assert!(
+        notice.contains("17.0.0-1 is kept on trial"),
+        "stopping must not roll back: {notice}"
+    );
+    let state = store.state().unwrap();
+    assert_eq!(state.current.version, "17.0.0-1");
+    assert!(state.on_trial);
+    assert!(state.failed.is_empty());
+    assert!(
+        store.image_dir("17.0.0-1").is_dir(),
+        "the downloaded image stays on disk"
+    );
+
+    // Starting Android again after the restart boots the kept image and confirms it without
+    // downloading Android 16.
+    *secret.lock().unwrap() = None;
+    android.start();
+    let deadline = Instant::now() + WAIT;
+    let boot_secret = loop {
+        if let Some(boot_secret) = secret.lock().unwrap().clone() {
+            break boot_secret;
+        }
+        assert!(Instant::now() < deadline, "the second start never began");
+        thread::sleep(Duration::from_millis(5));
+    };
+    let mut agent = connector.connect(WAIT).unwrap();
+    guest_connect(
+        &mut *agent,
+        &local_hello(Role::Guest, "agent"),
+        &boot_secret,
+        WAIT,
+    )
+    .unwrap();
+    agent
+        .send(&dsa_protocol::encode(&dsa_protocol::control::Envelope {
+            body: Some(dsa_protocol::control::envelope::Body::GuestBoot(
+                dsa_protocol::control::GuestBoot {
+                    boot_completed: true,
+                    agent_connected: true,
+                },
+            )),
+        }))
+        .unwrap();
+    assert!(android.session.wait_for(SessionState::Active, WAIT));
+    wait_until("trial finishes confirming 17.0.0-1", || {
+        !store.state().unwrap().on_trial
+    });
+    assert_eq!(store.state().unwrap().current.version, "17.0.0-1");
+    std::mem::forget(agent);
+}
+
+#[test]
+fn fr14_a_slow_first_boot_past_ready_timeout_keeps_waiting_until_boot_timeout() {
+    let store = store_without_an_image();
+    check(
+        &store,
+        &server(&[17], &[("17.0.0-1", 17, 1)], &key()),
+        "mem://list.json",
+        &trusted(),
+    )
+    .unwrap();
+    let (listener, mut connector) = memory::pair();
+    let secret = Arc::new(Mutex::new(None));
+    let session = Arc::new(Session::new(
+        StoreLauncher {
+            store: Arc::clone(&store),
+            broken: Vec::new(),
+            other_keys: false,
+            secret: Arc::clone(&secret),
+            boots: Default::default(),
+        },
+        Box::new(listener),
+        ControlHandshake::new("test host", WAIT),
+        SessionConfig {
+            connect_timeout: WAIT,
+            ready_timeout: Duration::from_millis(80),
+            stop_timeout: WAIT,
+            ..SessionConfig::default()
+        },
+    ));
+    let android = UpdatingAndroid {
+        session,
+        store: Arc::clone(&store),
+        notices: Arc::new(UpdateNotices::default()),
+        boot_timeout: Duration::from_secs(5),
+        trial_running: Arc::new(AtomicBool::new(false)),
+        rollback: Default::default(),
+        image_restart: Default::default(),
+    };
+    android.start();
+    let deadline = Instant::now() + WAIT;
+    let boot_secret = loop {
+        if let Some(boot_secret) = secret.lock().unwrap().clone() {
+            break boot_secret;
+        }
+        assert!(Instant::now() < deadline, "the guest was never started");
+        thread::sleep(Duration::from_millis(5));
+    };
+    let mut agent = connector.connect(WAIT).unwrap();
+    guest_connect(
+        &mut *agent,
+        &local_hello(Role::Guest, "agent"),
+        &boot_secret,
+        WAIT,
+    )
+    .unwrap();
+    // Wait until Session enters Stalled(BootUnfinished), then finish booting.
+    assert!(android.session.wait_for(SessionState::Stalled, WAIT));
+    agent
+        .send(&dsa_protocol::encode(&dsa_protocol::control::Envelope {
+            body: Some(dsa_protocol::control::envelope::Body::GuestBoot(
+                dsa_protocol::control::GuestBoot {
+                    boot_completed: true,
+                    agent_connected: true,
+                },
+            )),
+        }))
+        .unwrap();
+    assert_eq!(wait_for_notice(&android), "Android 17.0.0-1 is installed");
+    assert!(android.session.wait_for(SessionState::Active, WAIT));
+    assert!(!store.state().unwrap().on_trial);
+    std::mem::forget(agent);
+}

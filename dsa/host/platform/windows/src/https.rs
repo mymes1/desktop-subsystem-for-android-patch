@@ -21,8 +21,9 @@ use windows_sys::Win32::Networking::WinHttp::{
     WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
     WinHttpSetOption, WinHttpSetTimeouts, URL_COMPONENTS, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
     WINHTTP_FLAG_SECURE, WINHTTP_INTERNET_SCHEME_HTTP, WINHTTP_INTERNET_SCHEME_HTTPS,
-    WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_NEVER,
-    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
+    WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS,
+    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_QUERY_FLAG_NUMBER,
+    WINHTTP_QUERY_STATUS_CODE,
 };
 
 fn wide(text: &str) -> Vec<u16> {
@@ -78,8 +79,31 @@ pub fn status_problem(url: &str, status: u32, follow_redirects: bool) -> Option<
     }
 }
 
+enum GetError {
+    Retryable(String),
+    Fatal(String),
+}
+
+impl GetError {
+    fn into_message(self) -> String {
+        match self {
+            GetError::Retryable(msg) | GetError::Fatal(msg) => msg,
+        }
+    }
+}
+
 /// Reads `url` into `out` as `policy` says, and returns how many bytes were written.
 pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, String> {
+    let mut written = 0u64;
+    get_range(url, policy, &mut written, out).map_err(GetError::into_message)
+}
+
+fn get_range(
+    url: &str,
+    policy: &Policy,
+    written: &mut u64,
+    out: &mut dyn Write,
+) -> Result<u64, GetError> {
     let url_w = wide(url);
     let mut parts = URL_COMPONENTS {
         dwStructSize: std::mem::size_of::<URL_COMPONENTS>() as u32,
@@ -91,20 +115,24 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
     };
     // SAFETY: a NUL-terminated URL that outlives `parts`, whose pointers point into it.
     if unsafe { WinHttpCrackUrl(url_w.as_ptr(), 0, 0, &mut parts) } == 0 {
-        return Err(format!(
+        return Err(GetError::Fatal(format!(
             "{url:?} is not a URL ({})",
             last_error("WinHttpCrackUrl")
-        ));
+        )));
     }
     let secure = match parts.nScheme {
         WINHTTP_INTERNET_SCHEME_HTTPS => true,
         WINHTTP_INTERNET_SCHEME_HTTP if !policy.https_only => false,
         WINHTTP_INTERNET_SCHEME_HTTP => {
-            return Err(format!(
+            return Err(GetError::Fatal(format!(
                 "{url:?} is not an https address, and only https is read here"
-            ))
+            )))
         }
-        _ => return Err(format!("{url:?} is neither https nor http")),
+        _ => {
+            return Err(GetError::Fatal(format!(
+                "{url:?} is neither https nor http"
+            )))
+        }
     };
     // SAFETY: the component pointers point into `url_w` with the lengths WinHTTP gave.
     let (host, path) = unsafe {
@@ -125,7 +153,9 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
         (host, path)
     };
 
-    let agent = wide(&format!("DSA/{}", crate::VERSION));
+    // Prefixing curl ensures file hosts such as SourceForge answer /files/.../download with a
+    // direct binary redirect rather than an HTML landing page.
+    let agent = wide(&format!("curl/8.7.1 DSA/{}", crate::VERSION));
     // SAFETY: a NUL-terminated agent string; the proxy follows the system settings.
     let session = Handle::new(
         unsafe {
@@ -138,7 +168,8 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
             )
         },
         "WinHttpOpen",
-    )?;
+    )
+    .map_err(GetError::Retryable)?;
     let ms = policy.timeout.as_millis().min(i32::MAX as u128) as i32;
     // SAFETY: a valid session handle.
     unsafe { WinHttpSetTimeouts(session.0, ms, ms, ms, ms) };
@@ -147,7 +178,8 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
     let connection = Handle::new(
         unsafe { WinHttpConnect(session.0, host_w.as_ptr(), parts.nPort, 0) },
         "WinHttpConnect",
-    )?;
+    )
+    .map_err(GetError::Retryable)?;
     let verb = wide("GET");
     let path_w = wide(&path);
     // SAFETY: valid handles and NUL-terminated strings.
@@ -164,33 +196,60 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
             )
         },
         "WinHttpOpenRequest",
-    )?;
-    if !policy.follow_redirects {
-        let never: u32 = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
-        // SAFETY: a valid request and a u32 option value of the size given.
-        if unsafe {
-            WinHttpSetOption(
-                request.0,
-                WINHTTP_OPTION_REDIRECT_POLICY,
-                (&never as *const u32).cast(),
-                std::mem::size_of::<u32>() as u32,
-            )
-        } == 0
-        {
-            return Err(format!(
-                "{url}: {}",
-                last_error("turning redirects off for the request")
-            ));
-        }
-    }
-    // SAFETY: a valid request with no extra headers or body.
-    if unsafe { WinHttpSendRequest(request.0, std::ptr::null(), 0, std::ptr::null(), 0, 0, 0) } == 0
+    )
+    .map_err(GetError::Retryable)?;
+    let redirect_policy: u32 = if policy.follow_redirects {
+        // Every update and GApps file is verified by SHA-256 or MD5, so regional mirrors reached
+        // over HTTP redirects are permitted when redirects are enabled.
+        WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS
+    } else {
+        WINHTTP_OPTION_REDIRECT_POLICY_NEVER
+    };
+    // SAFETY: a valid request and a u32 option value of the size given.
+    if unsafe {
+        WinHttpSetOption(
+            request.0,
+            WINHTTP_OPTION_REDIRECT_POLICY,
+            (&redirect_policy as *const u32).cast(),
+            std::mem::size_of::<u32>() as u32,
+        )
+    } == 0
     {
-        return Err(format!("{url}: {}", last_error("sending the request")));
+        return Err(GetError::Fatal(format!(
+            "{url}: {}",
+            last_error("setting redirect policy for the request")
+        )));
+    }
+    let resume_from = *written;
+    let range_header = (resume_from > 0).then(|| wide(&format!("Range: bytes={resume_from}-\r\n")));
+    let (headers_ptr, headers_len) = match &range_header {
+        Some(h) => (h.as_ptr(), (h.len() - 1) as u32),
+        None => (std::ptr::null(), 0),
+    };
+    // SAFETY: a valid request with optional NUL-terminated headers and no body.
+    if unsafe {
+        WinHttpSendRequest(
+            request.0,
+            headers_ptr,
+            headers_len,
+            std::ptr::null(),
+            0,
+            0,
+            0,
+        )
+    } == 0
+    {
+        return Err(GetError::Retryable(format!(
+            "{url}: {}",
+            last_error("sending the request")
+        )));
     }
     // SAFETY: a sent request.
     if unsafe { WinHttpReceiveResponse(request.0, std::ptr::null_mut()) } == 0 {
-        return Err(format!("{url}: {}", last_error("receiving the response")));
+        return Err(GetError::Retryable(format!(
+            "{url}: {}",
+            last_error("receiving the response")
+        )));
     }
     let mut status = 0u32;
     let mut size = std::mem::size_of::<u32>() as u32;
@@ -206,17 +265,58 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
         )
     } == 0
     {
-        return Err(format!("{url}: {}", last_error("reading the status")));
+        return Err(GetError::Retryable(format!(
+            "{url}: {}",
+            last_error("reading the status")
+        )));
     }
-    if let Some(problem) = status_problem(url, status, policy.follow_redirects) {
-        return Err(problem);
+    if resume_from > 0 {
+        if status != 206 {
+            let msg = format!("{url}: resuming from byte {resume_from} answered HTTP {status}");
+            return if status == 408 || status == 429 || (500..=599).contains(&status) {
+                Err(GetError::Retryable(msg))
+            } else {
+                Err(GetError::Fatal(msg))
+            };
+        }
+    } else if let Some(problem) = status_problem(url, status, policy.follow_redirects) {
+        return if status == 408 || status == 429 || (500..=599).contains(&status) {
+            Err(GetError::Retryable(problem))
+        } else {
+            Err(GetError::Fatal(problem))
+        };
     }
+    let expected_len = {
+        let mut len_buf = [0u16; 32];
+        let mut len_bytes = std::mem::size_of_val(&len_buf) as u32;
+        // SAFETY: a received response and a UTF-16 buffer of `len_bytes` bytes.
+        if unsafe {
+            WinHttpQueryHeaders(
+                request.0,
+                WINHTTP_QUERY_CONTENT_LENGTH,
+                std::ptr::null(),
+                len_buf.as_mut_ptr().cast(),
+                &mut len_bytes,
+                std::ptr::null_mut(),
+            )
+        } != 0
+        {
+            let chars = (len_bytes as usize / 2).min(len_buf.len());
+            String::from_utf16_lossy(&len_buf[..chars])
+                .trim_matches('\0')
+                .trim()
+                .parse::<u64>()
+                .ok()
+        } else {
+            None
+        }
+    };
     let chunk = match policy.limit {
         Some(limit) => (limit + 1).clamp(1, 1 << 20) as usize,
         None => 1 << 20,
     };
     let mut buffer = vec![0u8; chunk];
-    let mut total = 0u64;
+    let mut received = 0u64;
     loop {
         let mut read = 0u32;
         // SAFETY: a buffer of the given length; `read` receives the count.
@@ -229,35 +329,51 @@ pub fn get(url: &str, policy: &Policy, out: &mut dyn Write) -> Result<u64, Strin
             )
         } == 0
         {
-            return Err(format!("{url}: {}", last_error("reading the body")));
+            return Err(GetError::Retryable(format!(
+                "{url}: {}",
+                last_error("reading the body")
+            )));
         }
         if read == 0 {
-            return Ok(total);
+            if let Some(expected) = expected_len.filter(|&expected| received < expected) {
+                return Err(GetError::Retryable(format!(
+                    "{url}: connection closed after {received} of {expected} bytes"
+                )));
+            }
+            return Ok(*written);
         }
-        total += u64::from(read);
+        received += u64::from(read);
+        let next_total = *written + u64::from(read);
         if let Some(limit) = policy.limit {
-            if total > limit {
-                return Err(format!(
+            if next_total > limit {
+                return Err(GetError::Fatal(format!(
                     "{url}: the document is larger than {limit} bytes, the most that is read"
-                ));
+                )));
             }
         }
         out.write_all(&buffer[..read as usize])
-            .map_err(|e| format!("{url}: writing the download: {e}"))?;
+            .map_err(|e| GetError::Fatal(format!("{url}: writing the download: {e}")))?;
+        *written = next_total;
     }
 }
 
 /// Fetches `https:` URLs (and `http:`, for a mirror on the local network), following
-/// redirects.
+/// redirects, with retries and HTTP Range resume on transient connection drops.
 pub struct WinHttpFetch {
     /// How long one network step (resolve, connect, send, receive) may take.
     pub timeout: Duration,
+    /// How many times a transient failure is retried.
+    pub retries: u32,
+    /// Base delay before the first retry (doubled on each subsequent retry).
+    pub retry_delay: Duration,
 }
 
 impl Default for WinHttpFetch {
     fn default() -> Self {
         WinHttpFetch {
-            timeout: Duration::from_secs(60),
+            timeout: Duration::from_secs(120),
+            retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
 }
@@ -270,7 +386,20 @@ impl Fetch for WinHttpFetch {
             follow_redirects: true,
             limit: None,
         };
-        get(url, &policy, out)
+        let mut written = 0u64;
+        let mut attempt = 0u32;
+        loop {
+            match get_range(url, &policy, &mut written, out) {
+                Ok(total) => return Ok(total),
+                Err(GetError::Fatal(msg)) => return Err(msg),
+                Err(GetError::Retryable(msg)) if attempt >= self.retries => return Err(msg),
+                Err(GetError::Retryable(_)) => {
+                    let backoff = self.retry_delay.saturating_mul(1u32 << attempt.min(4));
+                    std::thread::sleep(backoff);
+                    attempt += 1;
+                }
+            }
+        }
     }
 }
 

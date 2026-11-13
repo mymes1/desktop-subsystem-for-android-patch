@@ -369,3 +369,28 @@ fn fr14_a_used_data_disk_without_a_partition_the_template_has_is_left_as_it_is()
     assert!(read_partition(&user, "userdata").iter().all(|&b| b == 0x77));
     assert_eq!(disk_image_version(&user).as_deref(), Some("v1"));
 }
+
+#[test]
+fn fr14_attaching_a_template_read_only_does_not_alter_its_size() {
+    if std::env::var_os("DSA_SERVICE_TESTS").is_none() {
+        eprintln!("skipped: set DSA_SERVICE_TESTS=1 to attach disks");
+        return;
+    }
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("readonly-template-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let template = dir.join("v2").join("data.vhdx");
+    make_disk_with(&template, &[("metadata", 2048), ("userdata", 8192)], |_| 0);
+    let size_before = std::fs::metadata(&template).unwrap().len();
+    let attached = AttachedDisk::attach(&template, true).unwrap();
+    let mut disk = attached.open(false).unwrap();
+    let found = partitions(&mut disk).unwrap();
+    assert_eq!(found.len(), 2);
+    drop(disk);
+    drop(attached);
+    let size_after = std::fs::metadata(&template).unwrap().len();
+    assert_eq!(
+        size_before, size_after,
+        "read-only attach must not alter template VHDX size"
+    );
+}

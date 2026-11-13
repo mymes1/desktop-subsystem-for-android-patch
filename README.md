@@ -85,9 +85,10 @@ so expect rough edges. Linux and macOS are in progress (see
   are not offered. With Google Play, Google's geocoder answers.
 - An ARM translation layer for ARM-only apps on x64: the open source translator Digitalis
   comes with the x64 image, and Google's translator or another package can replace it.
-- Signed automatic updates of both the Android image and DSA itself, with a failed image
-  rolled back to the last good one, and a notification when an update is ready, applied or
-  failed.
+- Signed automatic updates of both the Android image and DSA itself, with resumable HTTP
+  Range downloads, reuse of already-verified image files across restarts, non-destructive
+  trial restarts, rollback to the last good image on genuine boot failure, and a
+  notification when an update is ready, applied or failed.
 - Root access, off by default. Once it is on, an app or `adb shell` set to ask gets `su`
   after an administrator approves it in a prompt under the app's name; other apps cannot
   see `su` at all.
@@ -98,7 +99,9 @@ so expect rough edges. Linux and macOS are in progress (see
 **Not shipped:** Google Play services or an app store (their licences make them a user's
 choice), and any of Microsoft's WSA binaries. A user who wants Google Play installs it from
 DSA Settings or with `dsa gapps install`: DSA then downloads the public LiteGapps Core package
-for that user's Android and lays it over the system. Google Play never keeps Android from
+for that user's Android (automatically falling back to the latest compatible Core package
+when LiteGapps has not published a build for a newly released Android API level yet) and
+lays it over the system. Google Play never keeps Android from
 starting, and removing it works even while Android is stopped. Google's apps follow
 Google's terms.
 
