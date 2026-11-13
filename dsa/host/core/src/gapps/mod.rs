@@ -509,27 +509,19 @@ impl Source {
             done: 0,
             total,
         });
-        let reused = {
-            let matches_build = |candidate: &Path| -> bool {
-                std::fs::metadata(candidate).is_ok_and(|m| m.is_file() && m.len() == build.size)
-                    && file_md5(candidate)
-                        .is_ok_and(|digest| digest.eq_ignore_ascii_case(&build.md5))
-            };
-            if matches_build(&zip) {
-                true
-            } else if let Ok(kept) = self.kept_package(user) {
-                if matches_build(&kept) {
+        let matches_build = |candidate: &Path| -> bool {
+            std::fs::metadata(candidate).is_ok_and(|m| m.is_file() && m.len() == build.size)
+                && file_md5(candidate).is_ok_and(|digest| digest.eq_ignore_ascii_case(&build.md5))
+        };
+        let reused = matches_build(&zip)
+            || self.kept_package(user).is_ok_and(|kept| {
+                matches_build(&kept) && {
                     let _ = std::fs::remove_file(&zip);
                     std::fs::hard_link(&kept, &zip)
                         .or_else(|_| std::fs::copy(&kept, &zip).map(|_| ()))
                         .is_ok()
-                } else {
-                    false
                 }
-            } else {
-                false
-            }
-        };
+            });
         let package = if reused {
             progress(Progress {
                 stage: Stage::Downloading,

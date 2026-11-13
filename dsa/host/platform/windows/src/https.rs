@@ -22,7 +22,8 @@ use windows_sys::Win32::Networking::WinHttp::{
     WinHttpSetOption, WinHttpSetTimeouts, URL_COMPONENTS, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
     WINHTTP_FLAG_SECURE, WINHTTP_INTERNET_SCHEME_HTTP, WINHTTP_INTERNET_SCHEME_HTTPS,
     WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS,
-    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE,
+    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_QUERY_CONTENT_LENGTH, WINHTTP_QUERY_FLAG_NUMBER,
+    WINHTTP_QUERY_STATUS_CODE,
 };
 
 fn wide(text: &str) -> Vec<u16> {
@@ -285,11 +286,37 @@ fn get_range(
             Err(GetError::Fatal(problem))
         };
     }
+    let expected_len = {
+        let mut len_buf = [0u16; 32];
+        let mut len_bytes = std::mem::size_of_val(&len_buf) as u32;
+        // SAFETY: a received response and a UTF-16 buffer of `len_bytes` bytes.
+        if unsafe {
+            WinHttpQueryHeaders(
+                request.0,
+                WINHTTP_QUERY_CONTENT_LENGTH,
+                std::ptr::null(),
+                len_buf.as_mut_ptr().cast(),
+                &mut len_bytes,
+                std::ptr::null_mut(),
+            )
+        } != 0
+        {
+            let chars = (len_bytes as usize / 2).min(len_buf.len());
+            String::from_utf16_lossy(&len_buf[..chars])
+                .trim_matches('\0')
+                .trim()
+                .parse::<u64>()
+                .ok()
+        } else {
+            None
+        }
+    };
     let chunk = match policy.limit {
         Some(limit) => (limit + 1).clamp(1, 1 << 20) as usize,
         None => 1 << 20,
     };
     let mut buffer = vec![0u8; chunk];
+    let mut received = 0u64;
     loop {
         let mut read = 0u32;
         // SAFETY: a buffer of the given length; `read` receives the count.
@@ -308,8 +335,14 @@ fn get_range(
             )));
         }
         if read == 0 {
+            if let Some(expected) = expected_len.filter(|&expected| received < expected) {
+                return Err(GetError::Retryable(format!(
+                    "{url}: connection closed after {received} of {expected} bytes"
+                )));
+            }
             return Ok(*written);
         }
+        received += u64::from(read);
         let next_total = *written + u64::from(read);
         if let Some(limit) = policy.limit {
             if next_total > limit {

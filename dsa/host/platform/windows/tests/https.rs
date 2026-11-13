@@ -187,8 +187,10 @@ fn fr14_an_interrupted_download_resumes_with_http_range() {
         req_str
     });
 
-    let mut fetcher = WinHttpFetch::default();
-    fetcher.retry_delay = std::time::Duration::from_millis(50);
+    let fetcher = WinHttpFetch {
+        retry_delay: std::time::Duration::from_millis(50),
+        ..WinHttpFetch::default()
+    };
     let mut out = Vec::new();
     let written = fetcher
         .fetch(&format!("http://{address}/17.0.0-1/system.vhdx"), &mut out)

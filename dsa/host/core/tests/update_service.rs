@@ -1233,11 +1233,12 @@ fn fr14_stopping_android_during_its_trial_boot_neither_deletes_nor_blames_the_im
     // downloading Android 16.
     *secret.lock().unwrap() = None;
     android.start();
+    let deadline = Instant::now() + WAIT;
     let boot_secret = loop {
         if let Some(boot_secret) = secret.lock().unwrap().clone() {
             break boot_secret;
         }
-        assert!(Instant::now() < Instant::now() + WAIT);
+        assert!(Instant::now() < deadline, "the second start never began");
         thread::sleep(Duration::from_millis(5));
     };
     let mut agent = connector.connect(WAIT).unwrap();

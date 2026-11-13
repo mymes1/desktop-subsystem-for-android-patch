@@ -302,9 +302,19 @@ jobs:
         env:
           DSA_SERVICE_TESTS: "1"
         run: |
-          cargo test -p dsa-host-core --test update --test update_service --test android_versions
-          cargo test -p dsa-host-core --lib gapps
-          cargo test -p dsa-host-windows --test https --test host_config --test user_disk_update
+          function Run-Checked([string[]]$ArgsList) {
+            $out = & cargo @ArgsList 2>&1
+            $code = $LASTEXITCODE
+            $out | ForEach-Object { Write-Host $_ }
+            if ($code -ne 0) {
+              $summary = ($out | Select-String -Pattern "FAILED|panicked|error\[" | Select-Object -First 8 | ForEach-Object { $_.Line }) -join " | "
+              Write-Host "::error::cargo $($ArgsList -join ' ') failed: $summary"
+              exit $code
+            }
+          }
+          Run-Checked @("test", "-p", "dsa-host-core", "--test", "update", "--test", "update_service", "--test", "android_versions")
+          Run-Checked @("test", "-p", "dsa-host-core", "--lib", "gapps")
+          Run-Checked @("test", "-p", "dsa-host-windows", "--test", "https", "--test", "host_config", "--test", "user_disk_update")
 
       - name: Build the Windows x64 MSI and setup.exe
         run: |

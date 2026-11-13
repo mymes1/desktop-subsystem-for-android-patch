@@ -948,6 +948,7 @@ impl UserAndroid for UpdatingAndroid {
             if let Some(alert) = outcome.as_ref().ok().and_then(alert_of) {
                 notices.raise(alert);
             }
+            running.store(false, Ordering::SeqCst);
             notices.set(match outcome {
                 Ok(Outcome::Booted {
                     image,
@@ -959,7 +960,7 @@ impl UserAndroid for UpdatingAndroid {
                 }) => {
                     format!("Android was updated to {}", image.version)
                 }
-                Ok(Outcome::Booted { .. }) => return running.store(false, Ordering::SeqCst),
+                Ok(Outcome::Booted { .. }) => return,
                 Ok(Outcome::RolledBack {
                     failed,
                     reason,
@@ -996,7 +997,6 @@ impl UserAndroid for UpdatingAndroid {
                 ),
                 Err(error) => error.to_string(),
             });
-            running.store(false, Ordering::SeqCst);
         });
         // Answer once the session has moved on, as a plain start does.
         let _ = events.recv_timeout(Duration::from_secs(5));
